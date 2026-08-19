@@ -1459,6 +1459,7 @@ export type Database = {
         }
         Returns: string
       }
+      create_counter_sale: { Args: { p_payload: Json }; Returns: Json }
       create_order: {
         Args: { p_payload: Json; p_store_slug: string }
         Returns: string
