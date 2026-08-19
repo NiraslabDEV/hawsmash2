@@ -17,6 +17,7 @@ let menuItemId: string;
 let userId: string;
 let deviceId: string;
 let orderId: string | null = null;
+let offlineOrderId: string | null = null;
 let originalStoreItem: {
   available: boolean;
   track_stock: boolean;
@@ -112,6 +113,7 @@ test.beforeAll(async () => {
 test.afterAll(async () => {
   if (!admin) return;
   if (orderId) await admin.from('orders').delete().eq('id', orderId);
+  if (offlineOrderId) await admin.from('orders').delete().eq('id', offlineOrderId);
   if (deviceId) await admin.from('devices').delete().eq('id', deviceId);
   if (originalStoreItem && storeId && menuItemId) {
     await admin
@@ -123,7 +125,7 @@ test.afterAll(async () => {
   if (userId) await admin.auth.admin.deleteUser(userId);
 });
 
-test('vende em dinheiro com troco e anula com motivo', async ({ page }) => {
+async function enterPos(page: import('@playwright/test').Page) {
   await page.addInitScript((linkedDeviceId) => {
     window.localStorage.setItem('hs_pos_device_id', linkedDeviceId);
   }, deviceId);
@@ -136,6 +138,10 @@ test('vende em dinheiro com troco e anula com motivo', async ({ page }) => {
   await page.getByPlaceholder('••••••••').fill(password);
   await page.getByRole('button', { name: 'Entrar' }).click();
   await expect(page).toHaveURL(/\/pos$/);
+}
+
+test('vende em dinheiro com troco e anula com motivo', async ({ page }) => {
+  await enterPos(page);
   await expect(page.getByText('CRIAR PIN')).toBeVisible();
   await page.getByLabel('PIN', { exact: true }).fill('4826');
   await page.getByLabel('Confirmar PIN').fill('4826');
@@ -201,4 +207,59 @@ test('vende em dinheiro com troco e anula com motivo', async ({ page }) => {
     .single();
   expect(audit?.actor_user_id).toBe(userId);
   expect(audit?.payload).toMatchObject({ reason: 'Cliente pediu correcção no balcão' });
+});
+
+test('guarda a venda com a rede desligada e sincroniza ao regressar', async ({ context, page }) => {
+  await enterPos(page);
+  await expect(page.getByRole('button', { name: /Classic Smash/ })).toBeVisible();
+
+  if (await page.getByText('CRIAR PIN').isVisible()) {
+    await page.getByLabel('PIN', { exact: true }).fill('4826');
+    await page.getByLabel('Confirmar PIN').fill('4826');
+    await page.getByRole('button', { name: 'Guardar PIN' }).click();
+  } else if (await page.getByText('POS BLOQUEADO').isVisible()) {
+    await page.getByLabel('PIN', { exact: true }).fill('4826');
+    await page.getByRole('button', { name: 'Desbloquear' }).click();
+  }
+
+  await expect(page.getByRole('button', { name: 'Recusar' })).toBeVisible();
+  await page.getByRole('button', { name: 'Recusar' }).click();
+
+  await context.setOffline(true);
+  await expect(page.getByText('SEM LIGAÇÃO · 0 vendas por sincronizar')).toBeVisible();
+
+  await page.getByRole('button', { name: /Classic Smash/ }).click();
+  await page.getByRole('button', { name: 'M-Pesa', exact: true }).click();
+  await page.getByRole('button', { name: 'FINALIZAR VENDA' }).click();
+
+  await expect(page.getByText('VENDA GUARDADA OFFLINE')).toBeVisible();
+  await expect(page.getByText('SEM LIGAÇÃO · 1 venda por sincronizar')).toBeVisible();
+
+  await context.setOffline(false);
+  await expect(page.getByText('1 venda sincronizada')).toBeVisible();
+
+  await expect.poll(async () => {
+    const { data } = await admin
+      .from('event_log')
+      .select('order_id')
+      .eq('actor_user_id', userId)
+      .eq('type', 'counter.sale_created')
+      .not('order_id', 'is', null)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    offlineOrderId = data?.order_id ?? null;
+    return offlineOrderId;
+  }).not.toBeNull();
+
+  const { data: syncedOrder } = await admin
+    .from('orders')
+    .select('store_id,status,needs_review')
+    .eq('id', offlineOrderId)
+    .single();
+  expect(syncedOrder).toMatchObject({
+    store_id: storeId,
+    status: 'paid',
+    needs_review: false,
+  });
 });
