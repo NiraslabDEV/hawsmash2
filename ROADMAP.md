@@ -124,7 +124,7 @@ _Os dias são referência de calendário, não paragens: a corrida não pára en
 - [x] Talões: comanda de cozinha (nº do dia grande, sem preços) + talão do cliente (com troco)
 - [x] Reimpressão pelo painel e pelo POS (`reprint`), sempre logada
 - [x] `heartbeat` de 60 s + watchdog + arranque automático no Windows + `.exe` (SEA, herdado do 1.0)
-- [ ] Testes do render ESC/POS (snapshot) + integração com o simulador
+- [x] Testes do render ESC/POS (snapshot) + integração com o simulador
 - [~] B-006 **Validação física** com a XP-T80Q e a gaveta reais (o cliente envia o equipamento)
 
 **PROMPT:** *"Executa a F3: impressão multi-loja + gaveta. Estende `services/print-bridge` conforme `CLAUDE.md §8`, incluindo o servidor HTTP local na LAN e o pulso da gaveta. Testes de snapshot dos dois talões contra o simulador. A falha de impressão nunca pode bloquear nem esconder o pedido."*

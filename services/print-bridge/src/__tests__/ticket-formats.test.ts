@@ -43,7 +43,8 @@ const receipt: CustomerReceiptPayload = {
 
 describe('formatos HAWSMASH de 80 mm', () => {
   it('faz a comanda com número diário grande e sem qualquer preço', () => {
-    const text = decodeReceipt(createKitchenTicket(kitchen));
+    const document = createKitchenTicket(kitchen);
+    const text = decodeReceipt(document);
 
     expect(text).toContain('HAWSMASH MAPUTO');
     expect(text).toContain('Nº 42');
@@ -53,10 +54,12 @@ describe('formatos HAWSMASH de 80 mm', () => {
     expect(text).not.toContain('MT');
     expect(text).not.toContain('TOTAL');
     expect(text).not.toContain('300');
+    expect({ text, hex: document.toString('hex') }).toMatchSnapshot();
   });
 
   it('faz o talão do cliente com preços, pagamento e troco', () => {
-    const text = decodeReceipt(createCustomerReceipt(receipt));
+    const document = createCustomerReceipt(receipt);
+    const text = decodeReceipt(document);
 
     expect(text).toContain('HAWSMASH MAPUTO');
     expect(text).toContain('Av. 24 de Julho, Maputo');
@@ -70,5 +73,6 @@ describe('formatos HAWSMASH de 80 mm', () => {
     expect(text).toContain('Troco');
     expect(text).toContain('400 MT');
     expect(text).toContain('Obrigado! Bom apetite.');
+    expect({ text, hex: document.toString('hex') }).toMatchSnapshot();
   });
 });

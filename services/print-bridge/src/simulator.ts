@@ -5,6 +5,8 @@ import { decodeReceipt } from './escpos';
 export interface SimulatorConfig {
   port: number;
   verbose?: boolean;
+  silent?: boolean;
+  onDocument?: (document: Buffer) => void;
 }
 
 export function startPrinterSimulator(config: SimulatorConfig): Server {
@@ -16,10 +18,13 @@ export function startPrinterSimulator(config: SimulatorConfig): Server {
     });
 
     socket.on('end', () => {
-      console.log('\n========== CUPOM (printer-sim) ==========');
-      console.log(decodeReceipt(received));
-      console.log('=========================================');
-      if (config.verbose) {
+      config.onDocument?.(Buffer.from(received));
+      if (!config.silent) {
+        console.log('\n========== CUPOM (printer-sim) ==========');
+        console.log(decodeReceipt(received));
+        console.log('=========================================');
+      }
+      if (config.verbose && !config.silent) {
         console.log(`[Simulator] ${received.length} bytes recebidos`);
         console.log(`[Simulator] hex: ${received.toString('hex')}`);
       }
@@ -31,15 +36,25 @@ export function startPrinterSimulator(config: SimulatorConfig): Server {
   });
 
   server.listen(config.port, () => {
-    console.log(`\n[Printer Simulator] Escutando na porta ${config.port}`);
-    console.log('Envie bytes ESC/POS para testar sem hardware. Ctrl+C para sair.\n');
+    if (!config.silent) {
+      const address = server.address();
+      const port = address && typeof address !== 'string' ? address.port : config.port;
+      console.log(`\n[Printer Simulator] Escutando na porta ${port}`);
+      console.log('Envie bytes ESC/POS para testar sem hardware. Ctrl+C para sair.\n');
+    }
   });
 
   return server;
 }
 
-export function stopPrinterSimulator(server: Server): void {
-  server.close(() => {
-    console.log('[Printer Simulator] Parado');
+export function stopPrinterSimulator(server: Server): Promise<void> {
+  return new Promise((resolve, reject) => {
+    server.close((error) => {
+      if (error) {
+        reject(error);
+        return;
+      }
+      resolve();
+    });
   });
 }
