@@ -175,3 +175,68 @@ describe("F7 — encaminhamento e kill switch", () => {
     }
   });
 });
+
+describe("F9 — ecrãs de TV", () => {
+  it("mostra o esgotado na parede em vez de o esconder, sem dados internos", async () => {
+    await admin
+      .from("store_items")
+      .update({ available: true, track_stock: true, stock_qty: 0 })
+      .eq("store_id", maputoStoreId)
+      .eq("menu_item_id", itemId);
+
+    try {
+      const { data, error } = await anon.rpc("get_store_board", { p_store_slug: "maputo" });
+      expect(error).toBeNull();
+
+      const board = data as {
+        categories: Array<{ items: Array<{ id: string; available: boolean; price_cents: number }> }>;
+      };
+      const item = board.categories
+        .flatMap((category) => category.items)
+        .find((entry) => entry.id === itemId);
+
+      expect(item).toBeTruthy();
+      expect(item!.available).toBe(false);
+      expect(Object.keys(item!).sort()).toEqual(["available", "id", "name", "price_cents"]);
+    } finally {
+      await admin
+        .from("store_items")
+        .update({ available: true, track_stock: false, stock_qty: 0 })
+        .eq("store_id", maputoStoreId)
+        .eq("menu_item_id", itemId);
+    }
+  });
+
+  it("mostra as senhas da loja sem expor um único dado do cliente", async () => {
+    const order = await createOrder("maputo", "Cliente TV Maputo");
+    expect(order.error).toBeNull();
+
+    await admin
+      .from("orders")
+      .update({ status: "ready", daily_number: 77 })
+      .eq("id", order.data);
+
+    const { data, error } = await anon.rpc("get_store_queue", { p_store_slug: "maputo" });
+    expect(error).toBeNull();
+
+    const queue = data as {
+      store: { slug: string; short_name: string };
+      ready: Array<{ daily_number: number; order_number: string }>;
+      preparing: Array<{ daily_number: number }>;
+    };
+    expect(queue.store.slug).toBe("maputo");
+    expect(queue.ready.some((entry) => entry.daily_number === 77)).toBe(true);
+
+    const serialized = JSON.stringify(queue);
+    expect(serialized).not.toContain("Cliente TV Maputo");
+    expect(serialized).not.toContain("customer");
+    expect(serialized).not.toContain("total_cents");
+
+    const { data: matolaQueue } = await anon.rpc("get_store_queue", { p_store_slug: "matola" });
+    expect(
+      (matolaQueue as { ready: Array<{ daily_number: number }> }).ready.some(
+        (entry) => entry.daily_number === 77,
+      ),
+    ).toBe(false);
+  });
+});

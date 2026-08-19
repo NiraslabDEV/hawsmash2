@@ -209,7 +209,7 @@ _Os dias são referência de calendário, não paragens: a corrida não pára en
 
 - [ ] `scripts/import-hawsmash-1.ts` com **dry-run** e relatório de contagens (CLAUDE §15)
 - [ ] Importação real para staging → conferência dos totais com o 1.0 (facturado por mês bate)
-- [ ] **TVs**: `/tv/[store]/menu` e `/tv/[store]/senhas` a correr nos ecrãs
+- [x] ⏳ **TVs**: `/tv/[store]/menu` e `/tv/[store]/senhas` — rotas prontas; falta apontar os ecrãs físicos (B-011)
 - [ ] **Ensaio geral** por loja: 20 vendas de balcão, 5 delivery, 1 fecho de caixa, 1 falha de rede simulada,
       1 falha de impressora simulada
 - [ ] Manuais PT (`docs/manual-caixa.md`, `docs/manual-cozinha.md`, `docs/manual-dono.md`) + formação das equipas
