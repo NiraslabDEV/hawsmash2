@@ -11,6 +11,7 @@ import {
 } from '@/lib/pos/payment';
 import {
   enqueueOfflineSale,
+  listOfflineSales,
   loadMenuWithFallback,
   MENU_REFRESH_MS,
   removeOfflineSale,
@@ -26,6 +27,7 @@ import {
   saveLocalBridgeConfig,
 } from '@/lib/pos/offline-sales';
 import { syncOfflineSales } from '@/lib/pos/offline-sync';
+import { connectionStatus } from '@/lib/pos/connection-status';
 import { isPosPin, POS_IDLE_TIMEOUT_MS } from '@/lib/pos/session';
 
 type PosContext = {
@@ -123,6 +125,9 @@ export function PosShell() {
   const [voidReason, setVoidReason] = useState('');
   const [reprintPending, setReprintPending] = useState(false);
   const [reprintFeedback, setReprintFeedback] = useState<string | null>(null);
+  const [online, setOnline] = useState(true);
+  const [pendingSales, setPendingSales] = useState(0);
+  const [recentlySynced, setRecentlySynced] = useState(0);
 
   const reprintLastReceipt = useCallback(async () => {
     if (!lastSale || reprintPending || locked) return;
@@ -240,6 +245,25 @@ export function PosShell() {
   }, [loadPos]);
 
   useEffect(() => {
+    let active = true;
+    const updateConnection = () => {
+      if (!active) return;
+      setOnline(navigator.onLine);
+      void listOfflineSales().then((sales) => {
+        if (active) setPendingSales(sales.length);
+      });
+    };
+    window.addEventListener('online', updateConnection);
+    window.addEventListener('offline', updateConnection);
+    updateConnection();
+    return () => {
+      active = false;
+      window.removeEventListener('online', updateConnection);
+      window.removeEventListener('offline', updateConnection);
+    };
+  }, []);
+
+  useEffect(() => {
     if (!context) return;
     const refresh = async () => {
       try {
@@ -261,11 +285,13 @@ export function PosShell() {
   useEffect(() => {
     if (!context) return;
     let running = false;
+    let active = true;
+    let confirmationTimer: number | undefined;
     const sync = async () => {
       if (!navigator.onLine || running) return;
       running = true;
       try {
-        await syncOfflineSales(async (sale) => {
+        const result = await syncOfflineSales(async (sale) => {
           const { data, error: syncError } = await supabase.rpc('sync_counter_sale', {
             p_payload: {
               clientSaleId: sale.clientSaleId,
@@ -282,6 +308,13 @@ export function PosShell() {
           if (syncError) throw new Error(syncError.message);
           return data;
         });
+        const remaining = await listOfflineSales();
+        if (active) setPendingSales(remaining.length);
+        if (active && result.synced > 0) {
+          setRecentlySynced(result.synced);
+          window.clearTimeout(confirmationTimer);
+          confirmationTimer = window.setTimeout(() => setRecentlySynced(0), 4000);
+        }
       } finally {
         running = false;
       }
@@ -291,8 +324,10 @@ export function PosShell() {
     const timer = window.setInterval(() => void sync(), 5000);
     void sync();
     return () => {
+      active = false;
       window.removeEventListener('online', onOnline);
       window.clearInterval(timer);
+      window.clearTimeout(confirmationTimer);
     };
   }, [context, supabase]);
 
@@ -543,6 +578,7 @@ export function PosShell() {
       setSaleId(crypto.randomUUID());
       setAllocations({});
       setCashReceivedCents(0);
+      setPendingSales((current) => current + 1);
       window.setTimeout(() => setConfirmation(null), 3000);
       const bridge = readLocalBridgeConfig(window.localStorage);
       if (bridge) {
@@ -613,6 +649,8 @@ export function PosShell() {
     setLastSale(null);
     await loadPos();
   }
+
+  const networkStatus = connectionStatus(online, pendingSales, recentlySynced);
 
   if (loading) {
     return (
@@ -739,8 +777,15 @@ export function PosShell() {
         >
           Bloquear
         </button>
-        <div className="rounded-full bg-emerald-500/15 px-3 py-2 text-sm font-bold text-emerald-300">
-          {reprintFeedback ?? 'ONLINE'}
+        <div
+          role="status"
+          className={`rounded-full px-3 py-2 text-sm font-bold ${
+            networkStatus.tone === 'offline'
+              ? 'bg-amber-500/15 text-amber-300'
+              : 'bg-emerald-500/15 text-emerald-300'
+          }`}
+        >
+          {reprintFeedback ?? networkStatus.label}
         </div>
       </header>
 
