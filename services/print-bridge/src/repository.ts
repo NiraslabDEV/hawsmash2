@@ -2,7 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import type { PrintJob } from './types';
 
 export const PRINT_JOB_COLUMNS =
-  'id,store_id,order_id,station,kind,reprint_seq,payload,status,attempts,created_at,printed_at';
+  'id,store_id,order_id,request_id,station,kind,reprint_seq,payload,status,attempts,created_at,printed_at';
 
 export async function fetchQueuedJobs(
   client: SupabaseClient,

@@ -1,10 +1,10 @@
 // Polling de print_jobs no Supabase, isolado pelo STORE_ID desta instalação.
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
-import { sendToPrinter } from './printer-client';
 import type { PrintJob } from './types';
 import type { BridgeConfig } from './config';
 import { claimPrintJob, fetchQueuedJobs } from './repository';
 import { resolvePrinter } from './printer-routing';
+import { dispatchPrintJob } from './job-dispatch';
 
 export function createBridgeClient(config: BridgeConfig): SupabaseClient {
   return createClient(config.supabaseUrl, config.supabaseServiceKey, {
@@ -68,7 +68,7 @@ async function processJob(
 
   const printer = resolvePrinter(job, config);
   console.log(`[Poller] Enviando para ${printer.ip}:${printer.port}`);
-  const success = await sendToPrinter(printer.ip, printer.port, job.payload, job.id);
+  const success = await dispatchPrintJob(job, printer);
 
   if (success) {
     const { error: printError } = await supabase

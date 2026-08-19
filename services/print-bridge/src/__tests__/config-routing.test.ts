@@ -18,6 +18,7 @@ const baseJob: PrintJob = {
   id: '00000000-0000-4000-8000-000000000201',
   store_id: validEnv.STORE_ID,
   order_id: '00000000-0000-4000-8000-000000000301',
+  request_id: null,
   station: 'kitchen',
   kind: 'order',
   reprint_seq: 0,

@@ -28,7 +28,7 @@ describe('consulta da fila por loja', () => {
       ['status', 'queued'],
     ]);
     expect(chain.select).toHaveBeenCalledWith(
-      'id,store_id,order_id,station,kind,reprint_seq,payload,status,attempts,created_at,printed_at',
+      'id,store_id,order_id,request_id,station,kind,reprint_seq,payload,status,attempts,created_at,printed_at',
     );
   });
 });

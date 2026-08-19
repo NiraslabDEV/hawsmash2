@@ -120,7 +120,7 @@ _Os dias são referência de calendário, não paragens: a corrida não pára en
 - [x] Migration `1006_print_jobs.sql`: `store_id`, `kind`, `reprint_seq`, unique `(order_id,station,kind,reprint_seq)`
 - [x] `print-bridge` por loja: `STORE_ID` no `.env`, poll só da sua loja, duas impressoras (cozinha + balcão)
 - [x] **Servidor HTTP local** (`POST /print`, `POST /drawer`, `GET /health`) autenticado por `LOCAL_TOKEN`
-- [ ] **Gaveta**: pulso `1B 70 00 19 FA`; abertura fora de venda exige perfil e grava `event_log`
+- [x] **Gaveta**: pulso `1B 70 00 19 FA`; abertura fora de venda exige perfil e grava `event_log`
 - [ ] Talões: comanda de cozinha (nº do dia grande, sem preços) + talão do cliente (com troco)
 - [ ] Reimpressão pelo painel e pelo POS (`reprint`), sempre logada
 - [ ] `heartbeat` de 60 s + watchdog + arranque automático no Windows + `.exe` (SEA, herdado do 1.0)

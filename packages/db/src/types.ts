@@ -12,6 +12,31 @@ export type Database = {
   __InternalSupabase: {
     PostgrestVersion: "14.15"
   }
+  graphql_public: {
+    Tables: {
+      [_ in never]: never
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      graphql: {
+        Args: {
+          extensions?: Json
+          operationName?: string
+          query?: string
+          variables?: Json
+        }
+        Returns: Json
+      }
+    }
+    Enums: {
+      [_ in never]: never
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
+  }
   public: {
     Tables: {
       analytics_events: {
@@ -878,6 +903,7 @@ export type Database = {
           payload: Json
           printed_at: string | null
           reprint_seq: number
+          request_id: string | null
           station: string
           status: string
           store_id: string
@@ -891,6 +917,7 @@ export type Database = {
           payload?: Json
           printed_at?: string | null
           reprint_seq?: number
+          request_id?: string | null
           station: string
           status?: string
           store_id?: string
@@ -904,6 +931,7 @@ export type Database = {
           payload?: Json
           printed_at?: string | null
           reprint_seq?: number
+          request_id?: string | null
           station?: string
           status?: string
           store_id?: string
@@ -1471,6 +1499,10 @@ export type Database = {
       }
       create_counter_sale: { Args: { p_payload: Json }; Returns: Json }
       create_counter_sale_unlocked: { Args: { p_payload: Json }; Returns: Json }
+      create_counter_sale_without_drawer: {
+        Args: { p_payload: Json }
+        Returns: Json
+      }
       create_order: {
         Args: { p_payload: Json; p_store_slug: string }
         Returns: string
@@ -1499,6 +1531,10 @@ export type Database = {
         Returns: Json
       }
       lock_pos_device: { Args: { p_device_id: string }; Returns: Json }
+      open_cash_drawer: {
+        Args: { p_device_id: string; p_reason: string; p_request_id: string }
+        Returns: Json
+      }
       open_cash_session: { Args: never; Returns: string }
       pos_pin_status: { Args: { p_device_id: string }; Returns: Json }
       set_own_pos_pin: {
@@ -1658,6 +1694,9 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
+  graphql_public: {
+    Enums: {},
+  },
   public: {
     Enums: {},
   },

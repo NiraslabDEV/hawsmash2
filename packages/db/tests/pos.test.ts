@@ -17,8 +17,10 @@ let admin: SupabaseClient;
 let manager: SupabaseClient;
 let cashier: SupabaseClient;
 let maputoStoreId: string;
+let matolaStoreId: string;
 let classicSmashId: string;
 let posDeviceId: string;
+let matolaPosDeviceId: string;
 let managerUserId: string;
 let originalStoreItem: {
   available: boolean;
@@ -28,6 +30,7 @@ let originalStoreItem: {
 const createdDeviceIds: string[] = [];
 const createdOrderIds: string[] = [];
 const createdUserIds: string[] = [];
+const createdDrawerRequestIds: string[] = [];
 
 beforeAll(async () => {
   admin = createClient(SUPABASE_URL, SERVICE_KEY);
@@ -43,6 +46,16 @@ beforeAll(async () => {
   }
 
   maputoStoreId = store.id;
+
+  const { data: matolaStore, error: matolaStoreError } = await admin
+    .from("stores")
+    .select("id")
+    .eq("slug", "matola")
+    .single();
+  if (matolaStoreError || !matolaStore) {
+    throw new Error(`Setup POS: loja Matola não encontrada — ${matolaStoreError?.message}`);
+  }
+  matolaStoreId = matolaStore.id;
 
   const { data: item, error: itemError } = await admin
     .from("menu_items")
@@ -152,9 +165,28 @@ beforeAll(async () => {
   }
   posDeviceId = device.id;
   createdDeviceIds.push(device.id);
+
+  const { data: matolaDevice, error: matolaDeviceError } = await admin
+    .from("devices")
+    .insert({
+      store_id: matolaStoreId,
+      kind: "pos",
+      label: "POS Matola teste F3",
+      device_key_hash: `teste-f3-matola-${suffix}`,
+    })
+    .select("id")
+    .single();
+  if (matolaDeviceError || !matolaDevice) {
+    throw new Error(`Setup POS: dispositivo Matola — ${matolaDeviceError?.message}`);
+  }
+  matolaPosDeviceId = matolaDevice.id;
+  createdDeviceIds.push(matolaDevice.id);
 });
 
 afterAll(async () => {
+  if (createdDrawerRequestIds.length > 0) {
+    await admin.from("print_jobs").delete().in("request_id", createdDrawerRequestIds);
+  }
   if (createdOrderIds.length > 0) {
     await admin.from("orders").delete().in("id", createdOrderIds);
   }
@@ -504,5 +536,128 @@ describe("F2 — void_sale", () => {
     expect(stock?.stock_qty).toBe(2);
     expect(events).toHaveLength(1);
     expect(events?.[0].actor_user_id).toBeTruthy();
+  });
+});
+
+describe("F3 — gaveta", () => {
+  it("enfileira um único pulso na venda com numerário e nenhum no pagamento móvel", async () => {
+    const cashClientSaleId = crypto.randomUUID();
+    const cashPayload = {
+      clientSaleId: cashClientSaleId,
+      deviceId: posDeviceId,
+      items: [{ menuItemId: classicSmashId, qty: 1 }],
+      payments: [{ method: "cash", amountCents: 30000 }],
+      cashReceivedCents: 30000,
+    };
+
+    const first = await manager.rpc("create_counter_sale", { p_payload: cashPayload });
+    const retry = await manager.rpc("create_counter_sale", { p_payload: cashPayload });
+    expect(first.error).toBeNull();
+    expect(retry.error).toBeNull();
+    createdOrderIds.push(first.data.order_id);
+
+    const { data: cashJobs, error: cashJobError } = await admin
+      .from("print_jobs")
+      .select("store_id,order_id,station,kind,request_id,payload")
+      .eq("order_id", first.data.order_id)
+      .eq("kind", "drawer");
+    expect(cashJobError).toBeNull();
+    expect(cashJobs).toHaveLength(1);
+    expect(cashJobs?.[0]).toMatchObject({
+      store_id: maputoStoreId,
+      order_id: first.data.order_id,
+      station: "counter",
+      kind: "drawer",
+      request_id: first.data.order_id,
+      payload: { source: "counter_sale", request_id: first.data.order_id },
+    });
+
+    const mobileClientSaleId = crypto.randomUUID();
+    const mobile = await manager.rpc("create_counter_sale", {
+      p_payload: {
+        clientSaleId: mobileClientSaleId,
+        deviceId: posDeviceId,
+        items: [{ menuItemId: classicSmashId, qty: 1 }],
+        payments: [{ method: "mpesa", amountCents: 30000 }],
+      },
+    });
+    expect(mobile.error).toBeNull();
+    createdOrderIds.push(mobile.data.order_id);
+
+    const { count: mobileDrawerCount } = await admin
+      .from("print_jobs")
+      .select("id", { count: "exact", head: true })
+      .eq("order_id", mobile.data.order_id)
+      .eq("kind", "drawer");
+    expect(mobileDrawerCount).toBe(0);
+  });
+
+  it("exige gerente da loja, motivo e audita uma abertura excepcional idempotente", async () => {
+    const requestId = crypto.randomUUID();
+    createdDrawerRequestIds.push(requestId);
+
+    const deniedCashier = await cashier.rpc("open_cash_drawer", {
+      p_device_id: posDeviceId,
+      p_request_id: crypto.randomUUID(),
+      p_reason: "Trocar dinheiro para o cliente",
+    });
+    expect(deniedCashier.error?.message).toContain("drawer_access_denied");
+
+    const deniedOtherStore = await manager.rpc("open_cash_drawer", {
+      p_device_id: matolaPosDeviceId,
+      p_request_id: crypto.randomUUID(),
+      p_reason: "Teste indevido entre lojas",
+    });
+    expect(deniedOtherStore.error?.message).toContain("invalid_or_unauthorised_device");
+
+    const missingReason = await manager.rpc("open_cash_drawer", {
+      p_device_id: posDeviceId,
+      p_request_id: crypto.randomUUID(),
+      p_reason: "  ",
+    });
+    expect(missingReason.error?.message).toContain("drawer_reason_required");
+
+    const first = await manager.rpc("open_cash_drawer", {
+      p_device_id: posDeviceId,
+      p_request_id: requestId,
+      p_reason: "Trocar dinheiro para o cliente",
+    });
+    const retry = await manager.rpc("open_cash_drawer", {
+      p_device_id: posDeviceId,
+      p_request_id: requestId,
+      p_reason: "Trocar dinheiro para o cliente",
+    });
+    expect(first.error).toBeNull();
+    expect(first.data).toMatchObject({ request_id: requestId, duplicate: false });
+    expect(retry.error).toBeNull();
+    expect(retry.data).toMatchObject({ request_id: requestId, duplicate: true });
+
+    const [{ data: jobs }, { data: events }] = await Promise.all([
+      admin
+        .from("print_jobs")
+        .select("store_id,order_id,station,kind,request_id,payload")
+        .eq("request_id", requestId),
+      admin
+        .from("event_log")
+        .select("store_id,actor_user_id,type,payload")
+        .eq("type", "cash.drawer_opened_outside_sale")
+        .eq("payload->>request_id", requestId),
+    ]);
+
+    expect(jobs).toHaveLength(1);
+    expect(jobs?.[0]).toMatchObject({
+      store_id: maputoStoreId,
+      order_id: null,
+      station: "counter",
+      kind: "drawer",
+      request_id: requestId,
+      payload: { reason: "Trocar dinheiro para o cliente", request_id: requestId },
+    });
+    expect(events).toHaveLength(1);
+    expect(events?.[0]).toMatchObject({
+      store_id: maputoStoreId,
+      actor_user_id: managerUserId,
+      type: "cash.drawer_opened_outside_sale",
+    });
   });
 });

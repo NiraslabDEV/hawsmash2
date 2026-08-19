@@ -4,6 +4,7 @@ export interface PrintJob {
   id: string;
   store_id: string;
   order_id: string | null;
+  request_id: string | null;
   station: 'kitchen' | 'counter' | 'bar';
   kind: 'order' | 'receipt' | 'drawer' | 'cash_close' | 'test';
   reprint_seq: number;
