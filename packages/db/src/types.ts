@@ -1,4 +1,4 @@
-﻿export type Json =
+export type Json =
   | string
   | number
   | boolean
@@ -190,6 +190,59 @@ export type Database = {
           last_seen_at?: string
         }
         Relationships: []
+      }
+      devices: {
+        Row: {
+          active: boolean
+          app_version: string | null
+          created_at: string
+          created_by: string | null
+          device_key_hash: string
+          id: string
+          kind: string
+          label: string
+          last_seen_at: string | null
+          locked_at: string | null
+          store_id: string
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          app_version?: string | null
+          created_at?: string
+          created_by?: string | null
+          device_key_hash: string
+          id?: string
+          kind: string
+          label: string
+          last_seen_at?: string | null
+          locked_at?: string | null
+          store_id: string
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          app_version?: string | null
+          created_at?: string
+          created_by?: string | null
+          device_key_hash?: string
+          id?: string
+          kind?: string
+          label?: string
+          last_seen_at?: string | null
+          locked_at?: string | null
+          store_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "devices_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       event_log: {
         Row: {
@@ -637,10 +690,15 @@ export type Database = {
       orders: {
         Row: {
           address: string | null
+          cash_received_cents: number | null
+          change_cents: number | null
+          channel: string
+          client_sale_id: string | null
           created_at: string
           customer_email: string | null
           customer_name: string
           customer_phone: string | null
+          daily_number: number | null
           delivery_fee_cents: number
           delivery_zone_id: string | null
           discount_cents: number
@@ -648,6 +706,7 @@ export type Database = {
           fulfillment_type: string
           gift_item_id: string | null
           id: string
+          needs_review: boolean
           notes: string | null
           order_number: string
           payment_method: string
@@ -664,10 +723,15 @@ export type Database = {
         }
         Insert: {
           address?: string | null
+          cash_received_cents?: number | null
+          change_cents?: number | null
+          channel: string
+          client_sale_id?: string | null
           created_at?: string
           customer_email?: string | null
           customer_name: string
           customer_phone?: string | null
+          daily_number?: number | null
           delivery_fee_cents?: number
           delivery_zone_id?: string | null
           discount_cents?: number
@@ -675,6 +739,7 @@ export type Database = {
           fulfillment_type: string
           gift_item_id?: string | null
           id?: string
+          needs_review?: boolean
           notes?: string | null
           order_number: string
           payment_method: string
@@ -691,10 +756,15 @@ export type Database = {
         }
         Update: {
           address?: string | null
+          cash_received_cents?: number | null
+          change_cents?: number | null
+          channel?: string
+          client_sale_id?: string | null
           created_at?: string
           customer_email?: string | null
           customer_name?: string
           customer_phone?: string | null
+          daily_number?: number | null
           delivery_fee_cents?: number
           delivery_zone_id?: string | null
           discount_cents?: number
@@ -702,6 +772,7 @@ export type Database = {
           fulfillment_type?: string
           gift_item_id?: string | null
           id?: string
+          needs_review?: boolean
           notes?: string | null
           order_number?: string
           payment_method?: string

@@ -45,13 +45,13 @@ jobs:
           supabase start
           supabase db reset
 
-      - name: Gate RLS entre lojas
+      - name: Gates de base de dados
         run: |
           eval "$(supabase status -o env)"
           SUPABASE_URL="$API_URL" \
           SUPABASE_ANON_KEY="$ANON_KEY" \
           SUPABASE_SERVICE_ROLE_KEY="$SERVICE_ROLE_KEY" \
-          pnpm --filter @delivery/db test:rls --run
+          pnpm --filter @delivery/db test:db --run
 
       - name: Lint e tipos
         run: pnpm lint

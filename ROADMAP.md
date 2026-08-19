@@ -102,7 +102,7 @@ _Os dias são referência de calendário, não paragens: a corrida não pára en
 
 **Objectivo:** vender ao balcão em menos de 15 segundos, com o preço do servidor.
 
-- [ ] Migration `1005_pos.sql`: `orders.client_sale_id uuid unique`, `daily_number`, `cash_received_cents`,
+- [x] Migration `1005_pos.sql`: `orders.client_sale_id uuid unique`, `daily_number`, `cash_received_cents`,
       `change_cents`, `needs_review bool`, `channel='counter'`, `devices`
 - [ ] RPC `create_counter_sale(p_payload jsonb)` — transacional e **idempotente** (CLAUDE §7.2)
 - [ ] RPC `void_sale(p_order_id, p_reason)` com perfil ≥ manager e reposição de stock
