@@ -213,6 +213,35 @@ describe("F8 — equipa e permissões", () => {
   });
 });
 
+describe("F8 — digest diário", () => {
+  it("resume o dia por loja e respeita o alcance de quem pergunta", async () => {
+    const ownerDigest = await owner.rpc("get_daily_digest", { p_day: null });
+    expect(ownerDigest.error).toBeNull();
+
+    const payload = ownerDigest.data as {
+      day: string;
+      stores: Array<{
+        store_id: string;
+        store_name: string;
+        orders_count: number;
+        revenue_cents: number;
+        payments: Record<string, number>;
+        cash_closes: unknown[];
+        incidents: number;
+      }>;
+    };
+    expect(payload.stores.length).toBeGreaterThan(1);
+    expect(typeof payload.stores[0].orders_count).toBe("number");
+    expect(typeof payload.stores[0].revenue_cents).toBe("number");
+
+    const managerDigest = await manager.rpc("get_daily_digest", { p_day: null });
+    expect(managerDigest.error).toBeNull();
+    const managerStores = (managerDigest.data as { stores: Array<{ store_id: string }> }).stores;
+    expect(managerStores).toHaveLength(1);
+    expect(managerStores[0].store_id).toBe(maputoStoreId);
+  });
+});
+
 describe("F8 — painel Sistema", () => {
   it("mostra o semáforo da loja com dispositivos, fila e último pedido", async () => {
     const { data: device, error: deviceError } = await admin

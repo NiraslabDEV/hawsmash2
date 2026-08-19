@@ -144,6 +144,26 @@
 - Onde está: `apps/web/app/api/emails/`
 - Se a resposta for outra: minutos — verificar domínio + preencher env.
 
+### B-013 · [F8] Projecto Sentry e DSN
+- Estado: aberto
+- Desbloqueia: Gabriel
+- Pergunta exacta: criar o projecto Sentry do HAWSMASH 2.0 e passar o DSN (web e print-bridge)?
+- Como avancei: `@sentry/nextjs` e `@sentry/node` instalados e ligados ao arranque, mas **inertes sem
+  `SENTRY_DSN`**. Sem DSN, o erro fica no log local e nada bloqueia.
+- Onde está: `apps/web/instrumentation.ts` · `services/print-bridge/src/observability.ts` · `.env.example`
+- Se a resposta for outra: minutos — preencher a env nos dois ambientes.
+
+### B-014 · [F8] Primeiro teste de restauro de backup
+- Estado: aberto
+- Desbloqueia: Gabriel (ambiente)
+- Pergunta exacta: onde corre o teste mensal de restauro — a máquina que corre o cron tem `pg_dump`/`pg_restore`?
+- Como avancei: `scripts/backup.mjs` escrito e validado em ensaio (`--dry-run`), política de retenção com
+  testes (`scripts/__tests__/backup-plan.test.ts`), e o procedimento de restauro passo a passo no
+  `docs/RUNBOOK.md §2`. Nesta máquina não há cliente Postgres nem Docker, por isso o **restauro real nunca
+  correu**.
+- Onde está: `scripts/backup.mjs` · `docs/RUNBOOK.md` (registo de testes de restauro)
+- Se a resposta for outra: 30 minutos — correr os 4 comandos do RUNBOOK e preencher a linha do registo.
+
 ---
 
 ## RESOLVIDOS

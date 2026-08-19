@@ -43,10 +43,40 @@ Alerta é sempre accionável: diz **qual loja, qual dispositivo, desde quando e 
 - [ ] Rever contas de equipa: alguém saiu? Remover acesso
 - [ ] Relatório ao dono: vendas por loja, produtos, horas de pico, incidentes e o que foi melhorado
 
+### Como correr o backup nocturno
+
+```bash
+# Produção. A ligação vem do Supabase → Project Settings → Database → Connection string.
+DATABASE_URL="postgres://…" node scripts/backup.mjs --dir /var/backups/hawsmash
+```
+
+- Formato **custom** (`pg_dump -Fc`) — é o que o `pg_restore` aceita tabela a tabela.
+- Retenção **30 dias**: o script apaga sozinho o que passa disso (`scripts/lib/backup-plan.mjs`).
+- Sem `BACKUP_TARGET`, o dump fica **só em disco local** e o script diz porquê (**B-008**).
+- `--dry-run` mostra o que faria sem escrever nada.
+
+### Como correr o teste de restauro (mensal)
+
+```bash
+# 1. Criar uma BD temporária vazia (nunca restaurar por cima de produção)
+createdb hawsmash_restore_teste
+
+# 2. Restaurar o dump mais recente
+pg_restore --dbname hawsmash_restore_teste --no-owner --clean --if-exists backup.dump
+
+# 3. Conferir o essencial
+psql hawsmash_restore_teste -c "select count(*) from orders;"
+psql hawsmash_restore_teste -c "select slug, order_prefix from stores;"
+psql hawsmash_restore_teste -c "select max(created_at) from orders;"
+
+# 4. Apagar a BD temporária e registar o resultado na tabela abaixo
+dropdb hawsmash_restore_teste
+```
+
 ### Registo de testes de restauro
 | Data | Backup usado | Resultado | Tempo até restaurar | Por |
 |---|---|---|---|---|
-| | | | | |
+| — | — | **por executar** — falta ambiente com `pg_dump`/`pg_restore` (**B-014**) | — | — |
 
 *(Backup não testado não é backup. Preencher todos os meses.)*
 

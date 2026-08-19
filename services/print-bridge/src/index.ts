@@ -7,6 +7,7 @@ import { FileRequestLedger } from './request-ledger';
 import { sendToPrinter } from './printer-client';
 import { sendDrawerPulse } from './drawer';
 import { startOperationalLoops } from './operations';
+import { initObservability, observabilityEnabled, reportError } from './observability';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -17,6 +18,7 @@ const SIMULATOR_VERBOSE = process.env.SIMULATOR_VERBOSE === 'true';
 
 async function main(): Promise<void> {
   const loadedConfig = loadBridgeConfig(process.env);
+  initObservability(loadedConfig.storeId, loadedConfig.appVersion);
   const config = USE_SIMULATOR
     ? {
         ...loadedConfig,
@@ -73,6 +75,7 @@ async function main(): Promise<void> {
     });
   });
   console.log(`[HTTP] ${config.localHttpHost}:${config.localHttpPort} pronto`);
+  console.log(`[Sentry] ${observabilityEnabled() ? 'activo' : 'sem DSN (B-013)'}`);
 
   const supabase = createBridgeClient(config);
   const stopOperationalLoops = startOperationalLoops(supabase, config);
@@ -88,15 +91,18 @@ async function main(): Promise<void> {
 
 process.on('unhandledRejection', (error) => {
   console.error('[Fatal] Unhandled rejection:', error);
+  reportError(error, { phase: 'unhandledRejection' });
   process.exit(1);
 });
 
 process.on('uncaughtException', (error) => {
   console.error('[Fatal] Uncaught exception:', error);
+  reportError(error, { phase: 'uncaughtException' });
   process.exit(1);
 });
 
 main().catch((error) => {
   console.error('[Fatal] Service startup failed:', error);
+  reportError(error, { phase: 'startup' });
   process.exit(1);
 });

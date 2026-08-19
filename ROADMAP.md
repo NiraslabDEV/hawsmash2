@@ -196,10 +196,10 @@ _Os dias são referência de calendário, não paragens: a corrida não pára en
 - [x] Aba **Equipa**: criar/desactivar contas, atribuir perfil e loja(s), definir PIN
 - [x] Remoção de acesso imediata (compromisso da proposta) + registo em `event_log`
 - [x] Aba **Sistema**: semáforo por loja (POS, bridge, impressora, último pedido, fila de impressão)
-- [ ] Alertas automáticos (email + WhatsApp deep link) da lista de `CLAUDE.md §11.5`
-- [ ] Digest diário ao dono
-- [ ] `pg_dump` nocturno para armazenamento externo + primeiro **teste de restauro** registado em `docs/RUNBOOK.md`
-- [ ] Sentry (web + bridge) ligado
+- [x] Alertas automáticos (email + WhatsApp deep link) da lista de `CLAUDE.md §11.5` — `/api/cron/alerts`, com arrefecimento de 30 min
+- [x] Digest diário ao dono — `/api/cron/digest` + `get_daily_digest`
+- [~] B-014 `pg_dump` nocturno (script pronto e ensaiado; destino externo B-008) + **teste de restauro** por correr
+- [x] ⏳ B-013 Sentry (web + bridge) ligado — inerte até haver DSN
 
 **PROMPT:** *"Executa a F8: equipa/permissões, painel Sistema com semáforos, alertas automáticos, digest diário e backups com teste de restauro. Segue `CLAUDE.md §6 e §11.5/11.6` e regista o restauro no RUNBOOK."*
 
