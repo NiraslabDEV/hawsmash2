@@ -15,8 +15,16 @@ const maputoMenu: PosMenuCategory[] = [
   {
     id: 'burgers',
     name: 'Smash burgers',
+    station: 'kitchen',
     items: [
-      { id: 'classic', name: 'Classic Smash', description: null, price_cents: 30000, available: true },
+      {
+        id: 'classic',
+        name: 'Classic Smash',
+        description: null,
+        price_cents: 30000,
+        available: true,
+        station: 'kitchen',
+      },
     ],
   },
 ];

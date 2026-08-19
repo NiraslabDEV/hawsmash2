@@ -10,11 +10,21 @@ import {
   type CounterPaymentMethod,
 } from '@/lib/pos/payment';
 import {
+  enqueueOfflineSale,
   loadMenuWithFallback,
   MENU_REFRESH_MS,
+  removeOfflineSale,
+  updateOfflineSale,
+  type OfflineSale,
   type PosMenuCategory as Category,
   type PosMenuItem as MenuItem,
 } from '@/lib/pos/offline-store';
+import {
+  DEFAULT_LOCAL_BRIDGE_URL,
+  printOfflineSale,
+  readLocalBridgeConfig,
+  saveLocalBridgeConfig,
+} from '@/lib/pos/offline-sales';
 import { isPosPin, POS_IDLE_TIMEOUT_MS } from '@/lib/pos/session';
 
 type PosContext = {
@@ -79,6 +89,8 @@ export function PosShell() {
   const [availableStores, setAvailableStores] = useState<AvailableStore[]>([]);
   const [selectedStoreId, setSelectedStoreId] = useState('');
   const [deviceLabel, setDeviceLabel] = useState('POS balcão');
+  const [bridgeUrl, setBridgeUrl] = useState(DEFAULT_LOCAL_BRIDGE_URL);
+  const [bridgeToken, setBridgeToken] = useState('');
   const [binding, setBinding] = useState(false);
   const [pinConfigured, setPinConfigured] = useState(false);
   const [locked, setLocked] = useState(false);
@@ -103,6 +115,7 @@ export function PosShell() {
     orderId: string;
     dailyNumber: number;
     totalCents: number;
+    offline?: boolean;
   } | null>(null);
   const [lastSale, setLastSale] = useState<{ orderId: string; dailyNumber: number } | null>(null);
   const [voidOpen, setVoidOpen] = useState(false);
@@ -276,7 +289,13 @@ export function PosShell() {
   }, [context, lockDevice, locked, pinConfigured]);
 
   async function bindDevice() {
-    if (!selectedStoreId || deviceLabel.trim().length < 3) return;
+    if (!selectedStoreId || deviceLabel.trim().length < 3 || bridgeToken.trim().length < 32) return;
+    try {
+      saveLocalBridgeConfig(window.localStorage, { baseUrl: bridgeUrl, token: bridgeToken });
+    } catch {
+      setError('Confirma o endereço e o token local do bridge.');
+      return;
+    }
     setBinding(true);
     setError(null);
     const { data, error: bindError } = await supabase.rpc('bind_pos_device', {
@@ -447,6 +466,58 @@ export function PosShell() {
 
     setSubmitting(true);
     setError(null);
+    const createdAt = new Date().toISOString();
+    let queuedSale: OfflineSale;
+    try {
+      queuedSale = await enqueueOfflineSale({
+        clientSaleId: saleId,
+        deviceId: context.deviceId,
+        storeSlug: context.storeSlug,
+        storeName: context.storeName,
+        createdAt,
+        items: lines.map((line) => ({
+          menuItemId: line.id,
+          name: line.name,
+          qty: line.qty,
+          unitPriceCents: line.price_cents,
+          station: line.station,
+        })),
+        payments: paymentPlan.payments,
+        ...(cashPaymentCents > 0 ? { cashReceivedCents } : {}),
+        totalCents,
+      });
+    } catch {
+      setSubmitting(false);
+      setError('Não foi possível guardar a venda neste PC. Não feches nem recarregues o POS.');
+      return;
+    }
+
+    const completeOfflineSale = () => {
+      setSubmitting(false);
+      setConfirmation({
+        orderId: '',
+        dailyNumber: queuedSale.localNumber,
+        totalCents: queuedSale.totalCents,
+        offline: true,
+      });
+      setCart({});
+      setSaleId(crypto.randomUUID());
+      setAllocations({});
+      setCashReceivedCents(0);
+      window.setTimeout(() => setConfirmation(null), 3000);
+      const bridge = readLocalBridgeConfig(window.localStorage);
+      if (bridge) {
+        void printOfflineSale(queuedSale, bridge)
+          .then((localPrint) => updateOfflineSale({ ...queuedSale, localPrint }))
+          .catch(() => undefined);
+      }
+    };
+
+    if (!navigator.onLine) {
+      completeOfflineSale();
+      return;
+    }
+
     const { data, error: saleError } = await supabase.rpc('create_counter_sale', {
       p_payload: {
         clientSaleId: saleId,
@@ -459,9 +530,17 @@ export function PosShell() {
     setSubmitting(false);
 
     if (saleError) {
+      const retryable = /fetch|network|connection|offline/i.test(saleError.message);
+      if (retryable) {
+        completeOfflineSale();
+        return;
+      }
+      await removeOfflineSale(saleId);
       setError(errorMessage(saleError.message));
       return;
     }
+
+    await removeOfflineSale(saleId);
 
     const completed = {
       orderId: data.order_id as string,
@@ -537,10 +616,30 @@ export function PosShell() {
               maxLength={80}
               className="mt-2 min-h-16 w-full rounded-2xl border border-white/10 bg-black/30 px-4 font-bold outline-none focus:border-[#e5a93c]"
             />
+            <label className="mt-4 block text-sm font-bold text-[#c8bfb0]" htmlFor="bridge-url">
+              Endereço local do bridge
+            </label>
+            <input
+              id="bridge-url"
+              value={bridgeUrl}
+              onChange={(event) => setBridgeUrl(event.target.value)}
+              className="mt-2 min-h-16 w-full rounded-2xl border border-white/10 bg-black/30 px-4 font-mono text-sm outline-none focus:border-[#e5a93c]"
+            />
+            <label className="mt-4 block text-sm font-bold text-[#c8bfb0]" htmlFor="bridge-token">
+              Token local do bridge
+            </label>
+            <input
+              id="bridge-token"
+              type="password"
+              value={bridgeToken}
+              onChange={(event) => setBridgeToken(event.target.value)}
+              autoComplete="off"
+              className="mt-2 min-h-16 w-full rounded-2xl border border-white/10 bg-black/30 px-4 font-mono outline-none focus:border-[#e5a93c]"
+            />
             {error && <p role="alert" className="mt-4 rounded-xl bg-red-950/60 p-3 text-red-200">{error}</p>}
             <button
               type="button"
-              disabled={binding || deviceLabel.trim().length < 3}
+              disabled={binding || deviceLabel.trim().length < 3 || bridgeToken.trim().length < 32}
               onClick={() => void bindDevice()}
               className="mt-6 min-h-16 w-full rounded-2xl bg-[#e5a93c] px-6 font-black text-black disabled:opacity-40"
             >
@@ -838,10 +937,14 @@ export function PosShell() {
       {confirmation && (
         <div className="fixed inset-0 z-50 grid place-items-center bg-black/85 p-6">
           <section className="w-full max-w-md rounded-[2rem] border border-emerald-400/40 bg-[#111110] p-8 text-center shadow-2xl">
-            <p className="text-lg font-black text-emerald-300">VENDA REGISTADA</p>
+            <p className="text-lg font-black text-emerald-300">
+              {confirmation.offline ? 'VENDA GUARDADA OFFLINE' : 'VENDA REGISTADA'}
+            </p>
             <p className="my-6 text-8xl font-black text-white">{confirmation.dailyNumber}</p>
             <p className="text-3xl font-black text-[#e5a93c]">{mt(confirmation.totalCents)}</p>
-            <p className="mt-4 text-sm text-[#847e72]">A preparar a próxima venda…</p>
+            <p className="mt-4 text-sm text-[#847e72]">
+              {confirmation.offline ? 'Será sincronizada quando a ligação voltar.' : 'A preparar a próxima venda…'}
+            </p>
           </section>
         </div>
       )}

@@ -137,7 +137,7 @@ _Os dias são referência de calendário, não paragens: a corrida não pára en
 
 - [x] PWA do POS: manifest, service worker, instalação no PC touch, arranque em modo kiosk
 - [x] Cache do menu (IndexedDB) refrescada a cada 2 min — **única fonte de preço offline**
-- [ ] Fila de vendas offline com `client_sale_id`; impressão imediata pelo HTTP local do bridge
+- [x] Fila de vendas offline com `client_sale_id`; impressão imediata pelo HTTP local do bridge
 - [ ] Sincronização automática ao voltar a ligação, com backoff; zero duplicados (idempotência da F2)
 - [ ] Divergência de preço na sincronização → `needs_review` + lista **Conciliação** no painel
 - [ ] Banner de estado (`SEM LIGAÇÃO · N por sincronizar`) e confirmação verde ao sincronizar
