@@ -44,11 +44,15 @@ begin
 
   delete from public.delivery_zones;
   -- O 1.0 cobra uma taxa plana confirmada de 150 MT em Maputo.
+  -- BLOQUEIO: B-002 — as zonas e taxas da Matola ainda não vieram do cliente.
+  -- Fica uma zona PLACEHOLDER_ZONA à mesma taxa para o fluxo de entrega poder
+  -- ser testado ponta a ponta; `scripts/check-placeholders.mjs` impede que
+  -- sobreviva ao go-live.
   insert into public.delivery_zones (
     store_id, name, fee_cents, active, sort
-  ) values (
-    v_maputo, 'Maputo', 15000, true, 1
-  );
+  ) values
+    (v_maputo, 'Maputo', 15000, true, 1),
+    (v_matola, 'PLACEHOLDER_ZONA', 15000, true, 1);
 
   -- Remove o catálogo demonstrativo herdado do Casa do Bom Pasteleiro.
   delete from public.menu_items;

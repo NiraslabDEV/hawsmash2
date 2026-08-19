@@ -53,10 +53,11 @@
 - Estado: aberto
 - Desbloqueia: cliente
 - Pergunta exacta: que zonas entrega a Matola e a que preço cada uma?
-- Como avancei: seed da Matola com **uma zona `PLACEHOLDER_ZONA` a 150 MT** e a loja com `delivery_enabled`.
-  Maputo mantém as zonas reais do 1.0.
-- Onde está: `supabase/seed.sql` · marcador `BLOQUEIO: B-002`
-- Se a resposta for outra: minutos — inserir linhas em `delivery_zones`.
+- Como avancei: seed da Matola com **uma zona `PLACEHOLDER_ZONA` a 150 MT** e a loja com `delivery_enabled`
+  (a taxa é a mesma que o 1.0 cobra em Maputo). Maputo mantém a zona real do 1.0.
+  `scripts/check-placeholders.mjs` **falha o go-live** enquanto esta zona existir com este nome.
+- Onde está: `supabase/seed.sql` · marcador `BLOQUEIO: B-002` · guarda em `scripts/check-placeholders.mjs`
+- Se a resposta for outra: minutos — renomear/acrescentar linhas em `delivery_zones` pelo painel.
 
 ### B-003 · [F2] Terminal de cartão
 - Estado: aberto
@@ -70,9 +71,9 @@
 - Estado: aberto
 - Desbloqueia: cliente
 - Pergunta exacta: quantas pessoas por loja e quem fica com perfil de **gerente** em cada uma?
-- Como avancei: seed cria `owner` (dono) + 1 `manager` e 1 `cashier` **placeholder** por loja, desactivados
-  (`active=false`), para o ecrã de Equipa poder ser testado sem contas reais.
-- Onde está: `supabase/seed.sql` · marcador `BLOQUEIO: B-004`
+- Como avancei: a aba **Equipa** já cria contas, atribui perfil/lojas e define PIN (`/equipa`), e a remoção
+  de acesso é imediata. Falta só **quem** são as pessoas — nenhuma conta real foi criada.
+- Onde está: `apps/web/app/(admin)/equipa/page.tsx` · RPC `set_staff_access` / `deactivate_staff`
 - Se a resposta for outra: minutos — criar contas no ecrã de Equipa.
 
 ### B-005 · [F3] Rodapé do talão do cliente
@@ -131,8 +132,10 @@
 - Estado: aberto
 - Desbloqueia: cliente
 - Pergunta exacta: quantas TVs por loja e o que mostra cada uma — **cardápio** ou **senhas**?
-- Como avancei: as duas rotas existem (`/tv/[store]/menu`, `/tv/[store]/senhas`) e funcionam em qualquer browser.
-- Onde está: `apps/web/app/(tv)/`
+- Como avancei: as duas rotas existem e funcionam em qualquer browser sem sessão —
+  `/tv/[store]/menu` (cardápio com esgotados) e `/tv/[store]/senhas` (número do dia). Ambas recarregam
+  sozinhas e mantêm o último estado se a rede oscilar.
+- Onde está: `apps/web/app/(tv)/` · RPC `get_store_board` e `get_store_queue`
 - Se a resposta for outra: minutos — é abrir o URL certo em cada ecrã.
 
 ### B-012 · [F7] Domínio de email verificado
@@ -174,19 +177,65 @@
 
 ## PACOTE FINAL — para atacar de uma vez só
 
-> O agente preenche esta secção **no fim da corrida**, agrupando os abertos por **quem desbloqueia**, com as
-> perguntas já redigidas para copiar e enviar. É o que torna esta lista útil em vez de um monte de TODOs.
+> Preenchido no fim da corrida (F0→F9). **14 bloqueios abertos**: 5 do cliente, 6 do Gabriel,
+> 3 à espera de hardware/agenda. Nenhum impede o sistema de funcionar hoje em staging.
 
 ### Para o cliente (mensagem pronta a enviar)
-*(preencher no fim: uma lista numerada de perguntas curtas, em português simples, sem jargão técnico)*
+
+> Olá Ridwan. O sistema das duas lojas já está de pé e a funcionar em ambiente de teste.
+> Para fechar, preciso destas respostas — todas rápidas:
+>
+> 1. **Matola — entregas:** que zonas a Matola entrega e quanto cobra em cada uma? (Neste momento está
+>    com uma zona provisória de 150 MT, igual a Maputo.)
+> 2. **M-Pesa/e-Mola:** o dinheiro das duas lojas cai na **mesma** conta, ou queres uma conta por loja?
+> 3. **Talão:** que texto queres no fim do talão do cliente? (Hoje está "Obrigado! Bom apetite!".) Queres NUIT?
+> 4. **Equipa:** quantas pessoas por loja e quem fica como **gerente** em cada uma? (Preciso de nome e email
+>    de cada pessoa para criar as contas.)
+> 5. **Cartão:** confirmo que o terminal de cartão é do banco e o sistema só regista que foi cartão — certo?
+> 6. **TVs:** quantos ecrãs por loja e o que mostra cada um — **cardápio** ou **senhas**?
+> 7. **Abertura:** em que dia exacto passamos o hawsmash.com para o sistema novo?
+
+| # | ID | Sem isto… |
+|---|---|---|
+| 1 | B-002 | a Matola não consegue receber entregas com a taxa certa |
+| 2 | B-001 | o dinheiro das duas lojas cai todo na mesma carteira |
+| 3 | B-005 | o talão sai com o rodapé provisório |
+| 4 | B-004 | a equipa entra com contas criadas à pressa no dia |
+| 5 | B-003 | (só confirmação — nada bloqueia) |
+| 6 | B-011 | as TVs ficam por apontar |
+| 7 | B-010 | não há data de cutover |
 
 ### Para o Gabriel (decisões e acessos)
-*(preencher no fim: custo, credenciais, contas)*
+
+| ID | O que falta | Custo/tempo |
+|---|---|---|
+| B-007 | GitHub Pro/Team para **proteger a `main`** (exigir CI verde antes do merge) | subscrição; 5 min a activar |
+| B-008 | Destino do `pg_dump` nocturno (Backblaze B2? Drive?) + credencial | decisão + 30 min |
+| B-009 | Service key **de leitura** do Supabase do 1.0 (`tsrgileifpiaiicwjfar`) para a importação | 5 min + 1 h de conferência |
+| B-012 | Domínio verificado no Resend e remetente dos emails | 30 min |
+| B-013 | Projecto Sentry + DSN (web e print-bridge) | 15 min |
+| B-014 | Máquina com `pg_dump`/`pg_restore` para o **primeiro teste de restauro** | 30 min |
 
 ### À espera de hardware
-*(preencher no fim: o que só se valida com o equipamento na mão, e quanto tempo demora)*
+
+| ID | O que só se valida com o equipamento | Tempo |
+|---|---|---|
+| B-006 | Impressão real nas duas cozinhas, **gaveta a abrir**, POS em kiosk no PC touch, watchdog do bridge no Windows | 1–2 h por loja (10 testes de `docs/HARDWARE.md §4`) |
+| B-006 | **Ensaio geral** por loja: 20 vendas, 5 delivery, falha de rede, falha de impressora, fecho de caixa | ~90 min por loja (guião em `docs/RUNBOOK.md §6`) |
+| B-011 | Apontar as TVs aos URLs `/tv/[loja]/menu` e `/tv/[loja]/senhas` | minutos |
 
 ### Ordenado por impacto na abertura
+
 | Prioridade | ID | Sem isto, na abertura… |
 |---|---|---|
-| | | |
+| 1 | **B-006** | ninguém garante que o papel sai e que a gaveta abre no equipamento real |
+| 2 | **B-004** | a equipa não tem contas nem PIN para trabalhar |
+| 3 | **B-002** | a Matola não factura entregas com a taxa certa |
+| 4 | **B-009** | abre-se sem o histórico do 1.0 (funciona, mas perde-se o passado) |
+| 5 | **B-005** | o talão sai com rodapé provisório |
+| 6 | **B-012** | o cliente não recebe email de confirmação (o pedido não pára) |
+| 7 | **B-001** | o dinheiro das duas lojas mistura-se numa carteira só |
+| 8 | **B-013** | uma falha silenciosa só se descobre por telefonema |
+| 9 | **B-008** / **B-014** | há backup do Supabase (PITR), mas não há cópia externa testada |
+| 10 | **B-010** | não há data marcada para o cutover |
+| 11 | **B-003** / **B-007** / **B-011** | nada bloqueia a venda |

@@ -181,6 +181,7 @@ Manuais a entregar no fim: [`manual-caixa.md`](manual-caixa.md), [`manual-cozinh
 - [ ] Impressora da cozinha: teste OK · Impressora do balcão: teste OK · Gaveta: abre OK
 - [ ] POS instalado em kiosk, arranca sozinho, ligado à loja certa
 - [ ] print-bridge com `STORE_ID` correcto, heartbeat verde no painel
+- [ ] `node scripts/check-placeholders.mjs` contra **produção** sai a zero (nenhum `PLACEHOLDER_` na BD)
 - [ ] Cardápio conferido (nomes, preços, fotos, disponibilidade) pelo dono
 - [ ] Horário e zonas de entrega da loja conferidos
 - [ ] Números M-Pesa/e-Mola da loja conferidos (**teste de pagamento real de 1 MT**)
