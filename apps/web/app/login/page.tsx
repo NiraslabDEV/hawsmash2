@@ -1,13 +1,12 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { createClient } from '@/utils/supabase/client';
+import { safeInternalRedirect } from '@/lib/auth/redirect';
 import { brand } from '@brand';
 
 export default function LoginPage() {
-  const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -30,8 +29,19 @@ export default function LoginPage() {
       return;
     }
 
-    router.push('/pedidos');
-    router.refresh();
+    const destination = safeInternalRedirect(
+      new URLSearchParams(window.location.search).get('next'),
+    );
+    const { data: sessionData } = await supabase.auth.getSession();
+    if (!sessionData.session) {
+      setError('A sessão não ficou activa. Tenta novamente.');
+      setLoading(false);
+      return;
+    }
+
+    // Navegação completa: garante que o POS seguinte lê os cookies já gravados,
+    // evitando uma corrida entre o router cliente e a persistência da sessão.
+    window.location.assign(destination);
   };
 
   return (

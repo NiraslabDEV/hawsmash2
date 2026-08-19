@@ -59,6 +59,18 @@ jobs:
       - name: Testes
         run: pnpm test
 
+      - name: Instalar Chromium para os testes E2E
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: E2E do POS
+        run: |
+          eval "$(supabase status -o env)"
+          SUPABASE_URL="$API_URL" \
+          NEXT_PUBLIC_SUPABASE_URL="$API_URL" \
+          NEXT_PUBLIC_SUPABASE_ANON_KEY="$ANON_KEY" \
+          SUPABASE_SERVICE_ROLE_KEY="$SERVICE_ROLE_KEY" \
+          pnpm test:e2e
+
       - name: Parar Supabase local
         if: always()
         run: supabase stop --no-backup
