@@ -125,6 +125,15 @@ test.afterAll(async () => {
   if (userId) await admin.auth.admin.deleteUser(userId);
 });
 
+// O aviso de cookies só aparece quando há tags de marketing configuradas —
+// depende dos dados do ambiente. O teste dispensa-o se ele não existir.
+async function dismissCookies(page: import('@playwright/test').Page) {
+  await page
+    .getByRole('button', { name: 'Recusar' })
+    .click({ timeout: 8000 })
+    .catch(() => {});
+}
+
 async function enterPos(page: import('@playwright/test').Page) {
   await page.addInitScript((linkedDeviceId) => {
     window.localStorage.setItem('hs_pos_device_id', linkedDeviceId);
@@ -132,8 +141,7 @@ async function enterPos(page: import('@playwright/test').Page) {
 
   await page.goto('/login?next=/pos');
   await page.waitForLoadState('networkidle');
-  const rejectCookies = page.getByRole('button', { name: 'Recusar' });
-  if (await rejectCookies.isVisible()) await rejectCookies.click();
+  await dismissCookies(page);
   await page.getByPlaceholder('dono@restaurante.com').fill(email);
   await page.getByPlaceholder('••••••••').fill(password);
   await page.getByRole('button', { name: 'Entrar' }).click();
@@ -146,8 +154,7 @@ test('vende em dinheiro com troco e anula com motivo', async ({ page }) => {
   await page.getByLabel('PIN', { exact: true }).fill('4826');
   await page.getByLabel('Confirmar PIN').fill('4826');
   await page.getByRole('button', { name: 'Guardar PIN' }).click();
-  await expect(page.getByRole('button', { name: 'Recusar' })).toBeVisible();
-  await page.getByRole('button', { name: 'Recusar' }).click();
+  await dismissCookies(page);
 
   await page.getByRole('button', { name: /Classic Smash/ }).click();
   await page.getByRole('button', { name: /^Recebido:/ }).click();
@@ -222,8 +229,7 @@ test('guarda a venda com a rede desligada e sincroniza ao regressar', async ({ c
     await page.getByRole('button', { name: 'Desbloquear' }).click();
   }
 
-  await expect(page.getByRole('button', { name: 'Recusar' })).toBeVisible();
-  await page.getByRole('button', { name: 'Recusar' }).click();
+  await dismissCookies(page);
 
   await context.setOffline(true);
   await expect(page.getByText('SEM LIGAÇÃO · 0 vendas por sincronizar')).toBeVisible();
