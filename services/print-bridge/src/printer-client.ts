@@ -1,6 +1,6 @@
 // TCP printer client com retry/backoff.
 import { createConnection } from 'net';
-import { createReceipt } from './escpos';
+import { createPrintDocument } from './escpos';
 import type { PrintPayload } from './types';
 
 const RETRY_ATTEMPTS = 3;
@@ -18,9 +18,10 @@ export async function sendToPrinter(
   port: number,
   job: PrintPayload,
   jobId: string,
+  kind = 'order',
   opts: SendOptions = {},
 ): Promise<boolean> {
-  return sendBufferToPrinter(ip, port, createReceipt(job), jobId, opts);
+  return sendBufferToPrinter(ip, port, createPrintDocument(kind, job), jobId, opts);
 }
 
 export async function sendBufferToPrinter(

@@ -38,7 +38,7 @@ describe('execução do job de impressão', () => {
 
     await dispatchPrintJob(baseJob, printer, { print, drawer });
 
-    expect(print).toHaveBeenCalledWith(printer, baseJob.payload, baseJob.id);
+    expect(print).toHaveBeenCalledWith(printer, 'receipt', baseJob.payload, baseJob.id);
     expect(drawer).not.toHaveBeenCalled();
   });
 });

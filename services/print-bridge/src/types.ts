@@ -49,10 +49,59 @@ export interface TestPrintPayload {
   message?: string;
 }
 
-export type PrintPayload = PrintJobPayload | TestPrintPayload;
+export interface KitchenTicketPayload {
+  template: 'kitchen';
+  store_short_name: string;
+  order_number: string;
+  daily_number: number;
+  channel: 'counter' | 'delivery' | 'pickup' | 'dine_in';
+  customer_name: string;
+  items: Array<{ name: string; quantity: number; notes?: string | null }>;
+  notes?: string | null;
+  created_at: string;
+}
+
+export interface CustomerReceiptPayload {
+  template: 'receipt';
+  store_short_name: string;
+  store_address?: string | null;
+  store_phone?: string | null;
+  receipt_footer?: string | null;
+  order_number: string;
+  daily_number: number;
+  customer_name: string;
+  items: Array<{
+    name: string;
+    quantity: number;
+    unit_price_cents: number;
+    line_total_cents: number;
+    notes?: string | null;
+  }>;
+  subtotal_cents: number;
+  delivery_fee_cents: number;
+  total_cents: number;
+  payments: Array<{ method: string; amount_cents: number }>;
+  cash_received_cents?: number | null;
+  change_cents?: number | null;
+  created_at: string;
+}
+
+export type PrintPayload =
+  | PrintJobPayload
+  | TestPrintPayload
+  | KitchenTicketPayload
+  | CustomerReceiptPayload;
 
 export function isTestPayload(p: PrintPayload): p is TestPrintPayload {
   return (p as TestPrintPayload).test === true;
+}
+
+export function isKitchenTicket(p: PrintPayload): p is KitchenTicketPayload {
+  return (p as KitchenTicketPayload).template === 'kitchen';
+}
+
+export function isCustomerReceipt(p: PrintPayload): p is CustomerReceiptPayload {
+  return (p as CustomerReceiptPayload).template === 'receipt';
 }
 
 export interface EventLog {

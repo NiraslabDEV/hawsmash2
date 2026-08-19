@@ -54,7 +54,13 @@ async function main(): Promise<void> {
       const printer = request.kind === 'order' && request.station !== 'counter'
         ? config.printers.kitchen
         : config.printers.counter;
-      return sendToPrinter(printer.ip, printer.port, request.payload, request.requestId);
+      return sendToPrinter(
+        printer.ip,
+        printer.port,
+        request.payload,
+        request.requestId,
+        request.kind,
+      );
     },
     drawer: (requestId) => sendDrawerPulse(config.printers.counter, requestId),
   });

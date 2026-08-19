@@ -158,6 +158,9 @@ importers:
 
   services/print-bridge:
     dependencies:
+      '@delivery/core':
+        specifier: workspace:*
+        version: link:../../packages/core
       '@supabase/supabase-js':
         specifier: ^2.39.0
         version: 2.108.1

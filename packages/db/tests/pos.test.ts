@@ -661,3 +661,80 @@ describe("F3 — gaveta", () => {
     });
   });
 });
+
+describe("F3 — talões da venda", () => {
+  it("enfileira uma comanda sem preços e um talão com troco uma só vez", async () => {
+    const { error: stockSetupError } = await admin
+      .from("store_items")
+      .update({ available: true, track_stock: true, stock_qty: 5 })
+      .eq("store_id", maputoStoreId)
+      .eq("menu_item_id", classicSmashId);
+    expect(stockSetupError).toBeNull();
+
+    const clientSaleId = crypto.randomUUID();
+    const payload = {
+      clientSaleId,
+      deviceId: posDeviceId,
+      items: [{ menuItemId: classicSmashId, qty: 2, notes: "Sem cebola" }],
+      payments: [{ method: "cash", amountCents: 60000 }],
+      cashReceivedCents: 100000,
+    };
+
+    const first = await manager.rpc("create_counter_sale", { p_payload: payload });
+    const retry = await manager.rpc("create_counter_sale", { p_payload: payload });
+    expect(first.error).toBeNull();
+    expect(retry.error).toBeNull();
+    createdOrderIds.push(first.data.order_id);
+
+    const { data: jobs, error } = await admin
+      .from("print_jobs")
+      .select("store_id,order_id,station,kind,reprint_seq,payload")
+      .eq("order_id", first.data.order_id)
+      .in("kind", ["order", "receipt"])
+      .order("kind");
+
+    expect(error).toBeNull();
+    expect(jobs).toHaveLength(2);
+
+    const kitchen = jobs?.find((job) => job.kind === "order");
+    const receipt = jobs?.find((job) => job.kind === "receipt");
+    expect(kitchen).toMatchObject({
+      store_id: maputoStoreId,
+      station: "kitchen",
+      reprint_seq: 0,
+      payload: {
+        template: "kitchen",
+        daily_number: first.data.daily_number,
+        order_number: first.data.order_number,
+        channel: "counter",
+        items: [{ name: "Classic Smash", quantity: 2, notes: "Sem cebola" }],
+      },
+    });
+    expect(kitchen?.payload).not.toHaveProperty("total_cents");
+    expect(kitchen?.payload.items[0]).not.toHaveProperty("unit_price_cents");
+
+    expect(receipt).toMatchObject({
+      store_id: maputoStoreId,
+      station: "counter",
+      reprint_seq: 0,
+      payload: {
+        template: "receipt",
+        daily_number: first.data.daily_number,
+        order_number: first.data.order_number,
+        subtotal_cents: 60000,
+        total_cents: 60000,
+        cash_received_cents: 100000,
+        change_cents: 40000,
+        items: [
+          {
+            name: "Classic Smash",
+            quantity: 2,
+            unit_price_cents: 30000,
+            line_total_cents: 60000,
+          },
+        ],
+        payments: [{ method: "cash", amount_cents: 60000 }],
+      },
+    });
+  });
+});
