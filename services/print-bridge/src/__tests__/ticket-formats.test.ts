@@ -4,6 +4,7 @@ import {
   createCashCloseReceipt,
   createCustomerReceipt,
   createKitchenTicket,
+  createReceipt,
   decodeReceipt,
 } from '../escpos';
 import type { CashClosePayload, CustomerReceiptPayload, KitchenTicketPayload } from '../types';
@@ -114,5 +115,11 @@ describe('formatos HAWSMASH de 80 mm', () => {
     expect(text).toContain('Diferenca');
     expect(text).toContain('Falta confirmada na contagem');
     expect({ text, hex: document.toString('hex') }).toMatchSnapshot();
+  });
+
+  it('encaminha qualquer payload conhecido sem cair no formato herdado', () => {
+    expect(decodeReceipt(createReceipt(cashClose))).toContain('FECHO DE CAIXA');
+    expect(decodeReceipt(createReceipt(kitchen))).toContain('Nº 42');
+    expect(decodeReceipt(createReceipt(receipt))).toContain('TOTAL');
   });
 });

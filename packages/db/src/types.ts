@@ -83,68 +83,6 @@ export type Database = {
           },
         ]
       }
-      cash_sessions: {
-        Row: {
-          closed_at: string | null
-          closed_by: string | null
-          counted_cash_cents: number | null
-          created_at: string
-          difference_cents: number | null
-          difference_reason: string | null
-          expected_cash_cents: number | null
-          id: string
-          notes: string | null
-          opening_float_cents: number
-          opened_at: string
-          opened_by: string | null
-          report: Json
-          shift_label: string
-          store_id: string
-        }
-        Insert: {
-          closed_at?: string | null
-          closed_by?: string | null
-          counted_cash_cents?: number | null
-          created_at?: string
-          difference_cents?: number | null
-          difference_reason?: string | null
-          expected_cash_cents?: number | null
-          id?: string
-          notes?: string | null
-          opening_float_cents?: number
-          opened_at?: string
-          opened_by?: string | null
-          report?: Json
-          shift_label: string
-          store_id?: string
-        }
-        Update: {
-          closed_at?: string | null
-          closed_by?: string | null
-          counted_cash_cents?: number | null
-          created_at?: string
-          difference_cents?: number | null
-          difference_reason?: string | null
-          expected_cash_cents?: number | null
-          id?: string
-          notes?: string | null
-          opening_float_cents?: number
-          opened_at?: string
-          opened_by?: string | null
-          report?: Json
-          shift_label?: string
-          store_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "cash_sessions_store_id_fkey"
-            columns: ["store_id"]
-            isOneToOne: false
-            referencedRelation: "stores"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       cash_movements: {
         Row: {
           amount_cents: number
@@ -186,6 +124,68 @@ export type Database = {
           },
           {
             foreignKeyName: "cash_movements_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      cash_sessions: {
+        Row: {
+          closed_at: string | null
+          closed_by: string | null
+          counted_cash_cents: number | null
+          created_at: string
+          difference_cents: number | null
+          difference_reason: string | null
+          expected_cash_cents: number | null
+          id: string
+          notes: string | null
+          opened_at: string
+          opened_by: string | null
+          opening_float_cents: number
+          report: Json
+          shift_label: string
+          store_id: string
+        }
+        Insert: {
+          closed_at?: string | null
+          closed_by?: string | null
+          counted_cash_cents?: number | null
+          created_at?: string
+          difference_cents?: number | null
+          difference_reason?: string | null
+          expected_cash_cents?: number | null
+          id?: string
+          notes?: string | null
+          opened_at?: string
+          opened_by?: string | null
+          opening_float_cents?: number
+          report?: Json
+          shift_label: string
+          store_id?: string
+        }
+        Update: {
+          closed_at?: string | null
+          closed_by?: string | null
+          counted_cash_cents?: number | null
+          created_at?: string
+          difference_cents?: number | null
+          difference_reason?: string | null
+          expected_cash_cents?: number | null
+          id?: string
+          notes?: string | null
+          opened_at?: string
+          opened_by?: string | null
+          opening_float_cents?: number
+          report?: Json
+          shift_label?: string
+          store_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cash_sessions_store_id_fkey"
             columns: ["store_id"]
             isOneToOne: false
             referencedRelation: "stores"
@@ -1269,6 +1269,67 @@ export type Database = {
           },
         ]
       }
+      stock_movements: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          delta: number
+          id: string
+          menu_item_id: string
+          note: string | null
+          order_id: string | null
+          qty_after: number
+          reason: string
+          store_id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          delta: number
+          id?: string
+          menu_item_id: string
+          note?: string | null
+          order_id?: string | null
+          qty_after: number
+          reason: string
+          store_id: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          delta?: number
+          id?: string
+          menu_item_id?: string
+          note?: string | null
+          order_id?: string | null
+          qty_after?: number
+          reason?: string
+          store_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "stock_movements_menu_item_id_fkey"
+            columns: ["menu_item_id"]
+            isOneToOne: false
+            referencedRelation: "menu_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "stock_movements_order_id_fkey"
+            columns: ["order_id"]
+            isOneToOne: false
+            referencedRelation: "orders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "stock_movements_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       store_hours: {
         Row: {
           active: boolean
@@ -1518,6 +1579,15 @@ export type Database = {
           total_cents: number
         }[]
       }
+      add_cash_movement: {
+        Args: {
+          p_amount_cents: number
+          p_reason: string
+          p_store: string
+          p_type: string
+        }
+        Returns: string
+      }
       adjust_stock: {
         Args: {
           p_adjusted_by?: string
@@ -1555,19 +1625,12 @@ export type Database = {
         }
         Returns: Json
       }
-      add_cash_movement: {
-        Args: {
-          p_amount_cents: number
-          p_reason: string
-          p_store: string
-          p_type: string
-        }
-        Returns: string
-      }
-      close_cash_session: {
-        Args: { p_counted: number; p_reason: string | null; p_store: string }
-        Returns: Json
-      }
+      close_cash_session:
+        | { Args: { p_counted_cents: number; p_notes?: string }; Returns: Json }
+        | {
+            Args: { p_counted: number; p_reason: string; p_store: string }
+            Returns: Json
+          }
       confirm_payment: {
         Args: {
           p_amount_cents: number
@@ -1594,13 +1657,17 @@ export type Database = {
         Args: { p_payload: Json; p_store_slug: string }
         Returns: string
       }
-      get_cash_dashboard: { Args: { p_store?: string | null }; Returns: Json }
+      get_cash_dashboard: { Args: { p_store?: string }; Returns: Json }
       get_customer_orders: { Args: { p_phone: string }; Returns: Json }
       get_dashboard_metrics: { Args: { p_period?: string }; Returns: Json }
       get_device_status: { Args: never; Returns: Json }
       get_funnel_metrics: { Args: never; Returns: Json }
       get_menu: {
-        Args: { p_channel?: string; p_store_slug: string }
+        Args: {
+          p_channel?: string
+          p_include_unavailable?: boolean
+          p_store_slug: string
+        }
         Returns: Json
       }
       get_order_stats: { Args: never; Returns: Json }
@@ -1622,10 +1689,9 @@ export type Database = {
         Args: { p_device_id: string; p_reason: string; p_request_id: string }
         Returns: Json
       }
-      open_cash_session: {
-        Args: { p_float: number; p_store: string }
-        Returns: string
-      }
+      open_cash_session:
+        | { Args: never; Returns: string }
+        | { Args: { p_float: number; p_store: string }; Returns: string }
       pos_pin_status: { Args: { p_device_id: string }; Returns: Json }
       recover_stale_print_jobs: { Args: { p_store_id: string }; Returns: Json }
       reprint: {

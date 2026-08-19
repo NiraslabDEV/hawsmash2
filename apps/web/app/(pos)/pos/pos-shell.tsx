@@ -16,6 +16,7 @@ import {
   MENU_REFRESH_MS,
   removeOfflineSale,
   updateOfflineSale,
+  posItemAvailability,
   type OfflineSale,
   type PosMenuCategory as Category,
   type PosMenuItem as MenuItem,
@@ -56,13 +57,18 @@ const METHODS: Array<{ id: CounterPaymentMethod; label: string }> = [
 
 const mt = (value: number) => formatMT(value as Cents);
 
-async function fetchMenu(storeSlug: string): Promise<unknown> {
-  const response = await fetch(`/api/menu?store=${encodeURIComponent(storeSlug)}`, {
-    cache: 'no-store',
+async function fetchMenu(
+  supabase: ReturnType<typeof createClient>,
+  storeSlug: string,
+): Promise<unknown> {
+  // O POS pede o cardápio completo da sua loja: o esgotado aparece a cinzento
+  // em vez de desaparecer do ecrã a meio do turno.
+  const { data, error } = await supabase.rpc('get_menu', {
+    p_store_slug: storeSlug,
+    p_include_unavailable: true,
   });
-  if (!response.ok) throw new Error('Não foi possível carregar o cardápio.');
-  const body = await response.json();
-  return body.categories;
+  if (error || !data) throw new Error('Não foi possível carregar o cardápio.');
+  return (data as { categories: unknown }).categories;
 }
 
 function errorMessage(message?: string): string {
@@ -212,7 +218,7 @@ export function PosShell() {
 
     let nextCategories: Category[];
     try {
-      const menu = await loadMenuWithFallback(store.slug, () => fetchMenu(store.slug));
+      const menu = await loadMenuWithFallback(store.slug, () => fetchMenu(supabase, store.slug));
       nextCategories = menu.categories;
     } catch (menuError) {
       setError(errorMessage(menuError instanceof Error ? menuError.message : undefined));
@@ -267,7 +273,9 @@ export function PosShell() {
     if (!context) return;
     const refresh = async () => {
       try {
-        const menu = await loadMenuWithFallback(context.storeSlug, () => fetchMenu(context.storeSlug));
+        const menu = await loadMenuWithFallback(context.storeSlug, () =>
+          fetchMenu(supabase, context.storeSlug),
+        );
         setCategories(menu.categories);
         setActiveCategory((current) =>
           menu.categories.some((category) => category.id === current)
@@ -809,32 +817,46 @@ export function PosShell() {
 
         <section className="overflow-y-auto p-3 lg:p-4">
           <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-4">
-            {visibleItems.map((item) => (
-              <button
-                key={item.id}
-                type="button"
-                disabled={item.available === false}
-                onClick={() => changeQty(item, 1)}
-                className="flex min-h-36 flex-col justify-between rounded-2xl border border-white/10 bg-[#1a1816] p-4 text-left shadow-lg active:scale-[0.98] disabled:opacity-35"
-              >
-                <span>
-                  <span className="block text-lg font-black leading-tight">{item.name}</span>
-                  {item.description && (
-                    <span className="mt-2 line-clamp-2 block text-xs text-[#847e72]">
-                      {item.description}
-                    </span>
-                  )}
-                </span>
-                <span className="mt-3 flex items-end justify-between gap-2">
-                  <span className="font-black text-[#e5a93c]">{mt(item.price_cents)}</span>
-                  {cart[item.id] && (
-                    <span className="grid h-9 min-w-9 place-items-center rounded-full bg-[#e5a93c] px-2 font-black text-black">
-                      {cart[item.id].qty}
-                    </span>
-                  )}
-                </span>
-              </button>
-            ))}
+            {visibleItems.map((item) => {
+              const availability = posItemAvailability(item);
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  disabled={!availability.sellable}
+                  onClick={() => changeQty(item, 1)}
+                  className="flex min-h-36 flex-col justify-between rounded-2xl border border-white/10 bg-[#1a1816] p-4 text-left shadow-lg active:scale-[0.98] disabled:opacity-35"
+                >
+                  <span>
+                    <span className="block text-lg font-black leading-tight">{item.name}</span>
+                    {item.description && (
+                      <span className="mt-2 line-clamp-2 block text-xs text-[#847e72]">
+                        {item.description}
+                      </span>
+                    )}
+                  </span>
+                  <span className="mt-3 flex items-end justify-between gap-2">
+                    <span className="font-black text-[#e5a93c]">{mt(item.price_cents)}</span>
+                    {availability.badge && (
+                      <span
+                        className={`rounded-full px-2 py-1 text-[11px] font-black uppercase ${
+                          availability.sellable
+                            ? 'bg-white/10 text-[#d8d2c6]'
+                            : 'bg-[#7a2b2b] text-white'
+                        }`}
+                      >
+                        {availability.badge}
+                      </span>
+                    )}
+                    {cart[item.id] && (
+                      <span className="grid h-9 min-w-9 place-items-center rounded-full bg-[#e5a93c] px-2 font-black text-black">
+                        {cart[item.id].qty}
+                      </span>
+                    )}
+                  </span>
+                </button>
+              );
+            })}
           </div>
         </section>
 

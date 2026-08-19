@@ -14,6 +14,8 @@ const rawMenuItemSchema = z.object({
   description: z.string().nullable(),
   price_cents: z.number().int().nonnegative(),
   available: z.boolean().optional(),
+  track_stock: z.boolean().optional(),
+  stock_qty: z.number().int().nonnegative().nullable().optional(),
 });
 
 const rawMenuCategorySchema = z.object({
@@ -35,6 +37,26 @@ const menuSchema = z.array(rawMenuCategorySchema).transform((categories) =>
 
 export type PosMenuCategory = z.infer<typeof menuSchema>[number];
 export type PosMenuItem = PosMenuCategory['items'][number];
+
+export type PosItemAvailability = {
+  sellable: boolean;
+  badge: string | null;
+};
+
+/**
+ * O POS mostra o esgotado a cinzento em vez de o fazer desaparecer a meio do
+ * turno. O stock que chega aqui é o da loja do terminal (store_items).
+ */
+export function posItemAvailability(item: PosMenuItem): PosItemAvailability {
+  const tracked = item.track_stock === true && typeof item.stock_qty === 'number';
+  if (item.available === false || (tracked && (item.stock_qty as number) <= 0)) {
+    return { sellable: false, badge: 'ESGOTADO' };
+  }
+  if (tracked) {
+    return { sellable: true, badge: `Restam ${item.stock_qty}` };
+  }
+  return { sellable: true, badge: null };
+}
 
 const paymentMethodSchema = z.enum(['cash', 'mpesa', 'emola', 'credit_card']);
 

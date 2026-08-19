@@ -167,7 +167,7 @@ _Os dias são referência de calendário, não paragens: a corrida não pára en
 
 - [x] Migration `1008_stock.sql`: `stock_movements` + índices; `low_stock_qty` em `store_items` (já vinha da 1003)
 - [x] Baixa atómica na mesma transação da venda (balcão e online); reposição na anulação
-- [ ] Esgotado → indisponível no site e no POS **daquela loja**, automaticamente
+- [x] Esgotado → indisponível no site e no POS **daquela loja**, automaticamente
 - [ ] Aba **Estoque** no painel: contagem, entrada, quebra, histórico de movimentos por item
 - [ ] Alerta de stock crítico (§11.5)
 - [ ] Testes: venda concorrente do último item (só uma passa), anulação repõe, movimento sempre gravado

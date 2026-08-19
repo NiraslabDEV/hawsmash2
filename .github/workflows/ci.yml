@@ -59,6 +59,9 @@ jobs:
       - name: Testes
         run: pnpm test
 
+      - name: Build (web + bridge)
+        run: pnpm build
+
       - name: Instalar Chromium para os testes E2E
         run: pnpm exec playwright install --with-deps chromium
 

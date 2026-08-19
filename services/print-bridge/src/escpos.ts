@@ -331,6 +331,7 @@ function itemsSection(job: PrintJobPayload): Buffer[] {
 export function createReceipt(payload: PrintPayload): Buffer {
   if (isKitchenTicket(payload)) return createKitchenTicket(payload);
   if (isCustomerReceipt(payload)) return createCustomerReceipt(payload);
+  if (isCashClosePayload(payload)) return createCashCloseReceipt(payload);
   if (isTestPayload(payload)) return createTestReceipt(payload);
   const job = payload;
   const chunks: Buffer[] = [];
