@@ -1,18 +1,46 @@
 # ROADMAP.md — HAWSMASH 2.0 · execução por fases
 
-> **Como usar:** uma fase por sessão do agente. Colar o **PROMPT** da fase, tal como está.
-> A fase só fecha quando **todo** o DoD estiver verde (`pnpm lint && pnpm test` incluídos).
-> Nunca antecipar fases. Nunca deixar o agente "adiantar" a seguinte.
+> **Como usar — corrida contínua.** O agente percorre este ficheiro **de cima a baixo sem parar**.
+> O que não der para fechar vai para [`BLOQUEIOS.md`](BLOQUEIOS.md) e o trabalho **continua no item seguinte**.
+> Regras completas em [`AGENTS.md §1`](AGENTS.md). Nada de perguntar a meio; nada de esperar por respostas.
+
+## PROMPT ÚNICO — colar uma vez e deixar correr
+
+```
+Lê CLAUDE.md, AGENTS.md e BLOQUEIOS.md.
+
+Executa o ROADMAP.md de cima a baixo, sem parar, começando no primeiro item por fazer.
+
+Para cada item: testes primeiro no que for domínio (dinheiro, estado, RLS, idempotência,
+stock, caixa), implementação mínima, `pnpm lint && pnpm test` verdes, marcar no ROADMAP,
+commit convencional em português. Depois passa imediatamente ao item seguinte.
+
+Se algo não der para fechar (falta resposta do cliente, acesso, segredo ou hardware):
+aplica o teste dos 3 segundos do AGENTS.md §1.2 — decide tu o que for reversível,
+usa PLACEHOLDER_* para dados, isola atrás de flag/stub o que depender de terceiros,
+regista uma entrada B-0NN em BLOQUEIOS.md, marca o item [~] B-0NN, e CONTINUA.
+
+Só paras se algo for destrutivo, gastar dinheiro real ou expor um segredo — nesse caso
+escreve em BLOQUEIOS.md > PARAGENS REAIS e termina.
+
+No fim: segunda passagem aos bloqueios (fecha os que já ficaram resolvidos por trabalho
+posterior) e preenche a secção PACOTE FINAL do BLOQUEIOS.md.
+```
+
+*(Os PROMPTs por fase, mais abaixo, servem para repetir ou retomar uma fase isolada — não para a corrida.)*
 
 **Legenda:** 🔴 bloqueia a abertura · 🟡 bloqueia a operação confortável · 🟢 melhoria
-**Estado:** `[ ]` por fazer · `[x]` feito · `[x] ⏳` código pronto, falta validar em runtime/hardware
+**Estado:** `[ ]` por fazer · `[x]` feito · `[x] ⏳` feito, falta validar em runtime/hardware · `[~] B-0NN` bloqueado (ver `BLOQUEIOS.md`)
 
-**Ordem obrigatória:** F0 → F1 → (F2 ‖ F3) → F4 → F5 → F6 → F7 → F8 → F9.
+**Ordem:** F0 → F1 → (F2 ‖ F3) → F4 → F5 → F6 → F7 → F8 → F9.
 **F1 bloqueia tudo** — mexer no POS antes de o `store_id` existir é retrabalho garantido.
+Um item `[~]` **nunca** trava a fase: se o resto da fase estiver verde, a fase avança e o bloqueio fica registado.
 
 ---
 
-## MAPA DAS 15 SESSÕES (Fase 1 do contrato — até à abertura)
+## MAPA DA CORRIDA (Fase 1 do contrato — até à abertura)
+
+_Os dias são referência de calendário, não paragens: a corrida não pára entre fases._
 
 | Dia | Fase | Entrega |
 |---|---|---|
@@ -42,7 +70,7 @@
 - [x] **Dois projectos Supabase novos**: `hawsmash2` (Pro) e `hawsmash2-staging` (Free). Nunca reutilizar o do 1.0
 - [x] `.env.example` actualizado (web + print-bridge) — sem um único segredo real commitado
 - [x] Deploy staging no Railway a partir de `dev`; healthcheck `/api/health` a responder
-- [x] ⏳ CI (GitHub Actions): `pnpm lint && pnpm test` obrigatório para merge em `main` — runs verdes; protecção de branch requer GitHub Pro
+- [~] B-007 CI (GitHub Actions): runs verdes; **protecção de branch** em `main` requer GitHub Pro
 - [x] `docs/decisions/0001-multi-unidade.md` — ADR a fixar `store_id` ≠ `tenant_id`
 
 **PROMPT:** *"Lê `CLAUDE.md` e `AGENTS.md`. Executa a F0 do ROADMAP: bootstrap do repo HAWSMASH 2.0 a partir do motor herdado, marca HAWSMASH em `config/brand.ts`, `.env.example`, CI com lint+test, healthcheck e ADR 0001. Não toques em schema. Lista os ficheiros que vais alterar antes de começar."*
@@ -61,7 +89,7 @@
       `auth_is_owner()`, `auth_can_store()` e **substituição de todas as policies `staff_all`**
 - [x] `get_menu(p_store_slug)`, `create_order` e todas as RPC públicas passam a receber/derivar a loja
 - [x] `event_log` ganha `store_id` + `actor_user_id`
-- [x] ⏳ **Seed**: lojas `maputo` e `matola` (prefixos `MPT`/`MTL`), horários, números de pagamento, zonas — dados de Matola e horários finais aguardam o cliente
+- [x] ⏳ **Seed**: lojas `maputo` e `matola` (prefixos `MPT`/`MTL`), horários, números de pagamento, zonas — horários, números e preços confirmados; **zonas da Matola: `PLACEHOLDER_ZONA` → B-002**
 - [x] **`packages/db/tests/rls.test.ts`**: utilizador da Matola falha a ler/escrever Maputo; `owner` lê ambas —
       **este teste é o gate da fase**
 - [x] `pnpm db:types` regenerado; app compila com os tipos novos
@@ -97,7 +125,7 @@
 - [ ] Reimpressão pelo painel e pelo POS (`reprint`), sempre logada
 - [ ] `heartbeat` de 60 s + watchdog + arranque automático no Windows + `.exe` (SEA, herdado do 1.0)
 - [ ] Testes do render ESC/POS (snapshot) + integração com o simulador
-- [ ] ⏳ **Validação física** com a XP-T80Q e a gaveta reais (o cliente envia o equipamento)
+- [~] B-006 **Validação física** com a XP-T80Q e a gaveta reais (o cliente envia o equipamento)
 
 **PROMPT:** *"Executa a F3: impressão multi-loja + gaveta. Estende `services/print-bridge` conforme `CLAUDE.md §8`, incluindo o servidor HTTP local na LAN e o pulso da gaveta. Testes de snapshot dos dois talões contra o simulador. A falha de impressão nunca pode bloquear nem esconder o pedido."*
 

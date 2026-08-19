@@ -7,8 +7,9 @@
 | Documento | Para quê |
 |---|---|
 | **[`CLAUDE.md`](CLAUDE.md)** | **Spec do produto** — arquitectura, schema, regras invioláveis. Fonte de verdade |
-| **[`ROADMAP.md`](ROADMAP.md)** | Plano por fases, com DoD e prompt de cada sessão |
-| **[`AGENTS.md`](AGENTS.md)** | Como o agente de código trabalha aqui (ler antes de codar) |
+| **[`ROADMAP.md`](ROADMAP.md)** | Plano por fases, com DoD e o **prompt único** da corrida contínua |
+| **[`AGENTS.md`](AGENTS.md)** | Como o agente de código trabalha aqui — **corrida contínua**, ler antes de codar |
+| **[`BLOQUEIOS.md`](BLOQUEIOS.md)** | Registo vivo do que ficou por fechar e porquê — atacado de uma vez só no fim |
 | [`docs/HARDWARE.md`](docs/HARDWARE.md) | Equipamento por loja, ligações, testes de aceitação |
 | [`docs/RUNBOOK.md`](docs/RUNBOOK.md) | Operação: monitorização, alertas, backups, incidentes, abertura |
 | [`docs/engine/`](docs/engine/) | Spec do motor herdado (Delivery OS) — consulta |

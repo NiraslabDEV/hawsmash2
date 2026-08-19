@@ -481,6 +481,10 @@ O 1.0 continua a vender **até ao dia do cutover**. Nada pára.
 
 ## 16. PERGUNTAS EM ABERTO (decidir com o cliente antes da fase respectiva)
 
+> **Registo vivo:** esta tabela é o retrato inicial. O que está por responder — e o que o agente fez para
+> não parar à espera da resposta — vive em **[`BLOQUEIOS.md`](BLOQUEIOS.md)**, com um ID por assunto
+> (`B-001`…) e o marcador correspondente no código. É essa a lista que se ataca de uma vez só.
+
 | # | Pergunta | Bloqueia |
 |---|---|---|
 | 1 | **Um Paysuite para as duas lojas ou um por loja?** (onde cai o dinheiro de cada unidade) | F6 pagamentos |

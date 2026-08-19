@@ -15,17 +15,86 @@ Trabalha com esse peso: preferir sempre a opção **mais simples e mais verific�
 
 ---
 
-## 1. Ciclo de trabalho (obrigatório)
+## 1. MODO DE TRABALHO — corrida contínua
 
-1. **Ler antes de escrever:** `CLAUDE.md` inteiro + a fase actual do `ROADMAP.md`.
-2. **Declarar o plano:** antes de tocar em código, listar (a) ficheiros a criar/alterar, (b) migrations,
-   (c) testes que vais escrever. Se houver ambiguidade de âmbito, **perguntar** — não inventar.
-3. **Testes primeiro** em tudo o que seja domínio: dinheiro, estado do pedido, RLS, idempotência, stock, caixa.
-   Nenhuma lógica destas entra sem um teste escrito **antes** que falhe primeiro.
-4. **Implementar o mínimo** que faz o teste passar e serve a fase. Nada de features da fase seguinte.
-5. **Fechar:** `pnpm lint && pnpm test` verdes + checklist da fase marcado + commit convencional
-   (`feat(pos): …`, `fix(caixa): …`, `chore(db): …`) em português.
-6. **Uma fase por sessão.** Não juntar fases.
+> **Não pares para perguntar.** Avança até ao fim do `ROADMAP.md`. O que não der para fechar,
+> **regista em [`BLOQUEIOS.md`](BLOQUEIOS.md), contorna, e continua.** No fim entregas a corrida completa
+> **mais** a lista do que ficou pelo caminho, agrupada por quem a desbloqueia. É essa lista que se ataca de uma
+> vez só — não uma pergunta de cada vez, ao longo de dias.
+
+### 1.1 O ciclo, por item do ROADMAP
+
+1. **Ler antes de escrever:** `CLAUDE.md` inteiro (uma vez por corrida) + o item que vais fazer.
+2. **Testes primeiro** em tudo o que seja domínio: dinheiro, estado do pedido, RLS, idempotência, stock, caixa.
+   Nenhuma lógica destas entra sem um teste escrito **antes**, que falhe primeiro.
+3. **Implementar o mínimo** que faz o teste passar e serve o item. Nada de features de fases futuras.
+4. **Fechar o item:** `pnpm lint && pnpm test` verdes → marcar no ROADMAP → **commit** convencional em
+   português (`feat(pos): …`, `fix(caixa): …`, `chore(db): …`).
+5. **Item seguinte.** Sem pausa, sem relatório intermédio, sem pedir confirmação.
+
+**Marcadores no ROADMAP:** `[ ]` por fazer · `[x]` feito · `[x] ⏳` feito, falta validar em runtime/hardware ·
+`[~] B-0NN` bloqueado e registado.
+
+### 1.2 Bloqueio ou decisão tua? (o teste dos 3 segundos)
+
+Antes de registar um bloqueio, pergunta: **"se eu escolher mal, o que custa corrigir?"**
+
+| Custa… | Então | Exemplo |
+|---|---|---|
+| **Editar um dado** (preço, número, horário, texto, cor) | **Não é bloqueio.** Põe um `PLACEHOLDER_*` óbvio, regista `B-0NN` e segue | zona de entrega da Matola |
+| **Trocar uma configuração** (env, flag, chave) | **Não é bloqueio.** Deixa a env vazia com fallback seguro, regista e segue | chave do Resend |
+| **Reescrever código ou schema** | **Decide tu** pela opção **mais reversível**, isola atrás de interface/flag, comenta `// DECISÃO:` e regista | uma conta Paysuite vs várias |
+| **Nada — falta acesso/segredo/hardware** | Constrói contra **mock/simulador**, testa contra o mock, regista `B-0NN` | gaveta física, BD do 1.0 |
+| **Perder dados, gastar dinheiro real, expor segredo** | **PARA.** Escreve em `BLOQUEIOS.md → PARAGENS REAIS` e termina a corrida | correr o import contra produção |
+
+Na dúvida entre duas opções igualmente defensáveis: escolhe a **mais simples de desfazer**, escreve porquê
+com `// DECISÃO:`, e segue. Uma decisão registada vale mais do que uma pergunta pendente.
+
+### 1.3 As três paragens reais (e só estas)
+
+- **Destrutivo/irreversível:** apagar dados, correr migrations contra a BD do HAWSMASH 1.0, `--force` em produção.
+- **Dinheiro real:** qualquer chamada que cobre, transfira ou subscreva.
+- **Segurança:** algo que exponha service key, chave de pagamento ou dados de clientes.
+
+Fora destes três, **não existe motivo para parar**. Falta de resposta não é motivo. Ambiguidade não é motivo.
+
+### 1.4 A árvore fica sempre verde
+
+Um bloqueio **nunca** deixa o repositório partido:
+- código dependente do que falta fica atrás de **flag** ou **stub** com comportamento seguro e definido;
+- o teste que precisa da resposta fica `it.skip('B-0NN: …')` — com o ID no nome, para se voltar a ligar;
+- `pnpm lint && pnpm test` continuam verdes ao fim de **cada commit**. Sem excepção.
+
+Se um item bloqueado partiria a árvore, não o metas pela metade: regista, **reverte o que ficou pendurado** e
+passa ao seguinte.
+
+### 1.5 Placeholders são detectáveis, nunca plausíveis
+
+Dado inventado leva prefixo **`PLACEHOLDER_`** (`PLACEHOLDER_ZONA`, `PLACEHOLDER_RODAPE`).
+Nunca inventes algo que **pareça real** — um número M-Pesa plausível chega à produção sem ninguém notar; um
+`PLACEHOLDER_` não. Escreve um teste/guard que **falha se algum `PLACEHOLDER_` sobreviver ao build de produção**.
+
+### 1.6 Ritmo
+
+- Um **commit por item** fechado. Nada de um commit gigante no fim.
+- Actualiza `ROADMAP.md` e `BLOQUEIOS.md` **no mesmo commit** do trabalho a que dizem respeito.
+- Nunca `push` para `main`. Trabalha em `dev`.
+
+### 1.7 Segunda passagem
+
+Chegado ao fim do ROADMAP, **volta ao topo do `BLOQUEIOS.md`**: algum ficou desbloqueado entretanto (por
+trabalho posterior, não por resposta humana)? Fecha esses. Só depois escreves o relatório.
+
+### 1.8 Relatório final (o entregável da corrida)
+
+Preenche a secção **PACOTE FINAL** do `BLOQUEIOS.md`:
+- perguntas **para o cliente**, redigidas em português simples, numeradas, prontas a copiar para uma mensagem;
+- decisões e acessos **para o Gabriel** (custo, credenciais, contas);
+- o que só se valida **com hardware**, e quanto tempo demora;
+- tabela **ordenada por impacto na abertura**: sem isto, o que é que a loja não consegue fazer no dia 1.
+
+E na resposta final: o que ficou a funcionar ponta a ponta, o que está feito mas por validar, e o número de
+bloqueios abertos por categoria. **Sem floreados e sem dar por concluído o que não foi verificado.**
 
 ---
 
@@ -86,9 +155,10 @@ Cada um custou uma sessão de debug em produção. Estão aqui para não voltare
 
 - **Português (pt-PT)** em UI, mensagens de erro, emails, talões, commits e documentação.
 - Moeda **MT** (`formatMT`), nunca `MTn` do `Intl` com `currency: 'MZN'`.
-- Ao terminar uma tarefa, dizer com clareza: o que ficou feito, o que ficou por fazer, o que precisa de
-  validação com hardware ou com o cliente. **Não declarar concluído o que não foi verificado.**
-- Decisão tomada por falta de resposta → comentar no código com `// DECISÃO:` e listar na resposta final.
+- **Durante a corrida não se pergunta nada** — dúvida vira entrada em `BLOQUEIOS.md` (§1.2) e o trabalho segue.
+- No fim da corrida, dizer com clareza: o que ficou a funcionar, o que está feito mas por validar, e quantos
+  bloqueios ficaram abertos por categoria. **Não declarar concluído o que não foi verificado.**
+- Decisão tomada por falta de resposta → comentar no código com `// DECISÃO:` e listar no relatório final.
 
 ---
 
@@ -101,3 +171,9 @@ Ver a lista completa em `CLAUDE.md §17`. Os cinco que partem o negócio:
 - ❌ Policy sem filtro de loja.
 - ❌ SQL manual em produção, ou merge em `main` sem passar por staging com testes verdes.
 - ❌ Apagar registo de venda, anulação ou movimento de caixa.
+
+E o que trava a corrida:
+
+- ❌ **Parar para perguntar** algo que cabe numa entrada de `BLOQUEIOS.md`.
+- ❌ Deixar a árvore vermelha, ou trabalho meio-feito pendurado, por causa de um bloqueio.
+- ❌ Inventar um dado **plausível** em vez de um `PLACEHOLDER_` detectável.
