@@ -210,11 +210,11 @@ _Os dias são referência de calendário, não paragens: a corrida não pára en
 - [x] `scripts/import-hawsmash-1.ts` com **dry-run** e relatório de contagens (CLAUDE §15) — mapeamento testado em `scripts/__tests__/import-mapping.test.ts`
 - [~] B-009 Importação real para staging → conferência dos totais com o 1.0 (falta a chave de leitura do projecto antigo)
 - [x] ⏳ **TVs**: `/tv/[store]/menu` e `/tv/[store]/senhas` — rotas prontas; falta apontar os ecrãs físicos (B-011)
-- [ ] **Ensaio geral** por loja: 20 vendas de balcão, 5 delivery, 1 fecho de caixa, 1 falha de rede simulada,
+- [~] B-006 **Ensaio geral** por loja: 20 vendas de balcão, 5 delivery, 1 fecho de caixa, 1 falha de rede simulada,
       1 falha de impressora simulada
-- [ ] Manuais PT (`docs/manual-caixa.md`, `docs/manual-cozinha.md`, `docs/manual-dono.md`) + formação das equipas
-- [ ] Checklist de abertura assinada (`docs/RUNBOOK.md`) — equipamento, rede, contas, impressoras, gavetas
-- [ ] Cutover: DNS para o 2.0, 1.0 em read-only, acompanhamento reforçado nos primeiros dias
+- [x] ⏳ Manuais PT (`docs/manual-caixa.md`, `docs/manual-cozinha.md`, `docs/manual-dono.md`) — escritos; formação presencial por dar
+- [x] ⏳ Checklist de abertura (`docs/RUNBOOK.md` §7) + guião do ensaio geral (§6) — por assinar no dia
+- [~] B-010 Cutover: DNS para o 2.0, 1.0 em read-only, acompanhamento reforçado nos primeiros dias
 
 **PROMPT:** *"Executa a F9: migração do HAWSMASH 1.0 (dry-run primeiro), ecrãs de TV, ensaio geral guiado, manuais em português e checklist de abertura. Nada é apagado no 1.0."*
 

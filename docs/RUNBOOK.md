@@ -149,7 +149,30 @@ Não deveria acontecer (idempotência por `client_sale_id`). Se acontecer: **é 
 
 ---
 
-## 6. Checklist de abertura (assinar por loja)
+## 6. Ensaio geral (véspera da abertura, por loja)
+
+> Correr com a loja fechada e o equipamento no sítio definitivo. Demora ~90 minutos.
+> Quem conduz: Niraslab. Quem executa: a equipa que vai trabalhar naquela loja.
+
+| # | Ensaio | Como se sabe que passou |
+|---|---|---|
+| 1 | **20 vendas de balcão** (dinheiro, M-Pesa, cartão e uma mista) | 20 talões, 20 comandas, gaveta abre só nas de dinheiro |
+| 2 | **5 pedidos online** (3 entrega, 2 levantamento) | caem na loja certa, comanda sai, `order-status` acompanha |
+| 3 | **1 anulação com motivo** | venda fica `cancelada`, stock repõe, aparece no registo com autor |
+| 4 | **1 falha de rede simulada** (desligar o cabo a meio de uma venda) | POS mostra `SEM LIGAÇÃO`, talão sai na mesma, sincroniza ao voltar |
+| 5 | **1 falha de impressora** (desligar a impressora da cozinha) | venda grava, painel avisa, reimprime quando volta |
+| 6 | **1 fecho de caixa completo** | diferença explicada, talão de fecho impresso, email ao dono recebido |
+| 7 | **Alerta automático** (deixar um dispositivo desligado 6 minutos) | email de alerta chega com o nome da loja |
+| 8 | **TVs** ligadas em `/tv/[loja]/menu` e `/tv/[loja]/senhas` | número do dia aparece ao marcar Pronto |
+
+Registar o resultado de cada linha e **só assinar a checklist de abertura depois de todas passarem**.
+
+Manuais a entregar no fim: [`manual-caixa.md`](manual-caixa.md), [`manual-cozinha.md`](manual-cozinha.md),
+[`manual-dono.md`](manual-dono.md).
+
+---
+
+## 7. Checklist de abertura (assinar por loja)
 
 **Loja: ____________  Data: ______  Responsável Niraslab: ____________**
 
