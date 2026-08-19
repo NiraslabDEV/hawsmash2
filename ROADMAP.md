@@ -39,10 +39,10 @@
 - [x] `git init` + branch `dev` (default) e `main`; `.gitignore` já cobre `node_modules`, `.env*`, `.next`
 - [x] `pnpm install` verde; `pnpm lint && pnpm test` verdes (motor herdado já tem testes)
 - [x] `config/brand.ts` → identidade HAWSMASH (nome, dourado `#e5a93c`, fundo escuro, logo, redes)
-- [ ] **Dois projectos Supabase novos**: `hawsmash2` (Pro) e `hawsmash2-staging` (Free). Nunca reutilizar o do 1.0
+- [x] **Dois projectos Supabase novos**: `hawsmash2` (Pro) e `hawsmash2-staging` (Free). Nunca reutilizar o do 1.0
 - [x] `.env.example` actualizado (web + print-bridge) — sem um único segredo real commitado
-- [x] ⏳ Deploy staging no Railway a partir de `dev`; healthcheck `/api/health` a responder
-- [x] ⏳ CI (GitHub Actions): `pnpm lint && pnpm test` obrigatório para merge em `main`
+- [x] Deploy staging no Railway a partir de `dev`; healthcheck `/api/health` a responder
+- [x] ⏳ CI (GitHub Actions): `pnpm lint && pnpm test` obrigatório para merge em `main` — runs verdes; protecção de branch requer GitHub Pro
 - [x] `docs/decisions/0001-multi-unidade.md` — ADR a fixar `store_id` ≠ `tenant_id`
 
 **PROMPT:** *"Lê `CLAUDE.md` e `AGENTS.md`. Executa a F0 do ROADMAP: bootstrap do repo HAWSMASH 2.0 a partir do motor herdado, marca HAWSMASH em `config/brand.ts`, `.env.example`, CI com lint+test, healthcheck e ADR 0001. Não toques em schema. Lista os ficheiros que vais alterar antes de começar."*
