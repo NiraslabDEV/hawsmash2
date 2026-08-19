@@ -373,6 +373,74 @@ describe("F2 — create_counter_sale", () => {
       { method: "cash", amount_cents: 30000, status: "confirmed" },
     ]);
   });
+
+  it("rejeita produto esgotado sem criar pedido nem pagamento", async () => {
+    const clientSaleId = crypto.randomUUID();
+    const { error: stockSetupError } = await admin
+      .from("store_items")
+      .update({ available: true, track_stock: true, stock_qty: 0 })
+      .eq("store_id", maputoStoreId)
+      .eq("menu_item_id", classicSmashId);
+    expect(stockSetupError).toBeNull();
+
+    try {
+      const sale = await manager.rpc("create_counter_sale", {
+        p_payload: {
+          clientSaleId,
+          deviceId: posDeviceId,
+          items: [{ menuItemId: classicSmashId, qty: 1 }],
+          payments: [{ method: "cash", amountCents: 30000 }],
+          cashReceivedCents: 30000,
+        },
+      });
+
+      expect(sale.error?.message).toContain("out_of_stock");
+
+      const { data: orders } = await admin
+        .from("orders")
+        .select("id")
+        .eq("client_sale_id", clientSaleId);
+      expect(orders).toEqual([]);
+    } finally {
+      await admin
+        .from("store_items")
+        .update(originalStoreItem)
+        .eq("store_id", maputoStoreId)
+        .eq("menu_item_id", classicSmashId);
+    }
+  });
+
+  it("fecha pagamento misto apenas quando as parcelas igualam o total", async () => {
+    const clientSaleId = crypto.randomUUID();
+    const sale = await manager.rpc("create_counter_sale", {
+      p_payload: {
+        clientSaleId,
+        deviceId: posDeviceId,
+        items: [{ menuItemId: classicSmashId, qty: 1 }],
+        payments: [
+          { method: "cash", amountCents: 10000 },
+          { method: "mpesa", amountCents: 20000 },
+        ],
+        cashReceivedCents: 10000,
+      },
+    });
+
+    expect(sale.error).toBeNull();
+    expect(sale.data).toMatchObject({ total_cents: 30000, change_cents: 0 });
+    createdOrderIds.push(sale.data.order_id);
+
+    const { data: payments, error } = await admin
+      .from("payments")
+      .select("method,amount_cents,status")
+      .eq("order_id", sale.data.order_id)
+      .order("amount_cents");
+
+    expect(error).toBeNull();
+    expect(payments).toEqual([
+      { method: "cash", amount_cents: 10000, status: "confirmed" },
+      { method: "mpesa", amount_cents: 20000, status: "confirmed" },
+    ]);
+  });
 });
 
 describe("F2 — void_sale", () => {

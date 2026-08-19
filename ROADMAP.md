@@ -108,7 +108,7 @@ _Os dias são referência de calendário, não paragens: a corrida não pára en
 - [x] RPC `void_sale(p_order_id, p_reason)` com perfil ≥ manager e reposição de stock
 - [x] `/pos`: grelha touch, carrinho, teclado numérico, troco, 4 formas de pagamento, pagamento misto
 - [x] Vinculação do dispositivo à loja (`devices`) + sessão longa + bloqueio de ecrã com PIN
-- [ ] Testes Vitest: idempotência (mesma `client_sale_id` 2× → 1 pedido), troco, esgotado, anulação
+- [x] Testes Vitest: idempotência (mesma `client_sale_id` 2× → 1 pedido), troco, esgotado, anulação
 - [ ] Playwright: venda ponta a ponta (dinheiro com troco) e anulação com motivo
 
 **PROMPT:** *"Executa a F2: POS de balcão online. Migration 1005 + `create_counter_sale` idempotente + `void_sale` + a rota `/pos` (touch, sem hover, alvos ≥64px). Testes ANTES do código para idempotência, troco, stock esgotado e anulação. O POS nunca envia preços — só ids, quantidades e `client_sale_id`."*
