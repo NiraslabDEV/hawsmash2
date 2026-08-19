@@ -1,0 +1,43 @@
+{
+  "name": "hawsmash2",
+  "version": "0.0.0",
+  "private": true,
+  "packageManager": "pnpm@9.0.0",
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "start": "pnpm --filter web start",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:e2e": "playwright test",
+    "lint": "turbo run lint && pnpm -r --if-present run typecheck",
+    "db:migrate": "supabase db reset",
+    "db:types": "supabase gen types typescript --local > packages/db/src/types.ts",
+    "db:seed": "supabase db reset",
+    "setup:client": "node scripts/setup-client.mjs",
+    "setup:check": "node scripts/setup-client.mjs --check",
+    "menu:import": "tsx scripts/import-menu.ts",
+    "bridge:dev": "cd services/print-bridge && USE_SIMULATOR=true SIMULATOR_PORT=9100 SIMULATOR_VERBOSE=true pnpm dev",
+    "clean": "turbo run clean && rm -rf node_modules"
+  },
+  "dependencies": {
+    "next": "14.2.35"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.45.0",
+    "@typescript-eslint/eslint-plugin": "^8.61.0",
+    "@typescript-eslint/parser": "^8.61.0",
+    "@vitest/coverage-v8": "^2.1.9",
+    "tsx": "^4.19.0",
+    "turbo": "^2.0.0",
+    "vitest": "^2.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "pnpm": {
+    "neverBuiltDependencies": [
+      "canvas"
+    ]
+  }
+}

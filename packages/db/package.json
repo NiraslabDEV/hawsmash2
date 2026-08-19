@@ -1,0 +1,21 @@
+{
+  "name": "@delivery/db",
+  "version": "0.0.0",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "scripts": {
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest --config vitest.config.ts",
+    "test:rls": "vitest --config vitest.config.ts tests/rls.test.ts",
+    "build": "echo TODO: Implement build script",
+    "db:types": "supabase gen types typescript --local > src/types.ts",
+    "db:migrate": "supabase db reset"
+  },
+  "devDependencies": {
+    "@supabase/supabase-js": "^2.108.1",
+    "typescript": "^5.0.0",
+    "eslint": "^8.57.0",
+    "vitest": "^2.0.0"
+  }
+}

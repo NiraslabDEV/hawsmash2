@@ -1,0 +1,1219 @@
+{
+  "version": 1,
+  "currency": "MZN",
+  "categories": [
+    {
+      "name": "Petiscos",
+      "sort": 0,
+      "station": "kitchen",
+      "items": [
+        {
+          "name": "Água e Sal de Cabrito",
+          "price": 500.0
+        },
+        {
+          "name": "Agua e Sal de Frango",
+          "price": 400.0
+        },
+        {
+          "name": "Água e Sal de Peixe",
+          "price": 500.0
+        },
+        {
+          "name": "Água e Sal de Vaca",
+          "price": 450.0
+        },
+        {
+          "name": "Amêijoas",
+          "price": 400.0
+        },
+        {
+          "name": "Cabeça de Garoupa",
+          "price": 550.0
+        },
+        {
+          "name": "Cabeça de Vaca",
+          "price": 400.0
+        },
+        {
+          "name": "Cabrito Fumado",
+          "price": 600.0
+        },
+        {
+          "name": "Camarão ao Molho de alho e Cerveja",
+          "price": 600.0
+        },
+        {
+          "name": "Carangueijo",
+          "price": 500.0
+        },
+        {
+          "name": "Carne de Vaca Fumada",
+          "price": 600.0
+        },
+        {
+          "name": "Dobrada",
+          "price": 400.0
+        },
+        {
+          "name": "Frango Fumado",
+          "price": 600.0
+        },
+        {
+          "name": "Kongué",
+          "price": 450.0
+        },
+        {
+          "name": "Lagostins",
+          "price": 500.0
+        },
+        {
+          "name": "Leitão Fumado",
+          "price": 600.0
+        },
+        {
+          "name": "Língua de Vaca",
+          "price": 400.0
+        },
+        {
+          "name": "Lula",
+          "price": 500.0
+        },
+        {
+          "name": "Mamusca (Dobrada e Cabeça)",
+          "price": 400.0
+        },
+        {
+          "name": "Mix de Cabrito (Cabeça, Tripas e Costelas)",
+          "price": 450.0
+        },
+        {
+          "name": "Mocotó (Dobrada branca, Feijão branco, Mão de vaca e Chouriço)",
+          "price": 500.0
+        },
+        {
+          "name": "Osso Buco",
+          "price": 450.0
+        },
+        {
+          "name": "Pato Fumado",
+          "price": 600.0
+        },
+        {
+          "name": "Rabada",
+          "price": 500.0
+        },
+        {
+          "name": "SOS Babalaza (Chispe, Carne de Porco, Enchidos e Grão de Bico)",
+          "price": 600.0
+        }
+      ]
+    },
+    {
+      "name": "Sopas",
+      "sort": 1,
+      "station": "kitchen",
+      "items": [
+        {
+          "name": "Caldo Verde",
+          "price": 220.0
+        },
+        {
+          "name": "Sopa de Carne",
+          "price": 300.0
+        },
+        {
+          "name": "Sopa de Feijão",
+          "price": 250.0
+        },
+        {
+          "name": "Sopa de Legumes",
+          "price": 220.0
+        },
+        {
+          "name": "Sopa de Peixe",
+          "price": 250.0
+        }
+      ]
+    },
+    {
+      "name": "Tábuas",
+      "sort": 2,
+      "station": "kitchen",
+      "items": [
+        {
+          "name": "Bros (Worse 300g, Chuck 300g, Asinhas 3, Coracao de Galinha 200g, Azeitonas, Ovos 3, Babalaza 200g e batata frita)",
+          "price": 3500.0
+        },
+        {
+          "name": "D'Galinha (Perninhas 4, Asinhas 4, Patinhas 4, Coração e Moelas)",
+          "price": 1950.0
+        },
+        {
+          "name": "La Babalaza (Lombo 300g e Babalaza 300g)",
+          "price": 1600.0
+        },
+        {
+          "name": "Picanha e Chouriço ( Picanha 400g e Chouriço inteiro)",
+          "price": 1800.0
+        },
+        {
+          "name": "Tábua de Picanha (Picanha 500g, Milho Grelhado ou Batata Frita, Salada de Cebola e Azeitonas) - 2px",
+          "price": 2900.0
+        }
+      ]
+    },
+    {
+      "name": "Refeições Pequenas",
+      "sort": 3,
+      "station": "kitchen",
+      "items": [
+        {
+          "name": "Asinhas  (com batata frita)",
+          "price": 450.0
+        },
+        {
+          "name": "Batatas Malandras (batata frita, carne moida e queijo)",
+          "price": 550.0
+        },
+        {
+          "name": "Bitoque (bife, ovo estrelado, batata frita e salada)",
+          "price": 600.0
+        },
+        {
+          "name": "Chouriço (Chouriço inteiro com batata frita)",
+          "price": 650.0
+        },
+        {
+          "name": "Fígado de Galinha (batata frita ou pão)",
+          "price": 450.0
+        },
+        {
+          "name": "Lombo Fatiado (com batata frita)",
+          "price": 1050.0
+        },
+        {
+          "name": "Moelas Picantes (com batata frita ou pão)",
+          "price": 400.0
+        },
+        {
+          "name": "Pão de Alho",
+          "price": 250.0
+        },
+        {
+          "name": "Pão de Alho com Queijo",
+          "price": 300.0
+        },
+        {
+          "name": "Perninhas (com batata frita)",
+          "price": 550.0
+        }
+      ]
+    },
+    {
+      "name": "Especiais",
+      "sort": 4,
+      "station": "kitchen",
+      "items": [
+        {
+          "name": "Magumba (frita ou grelhada)",
+          "price": 350.0
+        },
+        {
+          "name": "Barriga de Porco Grelhada",
+          "price": 600.0
+        },
+        {
+          "name": "Camarão e Lulas ao alho (batata frita ou pao)",
+          "price": 750.0
+        },
+        {
+          "name": "Caudinhas de Galinha",
+          "price": 350.0
+        },
+        {
+          "name": "Codornizes",
+          "price": 600.0
+        },
+        {
+          "name": "Coração de Galinha",
+          "price": 350.0
+        },
+        {
+          "name": "Ovos de Codorniz",
+          "price": 300.0
+        },
+        {
+          "name": "Patinhas",
+          "price": 350.0
+        },
+        {
+          "name": "Peixe escalado a babalaza (consultar disponibilidade)",
+          "price": 850.0,
+          "description": "por Kg"
+        },
+        {
+          "name": "Pescadinha",
+          "price": 450.0
+        },
+        {
+          "name": "Torresmo de Porco",
+          "price": 550.0
+        },
+        {
+          "name": "Trinchado de Lombo/Alcatra (carne, molho de balsamico especial, queijo e alcaparras)",
+          "price": 1650.0
+        }
+      ]
+    },
+    {
+      "name": "Finger Food",
+      "sort": 5,
+      "station": "kitchen",
+      "items": [
+        {
+          "name": "Azeitonas",
+          "price": 250.0
+        },
+        {
+          "name": "Azeitonas Temperadas",
+          "price": 300.0
+        },
+        {
+          "name": "Babalaza Trinchada",
+          "price": 400.0
+        },
+        {
+          "name": "Badjias (4)",
+          "price": 200.0
+        },
+        {
+          "name": "Chamussas (4)",
+          "price": 250.0
+        },
+        {
+          "name": "Fatias Crocantes (Torradas, com queijo e molho de tomate)",
+          "price": 350.0
+        },
+        {
+          "name": "Ovos cozidos da Kátia (4)",
+          "price": 200.0
+        },
+        {
+          "name": "Pizza Pão",
+          "price": 600.0
+        },
+        {
+          "name": "Rissois (4)",
+          "price": 250.0
+        }
+      ]
+    },
+    {
+      "name": "No Pão",
+      "sort": 6,
+      "station": "kitchen",
+      "items": [
+        {
+          "name": "Bifana (Bifana de porco e molho especial)",
+          "price": 400.0
+        },
+        {
+          "name": "Bifana Pro Max (Bifana de porco, molho especial e queijo)",
+          "price": 500.0
+        },
+        {
+          "name": "Bifana Ultra (Bifana de porco, molho especial, queijo e bacon)",
+          "price": 650.0
+        },
+        {
+          "name": "Prego Pro Max (Bife, molho especial, ovo estrelado e queijo)",
+          "price": 550.0
+        },
+        {
+          "name": "Prego Simples (Bife e molho especial)",
+          "price": 450.0
+        },
+        {
+          "name": "Prego Ultra (Bife, molho especial, ovo estrelado, queijo e fiambre)",
+          "price": 650.0
+        },
+        {
+          "name": "Sandes de Filete de Frango",
+          "price": 550.0
+        },
+        {
+          "name": "Sandes de Pernil",
+          "price": 650.0
+        },
+        {
+          "name": "Sandes de Pernil Fumado",
+          "price": 750.0
+        },
+        {
+          "name": "Sandes de Picanha ao Molho de alho",
+          "price": 900.0
+        }
+      ]
+    },
+    {
+      "name": "Refeições Completas",
+      "sort": 7,
+      "station": "kitchen",
+      "items": [
+        {
+          "name": "1/2 Frango (batata frita e salada)",
+          "price": 750.0
+        },
+        {
+          "name": "1/4 de Frango (batata frita e salada)",
+          "price": 400.0
+        },
+        {
+          "name": "Carne de Porco (Com xima ou batata frita)",
+          "price": 750.0
+        },
+        {
+          "name": "Chuck (batata frita)",
+          "price": 850.0
+        },
+        {
+          "name": "Filete de Peixe ao molho de manteiga e limão (batata frita ou legumes)",
+          "price": 700.0
+        },
+        {
+          "name": "Frango Inteiro (batata frita e salada)",
+          "price": 1200.0
+        },
+        {
+          "name": "Lulas com Legumes",
+          "price": 750.0
+        },
+        {
+          "name": "Panceta com arroz de Feijão",
+          "price": 750.0
+        },
+        {
+          "name": "Pernil à Babalaza (batata frita)",
+          "price": 950.0
+        },
+        {
+          "name": "Pernil Fumado (batata frita)",
+          "price": 1200.0
+        },
+        {
+          "name": "Picanha (batata frita, arroz e feijão)",
+          "price": 1450.0
+        },
+        {
+          "name": "T-Bone (com xima ou batata frita)",
+          "price": 950.0
+        }
+      ]
+    },
+    {
+      "name": "Espetos",
+      "sort": 8,
+      "station": "kitchen",
+      "items": [
+        {
+          "name": "Alcatra",
+          "price": 750.0
+        },
+        {
+          "name": "Lombo",
+          "price": 850.0
+        },
+        {
+          "name": "Moelas grelhadas",
+          "price": 350.0
+        },
+        {
+          "name": "Peito de Frango",
+          "price": 450.0
+        },
+        {
+          "name": "Picanha",
+          "price": 950.0
+        }
+      ]
+    },
+    {
+      "name": "Extras",
+      "sort": 9,
+      "station": "kitchen",
+      "items": [
+        {
+          "name": "Arroz",
+          "price": 150.0
+        },
+        {
+          "name": "Batata Frita",
+          "price": 150.0
+        },
+        {
+          "name": "Molho de Tomate",
+          "price": 100.0
+        },
+        {
+          "name": "Pão",
+          "price": 50.0
+        },
+        {
+          "name": "Queijo",
+          "price": 120.0
+        },
+        {
+          "name": "Salada",
+          "price": 100.0
+        },
+        {
+          "name": "Xima",
+          "price": 150.0
+        }
+      ]
+    },
+    {
+      "name": "Água e Sumos",
+      "sort": 10,
+      "station": "bar",
+      "items": [
+        {
+          "name": "Agua das Pedras",
+          "price": 200.0
+        },
+        {
+          "name": "Agua Vumba 0,5l",
+          "price": 50.0
+        },
+        {
+          "name": "Agua Vumba 1,5l",
+          "price": 150.0
+        },
+        {
+          "name": "Cappy",
+          "price": 90.0
+        },
+        {
+          "name": "Ceres 1l",
+          "price": 280.0
+        },
+        {
+          "name": "Compal 1l",
+          "price": 280.0
+        }
+      ]
+    },
+    {
+      "name": "Refrigerantes",
+      "sort": 11,
+      "station": "bar",
+      "items": [
+        {
+          "name": "Appletiser",
+          "price": 200.0
+        },
+        {
+          "name": "Appletiser 1l",
+          "price": 350.0
+        },
+        {
+          "name": "Grapetiser",
+          "price": 200.0
+        },
+        {
+          "name": "Grapetiser 1l",
+          "price": 350.0
+        },
+        {
+          "name": "Lata",
+          "price": 90.0
+        },
+        {
+          "name": "Mixers",
+          "price": 100.0
+        }
+      ]
+    },
+    {
+      "name": "Energéticas",
+      "sort": 12,
+      "station": "bar",
+      "items": [
+        {
+          "name": "Monster",
+          "price": 160.0
+        },
+        {
+          "name": "Red Bull",
+          "price": 160.0
+        },
+        {
+          "name": "Switch",
+          "price": 150.0
+        }
+      ]
+    },
+    {
+      "name": "Cervejas",
+      "sort": 13,
+      "station": "bar",
+      "items": [
+        {
+          "name": "2M Lata",
+          "price": 130.0
+        },
+        {
+          "name": "2M Txoti",
+          "price": 130.0
+        },
+        {
+          "name": "Castle Lite",
+          "price": 160.0
+        },
+        {
+          "name": "Corona",
+          "price": 160.0
+        },
+        {
+          "name": "Heineken",
+          "price": 160.0
+        },
+        {
+          "name": "Heineken Silver",
+          "price": 160.0
+        },
+        {
+          "name": "Impala",
+          "price": 130.0
+        },
+        {
+          "name": "Laurentina Preta",
+          "price": 130.0
+        },
+        {
+          "name": "Manica Lata",
+          "price": 130.0
+        },
+        {
+          "name": "Stella Artois",
+          "price": 160.0
+        },
+        {
+          "name": "Super Bock",
+          "price": 160.0
+        },
+        {
+          "name": "Txilar",
+          "price": 130.0
+        }
+      ]
+    },
+    {
+      "name": "À Pressão",
+      "sort": 14,
+      "station": "bar",
+      "items": [
+        {
+          "name": "2M - 300ml",
+          "price": 130.0
+        },
+        {
+          "name": "2M - 500ml",
+          "price": 160.0
+        },
+        {
+          "name": "2M - Lambreta - 250ml",
+          "price": 100.0
+        },
+        {
+          "name": "Heineken - 250ml",
+          "price": 150.0
+        },
+        {
+          "name": "Heineken - 300ml",
+          "price": 170.0
+        },
+        {
+          "name": "Heineken - 500ml",
+          "price": 220.0
+        },
+        {
+          "name": "Stella Artois - 300ml",
+          "price": 190.0
+        },
+        {
+          "name": "Stella Artois - 500ml",
+          "price": 250.0
+        },
+        {
+          "name": "Txilar - 300ml",
+          "price": 130.0
+        },
+        {
+          "name": "Txilar - 500ml",
+          "price": 160.0
+        }
+      ]
+    },
+    {
+      "name": "Cidras",
+      "sort": 15,
+      "station": "bar",
+      "items": [
+        {
+          "name": "Bernini",
+          "price": 150.0
+        },
+        {
+          "name": "Black Crown",
+          "price": 150.0
+        },
+        {
+          "name": "Brutal Fruit",
+          "price": 150.0
+        },
+        {
+          "name": "FlyingFish",
+          "price": 150.0
+        },
+        {
+          "name": "Hunters Gold/Dry",
+          "price": 150.0
+        },
+        {
+          "name": "Ice Tropez",
+          "price": 500.0
+        },
+        {
+          "name": "Jc Lata",
+          "price": 150.0
+        },
+        {
+          "name": "Kopparberg",
+          "price": 300.0
+        },
+        {
+          "name": "Mayfair",
+          "price": 200.0
+        },
+        {
+          "name": "Savana Dry",
+          "price": 150.0
+        },
+        {
+          "name": "Savana Lemon",
+          "price": 150.0
+        },
+        {
+          "name": "Savana Neat",
+          "price": 200.0
+        },
+        {
+          "name": "Somersby",
+          "price": 250.0
+        },
+        {
+          "name": "StrongBow",
+          "price": 150.0
+        }
+      ]
+    },
+    {
+      "name": "Zero (sem álcool)",
+      "sort": 16,
+      "station": "bar",
+      "items": [
+        {
+          "name": "Corona",
+          "price": 200.0
+        },
+        {
+          "name": "Heineken",
+          "price": 200.0
+        },
+        {
+          "name": "Super Bock",
+          "price": 200.0
+        }
+      ]
+    },
+    {
+      "name": "Espumantes",
+      "sort": 17,
+      "station": "bar",
+      "items": [
+        {
+          "name": "Alberone",
+          "price": 2000.0
+        },
+        {
+          "name": "JC Le Roux",
+          "price": 1200.0
+        },
+        {
+          "name": "Krone",
+          "price": 2500.0
+        },
+        {
+          "name": "Martini",
+          "price": 1700.0
+        },
+        {
+          "name": "Moet",
+          "price": 7500.0
+        },
+        {
+          "name": "Moet Ice",
+          "price": 12000.0
+        },
+        {
+          "name": "Moet Imperial",
+          "price": 9500.0
+        },
+        {
+          "name": "Moscato",
+          "price": 2000.0
+        },
+        {
+          "name": "Nua",
+          "price": 2000.0
+        },
+        {
+          "name": "Pongracz",
+          "price": 2500.0
+        },
+        {
+          "name": "Tosti",
+          "price": 1500.0
+        },
+        {
+          "name": "Veuve Clicquot",
+          "price": 7500.0
+        },
+        {
+          "name": "Veuve Clicquot Rich",
+          "price": 9500.0
+        }
+      ]
+    },
+    {
+      "name": "Espirituosas",
+      "sort": 18,
+      "station": "bar",
+      "items": [
+        {
+          "name": "1920 (Simples)",
+          "price": 350.0
+        },
+        {
+          "name": "1920 (Duplo)",
+          "price": 650.0
+        },
+        {
+          "name": "Hennesy (Simples)",
+          "price": 450.0
+        },
+        {
+          "name": "Hennesy (Duplo)",
+          "price": 850.0
+        },
+        {
+          "name": "Hennesy V.S.O.P (Simples)",
+          "price": 700.0
+        },
+        {
+          "name": "Hennesy V.S.O.P (Duplo)",
+          "price": 1350.0
+        },
+        {
+          "name": "Pitu (Simples)",
+          "price": 250.0
+        },
+        {
+          "name": "Pitu (Duplo)",
+          "price": 450.0
+        },
+        {
+          "name": "Sao Domingos (Simples)",
+          "price": 350.0
+        },
+        {
+          "name": "Sao Domingos (Duplo)",
+          "price": 650.0
+        }
+      ]
+    },
+    {
+      "name": "Licores",
+      "sort": 19,
+      "station": "bar",
+      "items": [
+        {
+          "name": "Amarula (Simples)",
+          "price": 250.0
+        },
+        {
+          "name": "Amarula (Duplo)",
+          "price": 450.0
+        },
+        {
+          "name": "Martini (Simples)",
+          "price": 250.0
+        },
+        {
+          "name": "Martini (Duplo)",
+          "price": 450.0
+        }
+      ]
+    },
+    {
+      "name": "Whiskey",
+      "sort": 20,
+      "station": "bar",
+      "items": [
+        {
+          "name": "Jack Daniels (Simples)",
+          "price": 350.0
+        },
+        {
+          "name": "Jack Daniels (Duplo)",
+          "price": 550.0
+        },
+        {
+          "name": "Jack Daniels Honey (Simples)",
+          "price": 350.0
+        },
+        {
+          "name": "Jack Daniels Honey (Duplo)",
+          "price": 550.0
+        },
+        {
+          "name": "Jameson (Simples)",
+          "price": 350.0
+        },
+        {
+          "name": "Jameson (Duplo)",
+          "price": 650.0
+        },
+        {
+          "name": "Jameson B.B. (Simples)",
+          "price": 450.0
+        },
+        {
+          "name": "Jameson B.B. (Duplo)",
+          "price": 850.0
+        },
+        {
+          "name": "Jameson IPA (Simples)",
+          "price": 400.0
+        },
+        {
+          "name": "Jameson IPA (Duplo)",
+          "price": 750.0
+        },
+        {
+          "name": "Jameson S.E. (Simples)",
+          "price": 350.0
+        },
+        {
+          "name": "Jameson S.E. (Duplo)",
+          "price": 650.0
+        },
+        {
+          "name": "Johnnie Walker (Simples)",
+          "price": 350.0
+        },
+        {
+          "name": "Johnnie Walker (Duplo)",
+          "price": 550.0
+        }
+      ]
+    },
+    {
+      "name": "Gin",
+      "sort": 21,
+      "station": "bar",
+      "items": [
+        {
+          "name": "Beefeater (Simples)",
+          "price": 350.0
+        },
+        {
+          "name": "Beefeater (Duplo)",
+          "price": 650.0
+        },
+        {
+          "name": "Beefeater Pink (Simples)",
+          "price": 400.0
+        },
+        {
+          "name": "Beefeater Pink (Duplo)",
+          "price": 750.0
+        },
+        {
+          "name": "Bombay (Simples)",
+          "price": 350.0
+        },
+        {
+          "name": "Bombay (Duplo)",
+          "price": 650.0
+        },
+        {
+          "name": "Bulldog (Simples)",
+          "price": 450.0
+        },
+        {
+          "name": "Bulldog (Duplo)",
+          "price": 850.0
+        },
+        {
+          "name": "Gordons (Simples)",
+          "price": 250.0
+        },
+        {
+          "name": "Gordons (Duplo)",
+          "price": 350.0
+        },
+        {
+          "name": "Hendrinks (Simples)",
+          "price": 400.0
+        },
+        {
+          "name": "Hendrinks (Duplo)",
+          "price": 750.0
+        },
+        {
+          "name": "Tanqueray (Simples)",
+          "price": 350.0
+        },
+        {
+          "name": "Tanqueray (Duplo)",
+          "price": 650.0
+        },
+        {
+          "name": "Tanqueray Royale (Simples)",
+          "price": 350.0
+        },
+        {
+          "name": "Tanqueray Royale (Duplo)",
+          "price": 650.0
+        },
+        {
+          "name": "Tanqueray Sevilla (Simples)",
+          "price": 350.0
+        },
+        {
+          "name": "Tanqueray Sevilla (Duplo)",
+          "price": 650.0
+        }
+      ]
+    },
+    {
+      "name": "Vodka / Ciroc",
+      "sort": 22,
+      "station": "bar",
+      "items": [
+        {
+          "name": "Absolut Vodka (Simples)",
+          "price": 300.0
+        },
+        {
+          "name": "Absolut Vodka (Duplo)",
+          "price": 550.0
+        }
+      ]
+    },
+    {
+      "name": "Shots",
+      "sort": 23,
+      "station": "bar",
+      "items": [
+        {
+          "name": "Blow Job",
+          "price": 300.0
+        },
+        {
+          "name": "Don Julio Gold",
+          "price": 500.0
+        },
+        {
+          "name": "Don Julio Silver",
+          "price": 400.0
+        },
+        {
+          "name": "JagerBomb",
+          "price": 500.0
+        },
+        {
+          "name": "Jagermeister",
+          "price": 250.0
+        },
+        {
+          "name": "Olmeca Gold",
+          "price": 250.0
+        },
+        {
+          "name": "Olmeca Silver",
+          "price": 200.0
+        }
+      ]
+    },
+    {
+      "name": "Mini",
+      "sort": 24,
+      "station": "bar",
+      "items": [
+        {
+          "name": "Amarula",
+          "price": 250.0
+        },
+        {
+          "name": "Hennessy",
+          "price": 550.0
+        },
+        {
+          "name": "Jagermeister",
+          "price": 250.0
+        },
+        {
+          "name": "Jameson",
+          "price": 350.0
+        }
+      ]
+    },
+    {
+      "name": "Garrafas",
+      "sort": 25,
+      "station": "bar",
+      "items": [
+        {
+          "name": "Jameson",
+          "price": 3500.0
+        },
+        {
+          "name": "Jameson Black Barrel",
+          "price": 5000.0
+        },
+        {
+          "name": "Jameson IPA",
+          "price": 4000.0
+        },
+        {
+          "name": "Jameson Stout Edition",
+          "price": 4000.0
+        },
+        {
+          "name": "Beefeater",
+          "price": 3000.0
+        },
+        {
+          "name": "Beefeater Pink",
+          "price": 3500.0
+        },
+        {
+          "name": "Tanqueray",
+          "price": 3500.0
+        },
+        {
+          "name": "Tanqueray Sevilla",
+          "price": 4500.0
+        },
+        {
+          "name": "Tanqueray Royale",
+          "price": 4500.0
+        },
+        {
+          "name": "Don Julio",
+          "price": 6500.0
+        },
+        {
+          "name": "Don Julio Reposado",
+          "price": 7500.0
+        },
+        {
+          "name": "Martini Rosso",
+          "price": 1100.0
+        },
+        {
+          "name": "Martini Blanco",
+          "price": 1100.0
+        },
+        {
+          "name": "Hennessy",
+          "price": 6500.0
+        },
+        {
+          "name": "Hennessy VSOP",
+          "price": 8500.0
+        }
+      ]
+    },
+    {
+      "name": "Vinho Tinto",
+      "sort": 26,
+      "station": "bar",
+      "items": [
+        {
+          "name": "Casa da Malta",
+          "price": null
+        },
+        {
+          "name": "Fat Bastard",
+          "price": null
+        },
+        {
+          "name": "Fat Bastard Reserva",
+          "price": null
+        },
+        {
+          "name": "Casal Catarino Tinto Reserva",
+          "price": null
+        },
+        {
+          "name": "Portada",
+          "price": null
+        },
+        {
+          "name": "Mucho Mas",
+          "price": null
+        },
+        {
+          "name": "Roble",
+          "price": null
+        },
+        {
+          "name": "Casal Catarino Tinto Reserva",
+          "price": null
+        },
+        {
+          "name": "Silk and Spice",
+          "price": null
+        },
+        {
+          "name": "Casa da Insua",
+          "price": null
+        }
+      ]
+    },
+    {
+      "name": "Vinho Branco / Verde",
+      "sort": 27,
+      "station": "bar",
+      "items": [
+        {
+          "name": "Casal Garcia",
+          "price": null
+        },
+        {
+          "name": "Casal Catarino Frizante",
+          "price": null
+        },
+        {
+          "name": "Aveleda",
+          "price": null
+        }
+      ]
+    }
+  ]
+}

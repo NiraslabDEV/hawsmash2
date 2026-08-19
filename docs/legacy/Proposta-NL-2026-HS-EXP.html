@@ -1,0 +1,636 @@
+<!doctype html>
+<html lang="pt">
+<head>
+<meta charset="utf-8">
+<title>HAWSMASH — Proposta Comercial</title>
+<style>
+  @page { size: A4; margin: 15mm 14mm 14mm 14mm; }
+  :root{
+    --ember:#e85a2a; --ember-deep:#b8401b;
+    --gold:#e5a93c;  --gold-deep:#c48a1e;
+    --char:#1f1c19;  --cream:#f7e8cf;
+    --ink:#23201d;   --ink-dim:#5c564e;  --line:#ddd6ca;
+    --green:#2f6b28; --greenbg:#eef6ec;
+  }
+  *{ box-sizing:border-box; }
+  html,body{ margin:0; padding:0; }
+  body{
+    font-family:"Segoe UI","Helvetica Neue",Arial,sans-serif;
+    font-size:10.1pt; line-height:1.48; color:var(--ink);
+    -webkit-print-color-adjust:exact; print-color-adjust:exact;
+  }
+
+  /* CAPA */
+  .cover{ height:267mm; background:var(--char); color:var(--cream); padding:24mm 20mm;
+    display:flex; flex-direction:column; page-break-after:always; }
+  .cover .mark{ font-size:9pt; letter-spacing:.28em; text-transform:uppercase; color:var(--gold); font-weight:700; }
+  .cover .rule{ height:3px; width:64px; background:var(--ember); margin:7mm 0 9mm; }
+  .cover h1{ font-size:36pt; line-height:1.03; margin:0; font-weight:800; letter-spacing:-.02em; color:#fff; }
+  .cover h1 em{ font-style:normal; color:var(--gold); }
+  .cover .sub{ margin-top:7mm; font-size:12.5pt; line-height:1.45; color:#cfc7b8; max-width:120mm; }
+  .cover .spacer{ flex:1 1 auto; }
+  .cover .meta{ border-top:1px solid rgba(247,232,207,.22); padding-top:6mm; display:flex; gap:11mm; font-size:9pt; color:#b3ab9c; }
+  .cover .meta b{ display:block; color:var(--cream); font-size:10.4pt; font-weight:700; margin-top:1.5mm; }
+
+  section{ page-break-inside:avoid; }
+  .brk{ page-break-before:always; }
+  h2{ font-size:16.5pt; margin:0 0 1mm; color:var(--char); font-weight:800; letter-spacing:-.01em; line-height:1.15; }
+  h2 .n{ display:inline-block; min-width:9mm; color:var(--ember); font-weight:800; }
+  .lede{ color:var(--ink-dim); font-size:9.9pt; margin:0 0 5mm; max-width:152mm; }
+  h3{ font-size:10.8pt; margin:6mm 0 2mm; color:var(--char); font-weight:700; }
+  p{ margin:0 0 3mm; }
+  ul,ol{ margin:0 0 3mm; padding-left:5mm; }
+  li{ margin-bottom:1.3mm; }
+  .hr{ height:1px; background:var(--line); margin:7mm 0; }
+  .note{ font-size:8.8pt; color:var(--ink-dim); }
+
+  table{ width:100%; border-collapse:collapse; margin:2mm 0 4mm; font-size:9.3pt; }
+  th{ text-align:left; background:var(--char); color:var(--cream); font-weight:700; padding:2.3mm 3mm; font-size:8.5pt; letter-spacing:.06em; text-transform:uppercase; }
+  td{ padding:2.5mm 3mm; border-bottom:1px solid var(--line); vertical-align:top; }
+  tbody tr:nth-child(even) td{ background:#faf7f1; }
+  .r{ text-align:right; white-space:nowrap; }
+  tr.tot td{ background:var(--char) !important; color:#fff; font-weight:800; font-size:10.3pt; border:none; }
+  tr.tot td .sm{ font-weight:400; font-size:8.5pt; color:#b3ab9c; }
+  tr.sub td{ background:#f2ede4 !important; font-weight:700; }
+  .real{ display:inline-block; font-size:7.4pt; font-weight:800; letter-spacing:.06em; background:var(--greenbg); color:var(--green); padding:.5mm 1.6mm; vertical-align:middle; }
+  .est{ display:inline-block; font-size:7.4pt; font-weight:800; letter-spacing:.06em; background:#f0ece3; color:var(--ink-dim); padding:.5mm 1.6mm; vertical-align:middle; }
+
+  .kpis{ display:flex; gap:3.5mm; margin:3mm 0 5mm; }
+  .kpi{ flex:1; border:1px solid var(--line); border-top:3px solid var(--ember); padding:3.5mm; background:#fff; text-align:center; }
+  .kpi .v{ font-size:17pt; font-weight:800; color:var(--char); line-height:1.1; letter-spacing:-.02em; }
+  .kpi .l{ font-size:7.9pt; text-transform:uppercase; letter-spacing:.08em; color:var(--ink-dim); margin-top:1.5mm; font-weight:700; }
+  .kpi.hero{ border-top-color:var(--green); }
+  .kpi.hero .v{ color:var(--green); }
+
+  .box{ border:1px solid var(--line); border-left:4px solid var(--gold); background:#fdfbf7; padding:4mm 5mm; margin:3mm 0 4mm; }
+  .box.warn{ border-left-color:var(--ember); background:#fdf4ef; }
+  .box.good{ border-left-color:var(--green); background:var(--greenbg); }
+  .box .t{ font-size:8.5pt; text-transform:uppercase; letter-spacing:.1em; font-weight:800; color:var(--gold-deep); margin-bottom:1.5mm; }
+  .box.warn .t{ color:var(--ember-deep); }
+  .box.good .t{ color:var(--green); }
+  .box p:last-child{ margin-bottom:0; }
+
+  .quote{ border-left:4px solid var(--char); padding:1mm 0 1mm 5mm; margin:3mm 0 4mm; font-size:10.8pt; line-height:1.45; color:var(--char); font-weight:600; }
+
+  .price{ background:var(--char); color:var(--cream); padding:6mm 7mm; margin:4mm 0; }
+  .price .row{ display:flex; justify-content:space-between; align-items:baseline; padding:2.5mm 0; border-bottom:1px solid rgba(247,232,207,.16); }
+  .price .row:last-child{ border-bottom:none; }
+  .price .lbl{ font-size:9.8pt; }
+  .price .lbl b{ display:block; color:#fff; font-size:11.5pt; font-weight:700; }
+  .price .lbl span{ color:#b3ab9c; font-size:8.7pt; }
+  .price .amt{ font-size:15pt; font-weight:800; color:var(--gold); white-space:nowrap; padding-left:6mm; }
+  .price .amt small{ display:block; font-size:8pt; color:#b3ab9c; font-weight:400; text-align:right; }
+
+  .two{ display:flex; gap:4mm; margin:3mm 0 4mm; }
+  .col{ flex:1; border:1px solid var(--line); padding:4mm; }
+  .col h4{ margin:0 0 2.5mm; font-size:9.8pt; text-transform:uppercase; letter-spacing:.07em; }
+  .col.yes h4{ color:var(--green); }
+  .col.no h4{ color:var(--ember-deep); }
+  .col ul{ padding-left:4mm; margin:0; font-size:9.1pt; }
+
+  .resp{ list-style:none; padding:0; margin:0; }
+  .resp li{ position:relative; padding:2.4mm 0 2.4mm 8mm; border-bottom:1px solid var(--line); }
+  .resp li:last-child{ border-bottom:none; }
+  .resp li::before{ content:"✓"; position:absolute; left:0; top:2.2mm; width:5.5mm; height:5.5mm; background:var(--green); color:#fff;
+    font-size:8pt; font-weight:800; display:flex; align-items:center; justify-content:center; border-radius:50%; }
+  .resp li b{ display:block; color:var(--char); }
+  .resp li span{ color:var(--ink-dim); font-size:9pt; }
+
+  .foot{ margin-top:8mm; padding-top:4mm; border-top:1px solid var(--line); font-size:8.3pt; color:var(--ink-dim); display:flex; justify-content:space-between; }
+
+  /* Tabela de responsabilidades — compacta */
+  table.dom{ font-size:8.9pt; }
+  table.dom td{ padding:2.2mm 3mm; }
+  table.dom td.d{ width:42mm; font-weight:700; color:var(--char); }
+  table.dom td.d span{ display:block; font-weight:400; font-size:7.8pt; color:var(--ink-dim); }
+  table.dom ul{ margin:0; padding-left:4mm; }
+  table.dom li{ margin-bottom:.9mm; }
+  .daily{ display:flex; gap:4mm; margin:4mm 0; }
+  .daily div{ flex:1; background:var(--char); color:var(--cream); padding:4.5mm; text-align:center; }
+  .daily .v{ font-size:18pt; font-weight:800; color:var(--gold); line-height:1.1; }
+  .daily .l{ font-size:8.2pt; color:#b3ab9c; margin-top:1.5mm; text-transform:uppercase; letter-spacing:.07em; font-weight:700; }
+  .sign{ display:flex; gap:10mm; margin-top:9mm; }
+  .sign div{ flex:1; border-top:1px solid var(--char); padding-top:2mm; font-size:8.7pt; color:var(--ink-dim); }
+</style>
+</head>
+<body>
+
+<div class="cover">
+  <div class="mark">Niraslab · Proposta Comercial</div>
+  <div class="rule"></div>
+  <h1>HAWSMASH<br><em>Duas lojas.</em><br>Um só sistema.</h1>
+  <div class="sub">
+    Balcão, delivery, pagamentos, estoque e caixa — em
+    <strong style="color:#fff">Maputo</strong> e <strong style="color:#fff">Matola</strong>,
+    num único painel. Alargando ao balcão o sistema que já corre o negócio.
+  </div>
+  <div class="spacer"></div>
+  <div class="meta">
+    <div>Para<b>Ridwan · HAWSMASH</b></div>
+    <div>De<b>Niraslab</b></div>
+    <div>Referência<b>NL-2026-HS-EXP</b></div>
+    <div>Data<b>16.08.2026</b></div>
+  </div>
+</div>
+
+<!-- ===== 1. O QUE ESTÁ EM JOGO ===== -->
+<section>
+  <h2>O que está em jogo</h2>
+  <p class="lede">Antes de falar de investimento, vejamos o que o HAWSMASH vai movimentar.</p>
+
+  <h3>O que o sistema já factura hoje — dados reais</h3>
+  <table>
+    <thead><tr><th>Mês</th><th class="r">Pedidos</th><th class="r">Facturado</th><th class="r">Ticket médio</th><th class="r">Clientes</th></tr></thead>
+    <tbody>
+      <tr><td>Junho 2026</td><td class="r">179</td><td class="r">255.110 MT</td><td class="r">1.425 MT</td><td class="r">141</td></tr>
+      <tr><td>Julho 2026</td><td class="r">221</td><td class="r">304.230 MT</td><td class="r">1.377 MT</td><td class="r">152</td></tr>
+      <tr><td>Agosto 2026 <span class="note">(até dia 16)</span></td><td class="r">140</td><td class="r">186.320 MT</td><td class="r">1.331 MT</td><td class="r">121</td></tr>
+      <tr class="sub"><td>Ritmo actual de Agosto <span class="real">REAL</span></td><td class="r">~270</td><td class="r">~360.000 MT</td><td class="r">1.331 MT</td><td class="r">—</td></tr>
+    </tbody>
+  </table>
+  <p>Três meses consecutivos a crescer perto de <strong>19% ao mês</strong>. E tudo isto
+  <strong>sem uma única loja aberta ao público</strong> — a operar a partir da cozinha nas traseiras da
+  padaria, só por encomenda.</p>
+</section>
+
+<!-- ===== PROJECÇÃO ===== -->
+<section class="brk">
+  <h2><span class="n">1.</span> Projecção: duas lojas, dois canais</h2>
+  <p class="lede">O que o HAWSMASH passa a movimentar quando a Matola estabilizar (6.º mês de operação).</p>
+
+  <table>
+    <thead><tr><th>Loja</th><th>Canal</th><th class="r">Pedidos/mês</th><th class="r">Ticket médio</th><th class="r">Facturação/mês</th></tr></thead>
+    <tbody>
+      <tr><td rowspan="2"><strong>Maputo</strong></td><td>Delivery e levantamento <span class="real">REAL</span></td><td class="r">262</td><td class="r">1.377 MT</td><td class="r">360.000 MT</td></tr>
+      <tr><td>Balcão <span class="est">PROJECTADO</span></td><td class="r">900</td><td class="r">500 MT</td><td class="r">450.000 MT</td></tr>
+      <tr><td rowspan="2"><strong>Matola</strong></td><td>Delivery e levantamento <span class="est">PROJECTADO</span></td><td class="r">156</td><td class="r">1.377 MT</td><td class="r">215.000 MT</td></tr>
+      <tr><td>Balcão <span class="est">PROJECTADO</span></td><td class="r">630</td><td class="r">500 MT</td><td class="r">315.000 MT</td></tr>
+      <tr class="tot"><td colspan="2">Volume total processado pelo sistema<span class="sm">Estimativa conservadora ao 6.º mês</span></td><td class="r">~1.948</td><td class="r">688 MT</td><td class="r">1.340.000 MT</td></tr>
+    </tbody>
+  </table>
+
+  <div class="kpis">
+    <div class="kpi hero"><div class="v">1,34 M MT</div><div class="l">Por mês, ao 6.º mês</div></div>
+    <div class="kpi hero"><div class="v">16,1 M MT</div><div class="l">Por ano, em velocidade de cruzeiro</div></div>
+    <div class="kpi"><div class="v">~1.950</div><div class="l">Pedidos por mês</div></div>
+  </div>
+
+  <div class="box">
+    <div class="t">Como se lê esta tabela</div>
+    <p>Os valores marcados <span class="real">REAL</span> vêm directamente da base de dados do HAWSMASH.
+    Os de balcão são <strong>projecções</strong> — os dois pontos ainda não existem: 30 vendas por dia por
+    loja, a um ticket de 500 MT. A Matola é projectada a <strong>60% do delivery</strong> e
+    <strong>70% do balcão</strong> de Maputo. <strong>São premissas a validar contigo</strong>; se o balcão
+    render mais do que isto, toda a projecção sobe e o peso do investimento desce.</p>
+  </div>
+
+  <div class="box good">
+    <div class="t">A leitura de fundo</div>
+    <p>A partir da abertura da Matola, <strong>praticamente toda a receita do HAWSMASH passa por este
+    sistema</strong> — as vendas ao balcão das duas lojas e o delivery das duas. Deixa de ser um site de
+    encomendas e passa a ser a infra-estrutura do negócio.</p>
+  </div>
+</section>
+
+<!-- ===== 2. ENTREGA EM 15 DIAS ===== -->
+<section class="brk">
+  <h2><span class="n">2.</span> O plano para abrir as duas lojas</h2>
+  <p class="lede">As duas abrem daqui a 15 dias, no mesmo dia. O plano é desenhado à volta dessa data.</p>
+
+  <div class="box warn">
+    <div class="t">O salto que se vai dar</div>
+    <p><strong>O HAWSMASH passa de cozinha nas traseiras da padaria a duas lojas com balcão — no mesmo dia.</strong><br>
+    Não há migração a fazer: a operação online continua sem qualquer interrupção e ganha <strong>dois pontos
+    físicos de raiz</strong>. No primeiro minuto do primeiro dia, as duas lojas têm de estar a
+    <strong>vender ao balcão e a receber delivery</strong> — cada uma com as suas zonas, os seus horários e
+    os seus pedidos a caírem na sua própria cozinha.</p>
+  </div>
+
+  <div class="box good">
+    <div class="t">O que isto vale</div>
+    <p>O HAWSMASH factura hoje <strong>360.000 MT por mês sem ter uma única loja aberta ao público</strong>.
+    A partir desta abertura passa a ter duas — ambas junto às quadras de padel, com movimento diário e
+    público certo. Por isso a projecção da página anterior é <strong>conservadora</strong>: parte de um
+    balcão que ainda não existe e já assume apenas um desempenho moderado.</p>
+  </div>
+
+  <h3>Fase 1 — nos 15 dias, para as duas lojas abrirem</h3>
+  <table>
+    <tbody>
+      <tr><td style="width:52mm"><strong>POS de balcão</strong></td><td>Registo da venda ao balcão, cobrança em dinheiro com troco, M-Pesa, e-Mola e cartão, talão para o cliente e abertura da gaveta. Idêntico nas duas lojas.</td></tr>
+      <tr><td><strong>Multi-unidade</strong></td><td>As duas lojas separadas no mesmo sistema: vendas, caixa, preços, horários e números de pagamento por loja — e o total consolidado num só ecrã.</td></tr>
+      <tr><td><strong>Equipa e permissões</strong></td><td>Conta individual por pessoa. Perfis de Dono, Gerente, Caixa e Cozinha. Cada colaborador vê apenas a sua loja.</td></tr>
+      <tr><td><strong>Cozinha e impressão</strong></td><td>Talão automático em cada cozinha, para pedidos de balcão e de delivery.</td></tr>
+      <tr><td><strong>Caixa</strong></td><td>Abertura e fecho com contagem, unificando balcão e online no mesmo apuramento, por loja.</td></tr>
+      <tr><td><strong>Delivery por loja</strong></td><td>Zonas, taxas e horários próprios de cada unidade, com o pedido a cair automaticamente na cozinha certa. Cada loja só vê e só imprime o que é seu.</td></tr>
+      <tr><td><strong>Levantamento nas lojas</strong></td><td>Os dois pontos passam a ser locais de levantamento das encomendas feitas no site, cada um com o seu horário.</td></tr>
+      <tr><td><strong>Formação e ensaio</strong></td><td>As duas equipas treinadas antes da abertura, com ensaio real de vendas, de delivery e de fecho de caixa.</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Fase 2 — semanas 3 a 6, com as lojas já a operar</h3>
+  <table>
+    <tbody>
+      <tr><td style="width:52mm"><strong>Caixa por turno</strong></td><td>Abertura e fecho por turno com responsável identificado, sangria e reforço.</td></tr>
+      <tr><td><strong>Estoque</strong></td><td>Quantidade por produto e por loja; o produto fecha-se sozinho ao esgotar.</td></tr>
+      <tr><td><strong>Fidelização</strong></td><td>Ficha de cliente e programa de indicação, ligando balcão e online.</td></tr>
+      <tr><td><strong>Afinação do delivery</strong></td><td>Ajuste das zonas e taxas de cada loja com base nos primeiros dias reais de entrega.</td></tr>
+    </tbody>
+  </table>
+
+  <p class="note">A facturação fiscal é tratada à parte — ver secção 9, Riscos.</p>
+</section>
+
+<!-- ===== 3. O QUE JÁ ESTÁ CONSTRUÍDO ===== -->
+<section class="brk">
+  <h2><span class="n">3.</span> O que o HAWSMASH herda, já construído</h2>
+  <p class="lede">Módulos desenvolvidos e a correr em produção noutro cliente. Sem custo de desenvolvimento nesta proposta.</p>
+
+  <table>
+    <thead><tr><th>Módulo</th><th>O que faz</th><th class="r">Valor de tabela</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Pagamento automático</strong></td><td>M-Pesa e e-Mola confirmados sozinhos — acaba a verificação manual de comprovativos</td><td class="r">8.000 MT</td></tr>
+      <tr><td><strong>Estoque</strong></td><td>Quantidade por produto; o site fecha o produto ao esgotar</td><td class="r">7.000 MT</td></tr>
+      <tr><td><strong>Relatórios</strong></td><td>Vendas, indicadores e comparativos por período e por loja</td><td class="r">4.000 MT</td></tr>
+      <tr><td><strong>Fidelização</strong></td><td>Ficha de cliente, código de indicação e recompensas</td><td class="r">4.000 MT</td></tr>
+      <tr><td><strong>Gestão de cardápio</strong></td><td>Produtos, variantes, adicionais e fotos, pelo painel</td><td class="r">3.500 MT</td></tr>
+      <tr><td><strong>Impressora de cozinha</strong></td><td>Talão automático, com reimpressão</td><td class="r">3.000 MT</td></tr>
+      <tr><td><strong>Marketing e tracking</strong></td><td>Pixel, analítica e medição de campanhas por loja</td><td class="r">incluído</td></tr>
+      <tr><td><strong>Mesas por QR</strong></td><td>Cliente pede pelo telemóvel, à mesa</td><td class="r">incluído</td></tr>
+      <tr class="tot"><td colspan="2">Valor herdado<span class="sm">Não cobrado nesta proposta</span></td><td class="r">29.500 MT</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ===== 4. INVESTIMENTO ===== -->
+<section class="brk">
+  <h2><span class="n">4.</span> Investimento</h2>
+  <p class="lede">Duas linhas apenas: o que se constrói, e o que se opera todos os dias.</p>
+
+  <table>
+    <thead><tr><th>Desenvolvimento</th><th class="r">Valor</th></tr></thead>
+    <tbody>
+      <tr><td><strong>POS de balcão</strong> — venda, cobrança, troco, cartão, M-Pesa, talão e gaveta</td><td class="r">17.000 MT</td></tr>
+      <tr><td><strong>Multi-unidade</strong> — as duas lojas separadas em todo o sistema</td><td class="r">12.000 MT</td></tr>
+      <tr><td><strong>Instalação e arranque</strong> — configuração das duas lojas, cardápio, testes, formação das equipas e acompanhamento na abertura</td><td class="r">15.000 MT</td></tr>
+      <tr><td><strong>Estoque</strong> — activação e configuração por loja</td><td class="r">5.500 MT</td></tr>
+      <tr><td><strong>Caixa por turno</strong> — turnos, responsável, sangria e reforço</td><td class="r">4.000 MT</td></tr>
+      <tr><td><strong>Equipa e permissões</strong> — contas individuais e perfis</td><td class="r">3.500 MT</td></tr>
+      <tr><td><strong>Arranque acelerado</strong> — compressão do plano para a abertura em 15 dias</td><td class="r">5.000 MT</td></tr>
+      <tr class="tot"><td>Total de desenvolvimento<span class="sm">Pagamento único · 50% no arranque, 50% na abertura da Matola</span></td><td class="r">62.000 MT</td></tr>
+    </tbody>
+  </table>
+
+  <div class="price">
+    <div class="row">
+      <div class="lbl"><b>Operação e suporte — 17.500 MT por loja</b>
+        <span>Alojamento, base de dados, backups, monitorização, actualizações, formação e suporte 7 dias.
+        Sem custos adicionais de plataforma. Lista completa de responsabilidades na secção 6.</span></div>
+      <div class="amt">35.000 MT<small>por mês · 2 lojas</small></div>
+    </div>
+  </div>
+
+  <h3>O que isto representa</h3>
+  <div class="kpis">
+    <div class="kpi"><div class="v">2,6%</div><div class="l">Do volume processado</div></div>
+    <div class="kpi"><div class="v">18 MT</div><div class="l">Por pedido processado</div></div>
+    <div class="kpi"><div class="v">3,0%</div><div class="l">Do volume, no 1.º ano<br>(com o desenvolvimento incluído)</div></div>
+  </div>
+
+  <p><strong>Menos de 18 MT por cada pedido</strong> que entra no sistema — balcão ou delivery, nas duas lojas.
+  Menos do que o preço de um refrigerante, para registar a venda, cobrar, imprimir na cozinha, controlar o
+  estoque e fechar a caixa.</p>
+</section>
+
+<!-- ===== COMPARAÇÕES ===== -->
+<section>
+  <h2><span class="n">5.</span> Em perspectiva</h2>
+
+  <table>
+    <thead><tr><th>Alternativa</th><th class="r">Custo mensal</th><th>O que cobre</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Plataforma de delivery</strong> (comissão de 15% a 30%)</td><td class="r">85.000 – 170.000 MT</td><td>Só o delivery. Sem balcão, sem estoque, sem caixa — e o cliente passa a ser deles.</td></tr>
+      <tr><td><strong>Um funcionário</strong> para gerir pedidos e conciliação</td><td class="r">20.000 – 30.000 MT</td><td>Trabalha 8 horas, não trabalha ao domingo, e engana-se.</td></tr>
+      <tr style="background:var(--greenbg) !important"><td><strong>HAWSMASH · Niraslab</strong></td><td class="r"><strong>35.000 MT</strong></td><td><strong>Balcão e delivery nas duas lojas, pagamentos, estoque, caixa, relatórios, fidelização e suporte.</strong></td></tr>
+    </tbody>
+  </table>
+
+  <div class="box warn">
+    <div class="t">O que não existe hoje — e passa a existir</div>
+    <p>Um sistema de caixa registadora comum resolve <strong>uma</strong> coisa: registar a venda ao balcão de
+    <strong>uma</strong> loja. Não recebe encomendas online, não confirma M-Pesa, não controla estoque, não
+    imprime na cozinha a partir do site, não mede campanhas e não fala com a segunda loja.</p>
+    <p>O HAWSMASH já corre <strong>360.000 MT por mês</strong> neste sistema, a crescer 19% ao mês, sem que
+    a venda ao balcão esteja sequer incluída. O que esta proposta faz é <strong>trazer o balcão das duas
+    lojas para dentro do mesmo sistema</strong> — e passar a ter, pela primeira vez, o número total do
+    negócio num só ecrã.</p>
+  </div>
+</section>
+
+<!-- ===== 6. RESPONSABILIDADES ===== -->
+<section class="brk">
+  <h2><span class="n">6.</span> A responsabilidade que assumo</h2>
+  <p class="lede">A partir da abertura, tudo o que o HAWSMASH vende passa por este sistema. Segue a lista completa
+  do que fica à responsabilidade da Niraslab, nas duas lojas.</p>
+
+  <table class="dom">
+    <thead><tr><th style="width:42mm">Área</th><th>O que fica à minha responsabilidade</th></tr></thead>
+    <tbody>
+      <tr><td class="d">Disponibilidade<span>O sistema tem de estar de pé</span></td><td><ul>
+        <li>Monitorização permanente das duas lojas, com alertas automáticos de falha</li>
+        <li>Verificação diária de que ambas as lojas estão a comunicar com o sistema</li>
+        <li>Resposta prioritária a qualquer falha que impeça vender</li>
+        <li>Plano de recuperação e reposição do serviço</li></ul></td></tr>
+
+      <tr><td class="d">Balcão e caixa registadora<span>O dinheiro à porta</span></td><td><ul>
+        <li>Funcionamento do POS nas duas lojas, todos os dias de abertura</li>
+        <li>Cobrança em dinheiro, troco, M-Pesa, e-Mola e cartão</li>
+        <li>Actualizações feitas sem parar o atendimento</li>
+        <li>Assistência imediata quando a caixa falha, com procedimento alternativo</li></ul></td></tr>
+
+      <tr><td class="d">Impressão e cozinha<span>O pedido chega a quem cozinha</span></td><td><ul>
+        <li>Ligação às impressoras das duas cozinhas e à gaveta de dinheiro</li>
+        <li>Fila de impressão, retentativas e reimpressão de talões</li>
+        <li>Manutenção do serviço local instalado em cada loja</li>
+        <li>Diagnóstico de falhas de rede, papel ou equipamento</li></ul></td></tr>
+
+      <tr><td class="d">Dinheiro e conciliação<span>As contas têm de bater</span></td><td><ul>
+        <li>Preços calculados sempre no servidor — nunca alteráveis pelo cliente</li>
+        <li>Conciliação de dinheiro, M-Pesa, e-Mola e cartão por loja</li>
+        <li>Investigação de divergências de caixa quando surgem</li>
+        <li>Prevenção de pedidos duplicados, fraude e abuso</li>
+        <li>Acompanhamento de pagamentos falhados ou pendentes</li></ul></td></tr>
+
+      <tr><td class="d">Dados e backups<span>Nada se perde</span></td><td><ul>
+        <li>Backups diários automáticos das duas lojas</li>
+        <li>Teste periódico de restauro — recuperação verificada, não assumida</li>
+        <li>Retenção do histórico de vendas, clientes e fechos de caixa</li>
+        <li>Exportação dos dados sempre que o HAWSMASH pedir</li></ul></td></tr>
+
+      <tr><td class="d">Segurança e acessos<span>Quem entra e o que vê</span></td><td><ul>
+        <li>Protecção dos dados de clientes e de facturação</li>
+        <li>Gestão de contas, perfis e permissões por loja</li>
+        <li>Remoção imediata de acesso de quem sai da equipa</li>
+        <li>Registo de auditoria: quem aprovou, quem anulou, quem fechou a caixa</li>
+        <li>Certificados, domínio e ligação segura do site</li></ul></td></tr>
+
+      <tr><td class="d">Cardápio e preços<span>O que se vende e por quanto</span></td><td><ul>
+        <li>Alterações de produtos, preços, fotos, variantes e adicionais</li>
+        <li>Disponibilidade diferenciada por loja</li>
+        <li>Coerência do cardápio entre balcão, site e as duas unidades</li>
+        <li>Campanhas, promoções e preços especiais</li></ul></td></tr>
+
+      <tr><td class="d">Delivery e levantamento<span>O pedido na loja certa</span></td><td><ul>
+        <li>Zonas, taxas e horários próprios de cada loja</li>
+        <li>Encaminhamento automático do pedido para a unidade correcta</li>
+        <li>Emails e estado do pedido para o cliente</li>
+        <li>Gestão das janelas de entrega e levantamento</li></ul></td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section class="brk">
+  <table class="dom">
+    <thead><tr><th style="width:42mm">Área</th><th>O que fica à minha responsabilidade</th></tr></thead>
+    <tbody>
+      <tr><td class="d">Estoque<span>Não vender o que não há</span></td><td><ul>
+        <li>Configuração e ajuste das quantidades por produto e por loja</li>
+        <li>Fecho automático do produto no site ao esgotar</li>
+        <li>Alertas de rotura e correcção de desvios</li></ul></td></tr>
+
+      <tr><td class="d">Equipa<span>Quem opera o sistema</span></td><td><ul>
+        <li>Criação e remoção de contas de colaboradores</li>
+        <li>Formação de novos elementos, sempre que a equipa mudar</li>
+        <li>Manuais e material de apoio actualizados</li>
+        <li>Apoio directo à equipa em dúvidas do dia-a-dia</li></ul></td></tr>
+
+      <tr><td class="d">Relatórios e gestão<span>Os números para decidir</span></td><td><ul>
+        <li>Fecho de caixa por loja e conferência de valores</li>
+        <li>Relatórios de vendas diários, semanais e mensais</li>
+        <li>Consolidado das duas lojas num só ecrã</li>
+        <li>Indicadores de produtos, horários e clientes</li></ul></td></tr>
+
+      <tr><td class="d">Site e marketing<span>O canal que já factura</span></td><td><ul>
+        <li>Funcionamento, velocidade e presença do site nas pesquisas</li>
+        <li>Página de entrada com escolha de loja</li>
+        <li>Medição de campanhas de Facebook, Instagram e Google, por loja</li>
+        <li>Ficha de cliente e programa de fidelização</li></ul></td></tr>
+
+      <tr><td class="d">Evolução do sistema<span>Melhorar sem parar</span></td><td><ul>
+        <li>Correcção de erros comunicados pela operação</li>
+        <li>Actualizações contínuas, sem custo adicional</li>
+        <li>Todas as melhorias feitas para outros clientes chegam ao HAWSMASH</li>
+        <li>Testes fora de produção antes de qualquer alteração entrar</li></ul></td></tr>
+
+      <tr><td class="d">Infra-estrutura<span>O que corre por trás</span></td><td><ul>
+        <li>Gestão das contas de alojamento, base de dados e domínio</li>
+        <li>Renovações, limites de capacidade e desempenho</li>
+        <li>Custos de plataforma incluídos na mensalidade</li></ul></td></tr>
+
+      <tr><td class="d">Acompanhamento<span>Alguém a quem ligar</span></td><td><ul>
+        <li>Ponto de contacto único para as duas lojas</li>
+        <li>Suporte nos sete dias da semana, em horário de funcionamento</li>
+        <li>Registo e seguimento de cada pedido de assistência</li>
+        <li>Reporte periódico ao dono sobre estado e desempenho do sistema</li></ul></td></tr>
+    </tbody>
+  </table>
+
+  <h3>O que isto custa, visto de outra forma</h3>
+
+  <div class="daily">
+    <div><div class="v">17.500 MT</div><div class="l">Por loja, por mês</div></div>
+    <div><div class="v">583 MT</div><div class="l">Por loja, por dia</div></div>
+    <div><div class="v">18 MT</div><div class="l">Por pedido processado</div></div>
+  </div>
+
+  <p><strong>583 MT por dia, por loja</strong> — menos do que um Hawsmash Signature. Por esse valor, cada
+  loja tem o sistema de caixa a funcionar, a cozinha a receber os pedidos, o dinheiro conciliado, o estoque
+  controlado, o site a vender e alguém responsável por tudo isso quando falhar.</p>
+
+  <div class="quote">
+    Não é um fornecedor de software que se contrata. É alguém que fica responsável pelo coração
+    da operação das duas lojas — e que responde quando ele falha.
+  </div>
+</section>
+
+<section class="brk">
+  <h2><span class="n">7.</span> O departamento que não vai precisar de ter</h2>
+  <p class="lede">A partir desta abertura, o HAWSMASH deixa de ser um restaurante com um site.
+  Passa a ser meio restaurante, meio empresa digital.</p>
+
+  <div class="kpis">
+    <div class="kpi hero"><div class="v">43%</div><div class="l">Da receita nasce<br>no digital</div></div>
+    <div class="kpi hero"><div class="v">100%</div><div class="l">Da receita passa<br>pelo sistema</div></div>
+    <div class="kpi"><div class="v">~1.950</div><div class="l">Vendas por mês<br>a processar</div></div>
+  </div>
+
+  <p>Quase metade do que o HAWSMASH factura nasce online — encomendas, pagamento móvel, campanhas, ficha de
+  cliente. E <strong>a totalidade</strong> da receita, incluindo cada venda ao balcão das duas lojas, passa
+  a ser registada, cobrada, impressa e conciliada por este sistema.</p>
+
+  <p>Uma empresa com este perfil tem normalmente <strong>um departamento inteiro</strong> a tratar disto.
+  Não uma pessoa: uma equipa, com funções distintas.</p>
+
+  <table>
+    <thead><tr><th>Função</th><th>O que faria</th><th class="r">Custo mensal</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Programador</strong></td><td>Manter e evoluir o sistema das duas lojas</td><td class="r">60.000 MT</td></tr>
+      <tr><td><strong>Administrador de sistemas</strong></td><td>Servidores, backups, segurança, disponibilidade</td><td class="r">50.000 MT</td></tr>
+      <tr><td><strong>Gestor digital</strong></td><td>Site, campanhas, medição, fidelização</td><td class="r">40.000 MT</td></tr>
+      <tr><td><strong>Analista de dados</strong></td><td>Relatórios, indicadores e apoio à decisão</td><td class="r">40.000 MT</td></tr>
+      <tr><td><strong>Técnico de suporte</strong></td><td>Atender as duas lojas no dia-a-dia</td><td class="r">30.000 MT</td></tr>
+      <tr class="sub"><td colspan="2">Subtotal de salários</td><td class="r">220.000 MT</td></tr>
+      <tr><td colspan="2">Encargos, subsídios, equipamento, formação e substituições <span class="note">(+30%)</span></td><td class="r">66.000 MT</td></tr>
+      <tr class="tot"><td colspan="2">Custo de uma equipa interna<span class="sm">Valores de referência do mercado de Maputo</span></td><td class="r">286.000 MT/mês</td></tr>
+    </tbody>
+  </table>
+
+  <div class="price">
+    <div class="row">
+      <div class="lbl"><b>HAWSMASH · Niraslab</b>
+        <span>As mesmas funções, as duas lojas, sete dias por semana — sem contratar ninguém.</span></div>
+      <div class="amt">35.000 MT<small>por mês</small></div>
+    </div>
+  </div>
+
+  <div class="box good">
+    <div class="t">A conta final</div>
+    <p><strong>12% do custo de uma equipa interna.</strong> Cerca de um oitavo — sem recrutamento, sem
+    encargos, sem férias por cobrir, sem alguém que sai e leva o conhecimento com ele. E sem o risco de
+    contratar cinco pessoas para um negócio que ainda está a abrir as portas.</p>
+  </div>
+
+  <div class="quote">
+    O HAWSMASH cresce como empresa digital sem ter de construir um departamento digital.
+    É essa a troca que esta proposta oferece.
+  </div>
+</section>
+
+<section class="brk">
+  <h2><span class="n">8.</span> Condição de parceiro fundador</h2>
+  <p class="lede">Os valores desta proposta não são os valores de tabela. E há uma razão para isso.</p>
+
+  <p>Encomendado de raiz a uma empresa de software, um sistema com este âmbito — caixa registadora em duas
+  lojas, delivery com encaminhamento por unidade, pagamento móvel automático, estoque, gestão de equipa,
+  relatórios consolidados e fidelização — <strong>não sai por menos de 200.000 MT</strong>, com cerca de
+  <strong>60.000 MT por mês</strong> de manutenção e suporte.</p>
+
+  <table>
+    <thead><tr><th>&nbsp;</th><th class="r">Valor de mercado</th><th class="r">Condição HAWSMASH</th><th class="r">Diferença</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Desenvolvimento</strong></td><td class="r">200.000 MT</td><td class="r">62.000 MT</td><td class="r">−138.000 MT</td></tr>
+      <tr><td><strong>Operação — 12 meses</strong></td><td class="r">720.000 MT</td><td class="r">420.000 MT</td><td class="r">−300.000 MT</td></tr>
+      <tr class="tot"><td>Primeiro ano<span class="sm">Desenvolvimento e operação somados</span></td><td class="r">920.000 MT</td><td class="r">482.000 MT</td><td class="r">−438.000 MT</td></tr>
+    </tbody>
+  </table>
+
+  <div class="kpis">
+    <div class="kpi hero"><div class="v">438.000 MT</div><div class="l">Poupados no primeiro ano</div></div>
+    <div class="kpi hero"><div class="v">48%</div><div class="l">Abaixo do valor de mercado</div></div>
+    <div class="kpi"><div class="v">69%</div><div class="l">De desconto no desenvolvimento</div></div>
+  </div>
+
+  <div class="box good">
+    <div class="t">Porquê esta condição</div>
+    <p><strong>Porque o Ridwan acreditou quando ainda não havia nada para ver.</strong> Confiou o negócio a
+    um sistema que estava a ser construído, e é essa confiança que hoje permite mostrar a outros
+    restaurantes um caso real, a funcionar e a crescer 19% ao mês.</p>
+    <p>Boa parte do que o HAWSMASH recebe pronto — pagamento automático, estoque, relatórios, fidelização,
+    impressão — <strong>existe porque este projecto veio primeiro</strong>. O HAWSMASH não paga o preço de
+    mercado por duas razões: a base já está construída, e foi ele quem tornou isso possível.</p>
+  </div>
+
+  <div class="quote">
+    O HAWSMASH é o parceiro de referência da Niraslab — e o preço reflecte isso,
+    hoje e enquanto a parceria durar.
+  </div>
+
+  <p class="note">Condição exclusiva do HAWSMASH, aplicável a esta proposta e mantida nas renovações
+  enquanto a parceria se mantiver. Não é praticada com novos clientes.</p>
+</section>
+
+<!-- ===== 7. RISCOS ===== -->
+<section>
+  <h2><span class="n">9.</span> Riscos e como são tratados</h2>
+  <p class="lede">Ditos à partida, com a mitigação ao lado. Nenhuma surpresa a meio do caminho.</p>
+
+  <table>
+    <thead><tr><th style="width:44mm">Risco</th><th>Como é tratado</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Prazo de 15 dias</strong><br><span class="note">Âmbito exigente para o tempo disponível</span></td>
+        <td>A Fase 1 é reduzida ao essencial para abrir. Se algum módulo não estiver pronto a tempo, a prioridade absoluta é <strong>o balcão a cobrar e a cozinha a imprimir</strong> — tudo o resto entra nos dias seguintes, com as lojas já abertas e a vender.</td></tr>
+      <tr><td><strong>Duas aberturas no mesmo dia</strong><br><span class="note">Não há loja-piloto</span></td>
+        <td>O sistema é <strong>idêntico nas duas lojas</strong>, com a mesma formação e o mesmo ecrã, para que a equipa de uma possa socorrer a outra. Ensaio completo de vendas e de fecho de caixa antes da abertura, com acompanhamento reforçado da Niraslab nos primeiros dias e um responsável formado em cada loja.</td></tr>
+      <tr><td><strong>Facturação fiscal</strong><br><span class="note">Exigências da Autoridade Tributária</span></td>
+        <td><strong>Não está incluído nesta proposta.</strong> O sistema regista a venda, cobra e imprime o talão de serviço; o documento fiscal continua a ser emitido exactamente como hoje, até o contabilista do HAWSMASH definir a exigência legal para a venda ao balcão. Só depois disso se orçamenta. <strong>Nenhum compromisso é assumido sobre certificação fiscal.</strong></td></tr>
+      <tr><td><strong>Falha de internet</strong><br><span class="note">O balcão não pode parar</span></td>
+        <td>Router 4G de reserva com comutação automática em cada loja (equipamento a cargo do HAWSMASH) e procedimento em papel treinado com a equipa. Funcionamento offline completo fica para avaliação posterior, se a operação o exigir.</td></tr>
+      <tr><td><strong>Operação online em curso</strong><br><span class="note">O delivery não pode parar</span></td>
+        <td>O canal online continua a funcionar sem interrupção durante todo o desenvolvimento. As alterações entram por fases e são testadas fora de produção antes de chegarem ao cliente final.</td></tr>
+      <tr><td><strong>Equipamento</strong><br><span class="note">Impressoras, PC, rede</span></td>
+        <td>A cargo do HAWSMASH, com especificação fornecida pela Niraslab antes da compra. A instalação e configuração estão incluídas.</td></tr>
+      <tr><td><strong>Dependência de fornecedor</strong></td>
+        <td>Sistema documentado, dados exportáveis a qualquer momento e acessos de administração na posse do HAWSMASH.</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<!-- ===== 8. CONDIÇÕES ===== -->
+<section class="brk">
+  <h2><span class="n">10.</span> Condições e próximos passos</h2>
+
+  <div class="two">
+    <div class="col yes">
+      <h4>✓ A mensalidade inclui</h4>
+      <ul>
+        <li>Alojamento, base de dados e backups</li>
+        <li>Monitorização e correcção de falhas</li>
+        <li>Actualizações do produto</li>
+        <li>Suporte 7 dias, em horário de loja</li>
+        <li>Apoio ao fecho de caixa</li>
+        <li>Manutenção do sistema de impressão</li>
+      </ul>
+    </div>
+    <div class="col no">
+      <h4>✕ Orçamentado à parte</h4>
+      <ul>
+        <li>Facturação fiscal certificada</li>
+        <li>Funcionalidades novas fora do âmbito</li>
+        <li>Integrações com sistemas terceiros</li>
+        <li>Alterações de identidade visual</li>
+        <li>Abertura de uma terceira loja</li>
+        <li>Equipamento (impressoras, PC, rede)</li>
+      </ul>
+    </div>
+  </div>
+
+  <h3>Condições</h3>
+  <ul>
+    <li><strong>Desenvolvimento:</strong> 62.000 MT — 50% no arranque, 50% na abertura da Matola.</li>
+    <li><strong>Operação:</strong> <strong>17.500 MT por loja/mês</strong> — 35.000 MT pelas duas, com início no dia da abertura. Abrindo uma terceira loja, acresce o mesmo valor por unidade.</li>
+    <li><strong>Período mínimo</strong> de 12 meses de operação, renovável mensalmente.</li>
+    <li><strong>Prazo:</strong> Fase 1 pronta para a abertura, em 15 dias a contar do pagamento inicial; Fase 2 até 6 semanas depois.</li>
+    <li><strong>Validade desta proposta:</strong> 15 dias.</li>
+  </ul>
+
+  <h3>Para arrancar</h3>
+  <ol>
+    <li>Validar as premissas de venda ao balcão previstas para cada loja.</li>
+    <li>Definir os números M-Pesa e e-Mola de cada loja e a política de preços entre unidades.</li>
+    <li>Confirmar o equipamento de cada loja: impressora, PC, gaveta e ligação de reserva.</li>
+    <li>Adjudicação e pagamento inicial — o desenvolvimento começa no dia seguinte.</li>
+  </ol>
+
+  <div class="sign">
+    <div>Ridwan · HAWSMASH<br><span style="font-size:8pt">Data e assinatura</span></div>
+    <div>Niraslab<br><span style="font-size:8pt">Data e assinatura</span></div>
+  </div>
+
+  <div class="foot end">
+    <span>Proposta NL-2026-HS-EXP · Duas lojas, um só sistema</span>
+    <span>Niraslab · niraslab.dev@gmail.com · 16.08.2026</span>
+  </div>
+</section>
+
+</body>
+</html>

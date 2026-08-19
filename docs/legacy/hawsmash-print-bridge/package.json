@@ -1,0 +1,22 @@
+{
+  "name": "hawsmash-print-bridge",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Imprime cupons de cozinha (ESC/POS) ao aprovar pedidos HAWSMASH. Corre num PC local do restaurante, separado do site (não vai ao Railway).",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "demo": "node src/demo.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2",
+    "dotenv": "^16"
+  },
+  "devDependencies": {
+    "jpeg-js": "^0.4.4"
+  }
+}

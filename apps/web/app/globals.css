@@ -1,0 +1,188 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ============================================================
+   DELIVERY OS — Tema escuro/dourado (portado do HawSmash)
+   Tokens sobrescritos pelo cliente via config/brand.ts
+   ============================================================ */
+
+:root {
+  --bg-0: #0a0807;
+  --bg-1: #111110;
+  --bg-2: #1a1816;
+  --bg-3: #221f1c;
+  --line: rgba(255,255,255,.08);
+  --line-strong: rgba(255,255,255,.16);
+  --ink: #f6f1e6;
+  --ink-dim: #c8bfb0;
+  --ink-mute: #847e72;
+
+  --gold: #e5a93c;
+  --gold-deep: #c48a1e;
+  --gold-glow: rgba(229,169,60,.35);
+
+  --ember: #e85a2a;
+  --ember-deep: #b8401b;
+
+  --r-sm: 6px;
+  --r-md: 10px;
+  --r-lg: 18px;
+
+  --font-display: 'Bebas Neue', 'Anton', Impact, sans-serif;
+  --font-body: 'DM Sans', 'Inter', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg-1);
+  color: var(--ink);
+  font-family: var(--font-body);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  overflow-x: clip;
+}
+
+img {
+  display: block;
+  max-width: 100%;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+  border: 0;
+  background: none;
+  color: inherit;
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+}
+
+/* A11y — foco visível por teclado (adapta-se à cor do contexto) */
+:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+
+/* ============================================================
+   Liquid Glass — cartão de seleção (iOS 26 / WhatsApp)
+   Tokens --st-* (whitelabel). Sem tilt 3D, sem neon.
+   Specular real no topo + tint da marca quando selecionado.
+   ============================================================ */
+.glass-opt {
+  position: relative;
+  border-radius: 20px;
+  cursor: pointer;
+  /* vidro: fundo levemente branco + blur + saturate para "refração" */
+  background: rgba(255, 255, 255, 0.07);
+  backdrop-filter: blur(28px) saturate(1.8);
+  -webkit-backdrop-filter: blur(28px) saturate(1.8);
+  /* sombra suave + linha specular superior (inset) */
+  box-shadow:
+    0 2px 14px rgba(0, 0, 0, 0.38),
+    inset 0 1.5px 0 rgba(255, 255, 255, 0.42),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.18);
+  transition:
+    transform   0.22s cubic-bezier(0.34, 1.56, 0.64, 1),
+    box-shadow  0.22s ease,
+    background  0.18s ease;
+}
+
+/* Borda de vidro: clara no topo (luz a "entrar"), escura em baixo */
+.glass-opt::before {
+  content: ""; position: absolute; inset: 0; border-radius: 20px;
+  padding: 1px; pointer-events: none;
+  background: linear-gradient(
+    158deg,
+    rgba(255, 255, 255, 0.52) 0%,
+    rgba(255, 255, 255, 0.10) 38%,
+    rgba(255, 255, 255, 0.00) 62%,
+    rgba(0, 0, 0, 0.14) 100%
+  );
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor; mask-composite: exclude;
+}
+
+/* Label não selecionado — branco suave */
+.glass-opt .glass-label { color: rgba(255, 255, 255, 0.62); font-weight: 500; }
+
+/* SELECIONADO — vidro tingido com a cor da marca + lift limpo */
+.glass-opt.is-selected {
+  background: color-mix(in srgb, var(--st-primary) 22%, rgba(255, 255, 255, 0.10));
+  backdrop-filter: blur(28px) saturate(2.2);
+  -webkit-backdrop-filter: blur(28px) saturate(2.2);
+  transform: scale(1.026) translateY(-2px);
+  box-shadow:
+    0 6px 22px rgba(0, 0, 0, 0.44),
+    0 0 0 1.5px color-mix(in srgb, var(--st-primary) 55%, rgba(255, 255, 255, 0.35)),
+    inset 0 2px 0 rgba(255, 255, 255, 0.58),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.10);
+}
+
+/* Specular mais brilhante + tint da marca em baixo quando selecionado */
+.glass-opt.is-selected::before {
+  background: linear-gradient(
+    158deg,
+    rgba(255, 255, 255, 0.70) 0%,
+    rgba(255, 255, 255, 0.18) 32%,
+    color-mix(in srgb, var(--st-primary) 18%, transparent) 72%,
+    transparent 100%
+  );
+}
+
+/* Label selecionado — branco puro com glow suave da marca */
+.glass-opt.is-selected .glass-label {
+  color: #ffffff; font-weight: 600;
+  text-shadow: 0 1px 10px color-mix(in srgb, var(--st-primary) 45%, transparent);
+}
+
+/* Pill — para chips de Adicionais */
+.glass-opt.pill { border-radius: 999px; }
+.glass-opt.pill::before { border-radius: 999px; }
+
+/* ============================================================
+   Liquid Glass forte — botão CTA flutuante "Ver carrinho"
+   ============================================================ */
+.glass-cta {
+  background: var(--st-grad); /* fallback sólido (browsers sem color-mix) */
+  background: color-mix(in srgb, var(--st-primary) 38%, rgba(255, 255, 255, 0.14));
+  backdrop-filter: blur(40px) saturate(2.8);
+  -webkit-backdrop-filter: blur(40px) saturate(2.8);
+  box-shadow:
+    0 10px 40px rgba(0, 0, 0, 0.55),
+    0 0 0 1.5px color-mix(in srgb, var(--st-primary) 70%, rgba(255, 255, 255, 0.45)),
+    inset 0 2.5px 0 rgba(255, 255, 255, 0.65),
+    inset 0 -2px 0 rgba(0, 0, 0, 0.20);
+  transition: box-shadow 0.18s ease;
+}
+/* Specular forte no canto superior — vidro a apanhar luz */
+.glass-cta::before {
+  content: ""; position: absolute; inset: 0; border-radius: inherit;
+  padding: 1px; pointer-events: none;
+  background: linear-gradient(
+    162deg,
+    rgba(255, 255, 255, 0.85) 0%,
+    rgba(255, 255, 255, 0.22) 26%,
+    rgba(255, 255, 255, 0.00) 55%,
+    rgba(0, 0, 0, 0.10) 100%
+  );
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor; mask-composite: exclude;
+}

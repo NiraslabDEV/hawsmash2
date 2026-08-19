@@ -1,0 +1,22 @@
+node_modules/
+.next/
+dist/
+.turbo/
+coverage/
+test-results/
+playwright-report/
+
+# Variáveis locais e segredos. Os exemplos documentados são versionados.
+.env
+.env.*
+**/.env
+**/.env.*
+!.env.example
+!**/.env.example
+
+# Artefactos de build e ferramentas
+*.tsbuildinfo
+*.log
+.vercel/
+
+README-add.md

@@ -1,0 +1,36 @@
+{
+  "version": 1,
+  "currency": "MZN",
+  "categories": [
+    {
+      "name": "Entradas",
+      "sort": 1,
+      "station": "kitchen",
+      "items": [
+        {
+          "name": "Caril de Camarão",
+          "description": "Camarão fresco em molho de coco com arroz",
+          "price": 130.0,
+          "photo_url": "https://exemplo.co.mz/fotos/caril-camarao.jpg",
+          "available": true
+        },
+        {
+          "name": "Rissóis de Camarão (6un)",
+          "description": "Massa estaladiça recheada",
+          "price": 90,
+          "track_stock": true,
+          "stock_qty": 40
+        }
+      ]
+    },
+    {
+      "name": "Bebidas",
+      "sort": 2,
+      "station": "bar",
+      "items": [
+        { "name": "Sumo de Manga", "price": "25.50", "photo_url": "https://exemplo.co.mz/fotos/sumo-manga.jpg" },
+        { "name": "Água 500ml", "price": 20, "sort": 1 }
+      ]
+    }
+  ]
+}
