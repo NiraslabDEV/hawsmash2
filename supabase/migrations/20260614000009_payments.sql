@@ -17,7 +17,7 @@ alter table orders add column if not exists payment_provider_ref text;
 -- Registo imutável por tentativa — idempotência via data.reference do webhook
 -- ────────────────────────────────────────────────────────────────────────────
 create table payments (
-  id              uuid        primary key default uuid_generate_v4(),
+  id              uuid        primary key default gen_random_uuid(),
   order_id        uuid        not null references orders(id) on delete cascade,
   provider        text        not null,
   provider_ref    text,
@@ -39,7 +39,7 @@ create policy "staff_all" on payments
 -- Fila ESC/POS para o print-bridge (F2.2). Criada em confirm_payment/APPROVE.
 -- ────────────────────────────────────────────────────────────────────────────
 create table print_jobs (
-  id         uuid        primary key default uuid_generate_v4(),
+  id         uuid        primary key default gen_random_uuid(),
   order_id   uuid        not null references orders(id) on delete cascade,
   station    text        not null,
   payload    jsonb       not null default '{}',

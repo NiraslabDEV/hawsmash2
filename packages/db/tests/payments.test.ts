@@ -26,7 +26,7 @@ let anon:       SupabaseClient;
 let menuItemId: string;
 let testUserId: string;
 
-const ITEM_PRICE = 65000; // Caril de Camarao (seed)
+const ITEM_PRICE = 30000; // Classic Smash (seed)
 
 beforeAll(async () => {
   admin = createClient(SUPABASE_URL, SERVICE_KEY);
@@ -48,7 +48,7 @@ beforeAll(async () => {
   const { data: item, error } = await admin
     .from('menu_items')
     .select('id')
-    .eq('name', 'Caril de Camarao')
+    .eq('name', 'Classic Smash')
     .single();
   if (error || !item) throw new Error(`Setup: item não encontrado — ${error?.message}`);
   menuItemId = item.id;
@@ -69,6 +69,7 @@ afterEach(async () => {
 // Helper: cria pedido digital via anon RPC
 async function createDigitalOrder(qty = 1): Promise<string> {
   const { data: orderId, error } = await anon.rpc('create_order', {
+    p_store_slug: 'maputo',
     p_payload: {
       items:          [{ menuItemId, qty }],
       customerName:   'Teste Digital',
@@ -100,6 +101,7 @@ describe('(a) create_order flow=digital', () => {
 
   it('create_order sem flow → status=awaiting_approval (retrocompat)', async () => {
     const { data: orderId } = await anon.rpc('create_order', {
+      p_store_slug: 'maputo',
       p_payload: {
         items:          [{ menuItemId, qty: 1 }],
         customerName:   'Teste Digital',
@@ -255,7 +257,7 @@ describe('(e) confirm_payment — invalid_state', () => {
 
 describe('(f) get_menu com payment_settings', () => {
   it('retorna payment_provider e mpesa_number no topo', async () => {
-    const { data, error } = await anon.rpc('get_menu');
+    const { data, error } = await anon.rpc('get_menu', { p_store_slug: 'maputo' });
 
     expect(error).toBeNull();
     expect(data).toHaveProperty('payment_provider');

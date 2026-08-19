@@ -26,7 +26,7 @@ let anon:       SupabaseClient;
 let testUserId: string;
 let menuItemId: string;
 
-const ITEM_PRICE = 65000; // Caril de Camarao (seed)
+const ITEM_PRICE = 30000; // Classic Smash (seed)
 
 beforeAll(async () => {
   admin = createClient(SUPABASE_URL, SERVICE_KEY);
@@ -49,7 +49,7 @@ beforeAll(async () => {
   const { data: item, error } = await admin
     .from('menu_items')
     .select('id, stock_qty, track_stock, available')
-    .eq('name', 'Caril de Camarao')
+    .eq('name', 'Classic Smash')
     .single();
   if (error || !item) throw new Error(`Setup: item não encontrado — ${error?.message}`);
   menuItemId = item.id;
@@ -96,6 +96,7 @@ afterEach(async () => {
 // Helper: cria pedido digital via anon RPC
 async function createDigitalOrder(customerName: string, qty = 1): Promise<string> {
   const { data: orderId, error } = await anon.rpc('create_order', {
+    p_store_slug: 'maputo',
     p_payload: {
       items:          [{ menuItemId, qty }],
       customerName:   customerName,
@@ -252,6 +253,7 @@ describe('(c) Rollback total quando item esgota', () => {
       .eq('id', menuItemId);
 
     const { data: orderId, error } = await anon.rpc('create_order', {
+      p_store_slug: 'maputo',
       p_payload: {
         items:          [{ menuItemId, qty: 5 }], // pede 5, só há 2
         customerName:   'Stock Test 4',

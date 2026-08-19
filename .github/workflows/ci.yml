@@ -17,7 +17,7 @@ jobs:
   quality:
     name: Lint e testes
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
 
     steps:
       - name: Obter o código
@@ -35,8 +35,30 @@ jobs:
       - name: Instalar dependências
         run: pnpm install --frozen-lockfile
 
+      - name: Instalar Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Preparar Supabase local
+        run: |
+          supabase start
+          supabase db reset
+
+      - name: Gate RLS entre lojas
+        run: |
+          eval "$(supabase status -o env)"
+          SUPABASE_URL="$API_URL" \
+          SUPABASE_ANON_KEY="$ANON_KEY" \
+          SUPABASE_SERVICE_ROLE_KEY="$SERVICE_ROLE_KEY" \
+          pnpm --filter @delivery/db test:rls --run
+
       - name: Lint e tipos
         run: pnpm lint
 
       - name: Testes
         run: pnpm test
+
+      - name: Parar Supabase local
+        if: always()
+        run: supabase stop --no-backup

@@ -53,18 +53,18 @@
 
 **Objectivo:** toda a linha operacional tem dono. Um utilizador de uma loja não alcança a outra.
 
-- [ ] Migration `1001_stores.sql`: `stores`, `store_hours`, `order_counters` (CLAUDE §5.1/5.4)
-- [ ] Migration `1002_store_scope.sql`: `store_id not null` em `orders`, `order_items`, `payments`,
+- [x] Migration `1001_stores.sql`: `stores`, `store_hours`, `order_counters` (CLAUDE §5.1/5.4)
+- [x] Migration `1002_store_scope.sql`: `store_id not null` em `orders`, `order_items`, `payments`,
       `print_jobs`, `delivery_zones`, `cash_sessions`, `analytics_events` (nullable) + índices
-- [ ] Migration `1003_store_items.sql`: `store_items` + triggers de preenchimento determinístico (§5.3)
-- [ ] Migration `1004_staff_rls.sql`: `staff_profiles`, `staff_stores`, helpers `auth_role()`,
+- [x] Migration `1003_store_items.sql`: `store_items` + triggers de preenchimento determinístico (§5.3)
+- [x] Migration `1004_staff_rls.sql`: `staff_profiles`, `staff_stores`, helpers `auth_role()`,
       `auth_is_owner()`, `auth_can_store()` e **substituição de todas as policies `staff_all`**
-- [ ] `get_menu(p_store_slug)`, `create_order` e todas as RPC públicas passam a receber/derivar a loja
-- [ ] `event_log` ganha `store_id` + `actor_user_id`
-- [ ] **Seed**: lojas `maputo` e `matola` (prefixos `MPT`/`MTL`), horários, números de pagamento, zonas
-- [ ] **`packages/db/tests/rls.test.ts`**: utilizador da Matola falha a ler/escrever Maputo; `owner` lê ambas —
+- [x] `get_menu(p_store_slug)`, `create_order` e todas as RPC públicas passam a receber/derivar a loja
+- [x] `event_log` ganha `store_id` + `actor_user_id`
+- [x] ⏳ **Seed**: lojas `maputo` e `matola` (prefixos `MPT`/`MTL`), horários, números de pagamento, zonas — dados de Matola e horários finais aguardam o cliente
+- [x] **`packages/db/tests/rls.test.ts`**: utilizador da Matola falha a ler/escrever Maputo; `owner` lê ambas —
       **este teste é o gate da fase**
-- [ ] `pnpm db:types` regenerado; app compila com os tipos novos
+- [x] `pnpm db:types` regenerado; app compila com os tipos novos
 
 **PROMPT:** *"Executa a F1: multi-unidade. Migrations 1001–1004 conforme `CLAUDE.md §5 e §6`, RPCs com loja, seed das duas lojas e testes de RLS de isolamento entre lojas em `packages/db/tests/rls.test.ts`. Escreve os testes de RLS ANTES das policies. Nenhuma policy pode ficar `using (true)`."*
 

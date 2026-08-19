@@ -1,5 +1,6 @@
 import { createClient } from '@/utils/supabase/server';
 import { NextResponse } from 'next/server';
+import { InvalidStoreSlugError, resolveStoreSlug } from '@/lib/store-context';
 
 function translateError(msg: string): string {
   if (msg.startsWith('out_of_stock:'))   return 'Um ou mais itens do teu pedido estão esgotados. Volta ao cardápio e ajusta a quantidade.';
@@ -7,6 +8,9 @@ function translateError(msg: string): string {
   if (msg.startsWith('invalid_variant:'))  return 'O tamanho escolhido já não está disponível. Volta ao cardápio e escolhe outro.';
   if (msg.startsWith('invalid_addon:'))    return 'Um dos adicionais escolhidos já não está disponível. Volta ao cardápio e ajusta.';
   if (msg === 'store_closed')             return 'A loja está encerrada de momento.';
+  if (msg === 'store_not_found')          return 'Loja inválida.';
+  if (msg === 'store_not_accepting_orders') return 'Esta loja não está a aceitar pedidos neste momento.';
+  if (msg === 'delivery_zone_store_mismatch') return 'A zona de entrega não pertence à loja escolhida.';
   if (msg === 'empty_order')              return 'O carrinho está vazio.';
   if (msg === 'invalid_customer_name')    return 'Nome inválido.';
   if (msg === 'delivery_zone_required')   return 'Seleciona uma zona de entrega.';
@@ -31,8 +35,10 @@ export async function POST(request: Request) {
   try {
     const supabase = await createClient();
     const payload = await request.json();
+    const storeSlug = resolveStoreSlug(payload?.storeSlug);
 
     const { data, error } = await supabase.rpc('create_order', {
+      p_store_slug: storeSlug,
       p_payload: payload,
     });
 
@@ -43,6 +49,9 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ orderId: data });
   } catch (error) {
+    if (error instanceof InvalidStoreSlugError) {
+      return NextResponse.json({ error: 'Loja inválida.' }, { status: 400 });
+    }
     console.error('Unexpected error:', error);
     return NextResponse.json({ error: 'Erro interno. Tenta novamente.' }, { status: 500 });
   }

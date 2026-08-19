@@ -59,7 +59,7 @@ beforeAll(async () => {
 
 describe("(a) get_menu() — objecto marketing público", () => {
   it("devolve marketing com os 5 campos (A)", async () => {
-    const { data, error } = await anon.rpc("get_menu");
+    const { data, error } = await anon.rpc("get_menu", { p_store_slug: "maputo" });
     expect(error).toBeNull();
     expect(data.marketing).toBeTruthy();
     for (const f of PUBLIC_FIELDS) {
@@ -74,7 +74,7 @@ describe("(a) get_menu() — objecto marketing público", () => {
 
 describe("(b) get_menu() — tokens secretos (B) nunca expostos", () => {
   it("nenhum token secreto aparece no JSON serializado do get_menu", async () => {
-    const { data } = await anon.rpc("get_menu");
+    const { data } = await anon.rpc("get_menu", { p_store_slug: "maputo" });
     const blob = JSON.stringify(data);
     for (const f of SECRET_FIELDS) {
       expect(blob).not.toContain(f);

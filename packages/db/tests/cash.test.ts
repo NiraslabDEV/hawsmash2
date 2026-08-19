@@ -21,7 +21,7 @@ const TEST_PASSWORD = "test-staff-pass-123!";
 let admin: SupabaseClient; // service role — ignora RLS, mas auth.uid()=null
 let staff: SupabaseClient; // utilizador autenticado — auth.uid() funciona
 let menuItemId: string;
-const ITEM_PRICE = 65000; // Caril de Camarao
+const ITEM_PRICE = 30000; // Classic Smash
 
 beforeAll(async () => {
   admin = createClient(SUPABASE_URL, SERVICE_KEY);
@@ -45,7 +45,7 @@ beforeAll(async () => {
   const { data: item, error } = await admin
     .from("menu_items")
     .select("id, price_cents")
-    .eq("name", "Caril de Camarao")
+    .eq("name", "Classic Smash")
     .single();
 
   if (error || !item) throw new Error(`Setup: item não encontrado — ${error?.message}`);
@@ -68,6 +68,7 @@ afterEach(async () => {
 async function createConfirmedOrder(qty = 1): Promise<string> {
   const anon = createClient(SUPABASE_URL, ANON_KEY);
   const { data: orderId, error } = await anon.rpc("create_order", {
+    p_store_slug: "maputo",
     p_payload: {
       items: [{ menuItemId, qty }],
       customerName: "Teste Caixa",
@@ -147,6 +148,7 @@ describe("(b) close_cash_session()", () => {
     // Pedido cancelado
     const anon = createClient(SUPABASE_URL, ANON_KEY);
     const { data: cancelId } = await anon.rpc("create_order", {
+      p_store_slug: "maputo",
       p_payload: {
         items: [{ menuItemId, qty: 1 }],
         customerName: "Cancelado",

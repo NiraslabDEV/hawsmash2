@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@/utils/supabase/server';
 import { getPaymentConfig, buildProvider } from '@/lib/payments/config';
 import { orderToReference } from '@/lib/payments/reference';
+import { InvalidStoreSlugError, resolveStoreSlug } from '@/lib/store-context';
 
 /**
  * URL público base para return_url/callback_url do Paysuite.
@@ -37,11 +38,21 @@ export async function POST(request: Request) {
   }
 
   const supabase = await createClient();
+  let storeSlug: string;
+  try {
+    storeSlug = resolveStoreSlug(payload.storeSlug);
+  } catch (error) {
+    if (error instanceof InvalidStoreSlugError) {
+      return NextResponse.json({ error: 'Loja inválida.' }, { status: 400 });
+    }
+    throw error;
+  }
 
   // 1. Criar pedido com flow=digital — status = awaiting_payment (CLAUDE.md 5)
   const orderPayload = { ...payload, flow: 'digital' };
 
   const { data: orderId, error: orderError } = await supabase.rpc('create_order', {
+    p_store_slug: storeSlug,
     p_payload: orderPayload,
   });
 

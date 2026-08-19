@@ -8,11 +8,11 @@
  *   (c) preco adulterado no payload nao afeta total (banco prevalece)
  *   (d) horario invalido e rejeitado
  */
-import { describe, it, expect, beforeAll } from "vitest";
+import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
 
 const SUPABASE_URL =
-  process.env.SUPABASE_URL ?? "http://localhost:54531";
+  process.env.SUPABASE_URL ?? "http://localhost:54731";
 
 // Chaves padrao do Supabase local — sem segredo real, seguras para commitar
 const ANON_KEY =
@@ -28,7 +28,54 @@ let admin: SupabaseClient;
 
 // IDs fixados pelo seed (necessarios nos testes c e d)
 let menuItemId: string;
-const BANK_PRICE_CENTS = 65000; // Caril de Camarao no seed
+const BANK_PRICE_CENTS = 30000; // Classic Smash no seed
+
+let maputoManager: SupabaseClient;
+let matolaManager: SupabaseClient;
+let owner: SupabaseClient;
+let maputoStoreId: string;
+let matolaStoreId: string;
+const testUserIds: string[] = [];
+
+async function createStaffClient(
+  email: string,
+  role: "owner" | "manager",
+  storeIds: string[],
+): Promise<SupabaseClient> {
+  const password = "Rls-F1-Teste-2026!";
+  const { data: created, error: createError } = await admin.auth.admin.createUser({
+    email,
+    password,
+    email_confirm: true,
+  });
+
+  if (createError || !created.user) {
+    throw new Error(`Setup: não foi possível criar ${email} — ${createError?.message}`);
+  }
+
+  testUserIds.push(created.user.id);
+
+  const { error: profileError } = await admin.from("staff_profiles").insert({
+    user_id: created.user.id,
+    full_name: `Teste ${role}`,
+    role,
+    active: true,
+  });
+  if (profileError) throw new Error(`Setup: staff_profile — ${profileError.message}`);
+
+  if (storeIds.length > 0) {
+    const { error: storesError } = await admin.from("staff_stores").insert(
+      storeIds.map((storeId) => ({ user_id: created.user.id, store_id: storeId })),
+    );
+    if (storesError) throw new Error(`Setup: staff_stores — ${storesError.message}`);
+  }
+
+  const client = createClient(SUPABASE_URL, ANON_KEY);
+  const { error: signInError } = await client.auth.signInWithPassword({ email, password });
+  if (signInError) throw new Error(`Setup: login ${email} — ${signInError.message}`);
+
+  return client;
+}
 
 beforeAll(async () => {
   anon  = createClient(SUPABASE_URL, ANON_KEY);
@@ -38,7 +85,7 @@ beforeAll(async () => {
   const { data: item, error } = await admin
     .from("menu_items")
     .select("id, price_cents")
-    .eq("name", "Caril de Camarao")
+    .eq("name", "Classic Smash")
     .single();
 
   if (error || !item) throw new Error(`Setup: item nao encontrado — ${error?.message}. Corre 'pnpm db:migrate' primeiro.`);
@@ -48,11 +95,161 @@ beforeAll(async () => {
   if (item.price_cents !== BANK_PRICE_CENTS) {
     throw new Error(`Setup: preco do item no banco e ${item.price_cents}, esperado ${BANK_PRICE_CENTS}`);
   }
+
+  const { data: stores, error: storesError } = await admin
+    .from("stores")
+    .select("id, slug")
+    .in("slug", ["maputo", "matola"]);
+
+  if (storesError || stores?.length !== 2) {
+    throw new Error(`Setup F1: lojas não encontradas — ${storesError?.message}`);
+  }
+
+  maputoStoreId = stores.find((store) => store.slug === "maputo")!.id;
+  matolaStoreId = stores.find((store) => store.slug === "matola")!.id;
+
+  const suffix = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  maputoManager = await createStaffClient(
+    `rls-maputo-${suffix}@delivery.test`,
+    "manager",
+    [maputoStoreId],
+  );
+  matolaManager = await createStaffClient(
+    `rls-matola-${suffix}@delivery.test`,
+    "manager",
+    [matolaStoreId],
+  );
+  owner = await createStaffClient(`rls-owner-${suffix}@delivery.test`, "owner", []);
+});
+
+afterAll(async () => {
+  await admin
+    .from("store_items")
+    .update({ price_cents_override: null })
+    .eq("store_id", matolaStoreId)
+    .eq("menu_item_id", menuItemId);
+
+  await admin
+    .from("delivery_zones")
+    .delete()
+    .like("name", "Zona RLS F1 %");
+
+  for (const userId of testUserIds) {
+    await admin.auth.admin.deleteUser(userId);
+  }
+});
+
+// ─── F1: isolamento entre lojas (gate de CI) ───────────────────────────────
+
+describe("F1 — RLS multi-unidade", () => {
+  it("manager da Matola não lê zonas de Maputo", async () => {
+    const { data, error } = await matolaManager
+      .from("delivery_zones")
+      .select("id, store_id")
+      .eq("store_id", maputoStoreId);
+
+    expect(error).toBeNull();
+    expect(data).toEqual([]);
+  });
+
+  it("manager da Matola não escreve em Maputo", async () => {
+    const { error } = await matolaManager.from("delivery_zones").insert({
+      store_id: maputoStoreId,
+      name: "Zona RLS F1 proibida",
+      fee_cents: 1000,
+      active: true,
+      sort: 999,
+    });
+
+    expect(error).not.toBeNull();
+  });
+
+  it("manager da Matola escreve na própria loja", async () => {
+    const { data, error } = await matolaManager
+      .from("delivery_zones")
+      .insert({
+        store_id: matolaStoreId,
+        name: "Zona RLS F1 Matola",
+        fee_cents: 1000,
+        active: true,
+        sort: 999,
+      })
+      .select("store_id")
+      .single();
+
+    expect(error).toBeNull();
+    expect(data?.store_id).toBe(matolaStoreId);
+  });
+
+  it("manager de Maputo não lê a zona criada na Matola", async () => {
+    const { data, error } = await maputoManager
+      .from("delivery_zones")
+      .select("id")
+      .eq("name", "Zona RLS F1 Matola");
+
+    expect(error).toBeNull();
+    expect(data).toEqual([]);
+  });
+
+  it("owner lê as duas lojas", async () => {
+    const { data, error } = await owner
+      .from("stores")
+      .select("slug")
+      .in("slug", ["maputo", "matola"])
+      .order("slug");
+
+    expect(error).toBeNull();
+    expect(data?.map((store) => store.slug)).toEqual(["maputo", "matola"]);
+  });
+
+  it("get_menu aplica preço e disponibilidade da loja pedida", async () => {
+    const { error: overrideError } = await admin
+      .from("store_items")
+      .update({ price_cents_override: 31000 })
+      .eq("store_id", matolaStoreId)
+      .eq("menu_item_id", menuItemId);
+    expect(overrideError).toBeNull();
+
+    const [{ data: maputoMenu }, { data: matolaMenu }] = await Promise.all([
+      anon.rpc("get_menu", { p_store_slug: "maputo" }),
+      anon.rpc("get_menu", { p_store_slug: "matola" }),
+    ]);
+
+    const maputoItem = maputoMenu.categories
+      .flatMap((category: { items: Array<{ id: string; price_cents: number }> }) => category.items)
+      .find((item: { id: string }) => item.id === menuItemId);
+    const matolaItem = matolaMenu.categories
+      .flatMap((category: { items: Array<{ id: string; price_cents: number }> }) => category.items)
+      .find((item: { id: string }) => item.id === menuItemId);
+
+    expect(maputoItem?.price_cents).toBe(30000);
+    expect(matolaItem?.price_cents).toBe(31000);
+  });
+
+  it("RPC de listagem também respeita o isolamento", async () => {
+    const { data: orderId, error: createError } = await anon.rpc("create_order", {
+      p_store_slug: "maputo",
+      p_payload: {
+        items: [{ menuItemId, qty: 1 }],
+        customerName: "Teste RLS RPC",
+        fulfillmentType: "pickup",
+        paymentMethod: "mpesa",
+      },
+    });
+    expect(createError).toBeNull();
+
+    const { data, error } = await matolaManager.rpc("get_orders", {
+      p_filters: {},
+    });
+
+    expect(error).toBeNull();
+    expect(JSON.stringify(data)).not.toContain(orderId);
+  });
 });
 
 // ─── (a) anon nao le nenhuma tabela ─────────────────────────────────────────
 
-describe("(a) RLS — anon nao tem acesso direto a nenhuma tabela", () => {
+describe("(a) Data API — anon nao tem acesso directo a nenhuma tabela", () => {
   const tables = [
     "settings",
     "menu_categories",
@@ -64,11 +261,12 @@ describe("(a) RLS — anon nao tem acesso direto a nenhuma tabela", () => {
   ] as const;
 
   for (const table of tables) {
-    it(`anon SELECT em '${table}' retorna array vazio (RLS bloqueia)`, async () => {
+    it(`anon SELECT em '${table}' é recusado antes do RLS`, async () => {
       const { data, error } = await anon.from(table).select("*").limit(5);
-      // RLS sem policy para anon -> resultado vazio, sem erro de permissao
-      expect(error).toBeNull();
-      expect(data).toEqual([]);
+      // Grants e RLS são camadas separadas. anon nem alcança a tabela; o
+      // cardápio e pedidos públicos passam exclusivamente pelas RPCs.
+      expect(error?.code).toBe("42501");
+      expect(data).toBeNull();
     });
   }
 });
@@ -77,7 +275,7 @@ describe("(a) RLS — anon nao tem acesso direto a nenhuma tabela", () => {
 
 describe("(b) RPC get_menu() — cardapio e zonas publicos", () => {
   it("retorna accepting_orders, categories e zones", async () => {
-    const { data, error } = await anon.rpc("get_menu");
+    const { data, error } = await anon.rpc("get_menu", { p_store_slug: "maputo" });
 
     expect(error).toBeNull();
     expect(typeof data.accepting_orders).toBe("boolean");
@@ -86,7 +284,7 @@ describe("(b) RPC get_menu() — cardapio e zonas publicos", () => {
   });
 
   it("categories tem ao menos 1 categoria com items", async () => {
-    const { data } = await anon.rpc("get_menu");
+    const { data } = await anon.rpc("get_menu", { p_store_slug: "maputo" });
 
     expect(data.categories.length).toBeGreaterThan(0);
     const firstCat = data.categories[0];
@@ -95,7 +293,7 @@ describe("(b) RPC get_menu() — cardapio e zonas publicos", () => {
   });
 
   it("items nao expoe campos sensiveis (sem category_id no item, sem track_stock)", async () => {
-    const { data } = await anon.rpc("get_menu");
+    const { data } = await anon.rpc("get_menu", { p_store_slug: "maputo" });
     const item = data.categories[0].items[0];
 
     // Campos publicos presentes
@@ -108,7 +306,7 @@ describe("(b) RPC get_menu() — cardapio e zonas publicos", () => {
   });
 
   it("zones tem ao menos 1 zona ativa com fee_cents", async () => {
-    const { data } = await anon.rpc("get_menu");
+    const { data } = await anon.rpc("get_menu", { p_store_slug: "maputo" });
 
     expect(data.zones.length).toBeGreaterThan(0);
     const zone = data.zones[0];
@@ -124,6 +322,7 @@ describe("(b) RPC get_menu() — cardapio e zonas publicos", () => {
 describe("(c) create_order() — banco calcula preco, client nao pode adulterar", () => {
   it("total usa preco do banco, nao qualquer valor enviado pelo client", async () => {
     const { data: orderId, error } = await anon.rpc("create_order", {
+      p_store_slug: "maputo",
       p_payload: {
         items: [
           {
@@ -149,9 +348,9 @@ describe("(c) create_order() — banco calcula preco, client nao pode adulterar"
       .eq("id", orderId)
       .single();
 
-    expect(order!.subtotal_cents).toBe(BANK_PRICE_CENTS * 2); // 130000
+    expect(order!.subtotal_cents).toBe(BANK_PRICE_CENTS * 2); // 60000
     expect(order!.delivery_fee_cents).toBe(0);                // pickup, sem taxa
-    expect(order!.total_cents).toBe(BANK_PRICE_CENTS * 2);    // 130000
+    expect(order!.total_cents).toBe(BANK_PRICE_CENTS * 2);    // 60000
     expect(order!.status).toBe("awaiting_approval");
     expect(order!.flow).toBe("manual");
   });
@@ -166,6 +365,7 @@ describe("(c) create_order() — banco calcula preco, client nao pode adulterar"
       .single();
 
     const { data: orderId, error } = await anon.rpc("create_order", {
+      p_store_slug: "maputo",
       p_payload: {
         items: [{ menuItemId: menuItemId, qty: 1 }],
         customerName: "Teste Entrega",
@@ -191,6 +391,7 @@ describe("(c) create_order() — banco calcula preco, client nao pode adulterar"
 
   it("event_log regista order.created com total correto", async () => {
     const { data: orderId } = await anon.rpc("create_order", {
+      p_store_slug: "maputo",
       p_payload: {
         items: [{ menuItemId: menuItemId, qty: 1 }],
         customerName: "Teste Log",
@@ -209,8 +410,9 @@ describe("(c) create_order() — banco calcula preco, client nao pode adulterar"
     expect(events![0].payload.total_cents).toBe(BANK_PRICE_CENTS);
   });
 
-  it("order_number e gerado no formato ENC-XXXX", async () => {
+  it("order_number e gerado com o prefixo da loja", async () => {
     const { data: orderId } = await anon.rpc("create_order", {
+      p_store_slug: "maputo",
       p_payload: {
         items: [{ menuItemId: menuItemId, qty: 1 }],
         customerName: "Teste Numero",
@@ -225,11 +427,12 @@ describe("(c) create_order() — banco calcula preco, client nao pode adulterar"
       .eq("id", orderId)
       .single();
 
-    expect(order!.order_number).toMatch(/^ENC-\d{4}$/);
+    expect(order!.order_number).toMatch(/^MPT-\d{4}$/);
   });
 
   it("pedido vazio e rejeitado", async () => {
     const { error } = await anon.rpc("create_order", {
+      p_store_slug: "maputo",
       p_payload: {
         items: [],
         customerName: "Teste Vazio",
@@ -244,6 +447,7 @@ describe("(c) create_order() — banco calcula preco, client nao pode adulterar"
 
   it("entrega sem zona e rejeitada", async () => {
     const { error } = await anon.rpc("create_order", {
+      p_store_slug: "maputo",
       p_payload: {
         items: [{ menuItemId: menuItemId, qty: 1 }],
         customerName: "Teste Zona",
@@ -266,6 +470,7 @@ describe("(c) create_order() — banco calcula preco, client nao pode adulterar"
       .single();
 
     const { error } = await anon.rpc("create_order", {
+      p_store_slug: "maputo",
       p_payload: {
         items: [{ menuItemId: menuItemId, qty: 1 }],
         customerName: "Teste Morada",
@@ -294,6 +499,7 @@ describe("(d) create_order() — validacao de horario agendado", () => {
     const past = new Date(Date.now() - 3600_000).toISOString(); // 1h atras
 
     const { error } = await anon.rpc("create_order", {
+      p_store_slug: "maputo",
       p_payload: {
         ...basePayload,
         items: [{ menuItemId, qty: 1 }],
@@ -312,6 +518,7 @@ describe("(d) create_order() — validacao de horario agendado", () => {
     tomorrow3am.setUTCHours(3, 0, 0, 0);
 
     const { error } = await anon.rpc("create_order", {
+      p_store_slug: "maputo",
       p_payload: {
         ...basePayload,
         items: [{ menuItemId, qty: 1 }],
@@ -330,6 +537,7 @@ describe("(d) create_order() — validacao de horario agendado", () => {
     tomorrow1317.setUTCHours(13, 17, 0, 0);
 
     const { error } = await anon.rpc("create_order", {
+      p_store_slug: "maputo",
       p_payload: {
         ...basePayload,
         items: [{ menuItemId, qty: 1 }],
@@ -348,6 +556,7 @@ describe("(d) create_order() — validacao de horario agendado", () => {
     tomorrow1230.setUTCHours(12, 30, 0, 0);
 
     const { data: orderId, error } = await anon.rpc("create_order", {
+      p_store_slug: "maputo",
       p_payload: {
         ...basePayload,
         items: [{ menuItemId, qty: 1 }],
@@ -369,6 +578,7 @@ describe("(d) create_order() — validacao de horario agendado", () => {
 
   it("null scheduledFor (ASAP) e sempre aceite", async () => {
     const { data: orderId, error } = await anon.rpc("create_order", {
+      p_store_slug: "maputo",
       p_payload: {
         ...basePayload,
         items: [{ menuItemId, qty: 1 }],
@@ -393,6 +603,7 @@ describe("(d) create_order() — validacao de horario agendado", () => {
 describe("get_order_status() — cliente faz polling do pedido", () => {
   it("retorna status do pedido por UUID", async () => {
     const { data: orderId } = await anon.rpc("create_order", {
+      p_store_slug: "maputo",
       p_payload: {
         items: [{ menuItemId, qty: 1 }],
         customerName: "Teste Status",
@@ -408,7 +619,7 @@ describe("get_order_status() — cliente faz polling do pedido", () => {
     expect(error).toBeNull();
     expect(status.id).toBe(orderId);
     expect(status.status).toBe("awaiting_approval");
-    expect(status.order_number).toMatch(/^ENC-/);
+    expect(status.order_number).toMatch(/^MPT-/);
   });
 
   it("UUID inexistente retorna erro", async () => {

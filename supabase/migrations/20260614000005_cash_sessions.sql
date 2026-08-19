@@ -9,7 +9,7 @@
 -- ============================================================================
 
 create table cash_sessions (
-  id                  uuid        primary key default uuid_generate_v4(),
+  id                  uuid        primary key default gen_random_uuid(),
   opened_at           timestamptz not null    default now(),
   opened_by           uuid        references auth.users(id) on delete set null,
   closed_at           timestamptz,

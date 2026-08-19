@@ -29,7 +29,7 @@ create table settings (
 );
 
 create table menu_categories (
-  id      uuid    primary key default uuid_generate_v4(),
+  id      uuid    primary key default gen_random_uuid(),
   name    text    not null,
   sort    int     not null default 0,
   station text    not null default 'kitchen'
@@ -38,7 +38,7 @@ create table menu_categories (
 );
 
 create table menu_items (
-  id          uuid    primary key default uuid_generate_v4(),
+  id          uuid    primary key default gen_random_uuid(),
   category_id uuid    references menu_categories(id) on delete cascade,
   name        text    not null,
   description text,
@@ -51,7 +51,7 @@ create table menu_items (
 );
 
 create table delivery_zones (
-  id        uuid primary key default uuid_generate_v4(),
+  id        uuid primary key default gen_random_uuid(),
   name      text not null,
   fee_cents int  not null check (fee_cents >= 0),
   active    bool not null default true,
@@ -59,10 +59,10 @@ create table delivery_zones (
 );
 
 -- Sequência para ENC-XXXX
-create sequence order_number_seq start 1;
+create sequence if not exists order_number_seq start 1;
 
 create table orders (
-  id                  uuid primary key default uuid_generate_v4(),
+  id                  uuid primary key default gen_random_uuid(),
   order_number        text unique not null,
   status              text not null check (status in (
     'draft','awaiting_payment','payment_failed','paid',
@@ -88,7 +88,7 @@ create table orders (
 );
 
 create table order_items (
-  id               uuid primary key default uuid_generate_v4(),
+  id               uuid primary key default gen_random_uuid(),
   order_id         uuid not null references orders(id) on delete cascade,
   menu_item_id     uuid references menu_items(id) on delete set null,
   name_snapshot    text not null,

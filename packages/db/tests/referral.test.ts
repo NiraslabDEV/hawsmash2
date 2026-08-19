@@ -35,11 +35,11 @@ beforeAll(async () => {
   admin = createClient(SUPABASE_URL, SERVICE_KEY);
   anon  = createClient(SUPABASE_URL, ANON_KEY);
 
-  // Item normal (seed: Caril de Camarao)
+  // Item normal (seed: Classic Smash)
   const { data: item } = await admin
     .from('menu_items')
     .select('id')
-    .eq('name', 'Caril de Camarao')
+    .eq('name', 'Classic Smash')
     .single();
   if (!item) throw new Error('Item seed não encontrado — correr pnpm db:migrate');
   testMenuItemId = item.id;
@@ -162,6 +162,7 @@ const basePayload = () => ({
 describe('create_order — referral anti-abuso', () => {
   it('(d) auto-resgate → erro referral_auto_redemption', async () => {
     const { error } = await anon.rpc('create_order', {
+      p_store_slug: 'maputo',
       p_payload: {
         ...basePayload(),
         customerPhone: OWNER_PHONE,
@@ -173,6 +174,7 @@ describe('create_order — referral anti-abuso', () => {
 
   it('(f) item is_gift sem cupom → erro gift_item_not_authorized', async () => {
     const { error } = await anon.rpc('create_order', {
+      p_store_slug: 'maputo',
       p_payload: {
         ...basePayload(),
         items: [{ menuItemId: giftMenuItemId, qty: 1 }],
@@ -183,6 +185,7 @@ describe('create_order — referral anti-abuso', () => {
 
   it('(g) desconto adulterado no payload é ignorado', async () => {
     const { data: orderId, error } = await anon.rpc('create_order', {
+      p_store_slug: 'maputo',
       p_payload: {
         ...basePayload(),
         customerPhone: OTHER_PHONE,
@@ -205,6 +208,7 @@ describe('create_order — referral anti-abuso', () => {
   it('(e) 2º resgate pelo mesmo telefone → erro referral_already_redeemed', async () => {
     // OTHER_PHONE já resgatou TESTDESC no teste anterior
     const { error } = await anon.rpc('create_order', {
+      p_store_slug: 'maputo',
       p_payload: {
         ...basePayload(),
         customerPhone: OTHER_PHONE,

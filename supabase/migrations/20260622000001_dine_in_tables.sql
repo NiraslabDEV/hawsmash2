@@ -11,7 +11,7 @@
 create table public.tables (
   id         uuid        primary key default gen_random_uuid(),
   number     int         not null unique check (number > 0),
-  token      text        not null unique default encode(gen_random_bytes(16), 'hex'),
+  token      text        not null unique default encode(extensions.gen_random_bytes(16), 'hex'),
   active     bool        not null default true,
   created_at timestamptz not null default now()
 );
