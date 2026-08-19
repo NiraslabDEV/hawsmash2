@@ -30,6 +30,19 @@ let admin: SupabaseClient;
 let menuItemId: string;
 const BANK_PRICE_CENTS = 30000; // Classic Smash no seed
 
+function nextMaputoDow(dow: number, hour: number, minute: number): string {
+  const now = new Date();
+  const candidate = new Date(now);
+  // Africa/Maputo é UTC+2 e não observa horário de verão.
+  candidate.setUTCHours(hour - 2, minute, 0, 0);
+
+  while (candidate <= now || candidate.getUTCDay() !== dow) {
+    candidate.setUTCDate(candidate.getUTCDate() + 1);
+  }
+
+  return candidate.toISOString();
+}
+
 let maputoManager: SupabaseClient;
 let matolaManager: SupabaseClient;
 let owner: SupabaseClient;
@@ -200,6 +213,45 @@ describe("F1 — RLS multi-unidade", () => {
 
     expect(error).toBeNull();
     expect(data?.map((store) => store.slug)).toEqual(["maputo", "matola"]);
+  });
+
+  it("aplica a configuração comercial confirmada às duas lojas", async () => {
+    const [{ data: maputoMenu, error: maputoError }, { data: matolaMenu, error: matolaError }] =
+      await Promise.all([
+        anon.rpc("get_menu", { p_store_slug: "maputo" }),
+        anon.rpc("get_menu", { p_store_slug: "matola" }),
+      ]);
+
+    expect(maputoError).toBeNull();
+    expect(matolaError).toBeNull();
+
+    for (const menu of [maputoMenu, matolaMenu]) {
+      expect(menu.accepting_orders).toBe(true);
+      expect(menu.mpesa_number).toBe("847955382");
+      expect(menu.mpesa_name).toBe("Soeil Nissar");
+      expect(menu.emola_number).toBe("870909080");
+      expect(menu.emola_name).toBe("Mehzabin Ibrahim");
+    }
+
+    expect(maputoMenu.hours).toEqual([
+      { dow: 4, opens: "11:00:00", closes: "21:30:00", active: true },
+      { dow: 5, opens: "11:00:00", closes: "21:30:00", active: true },
+      { dow: 6, opens: "11:00:00", closes: "21:30:00", active: true },
+    ]);
+    expect(matolaMenu.hours).toEqual([
+      { dow: 4, opens: "12:00:00", closes: "21:30:00", active: true },
+      { dow: 5, opens: "12:00:00", closes: "21:30:00", active: true },
+      { dow: 6, opens: "12:00:00", closes: "21:30:00", active: true },
+    ]);
+
+    const prices = (menu: typeof maputoMenu) => {
+      const entries: Array<[string, number]> = menu.categories
+        .flatMap((category: { items: Array<{ id: string; price_cents: number }> }) => category.items)
+        .map((item: { id: string; price_cents: number }) => [item.id, item.price_cents]);
+      return entries.sort(([left], [right]) => left.localeCompare(right));
+    };
+
+    expect(prices(matolaMenu)).toEqual(prices(maputoMenu));
   });
 
   it("get_menu aplica preço e disponibilidade da loja pedida", async () => {
@@ -512,17 +564,12 @@ describe("(d) create_order() — validacao de horario agendado", () => {
   });
 
   it("scheduledFor fora do horario de funcionamento e rejeitado", async () => {
-    // Amanha as 03:00 (fora de open_hour=10, close_hour=22)
-    const tomorrow3am = new Date();
-    tomorrow3am.setDate(tomorrow3am.getDate() + 1);
-    tomorrow3am.setUTCHours(3, 0, 0, 0);
-
     const { error } = await anon.rpc("create_order", {
       p_store_slug: "maputo",
       p_payload: {
         ...basePayload,
         items: [{ menuItemId, qty: 1 }],
-        scheduledFor: tomorrow3am.toISOString(),
+        scheduledFor: nextMaputoDow(4, 3, 0),
       },
     });
 
@@ -531,17 +578,12 @@ describe("(d) create_order() — validacao de horario agendado", () => {
   });
 
   it("scheduledFor no minuto errado (nao alinhado ao slot de 30min) e rejeitado", async () => {
-    // Amanha as 13:17 — minuto 17 nao e multiplo de 30
-    const tomorrow1317 = new Date();
-    tomorrow1317.setDate(tomorrow1317.getDate() + 1);
-    tomorrow1317.setUTCHours(13, 17, 0, 0);
-
     const { error } = await anon.rpc("create_order", {
       p_store_slug: "maputo",
       p_payload: {
         ...basePayload,
         items: [{ menuItemId, qty: 1 }],
-        scheduledFor: tomorrow1317.toISOString(),
+        scheduledFor: nextMaputoDow(4, 13, 17),
       },
     });
 
@@ -549,18 +591,13 @@ describe("(d) create_order() — validacao de horario agendado", () => {
     expect(error!.message).toContain("scheduled_for_invalid_slot");
   });
 
-  it("scheduledFor valido (amanha as 12:30) e aceite", async () => {
-    // Amanha as 12:30 — dentro de 10-22, minuto 30 alinhado
-    const tomorrow1230 = new Date();
-    tomorrow1230.setDate(tomorrow1230.getDate() + 1);
-    tomorrow1230.setUTCHours(12, 30, 0, 0);
-
+  it("scheduledFor válido em Maputo é aceite", async () => {
     const { data: orderId, error } = await anon.rpc("create_order", {
       p_store_slug: "maputo",
       p_payload: {
         ...basePayload,
         items: [{ menuItemId, qty: 1 }],
-        scheduledFor: tomorrow1230.toISOString(),
+        scheduledFor: nextMaputoDow(4, 12, 30),
       },
     });
 
@@ -574,6 +611,48 @@ describe("(d) create_order() — validacao de horario agendado", () => {
       .single();
 
     expect(order!.scheduled_for).not.toBeNull();
+  });
+
+  it("Maputo aceita 11:30 num dia aberto", async () => {
+    const { data: orderId, error } = await anon.rpc("create_order", {
+      p_store_slug: "maputo",
+      p_payload: {
+        ...basePayload,
+        items: [{ menuItemId, qty: 1 }],
+        scheduledFor: nextMaputoDow(4, 11, 30),
+      },
+    });
+
+    expect(error).toBeNull();
+    expect(typeof orderId).toBe("string");
+  });
+
+  it("Matola rejeita agendamento antes das 12:00", async () => {
+    const { error } = await anon.rpc("create_order", {
+      p_store_slug: "matola",
+      p_payload: {
+        ...basePayload,
+        items: [{ menuItemId, qty: 1 }],
+        scheduledFor: nextMaputoDow(4, 11, 30),
+      },
+    });
+
+    expect(error).not.toBeNull();
+    expect(error!.message).toContain("scheduled_for_outside_hours");
+  });
+
+  it("uma loja rejeita agendamento num dia encerrado", async () => {
+    const { error } = await anon.rpc("create_order", {
+      p_store_slug: "maputo",
+      p_payload: {
+        ...basePayload,
+        items: [{ menuItemId, qty: 1 }],
+        scheduledFor: nextMaputoDow(1, 12, 30),
+      },
+    });
+
+    expect(error).not.toBeNull();
+    expect(error!.message).toContain("scheduled_for_outside_hours");
   });
 
   it("null scheduledFor (ASAP) e sempre aceite", async () => {

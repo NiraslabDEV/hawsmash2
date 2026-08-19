@@ -20,8 +20,8 @@ begin
   )
   on conflict (id) do nothing;
 
-  -- Dados confirmados no HAWSMASH 1.0. A Matola fica fechada e sem números
-  -- até o cliente confirmar os dados da unidade — não inventar pagamentos.
+  -- DECISÃO confirmada pelo cliente em 2026-08-19: as duas lojas usam os
+  -- mesmos números e titulares do HAWSMASH actual.
   update public.stores
   set accepting_orders = true,
       payment_provider = 'manual',
@@ -29,24 +29,18 @@ begin
       mpesa_name = 'Soeil Nissar',
       emola_number = '870909080',
       emola_name = 'Mehzabin Ibrahim'
-  where id = v_maputo;
-
-  update public.stores
-  set accepting_orders = false,
-      payment_provider = 'manual',
-      mpesa_number = null,
-      mpesa_name = null,
-      emola_number = null,
-      emola_name = null
-  where id = v_matola;
+  where id in (v_maputo, v_matola);
 
   delete from public.store_hours;
-  -- DECISÃO provisória e segura: o horário histórico Qui–Sáb 11:00–21:30
-  -- fica registado mas inactivo. Só se activa após confirmação do cliente.
+  -- DECISÃO confirmada: Maputo mantém o horário actual; Matola usa os mesmos
+  -- dias e fecha à mesma hora, abrindo às 12:00.
   insert into public.store_hours (store_id, dow, opens, closes, active) values
-    (v_maputo, 4, '11:00', '21:30', false),
-    (v_maputo, 5, '11:00', '21:30', false),
-    (v_maputo, 6, '11:00', '21:30', false);
+    (v_maputo, 4, '11:00', '21:30', true),
+    (v_maputo, 5, '11:00', '21:30', true),
+    (v_maputo, 6, '11:00', '21:30', true),
+    (v_matola, 4, '12:00', '21:30', true),
+    (v_matola, 5, '12:00', '21:30', true),
+    (v_matola, 6, '12:00', '21:30', true);
 
   delete from public.delivery_zones;
   -- O 1.0 cobra uma taxa plana confirmada de 150 MT em Maputo.
@@ -117,8 +111,7 @@ begin
     (v_nata, '1 unidade', 9000, 1, true, true),
     (v_nata, '6 unidades', 50000, 2, false, true);
 
-  -- DECISÃO provisória: preços iguais nas duas lojas via override NULL. O
-  -- cliente pode definir diferenças sem nova migration.
+  -- DECISÃO confirmada: preços iguais nas duas lojas via override NULL.
   update public.store_items set price_cents_override = null;
 
   -- O singleton conserva apenas configuração global usada pelo motor herdado.

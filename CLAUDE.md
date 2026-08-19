@@ -484,10 +484,10 @@ O 1.0 continua a vender **até ao dia do cutover**. Nada pára.
 | # | Pergunta | Bloqueia |
 |---|---|---|
 | 1 | **Um Paysuite para as duas lojas ou um por loja?** (onde cai o dinheiro de cada unidade) | F6 pagamentos |
-| 2 | **Preços iguais nas duas lojas?** O schema suporta diferente; a política é do cliente | F1 seed |
-| 3 | Números M-Pesa/e-Mola **de cada loja** | F1 seed |
+| 2 | ✅ **Decidido:** preços iguais nas duas lojas | — |
+| 3 | ✅ **Decidido:** ambas usam M-Pesa 847955382 (Soeil Nissar) e e-Mola 870909080 (Mehzabin Ibrahim) | — |
 | 4 | Zonas e taxas de entrega da **Matola** | F6 |
-| 5 | Horário de cada loja (abertura/fecho por dia) | F1 |
+| 5 | ✅ **Decidido:** Qui–Sáb; Maputo 11:00–21:30 e Matola 12:00–21:30 | — |
 | 6 | Terminal de cartão: é do banco (só registamos a forma de pagamento) — confirmar | F2 POS |
 | 7 | Quantas contas de equipa por loja e quem é `manager` | F7 |
 | 8 | Talão do cliente: que rodapé/NUIT aparece (sem certificação fiscal) | F3 |
