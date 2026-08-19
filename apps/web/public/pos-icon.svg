@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title">
+  <title id="title">HAWSMASH POS</title>
+  <rect width="64" height="64" fill="#0a0807"/>
+  <path d="M12 24c0-9 9-16 20-16s20 7 20 16H12z" fill="#f6e8c3"/>
+  <circle cx="24" cy="17" r="1.5" fill="#1a1208"/>
+  <circle cx="32" cy="14" r="1.5" fill="#1a1208"/>
+  <circle cx="40" cy="17" r="1.5" fill="#1a1208"/>
+  <rect x="11" y="26" width="42" height="5" rx="2" fill="#e5a93c"/>
+  <rect x="11" y="33" width="42" height="6" rx="2" fill="#6b3a1f"/>
+  <path d="M11 41h42v5a5 5 0 0 1-5 5H16a5 5 0 0 1-5-5v-5z" fill="#f6e8c3"/>
+</svg>

@@ -5,6 +5,7 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': path.resolve(__dirname, 'apps/web'),
+      '@brand': path.resolve(__dirname, 'config/brand.ts'),
     },
   },
   test: {
