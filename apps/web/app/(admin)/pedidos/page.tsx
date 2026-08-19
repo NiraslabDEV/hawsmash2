@@ -54,6 +54,14 @@ type DeviceStatus = {
   threshold_seconds: number;
 };
 
+type ReconciliationOrder = {
+  id: string;
+  order_number: string;
+  offline_total_cents: number;
+  total_cents: number;
+  created_at: string;
+};
+
 const FATURADO_HIDDEN_KEY = 'pedidos_faturado_hidden';
 const PAGE_SIZE = 10;
 const money = (c: number) => formatMT(c as Cents);
@@ -109,6 +117,7 @@ export default function PedidosPage() {
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [hideFaturado, setHideFaturado] = useState(false);
   const [reprinting, setReprinting] = useState<string | null>(null);
+  const [reconciliation, setReconciliation] = useState<ReconciliationOrder[]>([]);
 
   useEffect(() => {
     if (typeof window !== 'undefined') setHideFaturado(window.localStorage.getItem(FATURADO_HIDDEN_KEY) === '1');
@@ -151,12 +160,23 @@ export default function PedidosPage() {
     }
   }, [supabase, search, statusFilter]);
 
-  useEffect(() => { fetchStats(); fetchDeviceStatus(); }, [fetchStats, fetchDeviceStatus]);
+  const fetchReconciliation = useCallback(async () => {
+    const { data } = await supabase
+      .from('orders')
+      .select('id,order_number,offline_total_cents,total_cents,created_at')
+      .eq('needs_review', true)
+      .not('offline_total_cents', 'is', null)
+      .order('created_at', { ascending: false })
+      .limit(100);
+    setReconciliation((data ?? []) as ReconciliationOrder[]);
+  }, [supabase]);
+
+  useEffect(() => { fetchStats(); fetchDeviceStatus(); fetchReconciliation(); }, [fetchStats, fetchDeviceStatus, fetchReconciliation]);
   useEffect(() => { const i = setInterval(fetchDeviceStatus, 60000); return () => clearInterval(i); }, [fetchDeviceStatus]);
   useEffect(() => { fetchOrders(); }, [fetchOrders]);
   useEffect(() => { setPage(1); }, [search, statusFilter]); // reset paginação ao filtrar
 
-  const refreshData = async () => { await Promise.all([fetchStats(), fetchOrders(), fetchDeviceStatus()]); };
+  const refreshData = async () => { await Promise.all([fetchStats(), fetchOrders(), fetchDeviceStatus(), fetchReconciliation()]); };
 
   const loadProof = useCallback(async (order: Order) => {
     if (!order.payment_proof_path || proofUrls[order.id]) return;
@@ -307,6 +327,36 @@ export default function PedidosPage() {
   return (
     <div className="space-y-5">
       <h1 className="text-2xl font-bold text-white tracking-tight">Pedidos</h1>
+
+      {reconciliation.length > 0 && (
+        <section className="rounded-2xl border border-amber-400/30 bg-amber-400/[0.07] p-5">
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <div>
+              <h2 className="font-bold text-amber-300">Conciliação</h2>
+              <p className="text-sm text-[#C9BCAC]">Vendas offline cujo preço mudou antes da sincronização.</p>
+            </div>
+            <span className="rounded-full bg-amber-300 px-3 py-1 text-sm font-black text-black">
+              {reconciliation.length}
+            </span>
+          </div>
+          <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+            {reconciliation.map((order) => (
+              <article key={order.id} className="rounded-xl bg-black/25 p-3 text-sm">
+                <div className="flex items-center justify-between gap-2">
+                  <strong className="text-white">#{order.order_number}</strong>
+                  <span className="text-[#8A7A69]">{formatDate(order.created_at)}</span>
+                </div>
+                <p className="mt-2 text-[#C9BCAC]">
+                  Offline: {money(order.offline_total_cents)} · Servidor: {money(order.total_cents)}
+                </p>
+                <p className="mt-1 font-bold text-amber-300">
+                  Diferença: {money(Math.abs(order.total_cents - order.offline_total_cents))}
+                </p>
+              </article>
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* Banner da impressora — só se existir e estiver offline */}
       {printer && !printerOnline && (

@@ -497,6 +497,7 @@ describe("F4 — sync_counter_sale", () => {
       items: [{ menuItemId: classicSmashId, qty: 1 }],
       payments: [{ method: "cash", amountCents: 30000 }],
       cashReceivedCents: 30000,
+      offlineTotalCents: 29000,
     };
     const localPrint = { receipt: true, drawer: true, stations: ["kitchen"] };
 
@@ -519,6 +520,17 @@ describe("F4 — sync_counter_sale", () => {
       .select("id", { count: "exact", head: true })
       .eq("client_sale_id", clientSaleId);
     expect(orderCount).toBe(1);
+
+    const { data: reconciledOrder } = await admin
+      .from("orders")
+      .select("needs_review,offline_total_cents,total_cents")
+      .eq("id", first.data.order_id)
+      .single();
+    expect(reconciledOrder).toMatchObject({
+      needs_review: true,
+      offline_total_cents: 29000,
+      total_cents: 30000,
+    });
 
     const { data: jobs, error: jobsError } = await admin
       .from("print_jobs")

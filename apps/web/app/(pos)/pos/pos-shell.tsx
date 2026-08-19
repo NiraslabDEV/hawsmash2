@@ -272,6 +272,7 @@ export function PosShell() {
               deviceId: sale.deviceId,
               items: sale.items.map((item) => ({ menuItemId: item.menuItemId, qty: item.qty })),
               payments: sale.payments,
+              offlineTotalCents: sale.totalCents,
               ...(sale.cashReceivedCents == null
                 ? {}
                 : { cashReceivedCents: sale.cashReceivedCents }),

@@ -733,6 +733,7 @@ export type Database = {
           id: string
           needs_review: boolean
           notes: string | null
+          offline_total_cents: number | null
           order_number: string
           payment_method: string
           payment_proof_path: string | null
@@ -766,6 +767,7 @@ export type Database = {
           id?: string
           needs_review?: boolean
           notes?: string | null
+          offline_total_cents?: number | null
           order_number: string
           payment_method: string
           payment_proof_path?: string | null
@@ -799,6 +801,7 @@ export type Database = {
           id?: string
           needs_review?: boolean
           notes?: string | null
+          offline_total_cents?: number | null
           order_number?: string
           payment_method?: string
           payment_proof_path?: string | null
