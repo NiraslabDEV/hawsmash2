@@ -1505,6 +1505,10 @@ export type Database = {
         Args: { p_code: string; p_phone: string }
         Returns: Json
       }
+      void_sale: {
+        Args: { p_order_id: string; p_reason: string }
+        Returns: Json
+      }
     }
     Enums: {
       [_ in never]: never

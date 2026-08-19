@@ -105,7 +105,7 @@ _Os dias são referência de calendário, não paragens: a corrida não pára en
 - [x] Migration `1005_pos.sql`: `orders.client_sale_id uuid unique`, `daily_number`, `cash_received_cents`,
       `change_cents`, `needs_review bool`, `channel='counter'`, `devices`
 - [x] RPC `create_counter_sale(p_payload jsonb)` — transacional e **idempotente** (CLAUDE §7.2)
-- [ ] RPC `void_sale(p_order_id, p_reason)` com perfil ≥ manager e reposição de stock
+- [x] RPC `void_sale(p_order_id, p_reason)` com perfil ≥ manager e reposição de stock
 - [ ] `/pos`: grelha touch, carrinho, teclado numérico, troco, 4 formas de pagamento, pagamento misto
 - [ ] Vinculação do dispositivo à loja (`devices`) + sessão longa + bloqueio de ecrã com PIN
 - [ ] Testes Vitest: idempotência (mesma `client_sale_id` 2× → 1 pedido), troco, esgotado, anulação

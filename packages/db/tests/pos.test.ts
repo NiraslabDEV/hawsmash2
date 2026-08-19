@@ -15,9 +15,15 @@ const SERVICE_KEY =
 
 let admin: SupabaseClient;
 let manager: SupabaseClient;
+let cashier: SupabaseClient;
 let maputoStoreId: string;
 let classicSmashId: string;
 let posDeviceId: string;
+let originalStoreItem: {
+  available: boolean;
+  track_stock: boolean;
+  stock_qty: number;
+};
 const createdDeviceIds: string[] = [];
 const createdOrderIds: string[] = [];
 const createdUserIds: string[] = [];
@@ -46,6 +52,17 @@ beforeAll(async () => {
     throw new Error(`Setup POS: Classic Smash inválido — ${itemError?.message}`);
   }
   classicSmashId = item.id;
+
+  const { data: storeItem, error: storeItemError } = await admin
+    .from("store_items")
+    .select("available,track_stock,stock_qty")
+    .eq("store_id", maputoStoreId)
+    .eq("menu_item_id", classicSmashId)
+    .single();
+  if (storeItemError || !storeItem) {
+    throw new Error(`Setup POS: stock da loja — ${storeItemError?.message}`);
+  }
+  originalStoreItem = storeItem;
 
   const suffix = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
   const password = "Pos-F2-Teste-2026!";
@@ -80,6 +97,44 @@ beforeAll(async () => {
   });
   if (loginError) throw new Error(`Setup POS: login — ${loginError.message}`);
 
+  const cashierPassword = "Pos-Caixa-F2-Teste-2026!";
+  const { data: cashierUser, error: cashierUserError } =
+    await admin.auth.admin.createUser({
+      email: `pos-cashier-${suffix}@delivery.test`,
+      password: cashierPassword,
+      email_confirm: true,
+    });
+  if (cashierUserError || !cashierUser.user) {
+    throw new Error(`Setup POS: caixa — ${cashierUserError?.message}`);
+  }
+  createdUserIds.push(cashierUser.user.id);
+
+  const { error: cashierProfileError } = await admin.from("staff_profiles").insert({
+    user_id: cashierUser.user.id,
+    full_name: "Caixa POS F2",
+    role: "cashier",
+    active: true,
+  });
+  if (cashierProfileError) {
+    throw new Error(`Setup POS: perfil caixa — ${cashierProfileError.message}`);
+  }
+  const { error: cashierStoreError } = await admin.from("staff_stores").insert({
+    user_id: cashierUser.user.id,
+    store_id: maputoStoreId,
+  });
+  if (cashierStoreError) {
+    throw new Error(`Setup POS: loja caixa — ${cashierStoreError.message}`);
+  }
+
+  cashier = createClient(SUPABASE_URL, ANON_KEY);
+  const { error: cashierLoginError } = await cashier.auth.signInWithPassword({
+    email: `pos-cashier-${suffix}@delivery.test`,
+    password: cashierPassword,
+  });
+  if (cashierLoginError) {
+    throw new Error(`Setup POS: login caixa — ${cashierLoginError.message}`);
+  }
+
   const { data: device, error: deviceError } = await admin
     .from("devices")
     .insert({
@@ -103,6 +158,13 @@ afterAll(async () => {
   }
   if (createdDeviceIds.length > 0) {
     await admin.from("devices").delete().in("id", createdDeviceIds);
+  }
+  if (originalStoreItem) {
+    await admin
+      .from("store_items")
+      .update(originalStoreItem)
+      .eq("store_id", maputoStoreId)
+      .eq("menu_item_id", classicSmashId);
   }
   for (const userId of createdUserIds) {
     await admin.auth.admin.deleteUser(userId);
@@ -208,5 +270,69 @@ describe("F2 — create_counter_sale", () => {
     expect(payments).toEqual([
       { method: "cash", amount_cents: 30000, status: "confirmed" },
     ]);
+  });
+});
+
+describe("F2 — void_sale", () => {
+  it("exige gerente, anula por advance_order e repõe stock uma só vez", async () => {
+    const { error: stockSetupError } = await admin
+      .from("store_items")
+      .update({ available: true, track_stock: true, stock_qty: 2 })
+      .eq("store_id", maputoStoreId)
+      .eq("menu_item_id", classicSmashId);
+    expect(stockSetupError).toBeNull();
+
+    const clientSaleId = crypto.randomUUID();
+    const sale = await manager.rpc("create_counter_sale", {
+      p_payload: {
+        clientSaleId,
+        deviceId: posDeviceId,
+        items: [{ menuItemId: classicSmashId, qty: 1 }],
+        payments: [{ method: "cash", amountCents: 30000 }],
+        cashReceivedCents: 30000,
+      },
+    });
+    expect(sale.error).toBeNull();
+    createdOrderIds.push(sale.data.order_id);
+
+    const denied = await cashier.rpc("void_sale", {
+      p_order_id: sale.data.order_id,
+      p_reason: "Erro registado pelo caixa",
+    });
+    expect(denied.error?.message).toContain("void_access_denied");
+
+    const first = await manager.rpc("void_sale", {
+      p_order_id: sale.data.order_id,
+      p_reason: "Cliente desistiu antes da entrega",
+    });
+    const second = await manager.rpc("void_sale", {
+      p_order_id: sale.data.order_id,
+      p_reason: "Cliente desistiu antes da entrega",
+    });
+
+    expect(first.error).toBeNull();
+    expect(first.data).toMatchObject({ status: "cancelled", duplicate: false });
+    expect(second.error).toBeNull();
+    expect(second.data).toMatchObject({ status: "cancelled", duplicate: true });
+
+    const [{ data: order }, { data: stock }, { data: events }] = await Promise.all([
+      admin.from("orders").select("status").eq("id", sale.data.order_id).single(),
+      admin
+        .from("store_items")
+        .select("stock_qty")
+        .eq("store_id", maputoStoreId)
+        .eq("menu_item_id", classicSmashId)
+        .single(),
+      admin
+        .from("event_log")
+        .select("type,actor_user_id")
+        .eq("order_id", sale.data.order_id)
+        .eq("type", "counter.sale_voided"),
+    ]);
+
+    expect(order?.status).toBe("cancelled");
+    expect(stock?.stock_qty).toBe(2);
+    expect(events).toHaveLength(1);
+    expect(events?.[0].actor_user_id).toBeTruthy();
   });
 });
