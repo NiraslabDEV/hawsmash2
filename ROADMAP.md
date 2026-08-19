@@ -193,9 +193,9 @@ _Os dias são referência de calendário, não paragens: a corrida não pára en
 
 ## F8 🔴 Equipa, permissões, painel Sistema e backups
 
-- [ ] Aba **Equipa**: criar/desactivar contas, atribuir perfil e loja(s), definir PIN
-- [ ] Remoção de acesso imediata (compromisso da proposta) + registo em `event_log`
-- [ ] Aba **Sistema**: semáforo por loja (POS, bridge, impressora, último pedido, fila de impressão)
+- [x] Aba **Equipa**: criar/desactivar contas, atribuir perfil e loja(s), definir PIN
+- [x] Remoção de acesso imediata (compromisso da proposta) + registo em `event_log`
+- [x] Aba **Sistema**: semáforo por loja (POS, bridge, impressora, último pedido, fila de impressão)
 - [ ] Alertas automáticos (email + WhatsApp deep link) da lista de `CLAUDE.md §11.5`
 - [ ] Digest diário ao dono
 - [ ] `pg_dump` nocturno para armazenamento externo + primeiro **teste de restauro** registado em `docs/RUNBOOK.md`

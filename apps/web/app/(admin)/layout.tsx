@@ -21,6 +21,8 @@ function Icon({ name }: { name: string }) {
     definicoes: <path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Zm8-3a8 8 0 0 0-.2-1.8l2-1.5-2-3.4-2.3 1a8 8 0 0 0-3-1.8L14 .5h-4l-.5 2.2a8 8 0 0 0-3 1.8l-2.3-1-2 3.4 2 1.5A8 8 0 0 0 4 12c0 .6 0 1.2.2 1.8l-2 1.5 2 3.4 2.3-1a8 8 0 0 0 3 1.8L10 23.5h4l.5-2.2a8 8 0 0 0 3-1.8l2.3 1 2-3.4-2-1.5c.2-.6.2-1.2.2-1.8Z" />,
     mesas: <path d="M3 10h18M3 10a1 1 0 0 1 1-1h16a1 1 0 0 1 1 1M3 10v9a1 1 0 0 0 1 1h1v-3M21 10v9a1 1 0 0 1-1 1h-1v-3M7 20h10" />,
     estoque: <path d="M3 7.5 12 3l9 4.5v9L12 21l-9-4.5v-9ZM3 7.5 12 12m0 0 9-4.5M12 12v9" />,
+    equipa: <path d="M17 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9.5 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" />,
+    sistema: <path d="M4 5h16v10H4zM2 19h20M9 19v-4M15 19v-4M8 9h.01M12 9h4" />,
   };
   return (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
@@ -39,6 +41,8 @@ const NAV = [
   { href: '/feedback', label: 'Avaliações', icon: 'feedback' },
   { href: '/lista-espera', label: 'Clientes', icon: 'clientes' },
   { href: '/marketing', label: 'Marketing', icon: 'marketing' },
+  { href: '/equipa', label: 'Equipa', icon: 'equipa' },
+  { href: '/sistema', label: 'Sistema', icon: 'sistema' },
   { href: '/definicoes', label: 'Definições', icon: 'definicoes' },
 ];
 
