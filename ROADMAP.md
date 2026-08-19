@@ -150,11 +150,11 @@ _Os dias são referência de calendário, não paragens: a corrida não pára en
 
 ## F5 🔴 Caixa por loja
 
-- [ ] Migration `1007_cash.sql`: `store_id` + `shift_label` + `opening_float_cents` em `cash_sessions`;
+- [x] Migration `1007_cash.sql`: `store_id` + `shift_label` + `opening_float_cents` em `cash_sessions`;
       nova `cash_movements` (sangria/reforço/despesa)
-- [ ] `open_cash_session(p_store, p_float)` · `close_cash_session(p_store, p_counted, p_reason)` ·
+- [x] `open_cash_session(p_store, p_float)` · `close_cash_session(p_store, p_counted, p_reason)` ·
       `add_cash_movement(...)` — todas com perfil e `event_log`
-- [ ] Esperado = fundo + dinheiro − sangrias + reforços − despesas; móvel/cartão em linhas separadas
+- [x] Esperado = fundo + dinheiro − sangrias + reforços − despesas; móvel/cartão em linhas separadas
 - [ ] Fecho: impressão do fecho + PDF + email ao dono; diferença acima da tolerância exige motivo
 - [ ] Painel Caixa por loja + consolidado das duas
 - [ ] Testes: cálculo do esperado com movimentos; fecho com diferença; período desde o último fecho

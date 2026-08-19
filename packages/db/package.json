@@ -7,7 +7,7 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "vitest --config vitest.config.ts",
-    "test:db": "vitest --config vitest.config.ts tests/rls.test.ts tests/pos.test.ts tests/print.test.ts",
+    "test:db": "vitest --config vitest.config.ts tests/rls.test.ts tests/pos.test.ts tests/print.test.ts tests/cash-v2.test.ts",
     "test:rls": "vitest --config vitest.config.ts tests/rls.test.ts",
     "build": "echo TODO: Implement build script",
     "db:types": "supabase gen types typescript --local > src/types.ts",
