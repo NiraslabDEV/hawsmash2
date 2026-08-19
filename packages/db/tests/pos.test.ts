@@ -19,6 +19,7 @@ let cashier: SupabaseClient;
 let maputoStoreId: string;
 let classicSmashId: string;
 let posDeviceId: string;
+let managerUserId: string;
 let originalStoreItem: {
   available: boolean;
   track_stock: boolean;
@@ -75,6 +76,7 @@ beforeAll(async () => {
     throw new Error(`Setup POS: utilizador — ${createUserError?.message}`);
   }
   createdUserIds.push(created.user.id);
+  managerUserId = created.user.id;
 
   const { error: profileError } = await admin.from("staff_profiles").insert({
     user_id: created.user.id,
@@ -207,6 +209,106 @@ describe("F2 — schema do POS", () => {
     });
 
     expect(error).not.toBeNull();
+  });
+});
+
+describe("F2 — vinculação e bloqueio do POS", () => {
+  it("permite ao gerente vincular um terminal à sua loja e audita a acção", async () => {
+    const label = `POS vinculado ${Date.now()}`;
+    const { data, error } = await manager.rpc("bind_pos_device", {
+      p_store_id: maputoStoreId,
+      p_label: label,
+    });
+
+    expect(error).toBeNull();
+    expect(data?.device_id).toBeTruthy();
+    createdDeviceIds.push(data.device_id);
+
+    const [{ data: device }, { data: events }] = await Promise.all([
+      admin
+        .from("devices")
+        .select("store_id,kind,label,active,created_by")
+        .eq("id", data.device_id)
+        .single(),
+      admin
+        .from("event_log")
+        .select("store_id,actor_user_id,type")
+        .eq("type", "pos.device_bound")
+        .eq("payload->>device_id", data.device_id),
+    ]);
+
+    expect(device).toMatchObject({
+      store_id: maputoStoreId,
+      kind: "pos",
+      label,
+      active: true,
+      created_by: managerUserId,
+    });
+    expect(events).toEqual([
+      {
+        store_id: maputoStoreId,
+        actor_user_id: managerUserId,
+        type: "pos.device_bound",
+      },
+    ]);
+  });
+
+  it("impede o caixa de vincular um terminal", async () => {
+    const { error } = await cashier.rpc("bind_pos_device", {
+      p_store_id: maputoStoreId,
+      p_label: "POS sem autorização",
+    });
+
+    expect(error?.message).toContain("device_binding_access_denied");
+  });
+
+  it("guarda o PIN com hash e só desbloqueia o terminal com o PIN certo", async () => {
+    const setPin = await manager.rpc("set_own_pos_pin", {
+      p_device_id: posDeviceId,
+      p_pin: "4826",
+    });
+    expect(setPin.error).toBeNull();
+
+    const { data: profile } = await admin
+      .from("staff_profiles")
+      .select("pin_hash")
+      .eq("user_id", managerUserId)
+      .single();
+    expect(profile?.pin_hash).toBeTruthy();
+    expect(profile?.pin_hash).not.toContain("4826");
+
+    const locked = await manager.rpc("lock_pos_device", { p_device_id: posDeviceId });
+    expect(locked.error).toBeNull();
+
+    const saleWhileLocked = await manager.rpc("create_counter_sale", {
+      p_payload: {
+        clientSaleId: crypto.randomUUID(),
+        deviceId: posDeviceId,
+        items: [{ menuItemId: classicSmashId, qty: 1 }],
+        payments: [{ method: "cash", amountCents: 30000 }],
+        cashReceivedCents: 30000,
+      },
+    });
+    expect(saleWhileLocked.error?.message).toContain("device_locked");
+
+    const wrong = await manager.rpc("unlock_pos_device", {
+      p_device_id: posDeviceId,
+      p_pin: "0000",
+    });
+    expect(wrong.error?.message).toContain("invalid_pin");
+
+    const unlocked = await manager.rpc("unlock_pos_device", {
+      p_device_id: posDeviceId,
+      p_pin: "4826",
+    });
+    expect(unlocked.error).toBeNull();
+
+    const { data: device } = await admin
+      .from("devices")
+      .select("locked_at")
+      .eq("id", posDeviceId)
+      .single();
+    expect(device?.locked_at).toBeNull();
   });
 });
 

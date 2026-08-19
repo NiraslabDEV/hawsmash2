@@ -1443,6 +1443,10 @@ export type Database = {
         Args: { p_order_id: string; p_path: string }
         Returns: Json
       }
+      bind_pos_device: {
+        Args: { p_label: string; p_store_id: string }
+        Returns: Json
+      }
       close_cash_session: {
         Args: { p_counted_cents: number; p_notes?: string }
         Returns: Json
@@ -1460,6 +1464,7 @@ export type Database = {
         Returns: string
       }
       create_counter_sale: { Args: { p_payload: Json }; Returns: Json }
+      create_counter_sale_unlocked: { Args: { p_payload: Json }; Returns: Json }
       create_order: {
         Args: { p_payload: Json; p_store_slug: string }
         Returns: string
@@ -1487,7 +1492,13 @@ export type Database = {
         Args: { p_name: string; p_notes?: string; p_phone: string }
         Returns: Json
       }
+      lock_pos_device: { Args: { p_device_id: string }; Returns: Json }
       open_cash_session: { Args: never; Returns: string }
+      pos_pin_status: { Args: { p_device_id: string }; Returns: Json }
+      set_own_pos_pin: {
+        Args: { p_device_id: string; p_pin: string }
+        Returns: Json
+      }
       submit_feedback: {
         Args: {
           p_comment?: string
@@ -1495,6 +1506,10 @@ export type Database = {
           p_order_id: string
           p_rating: number
         }
+        Returns: Json
+      }
+      unlock_pos_device: {
+        Args: { p_device_id: string; p_pin: string }
         Returns: Json
       }
       upsert_heartbeat: {

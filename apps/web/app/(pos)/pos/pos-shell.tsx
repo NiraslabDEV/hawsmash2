@@ -9,6 +9,7 @@ import {
   calculateChange,
   type CounterPaymentMethod,
 } from '@/lib/pos/payment';
+import { isPosPin, POS_IDLE_TIMEOUT_MS } from '@/lib/pos/session';
 
 type MenuItem = {
   id: string;
@@ -29,6 +30,12 @@ type PosContext = {
   deviceLabel: string;
   storeSlug: string;
   storeName: string;
+};
+
+type AvailableStore = {
+  id: string;
+  slug: string;
+  short_name: string;
 };
 
 type CartLine = MenuItem & { qty: number };
@@ -55,6 +62,9 @@ function errorMessage(message?: string): string {
   if (message.includes('invalid_or_unauthorised_device')) {
     return 'Este dispositivo perdeu o acesso à loja.';
   }
+  if (message.includes('device_locked')) {
+    return 'O POS está bloqueado. Introduz o PIN para continuar.';
+  }
   if (message.includes('void_access_denied')) {
     return 'A anulação exige um gerente ou o dono.';
   }
@@ -65,6 +75,15 @@ export function PosShell() {
   const router = useRouter();
   const supabase = useMemo(() => createClient(), []);
   const [context, setContext] = useState<PosContext | null>(null);
+  const [availableStores, setAvailableStores] = useState<AvailableStore[]>([]);
+  const [selectedStoreId, setSelectedStoreId] = useState('');
+  const [deviceLabel, setDeviceLabel] = useState('POS balcão');
+  const [binding, setBinding] = useState(false);
+  const [pinConfigured, setPinConfigured] = useState(false);
+  const [locked, setLocked] = useState(false);
+  const [pin, setPin] = useState('');
+  const [pinConfirmation, setPinConfirmation] = useState('');
+  const [pinError, setPinError] = useState<string | null>(null);
   const [categories, setCategories] = useState<Category[]>([]);
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
   const [cart, setCart] = useState<Record<string, CartLine>>({});
@@ -91,6 +110,7 @@ export function PosShell() {
   const loadPos = useCallback(async () => {
     setLoading(true);
     setError(null);
+    setAvailableStores([]);
 
     const { data: sessionData } = await supabase.auth.getSession();
     if (!sessionData.session) {
@@ -110,10 +130,20 @@ export function PosShell() {
     }
 
     const savedId = window.localStorage.getItem(DEVICE_STORAGE_KEY);
-    const device = devices?.find((candidate) => candidate.id === savedId) ??
-      (devices?.length === 1 ? devices[0] : null);
+    const device = devices?.find((candidate) => candidate.id === savedId) ?? null;
     if (!device) {
-      setError('Este PC ainda não está vinculado a um POS da loja.');
+      if (savedId) window.localStorage.removeItem(DEVICE_STORAGE_KEY);
+      const { data: stores, error: storesError } = await supabase
+        .from('stores')
+        .select('id,slug,short_name')
+        .eq('active', true)
+        .order('short_name');
+      if (storesError || !stores?.length) {
+        setError('Não foi possível listar as lojas disponíveis para vinculação.');
+      } else {
+        setAvailableStores(stores);
+        setSelectedStoreId((current) => current || stores[0].id);
+      }
       setLoading(false);
       return;
     }
@@ -142,18 +172,126 @@ export function PosShell() {
     const nextCategories: Category[] = menu.categories ?? [];
     setCategories(nextCategories);
     setActiveCategory((current) => current ?? nextCategories[0]?.id ?? null);
+    const { data: pinStatus, error: pinStatusError } = await supabase.rpc('pos_pin_status', {
+      p_device_id: device.id,
+    });
+    if (pinStatusError || !pinStatus) {
+      setError('Não foi possível confirmar o bloqueio deste POS.');
+      setLoading(false);
+      return;
+    }
     setContext({
       deviceId: device.id,
       deviceLabel: device.label,
       storeSlug: store.slug,
       storeName: store.short_name,
     });
+    setPinConfigured(Boolean(pinStatus.configured));
+    setLocked(Boolean(pinStatus.locked));
     setLoading(false);
   }, [router, supabase]);
 
   useEffect(() => {
     void loadPos();
   }, [loadPos]);
+
+  const lockDevice = useCallback(async () => {
+    if (!context || locked) return;
+    const { error: lockError } = await supabase.rpc('lock_pos_device', {
+      p_device_id: context.deviceId,
+    });
+    if (lockError) {
+      setError(errorMessage(lockError.message));
+      return;
+    }
+    setPin('');
+    setPinError(null);
+    setLocked(true);
+  }, [context, locked, supabase]);
+
+  useEffect(() => {
+    if (!context || locked || !pinConfigured) return;
+
+    let timer = window.setTimeout(() => void lockDevice(), POS_IDLE_TIMEOUT_MS);
+    const registerActivity = () => {
+      window.clearTimeout(timer);
+      timer = window.setTimeout(() => void lockDevice(), POS_IDLE_TIMEOUT_MS);
+    };
+    const events: Array<keyof WindowEventMap> = ['pointerdown', 'keydown', 'touchstart'];
+    events.forEach((event) => window.addEventListener(event, registerActivity, { passive: true }));
+
+    return () => {
+      window.clearTimeout(timer);
+      events.forEach((event) => window.removeEventListener(event, registerActivity));
+    };
+  }, [context, lockDevice, locked, pinConfigured]);
+
+  async function bindDevice() {
+    if (!selectedStoreId || deviceLabel.trim().length < 3) return;
+    setBinding(true);
+    setError(null);
+    const { data, error: bindError } = await supabase.rpc('bind_pos_device', {
+      p_store_id: selectedStoreId,
+      p_label: deviceLabel.trim(),
+    });
+    setBinding(false);
+    if (bindError || !data?.device_id) {
+      setError(
+        bindError?.message.includes('device_binding_access_denied')
+          ? 'A vinculação deste PC exige um gerente ou o dono.'
+          : errorMessage(bindError?.message),
+      );
+      return;
+    }
+    window.localStorage.setItem(DEVICE_STORAGE_KEY, data.device_id);
+    await loadPos();
+  }
+
+  async function configurePin() {
+    if (!context || !isPosPin(pin) || pin !== pinConfirmation) {
+      setPinError('Usa 4 a 6 algarismos e confirma o mesmo PIN.');
+      return;
+    }
+    setSubmitting(true);
+    setPinError(null);
+    const { error: pinSetupError } = await supabase.rpc('set_own_pos_pin', {
+      p_device_id: context.deviceId,
+      p_pin: pin,
+    });
+    setSubmitting(false);
+    if (pinSetupError) {
+      setPinError(errorMessage(pinSetupError.message));
+      return;
+    }
+    setPin('');
+    setPinConfirmation('');
+    setPinConfigured(true);
+    setLocked(false);
+  }
+
+  async function unlockDevice() {
+    if (!context || !isPosPin(pin)) {
+      setPinError('Introduz o teu PIN de 4 a 6 algarismos.');
+      return;
+    }
+    setSubmitting(true);
+    setPinError(null);
+    const { error: unlockError } = await supabase.rpc('unlock_pos_device', {
+      p_device_id: context.deviceId,
+      p_pin: pin,
+    });
+    setSubmitting(false);
+    if (unlockError) {
+      setPinError(
+        unlockError.message.includes('invalid_pin')
+          ? 'PIN incorrecto.'
+          : errorMessage(unlockError.message),
+      );
+      return;
+    }
+    setPin('');
+    setLocked(false);
+  }
 
   const lines = useMemo(() => Object.values(cart), [cart]);
   const totalCents = useMemo(
@@ -318,6 +456,52 @@ export function PosShell() {
   }
 
   if (!context) {
+    if (availableStores.length > 0) {
+      return (
+        <main className="grid min-h-screen place-items-center bg-[#0a0807] p-6 text-white">
+          <section className="w-full max-w-xl rounded-3xl border border-[#e5a93c]/30 bg-[#151310] p-8 shadow-2xl">
+            <p className="text-sm font-black tracking-[0.2em] text-[#e5a93c]">CONFIGURAÇÃO INICIAL</p>
+            <h1 className="mt-2 text-3xl font-black">Vincular este PC</h1>
+            <p className="mt-2 text-sm text-[#a89f91]">
+              Esta acção é feita uma vez por um gerente ou pelo dono e fica auditada.
+            </p>
+            <label className="mt-6 block text-sm font-bold text-[#c8bfb0]" htmlFor="pos-store">
+              Loja
+            </label>
+            <select
+              id="pos-store"
+              value={selectedStoreId}
+              onChange={(event) => setSelectedStoreId(event.target.value)}
+              className="mt-2 min-h-16 w-full rounded-2xl border border-white/10 bg-black/30 px-4 font-bold"
+            >
+              {availableStores.map((store) => (
+                <option key={store.id} value={store.id}>{store.short_name}</option>
+              ))}
+            </select>
+            <label className="mt-4 block text-sm font-bold text-[#c8bfb0]" htmlFor="pos-label">
+              Nome do terminal
+            </label>
+            <input
+              id="pos-label"
+              value={deviceLabel}
+              onChange={(event) => setDeviceLabel(event.target.value)}
+              maxLength={80}
+              className="mt-2 min-h-16 w-full rounded-2xl border border-white/10 bg-black/30 px-4 font-bold outline-none focus:border-[#e5a93c]"
+            />
+            {error && <p role="alert" className="mt-4 rounded-xl bg-red-950/60 p-3 text-red-200">{error}</p>}
+            <button
+              type="button"
+              disabled={binding || deviceLabel.trim().length < 3}
+              onClick={() => void bindDevice()}
+              className="mt-6 min-h-16 w-full rounded-2xl bg-[#e5a93c] px-6 font-black text-black disabled:opacity-40"
+            >
+              {binding ? 'A vincular…' : 'Vincular POS'}
+            </button>
+          </section>
+        </main>
+      );
+    }
+
     return (
       <main className="grid min-h-screen place-items-center bg-[#0a0807] p-8 text-white">
         <section className="max-w-lg rounded-3xl border border-red-500/40 bg-red-950/30 p-8 text-center">
@@ -351,6 +535,13 @@ export function PosShell() {
             Anular #{lastSale.dailyNumber}
           </button>
         )}
+        <button
+          type="button"
+          onClick={() => void lockDevice()}
+          className="min-h-16 rounded-xl bg-white/[0.07] px-4 text-sm font-bold active:bg-white/15"
+        >
+          Bloquear
+        </button>
         <div className="rounded-full bg-emerald-500/15 px-3 py-2 text-sm font-bold text-emerald-300">
           ONLINE
         </div>
@@ -624,6 +815,69 @@ export function PosShell() {
                 Confirmar anulação
               </button>
             </div>
+          </section>
+        </div>
+      )}
+
+      {(!pinConfigured || locked) && (
+        <div className="fixed inset-0 z-[70] grid place-items-center bg-black/95 p-4">
+          <section className="w-full max-w-md rounded-3xl border border-[#e5a93c]/30 bg-[#151310] p-7 text-center shadow-2xl">
+            <p className="text-sm font-black tracking-[0.2em] text-[#e5a93c]">
+              {pinConfigured ? 'POS BLOQUEADO' : 'CRIAR PIN'}
+            </p>
+            <h2 className="mt-3 text-3xl font-black">
+              {pinConfigured ? context.deviceLabel : 'Protege este turno'}
+            </h2>
+            <p className="mt-2 text-sm text-[#a89f91]">
+              {pinConfigured
+                ? 'Introduz o teu PIN pessoal para continuar.'
+                : 'Escolhe 4 a 6 algarismos. O PIN é guardado apenas como hash.'}
+            </p>
+            <input
+              type="password"
+              inputMode="numeric"
+              pattern="[0-9]*"
+              autoComplete="off"
+              autoFocus
+              aria-label="PIN"
+              value={pin}
+              onChange={(event) => setPin(event.target.value.replace(/\D/g, '').slice(0, 6))}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') {
+                  void (pinConfigured ? unlockDevice() : configurePin());
+                }
+              }}
+              className="mt-6 min-h-16 w-full rounded-2xl border border-white/15 bg-black/40 px-4 text-center text-3xl font-black tracking-[0.5em] outline-none focus:border-[#e5a93c]"
+            />
+            {!pinConfigured && (
+              <input
+                type="password"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                autoComplete="off"
+                aria-label="Confirmar PIN"
+                placeholder="Confirmar PIN"
+                value={pinConfirmation}
+                onChange={(event) => setPinConfirmation(event.target.value.replace(/\D/g, '').slice(0, 6))}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') void configurePin();
+                }}
+                className="mt-3 min-h-16 w-full rounded-2xl border border-white/15 bg-black/40 px-4 text-center text-xl font-black tracking-[0.35em] outline-none focus:border-[#e5a93c]"
+              />
+            )}
+            {pinError && (
+              <p role="alert" className="mt-4 rounded-xl bg-red-950/60 p-3 font-bold text-red-200">
+                {pinError}
+              </p>
+            )}
+            <button
+              type="button"
+              disabled={submitting || !isPosPin(pin) || (!pinConfigured && pin !== pinConfirmation)}
+              onClick={() => void (pinConfigured ? unlockDevice() : configurePin())}
+              className="mt-5 min-h-16 w-full rounded-2xl bg-[#e5a93c] px-5 text-lg font-black text-black disabled:opacity-40"
+            >
+              {submitting ? 'A confirmar…' : pinConfigured ? 'Desbloquear' : 'Guardar PIN'}
+            </button>
           </section>
         </div>
       )}
