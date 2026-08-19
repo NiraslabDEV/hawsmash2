@@ -18,5 +18,6 @@ playwright-report/
 *.tsbuildinfo
 *.log
 .vercel/
+services/print-bridge/build/
 
 README-add.md

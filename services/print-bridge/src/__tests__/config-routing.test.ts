@@ -7,6 +7,7 @@ const validEnv = {
   SUPABASE_URL: 'https://staging.supabase.co',
   SUPABASE_SERVICE_ROLE_KEY: 'segredo-de-teste',
   STORE_ID: '00000000-0000-4000-8000-000000000101',
+  BRIDGE_DEVICE_ID: '00000000-0000-4000-8000-000000000401',
   PRINTER_IP_KITCHEN: '192.168.10.50',
   PRINTER_IP_COUNTER: '192.168.10.51',
   PRINTER_PORT: '9100',
@@ -25,6 +26,7 @@ const baseJob: PrintJob = {
   payload: { test: true },
   status: 'queued',
   attempts: 0,
+  claimed_at: null,
   created_at: '2026-08-19T12:00:00.000Z',
   printed_at: null,
 };
@@ -44,6 +46,7 @@ describe('configuração multi-loja do print-bridge', () => {
     const config = loadBridgeConfig(validEnv);
 
     expect(config.storeId).toBe(validEnv.STORE_ID);
+    expect(config.bridgeDeviceId).toBe(validEnv.BRIDGE_DEVICE_ID);
     expect(config.printers).toEqual({
       kitchen: { ip: '192.168.10.50', port: 9100 },
       counter: { ip: '192.168.10.51', port: 9100 },

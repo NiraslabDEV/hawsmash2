@@ -10,7 +10,9 @@
     "dev": "tsx watch src/index.ts",
     "dev:sim": "tsx src/dev.ts",
     "bridge:dev": "tsx watch src/index.ts",
-    "build": "tsc"
+    "build": "tsc",
+    "build:bundle": "esbuild src/index.ts --bundle --platform=node --format=cjs --target=node22 --outfile=build/bridge.cjs",
+    "build:sea": "powershell -NoProfile -ExecutionPolicy Bypass -File ./windows/build-sea.ps1"
   },
   "dependencies": {
     "@delivery/core": "workspace:*",
@@ -19,7 +21,9 @@
   },
   "devDependencies": {
     "@types/node": "^20.10.0",
+    "esbuild": "^0.28.2",
     "eslint": "^8.57.0",
+    "postject": "1.0.0-alpha.6",
     "tsx": "^4.7.0",
     "typescript": "^5.3.0",
     "vitest": "^2.0.0"

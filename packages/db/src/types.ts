@@ -896,6 +896,7 @@ export type Database = {
       print_jobs: {
         Row: {
           attempts: number
+          claimed_at: string | null
           created_at: string
           id: string
           kind: string
@@ -910,6 +911,7 @@ export type Database = {
         }
         Insert: {
           attempts?: number
+          claimed_at?: string | null
           created_at?: string
           id?: string
           kind?: string
@@ -924,6 +926,7 @@ export type Database = {
         }
         Update: {
           attempts?: number
+          claimed_at?: string | null
           created_at?: string
           id?: string
           kind?: string
@@ -1481,6 +1484,14 @@ export type Database = {
         Args: { p_label: string; p_store_id: string }
         Returns: Json
       }
+      bridge_heartbeat: {
+        Args: {
+          p_app_version?: string
+          p_device_id: string
+          p_store_id: string
+        }
+        Returns: Json
+      }
       close_cash_session: {
         Args: { p_counted_cents: number; p_notes?: string }
         Returns: Json
@@ -1541,6 +1552,7 @@ export type Database = {
       }
       open_cash_session: { Args: never; Returns: string }
       pos_pin_status: { Args: { p_device_id: string }; Returns: Json }
+      recover_stale_print_jobs: { Args: { p_store_id: string }; Returns: Json }
       reprint: {
         Args: { p_kind: string; p_order_id: string; p_request_id?: string }
         Returns: Json

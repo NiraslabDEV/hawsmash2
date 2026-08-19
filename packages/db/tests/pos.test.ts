@@ -242,6 +242,19 @@ describe("F2 — schema do POS", () => {
 
     expect(error).not.toBeNull();
   });
+
+  it("lista apenas dispositivos da loja do gerente no estado operacional", async () => {
+    await admin
+      .from("devices")
+      .update({ last_seen_at: new Date().toISOString() })
+      .in("id", [posDeviceId, matolaPosDeviceId]);
+
+    const { data, error } = await manager.rpc("get_device_status");
+    expect(error).toBeNull();
+    expect(data.threshold_seconds).toBe(120);
+    expect(data.devices.some((device: { id: string }) => device.id === posDeviceId)).toBe(true);
+    expect(data.devices.some((device: { id: string }) => device.id === matolaPosDeviceId)).toBe(false);
+  });
 });
 
 describe("F2 — vinculação e bloqueio do POS", () => {

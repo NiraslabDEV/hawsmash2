@@ -123,7 +123,7 @@ _Os dias são referência de calendário, não paragens: a corrida não pára en
 - [x] **Gaveta**: pulso `1B 70 00 19 FA`; abertura fora de venda exige perfil e grava `event_log`
 - [x] Talões: comanda de cozinha (nº do dia grande, sem preços) + talão do cliente (com troco)
 - [x] Reimpressão pelo painel e pelo POS (`reprint`), sempre logada
-- [ ] `heartbeat` de 60 s + watchdog + arranque automático no Windows + `.exe` (SEA, herdado do 1.0)
+- [x] `heartbeat` de 60 s + watchdog + arranque automático no Windows + `.exe` (SEA, herdado do 1.0)
 - [ ] Testes do render ESC/POS (snapshot) + integração com o simulador
 - [~] B-006 **Validação física** com a XP-T80Q e a gaveta reais (o cliente envia o equipamento)
 

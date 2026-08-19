@@ -7,6 +7,8 @@ export interface BridgeConfig {
   supabaseUrl: string;
   supabaseServiceKey: string;
   storeId: string;
+  bridgeDeviceId: string;
+  appVersion: string;
   printers: {
     kitchen: PrinterEndpoint;
     counter: PrinterEndpoint;
@@ -45,6 +47,10 @@ export function loadBridgeConfig(env: Environment): BridgeConfig {
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(storeId)) {
     throw new Error('STORE_ID inválido');
   }
+  const bridgeDeviceId = required(env, 'BRIDGE_DEVICE_ID');
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(bridgeDeviceId)) {
+    throw new Error('BRIDGE_DEVICE_ID inválido');
+  }
 
   const printerPort = positiveInteger(env.PRINTER_PORT, 9100, 'PRINTER_PORT', 65_535);
   const localToken = required(env, 'LOCAL_TOKEN');
@@ -63,6 +69,8 @@ export function loadBridgeConfig(env: Environment): BridgeConfig {
     supabaseUrl: required(env, 'SUPABASE_URL'),
     supabaseServiceKey: required(env, 'SUPABASE_SERVICE_ROLE_KEY'),
     storeId,
+    bridgeDeviceId,
+    appVersion: env.BRIDGE_APP_VERSION?.trim() || '2.0.0',
     printers: {
       kitchen: { ip: required(env, 'PRINTER_IP_KITCHEN'), port: printerPort },
       counter: { ip: required(env, 'PRINTER_IP_COUNTER'), port: printerPort },

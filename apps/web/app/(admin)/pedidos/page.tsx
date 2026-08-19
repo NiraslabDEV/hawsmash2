@@ -229,7 +229,7 @@ export default function PedidosPage() {
   const isPrintable = (s: string) =>
     ['approved', 'paid', 'in_preparation', 'ready', 'delivered'].includes(s);
 
-  const printer = deviceStatus?.devices.find((d) => d.kind === 'printer');
+  const printer = deviceStatus?.devices.find((d) => d.kind === 'bridge' || d.kind === 'printer');
   const printerOnline = !!printer?.online;
 
   // contagem por aba (real, vinda do RPC)

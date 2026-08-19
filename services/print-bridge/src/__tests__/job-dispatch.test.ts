@@ -15,6 +15,7 @@ const baseJob: PrintJob = {
   payload: { test: true },
   status: 'printing',
   attempts: 1,
+  claimed_at: '2026-08-19T12:00:01.000Z',
   created_at: '2026-08-19T12:00:00.000Z',
   printed_at: null,
 };

@@ -73,7 +73,7 @@ async function processJob(
   if (success) {
     const { error: printError } = await supabase
       .from('print_jobs')
-      .update({ status: 'printed', printed_at: new Date().toISOString() })
+      .update({ status: 'printed', printed_at: new Date().toISOString(), claimed_at: null })
       .eq('id', job.id)
       .eq('store_id', config.storeId);
     if (printError) {
@@ -96,7 +96,7 @@ async function markJobFailed(
   console.error(`[Poller] Job ${job.id} → failed: ${reason}`);
   const { error } = await supabase
     .from('print_jobs')
-    .update({ status: 'failed' })
+    .update({ status: 'failed', claimed_at: null })
     .eq('id', job.id)
     .eq('store_id', config.storeId);
   if (error) console.error('[Poller] Erro ao marcar failed:', error);

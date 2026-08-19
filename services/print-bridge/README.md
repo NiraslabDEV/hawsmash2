@@ -20,6 +20,8 @@ cp .env.example .env
 SUPABASE_URL=https://your-project.supabase.co
 SUPABASE_SERVICE_ROLE_KEY=your-service-role-key   # SECRETO — só no mini-PC
 STORE_ID=00000000-0000-4000-8000-000000000101
+BRIDGE_DEVICE_ID=00000000-0000-4000-8000-000000000201
+BRIDGE_APP_VERSION=2.0.0
 PRINTER_IP_KITCHEN=192.168.1.50
 PRINTER_IP_COUNTER=192.168.1.51
 PRINTER_PORT=9100
@@ -60,6 +62,28 @@ pnpm dev                   # dentro de services/print-bridge
 # ou, da raiz:
 pnpm bridge:dev
 ```
+
+## Windows: `.exe`, arranque automático e watchdog
+
+Gerar o executável no Windows (Node 22 ou 24):
+
+```powershell
+pnpm --filter print-bridge build:sea
+```
+
+O resultado fica em `services/print-bridge/build/hawsmash-print-bridge.exe`. Coloca um `.env` preenchido
+no mesmo directório do executável e instala a tarefa como Administrador:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\windows\install-task.ps1
+```
+
+A tarefa arranca com o Windows sob `SYSTEM` e reinicia o processo após 1 minuto em caso de crash. Para a
+remover: `powershell -ExecutionPolicy Bypass -File .\windows\uninstall-task.ps1`.
+
+O bridge envia heartbeat a cada 60 segundos para `devices`, sempre com `STORE_ID` e `BRIDGE_DEVICE_ID`.
+O watchdog corre no mesmo intervalo: jobs em `printing` há mais de 2 minutos voltam para `queued`; após três
+tentativas passam a `failed`. Cada recuperação ou falha fica em `event_log`.
 
 ## Produção (systemd no mini-PC)
 

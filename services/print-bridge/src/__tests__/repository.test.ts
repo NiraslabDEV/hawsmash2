@@ -28,7 +28,7 @@ describe('consulta da fila por loja', () => {
       ['status', 'queued'],
     ]);
     expect(chain.select).toHaveBeenCalledWith(
-      'id,store_id,order_id,request_id,station,kind,reprint_seq,payload,status,attempts,created_at,printed_at',
+      'id,store_id,order_id,request_id,station,kind,reprint_seq,payload,status,attempts,claimed_at,created_at,printed_at',
     );
   });
 });
@@ -59,6 +59,10 @@ describe('reserva atómica do papel', () => {
       ['store_id', 'loja-1'],
       ['status', 'queued'],
     ]);
-    expect(chain.update).toHaveBeenCalledWith({ status: 'printing', attempts: 3 });
+    expect(chain.update).toHaveBeenCalledWith({
+      status: 'printing',
+      attempts: 3,
+      claimed_at: expect.any(String),
+    });
   });
 });

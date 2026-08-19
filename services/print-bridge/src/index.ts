@@ -1,11 +1,12 @@
 // Print-bridge service entry point — single-tenant Delivery OS
 import { startPrinterSimulator, stopPrinterSimulator } from './simulator';
-import { pollPrintJobs } from './polling';
+import { createBridgeClient, pollPrintJobs } from './polling';
 import { loadBridgeConfig } from './config';
 import { createLocalServer } from './local-server';
 import { FileRequestLedger } from './request-ledger';
 import { sendToPrinter } from './printer-client';
 import { sendDrawerPulse } from './drawer';
+import { startOperationalLoops } from './operations';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -73,12 +74,16 @@ async function main(): Promise<void> {
   });
   console.log(`[HTTP] ${config.localHttpHost}:${config.localHttpPort} pronto`);
 
+  const supabase = createBridgeClient(config);
+  const stopOperationalLoops = startOperationalLoops(supabase, config);
+
   process.once('SIGINT', () => {
     console.log('\n[Shutdown] A terminar print-bridge');
+    stopOperationalLoops();
     localServer.close(() => process.exit(0));
   });
 
-  await pollPrintJobs(config);
+  await pollPrintJobs(config, supabase);
 }
 
 process.on('unhandledRejection', (error) => {
