@@ -1,10 +1,12 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { formatMT, type Cents } from '@delivery/core';
 import { createClient } from '@/utils/supabase/client';
+import { useStoreSlug } from '@/utils/useStore';
+import { buildScheduleSlots, type StoreHour } from '@/lib/store-hours';
 import { trackBeginCheckout, trackAddPaymentInfo, type TrackItem } from '@/lib/analytics/track';
 
 type PaymentFlow   = 'manual' | 'auto';
@@ -48,13 +50,14 @@ function lineUnitPrice(
 const CARD = 'rounded-2xl p-4 bg-[var(--st-card)] border border-[var(--st-line)]';
 const INPUT = 'w-full bg-[var(--st-bg)] border border-[var(--st-line)] rounded-xl px-4 py-3 text-[var(--st-text)] placeholder:text-[var(--st-muted)] focus:border-[var(--st-primary)] focus:outline-none';
 // Opção selecionável glass 3D (F9). O ✓ é a rede de segurança para browsers sem color-mix.
-function Opt({ selected, onClick, children, className = '' }: { selected: boolean; onClick: () => void; children: React.ReactNode; className?: string }) {
+function Opt({ selected, onClick, children, className = '', disabled = false }: { selected: boolean; onClick: () => void; children: React.ReactNode; className?: string; disabled?: boolean }) {
   return (
     <button
       type="button"
       onClick={onClick}
+      disabled={disabled}
       aria-pressed={selected}
-      className={`glass-opt${selected ? ' is-selected' : ''} ${className}`}
+      className={`glass-opt${selected ? ' is-selected' : ''} ${disabled ? ' opacity-50' : ''} ${className}`}
     >
       {children}
       {selected && (
@@ -136,16 +139,22 @@ export default function CheckoutPage() {
   const [uploading, setUploading]                 = useState(false);
   const [autoSubmitting, setAutoSubmitting]       = useState(false);
 
+  const storeSlug = useStoreSlug();
+
   const { data: menuData, isLoading: isLoadingMenu } = useQuery({
-    queryKey: ['menu'],
+    queryKey: ['menu', storeSlug],
     queryFn: async () => {
-      const res = await fetch('/api/menu');
+      const res = await fetch(`/api/menu?store=${encodeURIComponent(storeSlug)}`);
       if (!res.ok) throw new Error('Failed to fetch menu');
       return res.json();
     },
   });
 
   const zones = menuData?.zones ?? [];
+  const scheduleSlots = useMemo(
+    () => buildScheduleSlots((menuData?.hours ?? []) as StoreHour[]),
+    [menuData?.hours],
+  );
   const paymentProvider: string = menuData?.payment_provider ?? 'manual';
   const hasAutoPayment = paymentProvider === 'mock' || paymentProvider === 'paysuite';
 
@@ -203,6 +212,8 @@ export default function CheckoutPage() {
 
   function buildOrderPayload(method: string) {
     return {
+      // A loja escolhida manda: preços, zonas e cozinha de destino são dela.
+      storeSlug,
       customerName,
       customerPhone,
       customerEmail,
@@ -508,24 +519,29 @@ export default function CheckoutPage() {
               </Opt>
               <Opt
                 selected={scheduledFor !== null}
-                onClick={() => {
-                  const now     = new Date();
-                  const minutes = Math.ceil(now.getMinutes() / 30) * 30;
-                  const next    = new Date(now);
-                  next.setHours(now.getHours(), minutes, 0, 0);
-                  setScheduledFor(next.toISOString());
-                }}
+                onClick={() => setScheduledFor(scheduleSlots[0]?.iso ?? null)}
+                disabled={scheduleSlots.length === 0}
                 className="p-4 text-left"
               >
                 <p className="glass-label">Horário</p>
-                <p className="text-[var(--st-muted)] text-sm">Agendar</p>
+                <p className="text-[var(--st-muted)] text-sm">
+                  {scheduleSlots.length === 0 ? 'Sem horários' : 'Agendar'}
+                </p>
               </Opt>
             </div>
-            {scheduledFor && (
-              <div className="mt-4 p-3 bg-[var(--st-bg)] rounded-lg border border-[var(--st-line)]">
-                <p className="text-[var(--st-muted-2)] text-sm">
-                  Agendado para: {new Date(scheduledFor).toLocaleString('pt-MZ', { dateStyle: 'short', timeStyle: 'short' })}
-                </p>
+            {scheduledFor && scheduleSlots.length > 0 && (
+              <div className="mt-4">
+                {/* Só horários em que esta loja abre — o servidor volta a validar. */}
+                <select
+                  value={scheduledFor}
+                  onChange={(e) => setScheduledFor(e.target.value)}
+                  aria-label="Horário de entrega"
+                  className={INPUT}
+                >
+                  {scheduleSlots.map((slot) => (
+                    <option key={slot.iso} value={slot.iso}>{slot.label}</option>
+                  ))}
+                </select>
               </div>
             )}
           </div>

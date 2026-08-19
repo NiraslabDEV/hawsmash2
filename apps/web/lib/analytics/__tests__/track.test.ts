@@ -159,3 +159,29 @@ describe('postFP — chama /api/track para cada evento', () => {
     expect(fetchCalls.some((c) => c.body.type === 'lead')).toBe(true);
   });
 });
+
+describe('F7 — dimensão da loja em todos os eventos', () => {
+  it('leva a loja escolhida ao dataLayer e ao first-party', () => {
+    (globalThis as any).document.cookie = 'dl_session=abc; hs_store=matola';
+    const item: TrackItem = { id: 'a1', name: 'Classic Smash', price_cents: 30000, qty: 1 };
+
+    trackAddToCart(item);
+
+    const event = lastEvent(dl(), 'add_to_cart')!;
+    expect((event.ecommerce as any).store).toBe('matola');
+
+    const call = fetchCalls.find((entry) => entry.url === '/api/track');
+    expect(call?.body.store).toBe('matola');
+  });
+
+  it('não inventa loja quando o cliente ainda não escolheu', () => {
+    (globalThis as any).document.cookie = 'dl_session=abc';
+    trackViewMenu([{ id: 'a1', name: 'Classic Smash', price_cents: 30000 }]);
+
+    const event = lastEvent(dl(), 'view_item_list')!;
+    expect((event.ecommerce as any).store).toBeUndefined();
+
+    const call = fetchCalls.find((entry) => entry.url === '/api/track');
+    expect(call?.body.store).toBeUndefined();
+  });
+});

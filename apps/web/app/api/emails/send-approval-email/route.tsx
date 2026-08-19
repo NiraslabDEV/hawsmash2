@@ -13,7 +13,7 @@ export async function POST(request: Request) {
     const resend = new Resend(apiKey);
 
     const body = await request.json();
-    const { to, customerName, orderNumber, totalCents, paymentMethod } = body;
+    const { to, customerName, orderNumber, totalCents, paymentMethod, storeName, storePhone } = body;
 
     if (!to || !customerName || !orderNumber) {
       return NextResponse.json(
@@ -34,6 +34,7 @@ export async function POST(request: Request) {
         <p>O seu pagamento foi confirmado com sucesso.</p>
         <div style="background: #1a1614; padding: 20px; border-radius: 8px; margin: 20px 0;">
           <p><strong>Número do Pedido:</strong> ${orderNumber}</p>
+          ${storeName ? `<p><strong>Loja:</strong> ${storeName}${storePhone ? ` · ${storePhone}` : ''}</p>` : ''}
           <p><strong>Total Pago:</strong> ${totalFormatted}</p>
           <p><strong>Método de Pagamento:</strong> ${paymentMethod.toUpperCase()}</p>
         </div>
@@ -45,7 +46,9 @@ export async function POST(request: Request) {
     const { data, error } = await resend.emails.send({
       from: process.env.RESEND_FROM_EMAIL || 'noreply@delivery-os.com',
       to,
-      subject: `Pagamento Confirmado - Pedido ${orderNumber}`,
+      subject: storeName
+        ? `Pagamento confirmado — Pedido ${orderNumber} · ${storeName}`
+        : `Pagamento confirmado — Pedido ${orderNumber}`,
       html,
       tags: [
         { name: 'Order ID', value: orderNumber },

@@ -2,11 +2,14 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { cookies } from 'next/headers';
 
+import { parseStoreCookie, resolveStoreSlug } from '@/lib/store-context';
+
 interface TrackBody {
   type: string;
   value_cents?: number;
   utm?: Record<string, string>;
   payload?: Record<string, unknown>;
+  store?: string | null;
 }
 
 function validate(body: unknown): { ok: true; data: TrackBody } | { ok: false; error: string } {
@@ -22,6 +25,15 @@ function validate(body: unknown): { ok: true; data: TrackBody } | { ok: false; e
       return { ok: false, error: 'value_cents must be a non-negative integer' };
     }
   }
+  let store: string | null = null;
+  if (b.store !== undefined && b.store !== null && b.store !== '') {
+    try {
+      store = resolveStoreSlug(b.store);
+    } catch {
+      return { ok: false, error: 'store must be a valid slug' };
+    }
+  }
+
   return {
     ok: true,
     data: {
@@ -29,6 +41,7 @@ function validate(body: unknown): { ok: true; data: TrackBody } | { ok: false; e
       value_cents: b.value_cents as number | undefined,
       utm: (b.utm && typeof b.utm === 'object' ? b.utm : {}) as Record<string, string>,
       payload: (b.payload && typeof b.payload === 'object' ? b.payload : {}) as Record<string, unknown>,
+      store,
     },
   };
 }
@@ -57,6 +70,18 @@ export async function POST(req: NextRequest) {
     { auth: { persistSession: false } },
   );
 
+  // A loja é uma dimensão do funil: tráfego antes da escolha fica sem loja.
+  const storeSlug = result.data.store ?? parseStoreCookie(req.headers.get('cookie'));
+  let storeId: string | null = null;
+  if (storeSlug) {
+    const { data: store } = await supabase
+      .from('stores')
+      .select('id')
+      .eq('slug', storeSlug)
+      .maybeSingle();
+    storeId = store?.id ?? null;
+  }
+
   const { error } = await supabase.from('analytics_events').insert({
     session_id: sessionId,
     customer_phone: customerPhone,
@@ -64,6 +89,7 @@ export async function POST(req: NextRequest) {
     value_cents: result.data.value_cents ?? null,
     utm: result.data.utm ?? {},
     payload: result.data.payload ?? {},
+    store_id: storeId,
   });
 
   if (error) {

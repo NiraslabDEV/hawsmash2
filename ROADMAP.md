@@ -178,14 +178,14 @@ _Os dias são referência de calendário, não paragens: a corrida não pára en
 
 ## F7 🔴 Site com escolha de loja + delivery por loja
 
-- [ ] Página de entrada com **escolha de loja** → cookie `hs_store` + rotas `/l/[slug]`
-- [ ] Trocar de loja limpa o carrinho (aviso claro)
-- [ ] `delivery_zones` e `store_hours` por loja; agendamento pelos horários da loja escolhida
-- [ ] Checkout mostra os números M-Pesa/e-Mola **da loja** e encaminha o pedido para a cozinha certa
-- [ ] `order-status` por pedido; email transacional com identificação da loja
-- [ ] Tracking com `store` como dimensão; `purchase` só em `paid`/`approved`
-- [ ] `stores.accepting_orders` como kill switch por loja (testado)
-- [ ] Playwright: pedido em Maputo e pedido na Matola caem em lojas diferentes
+- [x] Página de entrada com **escolha de loja** → cookie `hs_store` + rotas `/l/[slug]`
+- [x] Trocar de loja limpa o carrinho (aviso claro)
+- [x] `delivery_zones` e `store_hours` por loja; agendamento pelos horários da loja escolhida — zonas da Matola em `PLACEHOLDER_ZONA` (B-002)
+- [x] Checkout mostra os números M-Pesa/e-Mola **da loja** e encaminha o pedido para a cozinha certa
+- [x] `order-status` por pedido; email transacional com identificação da loja
+- [x] Tracking com `store` como dimensão; `purchase` só em `paid`/`approved`
+- [x] `stores.accepting_orders` como kill switch por loja (testado)
+- [x] Playwright: pedido em Maputo e pedido na Matola caem em lojas diferentes
 
 **PROMPT:** *"Executa a F7: site multi-loja conforme `CLAUDE.md §13`. Entrada com escolha de loja, zonas/horários/pagamentos por loja, encaminhamento para a cozinha certa e kill switch por loja. Playwright a provar o encaminhamento."*
 

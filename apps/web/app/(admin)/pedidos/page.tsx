@@ -8,7 +8,12 @@ import { pt } from 'date-fns/locale';
 
 type Order = {
   id: string;
+  store_id?: string | null;
+  store_slug?: string | null;
+  store_name?: string | null;
   order_number: string;
+  daily_number?: number | null;
+  channel?: string | null;
   status: string;
   flow: string;
   fulfillment_type: string;
@@ -108,6 +113,8 @@ export default function PedidosPage() {
   const [deviceStatus, setDeviceStatus] = useState<DeviceStatus | null>(null);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [storeFilter, setStoreFilter] = useState<string>('all');
+  const [stores, setStores] = useState<Array<{ slug: string; short_name: string }>>([]);
   const [page, setPage] = useState(1);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [proofUrls, setProofUrls] = useState<Record<string, string>>({});
@@ -137,6 +144,15 @@ export default function PedidosPage() {
     return () => clearTimeout(t);
   }, [message]);
 
+  const fetchStores = useCallback(async () => {
+    const { data } = await supabase
+      .from('stores')
+      .select('slug,short_name')
+      .eq('active', true)
+      .order('sort');
+    if (data) setStores(data as Array<{ slug: string; short_name: string }>);
+  }, [supabase]);
+
   const fetchStats = useCallback(async () => {
     const { data } = await supabase.rpc('get_order_stats');
     if (data) setStats(data);
@@ -153,12 +169,14 @@ export default function PedidosPage() {
       const filters: Record<string, unknown> = { limit: 100 };
       if (search) filters.search = search;
       if (statusFilter !== 'all') filters.status = statusFilter;
+      // "Todas" é leitura consolidada; a acção continua a exigir loja concreta.
+      if (storeFilter !== 'all') filters.store = storeFilter;
       const { data, error } = await supabase.rpc('get_orders', { p_filters: filters });
       if (!error && data) setOrders(data.orders || []);
     } finally {
       setLoading(false);
     }
-  }, [supabase, search, statusFilter]);
+  }, [supabase, search, statusFilter, storeFilter]);
 
   const fetchReconciliation = useCallback(async () => {
     const { data } = await supabase
@@ -171,10 +189,10 @@ export default function PedidosPage() {
     setReconciliation((data ?? []) as ReconciliationOrder[]);
   }, [supabase]);
 
-  useEffect(() => { fetchStats(); fetchDeviceStatus(); fetchReconciliation(); }, [fetchStats, fetchDeviceStatus, fetchReconciliation]);
+  useEffect(() => { fetchStats(); fetchDeviceStatus(); fetchReconciliation(); fetchStores(); }, [fetchStats, fetchDeviceStatus, fetchReconciliation, fetchStores]);
   useEffect(() => { const i = setInterval(fetchDeviceStatus, 60000); return () => clearInterval(i); }, [fetchDeviceStatus]);
   useEffect(() => { fetchOrders(); }, [fetchOrders]);
-  useEffect(() => { setPage(1); }, [search, statusFilter]); // reset paginação ao filtrar
+  useEffect(() => { setPage(1); }, [search, statusFilter, storeFilter]); // reset paginação ao filtrar
 
   const refreshData = async () => { await Promise.all([fetchStats(), fetchOrders(), fetchDeviceStatus(), fetchReconciliation()]); };
 
@@ -197,7 +215,7 @@ export default function PedidosPage() {
       fetch('/api/conversions/fire', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ orderId: order.id, totalCents: order.total_cents }) }).catch(() => {});
     }
     if (event === 'APPROVE' && order.customer_email) {
-      fetch('/api/emails/send-approval-email', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ to: order.customer_email, customerName: order.customer_name, orderNumber: order.order_number, totalCents: order.total_cents, paymentMethod: order.payment_method }) }).catch(console.error);
+      fetch('/api/emails/send-approval-email', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ to: order.customer_email, customerName: order.customer_name, orderNumber: order.order_number, totalCents: order.total_cents, paymentMethod: order.payment_method, storeName: order.store_name ?? null }) }).catch(console.error);
     }
     if (event === 'CANCEL' && order.customer_email) {
       fetch('/api/emails/send-rejection-email', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ to: order.customer_email, customerName: order.customer_name, orderNumber: order.order_number, reason, paymentMethod: order.payment_method }) }).catch(console.error);
@@ -404,6 +422,15 @@ export default function PedidosPage() {
           className="bg-black/20 border border-white/[0.08] rounded-xl px-3 py-2.5 text-sm text-[#C9BCAC] focus:outline-none focus:border-[#F5A623]/40 cursor-pointer">
           {TABS.map((t) => <option key={t.key} value={t.key} className="bg-[#231610] text-white">{t.key === 'all' ? 'Todos os status' : t.label}</option>)}
         </select>
+        {stores.length > 1 && (
+          <select value={storeFilter} onChange={(e) => setStoreFilter(e.target.value)} aria-label="Loja"
+            className="bg-black/20 border border-white/[0.08] rounded-xl px-3 py-2.5 text-sm text-[#C9BCAC] focus:outline-none focus:border-[#F5A623]/40 cursor-pointer">
+            <option value="all" className="bg-[#231610] text-white">Todas as lojas</option>
+            {stores.map((store) => (
+              <option key={store.slug} value={store.slug} className="bg-[#231610] text-white">{store.short_name}</option>
+            ))}
+          </select>
+        )}
       </div>
 
       {/* Abas de status com contagem */}
@@ -452,7 +479,7 @@ export default function PedidosPage() {
                   return (
                     <Fragment key={order.id}>
                       <tr className={`border-b border-white/[0.04] transition-colors ${expanded ? 'bg-[#F5A623]/[0.03]' : 'hover:bg-white/[0.04]'}`}>
-                        <td className="px-4 py-3"><div className="font-mono font-bold text-white">{order.order_number}</div><div className="text-[11px] text-[#8A7A69]">{order.flow === 'digital' ? 'Pago online' : 'Manual'}</div></td>
+                        <td className="px-4 py-3"><div className="font-mono font-bold text-white">{order.order_number}</div><div className="text-[11px] text-[#8A7A69]">{order.store_name ? `${order.store_name} · ` : ''}{order.flow === 'digital' ? 'Pago online' : 'Manual'}</div></td>
                         <td className="px-4 py-3"><div className="font-medium text-white">{order.customer_name}</div><div className="text-[11px] text-[#C9BCAC]">{order.customer_phone}</div></td>
                         <td className="px-4 py-3"><TypeBadge type={order.fulfillment_type} />{order.payment_proof_path && <div className="text-[11px] text-[#F5A623] mt-1">📎 comprovativo</div>}</td>
                         <td className="px-4 py-3 text-sm text-[#C9BCAC] max-w-[220px] truncate">{order.fulfillment_type === 'delivery' ? (order.address || '—') : 'Levantamento no balcão'}</td>
@@ -503,6 +530,7 @@ export default function PedidosPage() {
                 <div className="flex items-start justify-between mb-2">
                   <div>
                     <div className="font-mono font-bold text-white">{order.order_number}</div>
+                    {order.store_name && <div className="text-[11px] text-[#8A7A69]">{order.store_name}</div>}
                     <div className="text-sm text-white">{order.customer_name}</div>
                     <div className="text-[11px] text-[#8A7A69]">{order.customer_phone}</div>
                   </div>

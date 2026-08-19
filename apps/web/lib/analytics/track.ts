@@ -15,6 +15,7 @@
  */
 
 import { centsToDecimalString, type Cents } from '@delivery/core';
+import { parseStoreCookie } from '@/lib/store-context';
 
 export interface MarketingConfig {
   gtm_container_id: string | null;
@@ -188,15 +189,23 @@ function getUtm(): Record<string, string> {
   return utm;
 }
 
+// Loja escolhida pelo cliente: é a dimensão que separa Maputo de Matola em
+// todo o funil. Sem escolha, o evento segue sem loja (nunca inventada).
+function currentStore(): string | undefined {
+  if (typeof document === 'undefined') return undefined;
+  return parseStoreCookie(document.cookie) ?? undefined;
+}
+
 function postFP(
   type: string,
   opts?: { value_cents?: number; payload?: Record<string, unknown> },
 ) {
   if (typeof window === 'undefined') return;
+  const store = currentStore();
   fetch('/api/track', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ type, utm: getUtm(), ...opts }),
+    body: JSON.stringify({ type, utm: getUtm(), ...(store ? { store } : {}), ...opts }),
   }).catch(() => {});
 }
 
@@ -211,10 +220,12 @@ function emit(
   metaPayload: Record<string, unknown>,
   metaOpts?: Record<string, unknown>,
 ) {
+  const store = currentStore();
+  const payloadWithStore = store ? { ...ga4Payload, store } : ga4Payload;
   pushDL({ ecommerce: null });
-  pushDL({ event: ga4Event, ecommerce: ga4Payload });
+  pushDL({ event: ga4Event, ecommerce: payloadWithStore });
   if (gtagLoaded && window.gtag) {
-    window.gtag('event', ga4Event, ga4Payload);
+    window.gtag('event', ga4Event, payloadWithStore);
   }
   if (metaEvent && fbqLoaded && window.fbq) {
     window.fbq('track', metaEvent, metaPayload, metaOpts);

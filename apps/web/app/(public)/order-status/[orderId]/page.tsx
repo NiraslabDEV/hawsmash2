@@ -134,6 +134,12 @@ export default function OrderStatusPage({ params }: { params: { orderId: string 
               <div>
                 <p className="text-[var(--st-muted)] text-sm mb-1">Pedido</p>
                 <p className="text-[var(--st-text)] font-extrabold text-xl">{orderStatus.order_number}</p>
+                {orderStatus.store?.short_name && (
+                  <p className="text-[var(--st-muted-2)] text-xs mt-1">
+                    Loja {orderStatus.store.short_name}
+                    {orderStatus.store.phone ? ` · ${orderStatus.store.phone}` : ''}
+                  </p>
+                )}
               </div>
               <span className={`inline-flex items-center gap-1.5 text-sm font-bold ${getStatusColor(orderStatus.status)}`}>
                 <span className={`w-2 h-2 rounded-full bg-current ${!isTerminal ? 'animate-pulse' : ''}`} />
