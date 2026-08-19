@@ -87,11 +87,36 @@ export interface CustomerReceiptPayload {
   created_at: string;
 }
 
+export interface CashClosePayload {
+  template: 'cash_close';
+  store_short_name: string;
+  shift_label: string;
+  opened_at: string;
+  closed_at: string;
+  opening_float_cents: number;
+  cash_sales_cents: number;
+  sangria_cents: number;
+  reforco_cents: number;
+  despesa_cents: number;
+  expected_cash_cents: number;
+  counted_cash_cents: number;
+  difference_cents: number;
+  difference_reason?: string | null;
+  payments: {
+    cash: number;
+    mpesa: number;
+    emola: number;
+    credit_card: number;
+  };
+  closed_by_name?: string | null;
+}
+
 export type PrintPayload =
   | PrintJobPayload
   | TestPrintPayload
   | KitchenTicketPayload
-  | CustomerReceiptPayload;
+  | CustomerReceiptPayload
+  | CashClosePayload;
 
 export function isTestPayload(p: PrintPayload): p is TestPrintPayload {
   return (p as TestPrintPayload).test === true;
@@ -103,6 +128,10 @@ export function isKitchenTicket(p: PrintPayload): p is KitchenTicketPayload {
 
 export function isCustomerReceipt(p: PrintPayload): p is CustomerReceiptPayload {
   return (p as CustomerReceiptPayload).template === 'receipt';
+}
+
+export function isCashClosePayload(p: PrintPayload): p is CashClosePayload {
+  return (p as CashClosePayload).template === 'cash_close';
 }
 
 export interface EventLog {

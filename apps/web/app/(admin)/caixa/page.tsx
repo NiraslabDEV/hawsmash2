@@ -124,11 +124,7 @@ export default function CaixaPage() {
       return;
     }
 
-    // Enviar email do fecho ao owner
-    const { data: settings } = await supabase.from('settings').select('owner_email').eq('id', 1).single();
-    if (settings?.owner_email) {
-      await sendCloseEmail(settings.owner_email, report);
-    }
+    await sendCloseEmail(report.session_id as string);
 
     setMessage({ type: 'success', text: 'Caixa fechada com sucesso!' });
     setShowCloseModal(false);
@@ -138,12 +134,12 @@ export default function CaixaPage() {
     setSubmitting(false);
   }
 
-  async function sendCloseEmail(to: string, report: Record<string, unknown>) {
+  async function sendCloseEmail(sessionId: string) {
     try {
       await fetch('/api/emails/send-cash-close-email', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ to, report }),
+        body: JSON.stringify({ sessionId }),
       });
     } catch {
       // email é best-effort; não bloqueia o fecho
@@ -374,14 +370,10 @@ function HistoricoRow({ item }: { item: HistoricoItem }) {
   }
 
   async function handleEmail() {
-    const supabase = createClient();
-    const { data: settings } = await supabase.from('settings').select('owner_email').eq('id', 1).single();
-    if (!settings?.owner_email) return alert('owner_email não configurado.');
-
     const res = await fetch('/api/emails/send-cash-close-email', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ to: settings.owner_email, sessionId: item.id }),
+      body: JSON.stringify({ sessionId: item.id }),
     });
     if (res.ok) alert('Email reenviado.');
     else alert('Erro ao reenviar email.');

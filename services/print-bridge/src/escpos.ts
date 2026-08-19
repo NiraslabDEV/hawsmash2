@@ -4,13 +4,14 @@
 // cujos bytes coincidem com CP1252 para acentos do portugues.
 import { cents, formatMT } from '@delivery/core';
 import type {
+  CashClosePayload,
   CustomerReceiptPayload,
   KitchenTicketPayload,
   PrintJobPayload,
   PrintPayload,
   TestPrintPayload,
 } from "./types";
-import { isCustomerReceipt, isKitchenTicket, isTestPayload } from "./types";
+import { isCashClosePayload, isCustomerReceipt, isKitchenTicket, isTestPayload } from "./types";
 
 const ESC = 0x1b;
 const GS = 0x1d;
@@ -124,6 +125,10 @@ function maputoTime(iso: string): string {
   }).format(new Date(iso));
 }
 
+function signedMT(value: number): string {
+  return value < 0 ? `-${formatMT(cents(Math.abs(value)))}` : formatMT(cents(value));
+}
+
 function channelLabel(channel: KitchenTicketPayload['channel']): string {
   const labels: Record<KitchenTicketPayload['channel'], string> = {
     counter: 'BALCÃO',
@@ -208,9 +213,43 @@ export function createCustomerReceipt(payload: CustomerReceiptPayload): Buffer {
   return Buffer.concat(chunks);
 }
 
+export function createCashCloseReceipt(payload: CashClosePayload): Buffer {
+  const chunks: Buffer[] = [INIT, CODEPAGE_CP1252, ALIGN_CENTER];
+  chunks.push(BOLD_ON, line(`HAWSMASH ${payload.store_short_name.toUpperCase()}`), BOLD_OFF);
+  chunks.push(SIZE_DOUBLE, BOLD_ON, line('FECHO DE CAIXA'), BOLD_OFF, SIZE_NORMAL);
+  chunks.push(line(payload.shift_label), line(`${maputoTime(payload.opened_at)} - ${maputoTime(payload.closed_at)}`));
+  chunks.push(ALIGN_LEFT, line(rule('=')));
+  chunks.push(line(twoColumns('Fundo inicial', formatMT(cents(payload.opening_float_cents)))));
+  chunks.push(line(twoColumns('Vendas dinheiro', formatMT(cents(payload.cash_sales_cents)))));
+  chunks.push(line(twoColumns('Sangrias', `-${formatMT(cents(payload.sangria_cents))}`)));
+  chunks.push(line(twoColumns('Reforcos', formatMT(cents(payload.reforco_cents)))));
+  chunks.push(line(twoColumns('Despesas', `-${formatMT(cents(payload.despesa_cents))}`)));
+  chunks.push(line(rule('-')));
+  chunks.push(BOLD_ON, line(twoColumns('Esperado na gaveta', formatMT(cents(payload.expected_cash_cents)))), BOLD_OFF);
+  chunks.push(line(twoColumns('Contado', formatMT(cents(payload.counted_cash_cents)))));
+  chunks.push(
+    BOLD_ON,
+    line(twoColumns('Diferenca', signedMT(payload.difference_cents))),
+    BOLD_OFF,
+  );
+  chunks.push(line(rule('=')), BOLD_ON, line('PAGAMENTOS'), BOLD_OFF);
+  chunks.push(line(twoColumns('Dinheiro', formatMT(cents(payload.payments.cash)))));
+  chunks.push(line(twoColumns('M-Pesa', formatMT(cents(payload.payments.mpesa)))));
+  chunks.push(line(twoColumns('e-Mola', formatMT(cents(payload.payments.emola)))));
+  chunks.push(line(twoColumns('Cartao', formatMT(cents(payload.payments.credit_card)))));
+  if (payload.difference_reason) {
+    chunks.push(line(rule('-')), BOLD_ON, line('MOTIVO DA DIFERENCA'), BOLD_OFF);
+    for (const reasonLine of wrap(payload.difference_reason)) chunks.push(line(reasonLine));
+  }
+  if (payload.closed_by_name) chunks.push(feed(1), line(`Fechado por: ${payload.closed_by_name}`));
+  chunks.push(feed(3), CUT_FULL);
+  return Buffer.concat(chunks);
+}
+
 export function createPrintDocument(kind: string, payload: PrintPayload): Buffer {
   if (kind === 'order' && isKitchenTicket(payload)) return createKitchenTicket(payload);
   if (kind === 'receipt' && isCustomerReceipt(payload)) return createCustomerReceipt(payload);
+  if (kind === 'cash_close' && isCashClosePayload(payload)) return createCashCloseReceipt(payload);
   return createReceipt(payload);
 }
 

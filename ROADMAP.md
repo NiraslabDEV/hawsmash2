@@ -155,7 +155,7 @@ _Os dias são referência de calendário, não paragens: a corrida não pára en
 - [x] `open_cash_session(p_store, p_float)` · `close_cash_session(p_store, p_counted, p_reason)` ·
       `add_cash_movement(...)` — todas com perfil e `event_log`
 - [x] Esperado = fundo + dinheiro − sangrias + reforços − despesas; móvel/cartão em linhas separadas
-- [ ] Fecho: impressão do fecho + PDF + email ao dono; diferença acima da tolerância exige motivo
+- [x] Fecho: impressão do fecho + PDF + email ao dono; diferença acima da tolerância exige motivo
 - [ ] Painel Caixa por loja + consolidado das duas
 - [ ] Testes: cálculo do esperado com movimentos; fecho com diferença; período desde o último fecho
 

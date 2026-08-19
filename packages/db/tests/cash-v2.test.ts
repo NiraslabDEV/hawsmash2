@@ -213,6 +213,28 @@ describe("F5 — caixa por loja e turno", () => {
     });
     expect(report.payments).toMatchObject({ cash: 30000, mpesa: 20000 });
 
+    const { data: printJob } = await admin
+      .from("print_jobs")
+      .select("store_id,order_id,request_id,station,kind,status,payload")
+      .eq("store_id", maputoStoreId)
+      .eq("request_id", report.session_id)
+      .eq("kind", "cash_close")
+      .single();
+    expect(printJob).toMatchObject({
+      store_id: maputoStoreId,
+      order_id: null,
+      request_id: report.session_id,
+      station: "counter",
+      kind: "cash_close",
+      status: "queued",
+    });
+    expect(printJob?.payload).toMatchObject({
+      template: "cash_close",
+      shift_label: report.shift_label,
+      expected_cash_cents: 31000,
+      difference_cents: 0,
+    });
+
     const { count: movementAudits } = await admin
       .from("event_log")
       .select("id", { count: "exact", head: true })

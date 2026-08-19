@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
-import { createCustomerReceipt, createKitchenTicket, decodeReceipt } from '../escpos';
-import type { CustomerReceiptPayload, KitchenTicketPayload } from '../types';
+import {
+  createCashCloseReceipt,
+  createCustomerReceipt,
+  createKitchenTicket,
+  decodeReceipt,
+} from '../escpos';
+import type { CashClosePayload, CustomerReceiptPayload, KitchenTicketPayload } from '../types';
 
 const kitchen: KitchenTicketPayload = {
   template: 'kitchen',
@@ -41,6 +46,25 @@ const receipt: CustomerReceiptPayload = {
   created_at: '2026-08-19T17:05:00.000Z',
 };
 
+const cashClose: CashClosePayload = {
+  template: 'cash_close',
+  store_short_name: 'Maputo',
+  shift_label: 'Turno 19/08/2026 18:00',
+  opened_at: '2026-08-19T16:00:00.000Z',
+  closed_at: '2026-08-19T19:30:00.000Z',
+  opening_float_cents: 5000,
+  cash_sales_cents: 30000,
+  sangria_cents: 5000,
+  reforco_cents: 2000,
+  despesa_cents: 1000,
+  expected_cash_cents: 31000,
+  counted_cash_cents: 30000,
+  difference_cents: -1000,
+  difference_reason: 'Falta confirmada na contagem',
+  payments: { cash: 30000, mpesa: 20000, emola: 0, credit_card: 10000 },
+  closed_by_name: 'Gerente Maputo',
+};
+
 describe('formatos HAWSMASH de 80 mm', () => {
   it('faz a comanda com número diário grande e sem qualquer preço', () => {
     const document = createKitchenTicket(kitchen);
@@ -73,6 +97,22 @@ describe('formatos HAWSMASH de 80 mm', () => {
     expect(text).toContain('Troco');
     expect(text).toContain('400 MT');
     expect(text).toContain('Obrigado! Bom apetite.');
+    expect({ text, hex: document.toString('hex') }).toMatchSnapshot();
+  });
+
+  it('faz o fecho de caixa com gaveta e pagamentos digitais separados', () => {
+    const document = createCashCloseReceipt(cashClose);
+    const text = decodeReceipt(document);
+
+    expect(text).toContain('FECHO DE CAIXA');
+    expect(text).toContain('HAWSMASH MAPUTO');
+    expect(text).toContain('Fundo inicial');
+    expect(text).toContain('Vendas dinheiro');
+    expect(text).toContain('Esperado na gaveta');
+    expect(text).toContain('M-Pesa');
+    expect(text).toContain('Cartao');
+    expect(text).toContain('Diferenca');
+    expect(text).toContain('Falta confirmada na contagem');
     expect({ text, hex: document.toString('hex') }).toMatchSnapshot();
   });
 });
