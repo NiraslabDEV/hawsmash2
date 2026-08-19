@@ -10,6 +10,8 @@ const validEnv = {
   PRINTER_IP_KITCHEN: '192.168.10.50',
   PRINTER_IP_COUNTER: '192.168.10.51',
   PRINTER_PORT: '9100',
+  LOCAL_TOKEN: 'token-local-de-teste-com-32-caracteres',
+  LOCAL_ALLOWED_ORIGINS: 'https://staging.hawsmash.test',
 };
 
 const baseJob: PrintJob = {
@@ -45,6 +47,7 @@ describe('configuração multi-loja do print-bridge', () => {
       kitchen: { ip: '192.168.10.50', port: 9100 },
       counter: { ip: '192.168.10.51', port: 9100 },
     });
+    expect(config.localAllowedOrigins).toEqual(['https://staging.hawsmash.test']);
   });
 });
 

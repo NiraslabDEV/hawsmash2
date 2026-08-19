@@ -24,7 +24,32 @@ PRINTER_IP_KITCHEN=192.168.1.50
 PRINTER_IP_COUNTER=192.168.1.51
 PRINTER_PORT=9100
 USE_SIMULATOR=false        # true = simulador TCP (sem hardware)
+LOCAL_HTTP_HOST=0.0.0.0
+LOCAL_HTTP_PORT=7777
+LOCAL_TOKEN=trocar-por-token-aleatorio-com-32-caracteres
+LOCAL_ALLOWED_ORIGINS=https://staging.hawsmash.co.mz,https://hawsmash.co.mz
+LOCAL_STATE_FILE=./data/local-requests.log
 ```
+
+## API HTTP local
+
+O bridge expõe `GET /health`, `POST /print` e `POST /drawer` na LAN. Todos os pedidos exigem
+`Authorization: Bearer <LOCAL_TOKEN>`. Os pedidos `POST` recebem um `requestId` único; o bridge guarda-o
+num registo local persistente e não volta a produzir papel nem a abrir a gaveta quando o mesmo pedido é
+repetido, inclusive depois de reiniciar.
+
+Exemplo:
+
+```bash
+curl -X POST http://127.0.0.1:7777/drawer \
+  -H "Authorization: Bearer $LOCAL_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"requestId":"drawer-018f1f4e-7ec8-7a29-a9df-3f0652f8ea2a"}'
+```
+
+`LOCAL_ALLOWED_ORIGINS` é obrigatório e deve listar apenas as origens exactas autorizadas a chamar o
+bridge a partir do browser. Clientes locais sem cabeçalho `Origin` continuam suportados. O token nunca é
+devolvido pelo endpoint de saúde nem escrito nos logs.
 
 ## Desenvolvimento (simulador)
 

@@ -20,11 +20,19 @@ export async function sendToPrinter(
   jobId: string,
   opts: SendOptions = {},
 ): Promise<boolean> {
+  return sendBufferToPrinter(ip, port, createReceipt(job), jobId, opts);
+}
+
+export async function sendBufferToPrinter(
+  ip: string,
+  port: number,
+  bytes: Buffer,
+  jobId: string,
+  opts: SendOptions = {},
+): Promise<boolean> {
   const attempts = opts.attempts ?? RETRY_ATTEMPTS;
   const backoffMs = opts.backoffMs ?? INITIAL_BACKOFF;
   const timeoutMs = opts.timeoutMs ?? CONNECT_TIMEOUT;
-  const bytes = createReceipt(job);
-
   for (let attempt = 1; attempt <= attempts; attempt++) {
     try {
       await sendOnce(ip, port, bytes, timeoutMs);

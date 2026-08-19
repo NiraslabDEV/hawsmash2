@@ -2,6 +2,10 @@
 import { startPrinterSimulator, stopPrinterSimulator } from './simulator';
 import { pollPrintJobs } from './polling';
 import { loadBridgeConfig } from './config';
+import { createLocalServer } from './local-server';
+import { FileRequestLedger } from './request-ledger';
+import { sendToPrinter } from './printer-client';
+import { sendDrawerPulse } from './drawer';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -11,7 +15,16 @@ const SIMULATOR_PORT = parseInt(process.env.SIMULATOR_PORT ?? '9100', 10);
 const SIMULATOR_VERBOSE = process.env.SIMULATOR_VERBOSE === 'true';
 
 async function main(): Promise<void> {
-  const config = loadBridgeConfig(process.env);
+  const loadedConfig = loadBridgeConfig(process.env);
+  const config = USE_SIMULATOR
+    ? {
+        ...loadedConfig,
+        printers: {
+          kitchen: { ip: '127.0.0.1', port: SIMULATOR_PORT },
+          counter: { ip: '127.0.0.1', port: SIMULATOR_PORT },
+        },
+      }
+    : loadedConfig;
   console.log('='.repeat(60));
   console.log('DELIVERY OS — Print Bridge Service');
   console.log('='.repeat(60));
@@ -22,20 +35,44 @@ async function main(): Promise<void> {
 
     const simulator = startPrinterSimulator({ port: SIMULATOR_PORT, verbose: SIMULATOR_VERBOSE });
     await new Promise(resolve => setTimeout(resolve, 1000));
-    await pollPrintJobs(config);
-
-    process.on('SIGINT', async () => {
-      console.log('\n[Shutdown] Received SIGINT');
-      stopPrinterSimulator(simulator);
-      process.exit(0);
-    });
+    process.once('SIGINT', () => stopPrinterSimulator(simulator));
   } else {
     console.log('\n[Mode] Production Mode (Real Printer)');
     console.log(`[Config] Loja: ${config.storeId}`);
     console.log(`[Config] Cozinha: ${config.printers.kitchen.ip}:${config.printers.kitchen.port}`);
     console.log(`[Config] Balcão: ${config.printers.counter.ip}:${config.printers.counter.port}\n`);
-    await pollPrintJobs(config);
   }
+
+  const ledger = new FileRequestLedger(config.localStateFile);
+  await ledger.initialize();
+  const localServer = createLocalServer({
+    token: config.localToken,
+    storeId: config.storeId,
+    allowedOrigins: config.localAllowedOrigins,
+    ledger,
+    print: async (request) => {
+      const printer = request.kind === 'order' && request.station !== 'counter'
+        ? config.printers.kitchen
+        : config.printers.counter;
+      return sendToPrinter(printer.ip, printer.port, request.payload, request.requestId);
+    },
+    drawer: (requestId) => sendDrawerPulse(config.printers.counter, requestId),
+  });
+  await new Promise<void>((resolve, reject) => {
+    localServer.once('error', reject);
+    localServer.listen(config.localHttpPort, config.localHttpHost, () => {
+      localServer.off('error', reject);
+      resolve();
+    });
+  });
+  console.log(`[HTTP] ${config.localHttpHost}:${config.localHttpPort} pronto`);
+
+  process.once('SIGINT', () => {
+    console.log('\n[Shutdown] A terminar print-bridge');
+    localServer.close(() => process.exit(0));
+  });
+
+  await pollPrintJobs(config);
 }
 
 process.on('unhandledRejection', (error) => {
