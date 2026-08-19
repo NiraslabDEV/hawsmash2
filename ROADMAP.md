@@ -168,9 +168,9 @@ _Os dias são referência de calendário, não paragens: a corrida não pára en
 - [x] Migration `1008_stock.sql`: `stock_movements` + índices; `low_stock_qty` em `store_items` (já vinha da 1003)
 - [x] Baixa atómica na mesma transação da venda (balcão e online); reposição na anulação
 - [x] Esgotado → indisponível no site e no POS **daquela loja**, automaticamente
-- [ ] Aba **Estoque** no painel: contagem, entrada, quebra, histórico de movimentos por item
-- [ ] Alerta de stock crítico (§11.5)
-- [ ] Testes: venda concorrente do último item (só uma passa), anulação repõe, movimento sempre gravado
+- [x] Aba **Estoque** no painel: contagem, entrada, quebra, histórico de movimentos por item
+- [x] Alerta de stock crítico (§11.5) — evento `stock.low`/`stock.out` + destaque no painel; envio por email/WhatsApp na F8
+- [x] Testes: venda concorrente do último item (só uma passa), anulação repõe, movimento sempre gravado
 
 **PROMPT:** *"Executa a F6: estoque por loja conforme `CLAUDE.md §10`. Migration 1008, baixa atómica, movimentos auditáveis, aba Estoque e alerta de rotura. Testa a corrida do último item."*
 
