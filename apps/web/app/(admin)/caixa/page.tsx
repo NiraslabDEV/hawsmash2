@@ -1,414 +1,356 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
-import { createClient } from '@/utils/supabase/client';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { formatMT, type Cents } from '@delivery/core';
 
-// ─── Types ───────────────────────────────────────────────────────────────────
+import { parseMTInput } from '@/lib/cash/input';
+import { createClient } from '@/utils/supabase/client';
 
-type Stats = {
-  total_pedidos: number;
-  total_faturado_cents: number;
-  total_entregues: number;
-  em_aberto_cents: number;
-};
-
-type ItemVendido = {
-  name: string;
-  qty: number;
-  total_cents: number;
-};
-
-type HistoricoItem = {
+type MovementType = 'sangria' | 'reforco' | 'despesa' | 'troco_inicial';
+type CashMovement = {
   id: string;
+  type: MovementType;
+  amount_cents: number;
+  reason: string;
+  created_at: string;
+};
+type CashHistory = {
+  id: string;
+  shift_label: string;
   opened_at: string;
   closed_at: string;
   expected_cash_cents: number;
   counted_cash_cents: number;
   difference_cents: number;
-  notes: string | null;
+  difference_reason: string | null;
 };
-
-type Dashboard = {
-  has_open_session: boolean;
-  open_session: { id: string; opened_at: string } | null;
+type StoreCash = {
+  store_id: string;
+  store_slug: string;
+  store_name: string;
   period_start: string;
-  stats: Stats;
-  items_hoje: ItemVendido[];
-  historico: HistoricoItem[];
+  has_open_session: boolean;
+  open_session: {
+    id: string;
+    shift_label: string;
+    opened_at: string;
+    opening_float_cents: number;
+  } | null;
+  total_pedidos: number;
+  total_faturado_cents: number;
+  cash_sales_cents: number;
+  mpesa_cents: number;
+  emola_cents: number;
+  credit_card_cents: number;
+  sangria_cents: number;
+  reforco_cents: number;
+  despesa_cents: number;
+  expected_cash_cents: number;
+  movements: CashMovement[];
+  history: CashHistory[];
+};
+type Dashboard = {
+  can_consolidate: boolean;
+  role: string;
+  stores: StoreCash[];
+  consolidated: {
+    total_pedidos: number;
+    total_faturado_cents: number;
+    cash_sales_cents: number;
+    mpesa_cents: number;
+    emola_cents: number;
+    credit_card_cents: number;
+    expected_cash_cents: number;
+  };
 };
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
-
-const GLASS = 'rounded-2xl border border-white/[0.08] bg-white/[0.04] backdrop-blur-[12px] shadow-[0_4px_24px_rgba(0,0,0,0.4)]';
-
-function fmtDT(iso: string) {
-  return new Date(iso).toLocaleString('pt-MZ', {
-    day: '2-digit', month: '2-digit', year: 'numeric',
-    hour: '2-digit', minute: '2-digit',
-  });
-}
-
-function fmtTime(iso: string) {
-  return new Date(iso).toLocaleTimeString('pt-MZ', { hour: '2-digit', minute: '2-digit' });
-}
-
-function diffColor(diff: number) {
-  if (diff === 0) return 'text-[#C9BCAC]';
-  return diff > 0 ? 'text-[#22C55E]' : 'text-[#EF4444]';
-}
-
-// ─── Component ───────────────────────────────────────────────────────────────
+const mt = (value: number) => {
+  const absolute = formatMT(Math.abs(value) as Cents);
+  return value < 0 ? `-${absolute}` : absolute;
+};
+const dateTime = (iso: string) =>
+  new Intl.DateTimeFormat('pt-PT', {
+    timeZone: 'Africa/Maputo',
+    day: '2-digit',
+    month: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).format(new Date(iso));
+const movementLabels: Record<MovementType, string> = {
+  sangria: 'Sangria',
+  reforco: 'Reforço',
+  despesa: 'Despesa',
+  troco_inicial: 'Troco inicial adicional',
+};
 
 export default function CaixaPage() {
-  const supabase = createClient();
+  const supabase = useMemo(() => createClient(), []);
+  const [dashboard, setDashboard] = useState<Dashboard | null>(null);
+  const [selectedStoreId, setSelectedStoreId] = useState('all');
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [dialog, setDialog] = useState<'open' | 'movement' | 'close' | null>(null);
+  const [amountInput, setAmountInput] = useState('');
+  const [reason, setReason] = useState('');
+  const [movementType, setMovementType] = useState<MovementType>('sangria');
+  const [message, setMessage] = useState<{ tone: 'ok' | 'error'; text: string } | null>(null);
 
-  const [dashboard, setDashboard]       = useState<Dashboard | null>(null);
-  const [loading, setLoading]           = useState(true);
-  const [showCloseModal, setShowCloseModal] = useState(false);
-  const [countedInput, setCountedInput] = useState('');
-  const [notes, setNotes]               = useState('');
-  const [submitting, setSubmitting]     = useState(false);
-  const [message, setMessage]           = useState<{ type: 'success' | 'error'; text: string } | null>(null);
-
-  // ─── Fetch dashboard ──────────────────────────────────────────────────────
-
-  const fetchDashboard = useCallback(async () => {
-    const { data, error } = await supabase.rpc('get_cash_dashboard');
-    if (error) {
-      setMessage({ type: 'error', text: `Erro ao carregar painel: ${error.message}` });
+  const refresh = useCallback(async () => {
+    const { data, error } = await supabase.rpc('get_cash_dashboard', { p_store: null });
+    if (error || !data) {
+      setMessage({ tone: 'error', text: `Não foi possível carregar o caixa: ${error?.message ?? 'erro desconhecido'}` });
     } else {
-      setDashboard(data as Dashboard);
+      const next = data as Dashboard;
+      setDashboard(next);
+      if (!next.can_consolidate || next.stores.length === 1) {
+        setSelectedStoreId(next.stores[0]?.store_id ?? 'all');
+      }
     }
     setLoading(false);
   }, [supabase]);
 
   useEffect(() => {
-    fetchDashboard();
-    const interval = setInterval(fetchDashboard, 30_000);
-    return () => clearInterval(interval);
-  }, [fetchDashboard]);
+    void refresh();
+    const timer = window.setInterval(() => void refresh(), 30_000);
+    return () => window.clearInterval(timer);
+  }, [refresh]);
 
-  // ─── Open session ─────────────────────────────────────────────────────────
+  const selectedStore = dashboard?.stores.find((store) => store.store_id === selectedStoreId) ?? null;
+  const summary = selectedStore ?? dashboard?.consolidated ?? null;
+  const closeDifference = selectedStore
+    ? (parseMTInput(amountInput) ?? 0) - selectedStore.expected_cash_cents
+    : 0;
 
-  async function handleOpenSession() {
-    setSubmitting(true);
-    const { error } = await supabase.rpc('open_cash_session');
-    if (error) {
-      setMessage({ type: 'error', text: `Erro ao abrir sessão: ${error.message}` });
-    } else {
-      setMessage({ type: 'success', text: 'Sessão de caixa aberta.' });
-      fetchDashboard();
-    }
-    setSubmitting(false);
+  function resetDialog() {
+    setDialog(null);
+    setAmountInput('');
+    setReason('');
+    setMovementType('sangria');
   }
 
-  // ─── Close session ────────────────────────────────────────────────────────
-
-  async function handleClose() {
-    const centavos = Math.round(parseFloat(countedInput.replace(',', '.')) * 100);
-    if (isNaN(centavos) || centavos < 0) {
-      setMessage({ type: 'error', text: 'Valor contado inválido.' });
+  async function openSession() {
+    if (!selectedStore) return;
+    const openingFloat = parseMTInput(amountInput);
+    if (openingFloat === null) {
+      setMessage({ tone: 'error', text: 'Indica um fundo inicial válido em MT.' });
       return;
     }
-
-    setSubmitting(true);
-    const { data: report, error } = await supabase.rpc('close_cash_session', {
-      p_counted_cents: centavos,
-      p_notes: notes.trim() || null,
+    setBusy(true);
+    const { error } = await supabase.rpc('open_cash_session', {
+      p_store: selectedStore.store_id,
+      p_float: openingFloat,
     });
-
+    setBusy(false);
     if (error) {
-      setMessage({ type: 'error', text: `Erro ao fechar caixa: ${error.message}` });
-      setSubmitting(false);
+      setMessage({ tone: 'error', text: `Não foi possível abrir o caixa: ${error.message}` });
       return;
     }
-
-    await sendCloseEmail(report.session_id as string);
-
-    setMessage({ type: 'success', text: 'Caixa fechada com sucesso!' });
-    setShowCloseModal(false);
-    setCountedInput('');
-    setNotes('');
-    fetchDashboard();
-    setSubmitting(false);
+    resetDialog();
+    setMessage({ tone: 'ok', text: `Caixa de ${selectedStore.store_name} aberto.` });
+    await refresh();
   }
 
-  async function sendCloseEmail(sessionId: string) {
-    try {
-      await fetch('/api/emails/send-cash-close-email', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sessionId }),
-      });
-    } catch {
-      // email é best-effort; não bloqueia o fecho
+  async function addMovement() {
+    if (!selectedStore) return;
+    const amount = parseMTInput(amountInput);
+    if (amount === null || amount === 0 || reason.trim().length < 3) {
+      setMessage({ tone: 'error', text: 'Indica um valor positivo e um motivo com pelo menos 3 caracteres.' });
+      return;
     }
+    setBusy(true);
+    const { error } = await supabase.rpc('add_cash_movement', {
+      p_store: selectedStore.store_id,
+      p_type: movementType,
+      p_amount_cents: amount,
+      p_reason: reason.trim(),
+    });
+    setBusy(false);
+    if (error) {
+      setMessage({ tone: 'error', text: `Movimento recusado: ${error.message}` });
+      return;
+    }
+    resetDialog();
+    setMessage({ tone: 'ok', text: `${movementLabels[movementType]} registado e auditado.` });
+    await refresh();
   }
 
-  // ─── Computed ─────────────────────────────────────────────────────────────
-
-  const countedCents = Math.round(parseFloat(countedInput.replace(',', '.')) * 100) || 0;
-  const expectedCents = dashboard?.stats.total_faturado_cents ?? 0;
-  const diffCents = countedCents - expectedCents;
-
-  // ─── Render ───────────────────────────────────────────────────────────────
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center py-20">
-        <div className="text-[#F5A623] font-semibold animate-pulse">A carregar caixa…</div>
-      </div>
-    );
+  async function closeSession() {
+    if (!selectedStore) return;
+    const counted = parseMTInput(amountInput);
+    if (counted === null) {
+      setMessage({ tone: 'error', text: 'Indica o valor contado na gaveta.' });
+      return;
+    }
+    setBusy(true);
+    const { data, error } = await supabase.rpc('close_cash_session', {
+      p_store: selectedStore.store_id,
+      p_counted: counted,
+      p_reason: reason.trim() || null,
+    });
+    setBusy(false);
+    if (error) {
+      setMessage({
+        tone: 'error',
+        text: error.message.includes('difference_reason_required')
+          ? 'A diferença ultrapassa a tolerância. Indica o motivo antes de fechar.'
+          : `Fecho recusado: ${error.message}`,
+      });
+      return;
+    }
+    const sessionId = (data as { session_id: string }).session_id;
+    void fetch('/api/emails/send-cash-close-email', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sessionId }),
+    }).catch(() => undefined);
+    resetDialog();
+    setMessage({ tone: 'ok', text: `Caixa de ${selectedStore.store_name} fechado. Talão em fila e relatório disponível.` });
+    await refresh();
   }
 
-  const d = dashboard!;
+  if (loading) return <p className="py-20 text-center font-bold text-[#F5A623]">A carregar caixa…</p>;
+  if (!dashboard || !summary) return <p className="py-20 text-center text-red-300">Caixa indisponível.</p>;
 
   return (
     <div className="space-y-6">
-
-      {/* Header: sessão + botões */}
-      <div className="flex items-center justify-between">
+      <header className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-white tracking-tight">Caixa</h1>
-          {d.has_open_session && d.open_session ? (
-            <p className="text-sm text-[#C9BCAC] mt-1">
-              Sessão aberta desde {fmtTime(d.open_session.opened_at)} ·{' '}
-              <span className="text-[#F5A623]">período activo</span>
-            </p>
-          ) : (
-            <p className="text-sm text-[#C9BCAC] mt-1">
-              Sem sessão aberta · a mostrar dados de hoje
-            </p>
-          )}
+          <p className="text-xs font-black uppercase tracking-[0.2em] text-[#F5A623]">Operação por turno</p>
+          <h1 className="mt-1 text-3xl font-black text-white">Caixa</h1>
+          <p className="mt-1 text-sm text-[#A99C8C]">Valores em tempo real desde o último fecho de cada loja.</p>
         </div>
-        <div className="flex gap-3">
-          {!d.has_open_session && (
-            <button
-              onClick={handleOpenSession}
-              disabled={submitting}
-              className="px-4 py-2 text-sm font-semibold rounded-xl border border-white/[0.08] bg-white/[0.04] text-[#F3E4CE] hover:bg-white/[0.08] transition-all disabled:opacity-50"
+        <div className="flex flex-wrap gap-2">
+          {dashboard.can_consolidate && (
+            <select
+              aria-label="Loja do caixa"
+              value={selectedStoreId}
+              onChange={(event) => setSelectedStoreId(event.target.value)}
+              className="min-h-12 rounded-xl border border-white/10 bg-[#1A1511] px-4 font-bold text-white"
             >
-              Abrir Sessão
-            </button>
+              <option value="all">Todas as lojas</option>
+              {dashboard.stores.map((store) => <option key={store.store_id} value={store.store_id}>{store.store_name}</option>)}
+            </select>
           )}
-          <button
-            onClick={() => setShowCloseModal(true)}
-            className="px-5 py-2 text-sm font-bold bg-[#F5A623] text-[#2A1710] rounded-xl hover:bg-[#D6860F] transition-all shadow-[0_0_16px_rgba(245,166,35,0.25)]"
-          >
-            Fechar Caixa
-          </button>
+          <button type="button" onClick={() => void refresh()} className="min-h-12 rounded-xl border border-white/10 px-4 font-bold text-[#E8DDCF]">Actualizar</button>
         </div>
-      </div>
+      </header>
 
-      {/* Stat Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <StatCard label="Total Pedidos" value={String(d.stats.total_pedidos)} accentBorder="border-t-[#3B82F6]/60" />
-        <StatCard label="Faturado" value={formatMT(d.stats.total_faturado_cents as unknown as Cents)} highlight accentBorder="border-t-[#22C55E]/60" />
-        <StatCard label="Entregues" value={String(d.stats.total_entregues)} accentBorder="border-t-[#8B5CF6]/60" />
-        <StatCard label="Em Aberto" value={formatMT(d.stats.em_aberto_cents as unknown as Cents)} accentBorder="border-t-[#F59E0B]/60" />
-      </div>
-
-      {/* Itens Vendidos */}
-      <div className={`${GLASS} p-6`}>
-        <h3 className="text-sm font-semibold text-white uppercase tracking-wide mb-4">
-          Vendido por Unidade
-        </h3>
-        {d.items_hoje.length === 0 ? (
-          <p className="text-[#C9BCAC] text-sm">Nenhum item vendido no período.</p>
-        ) : (
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="text-left text-[11px] uppercase tracking-wide text-[#8A7A69] border-b border-white/[0.06]">
-                <th className="pb-2 font-medium">Produto</th>
-                <th className="pb-2 font-medium text-center">Qtd</th>
-                <th className="pb-2 font-medium text-right">Total</th>
-              </tr>
-            </thead>
-            <tbody>
-              {d.items_hoje.map((item, i) => (
-                <tr key={i} className="border-b border-white/[0.04] last:border-0">
-                  <td className="py-2 text-white">{item.name}</td>
-                  <td className="py-2 text-center text-[#C9BCAC]">{item.qty}</td>
-                  <td className="py-2 text-right text-white font-medium">
-                    {formatMT(item.total_cents as unknown as Cents)}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
-
-      {/* Histórico de Fechos */}
-      <div className={`${GLASS} p-6`}>
-        <h3 className="text-sm font-semibold text-white uppercase tracking-wide mb-4">
-          Histórico de Fechos
-        </h3>
-        {d.historico.length === 0 ? (
-          <p className="text-[#C9BCAC] text-sm">Nenhum fecho registado ainda.</p>
-        ) : (
-          <div className="space-y-3">
-            {d.historico.map((h) => (
-              <HistoricoRow key={h.id} item={h} />
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* Modal: Fechar Caixa */}
-      {showCloseModal && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-[4px] flex items-center justify-center z-50 p-4">
-          <div className="w-full max-w-md rounded-2xl border border-white/[0.10] bg-white/[0.06] backdrop-blur-[20px] shadow-[0_20px_60px_rgba(0,0,0,0.6),0_0_40px_rgba(245,166,35,0.08)] p-6 space-y-5">
-            <h3 className="text-lg font-bold text-white">Fechar Caixa</h3>
-
-            {d.has_open_session && d.open_session && (
-              <p className="text-sm text-[#C9BCAC]">
-                Período: {fmtDT(d.open_session.opened_at)} → agora
-              </p>
-            )}
-
-            <div className="bg-black/20 border border-white/[0.08] rounded-xl p-4 space-y-2 text-sm">
-              <Row label="Total Esperado" value={formatMT(d.stats.total_faturado_cents as unknown as Cents)} bold />
-              <Row label="Pedidos Confirmados" value={String(d.stats.total_pedidos)} />
-              <Row label="Entregues" value={String(d.stats.total_entregues)} />
-            </div>
-
-            <div>
-              <label className="block text-sm text-[#C9BCAC] mb-1">Valor Contado (MT)</label>
-              <input
-                type="number"
-                step="0.01"
-                min="0"
-                value={countedInput}
-                onChange={(e) => setCountedInput(e.target.value)}
-                placeholder="0.00"
-                className="w-full px-3 py-2 bg-black/30 border border-white/[0.08] rounded-xl text-white focus:outline-none focus:border-[#F5A623]/50 text-lg font-mono transition-colors"
-              />
-            </div>
-
-            {countedInput && (
-              <div className="bg-black/20 border border-white/[0.08] rounded-xl p-3 text-sm flex justify-between">
-                <span className="text-[#C9BCAC]">Diferença</span>
-                <span className={`font-bold ${diffColor(diffCents)}`}>
-                  {diffCents >= 0 ? '+' : ''}{formatMT(diffCents as unknown as Cents)}
-                </span>
-              </div>
-            )}
-
-            <div>
-              <label className="block text-sm text-[#C9BCAC] mb-1">Notas (opcional)</label>
-              <textarea
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                rows={2}
-                placeholder="Observações sobre o fecho…"
-                className="w-full px-3 py-2 bg-black/30 border border-white/[0.08] rounded-xl text-white focus:outline-none focus:border-[#F5A623]/50 resize-none text-sm transition-colors"
-              />
-            </div>
-
-            <div className="flex gap-3 pt-2">
-              <button
-                onClick={() => { setShowCloseModal(false); setCountedInput(''); setNotes(''); }}
-                disabled={submitting}
-                className="flex-1 px-4 py-2 text-sm text-[#C9BCAC] bg-white/[0.06] hover:bg-white/[0.10] rounded-xl transition-all"
-              >
-                Cancelar
-              </button>
-              <button
-                onClick={handleClose}
-                disabled={submitting || !countedInput}
-                className="flex-1 px-4 py-2 text-sm font-bold bg-[#F5A623] text-[#2A1710] rounded-xl hover:bg-[#D6860F] transition-all disabled:opacity-50"
-              >
-                {submitting ? 'A fechar…' : 'Confirmar Fecho'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Toast */}
       {message && (
-        <div className={`fixed bottom-6 right-6 z-50 rounded-2xl border backdrop-blur-[16px] px-5 py-3 font-medium text-sm shadow-[0_4px_24px_rgba(0,0,0,0.4)] ${
-          message.type === 'success' ? 'border-[#22C55E]/30 bg-[#22C55E]/10 text-[#22C55E]' : 'border-[#F5A623]/30 bg-[#F5A623]/10 text-[#F5A623]'
-        }`}>
-          <div className="flex items-center gap-3">
-            <span>{message.text}</span>
-            <button className="opacity-60 hover:opacity-100" onClick={() => setMessage(null)}>✕</button>
-          </div>
+        <div role="status" className={`rounded-xl border px-4 py-3 text-sm font-bold ${message.tone === 'ok' ? 'border-emerald-400/30 bg-emerald-500/10 text-emerald-200' : 'border-red-400/30 bg-red-500/10 text-red-200'}`}>
+          {message.text}
+        </div>
+      )}
+
+      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <Metric label="Facturado" value={mt(summary.total_faturado_cents)} accent />
+        <Metric label="Dinheiro vendido" value={mt(summary.cash_sales_cents)} />
+        <Metric label="Esperado nas gavetas" value={mt(summary.expected_cash_cents)} />
+        <Metric label="Pedidos" value={String(summary.total_pedidos)} />
+      </section>
+
+      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <Payment label="M-Pesa" value={summary.mpesa_cents} />
+        <Payment label="e-Mola" value={summary.emola_cents} />
+        <Payment label="Cartão" value={summary.credit_card_cents} />
+        <Payment label="Dinheiro" value={summary.cash_sales_cents} />
+      </section>
+
+      {selectedStore ? (
+        <>
+          <section className="rounded-2xl border border-white/10 bg-white/[0.04] p-5">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+              <div>
+                <h2 className="text-xl font-black text-white">{selectedStore.store_name}</h2>
+                {selectedStore.open_session ? (
+                  <p className="mt-1 text-sm text-emerald-300">{selectedStore.open_session.shift_label} · aberto às {dateTime(selectedStore.open_session.opened_at)}</p>
+                ) : <p className="mt-1 text-sm text-amber-300">Sem turno aberto</p>}
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {!selectedStore.has_open_session ? (
+                  <button type="button" onClick={() => setDialog('open')} className="min-h-12 rounded-xl bg-[#F5A623] px-5 font-black text-[#24150D]">Abrir caixa</button>
+                ) : (
+                  <>
+                    <button type="button" onClick={() => setDialog('movement')} className="min-h-12 rounded-xl border border-[#F5A623]/40 px-5 font-bold text-[#F5A623]">Movimento</button>
+                    <button type="button" onClick={() => setDialog('close')} className="min-h-12 rounded-xl bg-[#F5A623] px-5 font-black text-[#24150D]">Fechar caixa</button>
+                  </>
+                )}
+              </div>
+            </div>
+            <div className="mt-5 grid gap-3 sm:grid-cols-4">
+              <SmallMetric label="Fundo" value={mt(selectedStore.open_session?.opening_float_cents ?? 0)} />
+              <SmallMetric label="Sangrias" value={mt(selectedStore.sangria_cents)} />
+              <SmallMetric label="Reforços" value={mt(selectedStore.reforco_cents)} />
+              <SmallMetric label="Despesas" value={mt(selectedStore.despesa_cents)} />
+            </div>
+          </section>
+
+          <section className="grid gap-4 xl:grid-cols-2">
+            <ListSection title="Movimentos do turno" empty="Sem movimentos neste turno.">
+              {selectedStore.movements.map((movement) => (
+                <div key={movement.id} className="flex items-center justify-between gap-4 border-b border-white/5 py-3 last:border-0">
+                  <div><p className="font-bold text-white">{movementLabels[movement.type]}</p><p className="text-xs text-[#938779]">{movement.reason} · {dateTime(movement.created_at)}</p></div>
+                  <strong className="text-[#F5A623]">{mt(movement.amount_cents)}</strong>
+                </div>
+              ))}
+            </ListSection>
+            <ListSection title="Histórico de fechos" empty="Ainda não existem fechos.">
+              {selectedStore.history.map((item) => (
+                <div key={item.id} className="flex items-center gap-3 border-b border-white/5 py-3 last:border-0">
+                  <div className="min-w-0 flex-1"><p className="truncate font-bold text-white">{item.shift_label}</p><p className="text-xs text-[#938779]">{dateTime(item.closed_at)}</p></div>
+                  <div className="text-right"><p className="font-bold text-white">{mt(item.expected_cash_cents)}</p><p className={item.difference_cents === 0 ? 'text-xs text-[#938779]' : 'text-xs text-amber-300'}>{mt(item.difference_cents)}</p></div>
+                  <a href={`/api/cash-sessions/${item.id}/report`} className="rounded-lg border border-white/10 px-3 py-2 text-xs font-bold text-[#F5A623]">PDF</a>
+                </div>
+              ))}
+            </ListSection>
+          </section>
+        </>
+      ) : (
+        <section className="grid gap-4 lg:grid-cols-2">
+          {dashboard.stores.map((store) => (
+            <button key={store.store_id} type="button" onClick={() => setSelectedStoreId(store.store_id)} className="rounded-2xl border border-white/10 bg-white/[0.04] p-5 text-left transition hover:border-[#F5A623]/40">
+              <div className="flex items-center justify-between"><h2 className="text-xl font-black text-white">{store.store_name}</h2><span className={store.has_open_session ? 'text-xs font-black text-emerald-300' : 'text-xs font-black text-amber-300'}>{store.has_open_session ? 'ABERTO' : 'FECHADO'}</span></div>
+              <div className="mt-5 grid grid-cols-2 gap-3"><SmallMetric label="Facturado" value={mt(store.total_faturado_cents)} /><SmallMetric label="Esperado" value={mt(store.expected_cash_cents)} /></div>
+            </button>
+          ))}
+        </section>
+      )}
+
+      {dialog && selectedStore && (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-black/80 p-4">
+          <section role="dialog" aria-modal="true" className="w-full max-w-lg rounded-2xl border border-white/10 bg-[#17120E] p-6 shadow-2xl">
+            <h2 className="text-2xl font-black text-white">{dialog === 'open' ? 'Abrir caixa' : dialog === 'movement' ? 'Registar movimento' : 'Fechar caixa'}</h2>
+            <p className="mt-1 text-sm text-[#A99C8C]">{selectedStore.store_name}</p>
+            {dialog === 'movement' && (
+              <select aria-label="Tipo de movimento" value={movementType} onChange={(event) => setMovementType(event.target.value as MovementType)} className="mt-5 min-h-12 w-full rounded-xl border border-white/10 bg-black/30 px-4 text-white">
+                {Object.entries(movementLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+              </select>
+            )}
+            {dialog === 'close' && <p className="mt-5 rounded-xl bg-black/25 p-4 text-sm text-[#C9BCAC]">Esperado na gaveta: <strong className="text-white">{mt(selectedStore.expected_cash_cents)}</strong></p>}
+            <label className="mt-5 block text-sm font-bold text-[#C9BCAC]" htmlFor="cash-amount">{dialog === 'open' ? 'Fundo inicial (MT)' : dialog === 'close' ? 'Valor contado (MT)' : 'Valor (MT)'}</label>
+            <input id="cash-amount" inputMode="decimal" value={amountInput} onChange={(event) => setAmountInput(event.target.value)} placeholder="0,00" className="mt-2 min-h-14 w-full rounded-xl border border-white/10 bg-black/30 px-4 text-xl font-black text-white outline-none focus:border-[#F5A623]" />
+            {dialog === 'close' && amountInput && <p className="mt-3 text-sm text-[#C9BCAC]">Diferença: <strong className={closeDifference === 0 ? 'text-emerald-300' : 'text-amber-300'}>{mt(closeDifference)}</strong></p>}
+            {dialog !== 'open' && (
+              <><label className="mt-5 block text-sm font-bold text-[#C9BCAC]" htmlFor="cash-reason">Motivo {dialog === 'movement' ? '(obrigatório)' : '(obrigatório acima da tolerância)'}</label><textarea id="cash-reason" value={reason} onChange={(event) => setReason(event.target.value)} rows={3} className="mt-2 w-full rounded-xl border border-white/10 bg-black/30 p-4 text-white outline-none focus:border-[#F5A623]" /></>
+            )}
+            <div className="mt-6 flex gap-3"><button type="button" disabled={busy} onClick={resetDialog} className="min-h-12 flex-1 rounded-xl border border-white/10 font-bold text-[#C9BCAC]">Cancelar</button><button type="button" disabled={busy} onClick={() => void (dialog === 'open' ? openSession() : dialog === 'movement' ? addMovement() : closeSession())} className="min-h-12 flex-1 rounded-xl bg-[#F5A623] font-black text-[#24150D] disabled:opacity-50">{busy ? 'A guardar…' : 'Confirmar'}</button></div>
+          </section>
         </div>
       )}
     </div>
   );
 }
 
-// ─── Sub-components ──────────────────────────────────────────────────────────
-
-function StatCard({ label, value, highlight, accentBorder }: { label: string; value: string; highlight?: boolean; accentBorder: string }) {
-  return (
-    <div className={`${GLASS} border-t-2 ${accentBorder} p-5 hover:bg-white/[0.07] hover:border-white/[0.12] transition-all`}>
-      <p className="text-[11px] text-[#8A7A69] uppercase tracking-wide mb-2 font-medium">{label}</p>
-      <p className={`text-2xl font-bold ${highlight ? 'text-[#F5A623]' : 'text-white'}`}>{value}</p>
-    </div>
-  );
+function Metric({ label, value, accent = false }: { label: string; value: string; accent?: boolean }) {
+  return <article className="rounded-2xl border border-white/10 bg-white/[0.04] p-5"><p className="text-xs font-black uppercase tracking-wide text-[#8F8376]">{label}</p><p className={`mt-2 text-2xl font-black ${accent ? 'text-[#F5A623]' : 'text-white'}`}>{value}</p></article>;
 }
-
-function Row({ label, value, bold }: { label: string; value: string; bold?: boolean }) {
-  return (
-    <div className="flex justify-between">
-      <span className="text-[#C9BCAC]">{label}</span>
-      <span className={bold ? 'text-white font-bold' : 'text-[#F3E4CE]'}>{value}</span>
-    </div>
-  );
+function Payment({ label, value }: { label: string; value: number }) {
+  return <article className="rounded-xl border border-white/5 bg-black/20 px-4 py-3"><p className="text-xs text-[#8F8376]">{label}</p><p className="mt-1 font-black text-[#E8DDCF]">{mt(value)}</p></article>;
 }
-
-function HistoricoRow({ item }: { item: HistoricoItem }) {
-  const diff = item.difference_cents;
-
-  function handlePDF() {
-    window.open(`/api/cash-sessions/${item.id}/report`, '_blank');
-  }
-
-  async function handleEmail() {
-    const res = await fetch('/api/emails/send-cash-close-email', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ sessionId: item.id }),
-    });
-    if (res.ok) alert('Email reenviado.');
-    else alert('Erro ao reenviar email.');
-  }
-
-  return (
-    <div className="flex items-center gap-4 p-3 bg-black/20 border border-white/[0.08] rounded-xl">
-      <div className="flex-1 min-w-0">
-        <p className="text-xs text-[#C9BCAC]">{fmtDT(item.opened_at)} → {fmtDT(item.closed_at)}</p>
-        {item.notes && <p className="text-xs text-[#8A7A69] mt-0.5 truncate">{item.notes}</p>}
-      </div>
-      <div className="text-right shrink-0">
-        <p className="text-sm text-white font-medium">
-          {formatMT(item.expected_cash_cents as unknown as Cents)}
-        </p>
-        <p className={`text-xs font-medium ${diffColor(diff)}`}>
-          {diff >= 0 ? '+' : ''}{formatMT(diff as unknown as Cents)}
-        </p>
-      </div>
-      <div className="flex gap-2 shrink-0">
-        <button
-          onClick={handlePDF}
-          title="Descarregar PDF"
-          className="px-3 py-1.5 text-xs rounded-xl border border-white/[0.08] bg-white/[0.04] text-[#C9BCAC] hover:text-white hover:bg-white/[0.08] transition-all"
-        >
-          PDF
-        </button>
-        <button
-          onClick={handleEmail}
-          title="Reenviar email"
-          className="px-3 py-1.5 text-xs rounded-xl border border-white/[0.08] bg-white/[0.04] text-[#C9BCAC] hover:text-white hover:bg-white/[0.08] transition-all"
-        >
-          Email
-        </button>
-      </div>
-    </div>
-  );
+function SmallMetric({ label, value }: { label: string; value: string }) {
+  return <div className="rounded-xl bg-black/20 p-3"><p className="text-xs text-[#8F8376]">{label}</p><p className="mt-1 font-black text-white">{value}</p></div>;
+}
+function ListSection({ title, empty, children }: { title: string; empty: string; children: React.ReactNode }) {
+  const hasChildren = Array.isArray(children) ? children.length > 0 : Boolean(children);
+  return <section className="rounded-2xl border border-white/10 bg-white/[0.04] p-5"><h2 className="text-lg font-black text-white">{title}</h2><div className="mt-3">{hasChildren ? children : <p className="py-8 text-center text-sm text-[#8F8376]">{empty}</p>}</div></section>;
 }

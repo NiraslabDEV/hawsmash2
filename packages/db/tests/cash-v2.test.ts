@@ -15,7 +15,9 @@ const SERVICE_KEY =
 
 let admin: SupabaseClient;
 let manager: SupabaseClient;
+let owner: SupabaseClient;
 let managerUserId: string;
+let ownerUserId: string;
 let maputoStoreId: string;
 let matolaStoreId: string;
 const createdOrderIds: string[] = [];
@@ -65,11 +67,35 @@ beforeAll(async () => {
   });
   const { error: loginError } = await manager.auth.signInWithPassword({ email, password });
   if (loginError) throw new Error(`Setup caixa: login — ${loginError.message}`);
+
+  const ownerEmail = `cash-owner-${suffix}@delivery.test`;
+  const { data: ownerUser, error: ownerError } = await admin.auth.admin.createUser({
+    email: ownerEmail,
+    password,
+    email_confirm: true,
+  });
+  if (ownerError || !ownerUser.user) throw new Error(`Setup caixa: dono — ${ownerError?.message}`);
+  ownerUserId = ownerUser.user.id;
+  const { error: ownerProfileError } = await admin.from("staff_profiles").insert({
+    user_id: ownerUserId,
+    full_name: "Dono Caixa F5",
+    role: "owner",
+    active: true,
+  });
+  if (ownerProfileError) throw new Error(`Setup caixa: perfil dono — ${ownerProfileError.message}`);
+  owner = createClient(SUPABASE_URL, ANON_KEY, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  });
+  const { error: ownerLoginError } = await owner.auth.signInWithPassword({
+    email: ownerEmail,
+    password,
+  });
+  if (ownerLoginError) throw new Error(`Setup caixa: login dono — ${ownerLoginError.message}`);
 });
 
 beforeEach(async () => {
-  await admin.from("cash_movements").delete().eq("store_id", maputoStoreId);
-  await admin.from("cash_sessions").delete().eq("store_id", maputoStoreId);
+  await admin.from("cash_movements").delete().in("store_id", [maputoStoreId, matolaStoreId]);
+  await admin.from("cash_sessions").delete().in("store_id", [maputoStoreId, matolaStoreId]);
   await admin.from("settings").update({ cash_diff_tolerance_cents: 1000 }).eq("id", 1);
 });
 
@@ -84,21 +110,24 @@ afterEach(async () => {
 
 afterAll(async () => {
   if (!admin) return;
-  await admin.from("cash_movements").delete().eq("store_id", maputoStoreId);
-  await admin.from("cash_sessions").delete().eq("store_id", maputoStoreId);
+  await admin.from("cash_movements").delete().in("store_id", [maputoStoreId, matolaStoreId]);
+  await admin.from("cash_sessions").delete().in("store_id", [maputoStoreId, matolaStoreId]);
   if (managerUserId) await admin.auth.admin.deleteUser(managerUserId);
+  if (ownerUserId) await admin.auth.admin.deleteUser(ownerUserId);
 });
 
 async function createPaidOrder(input: {
   amountCents: number;
   method: "cash" | "mpesa" | "emola" | "credit_card";
   createdAt?: string;
+  storeId?: string;
 }) {
+  const storeId = input.storeId ?? maputoStoreId;
   const orderNumber = `F5-${suffix}-${createdOrderIds.length + 1}`;
   const { data: order, error: orderError } = await admin
     .from("orders")
     .insert({
-      store_id: maputoStoreId,
+      store_id: storeId,
       order_number: orderNumber,
       status: "paid",
       flow: "manual",
@@ -119,7 +148,7 @@ async function createPaidOrder(input: {
 
   const { error: paymentError } = await admin.from("payments").insert({
     order_id: order.id,
-    store_id: maputoStoreId,
+    store_id: storeId,
     provider: "counter",
     method: input.method,
     amount_cents: input.amountCents,
@@ -292,5 +321,46 @@ describe("F5 — caixa por loja e turno", () => {
     expect(error).toBeNull();
     expect(new Date(report.period_start).toISOString()).toBe(lastClose);
     expect(report).toMatchObject({ cash_sales_cents: 15000, expected_cash_cents: 15000 });
+  });
+
+  it("painel limita o gerente à sua loja e recusa a Matola", async () => {
+    await manager.rpc("open_cash_session", { p_store: maputoStoreId, p_float: 5000 });
+    await createPaidOrder({ amountCents: 30000, method: "cash" });
+
+    const { data: dashboard, error } = await manager.rpc("get_cash_dashboard", {
+      p_store: maputoStoreId,
+    });
+    expect(error).toBeNull();
+    expect(dashboard.stores).toHaveLength(1);
+    expect(dashboard.stores[0]).toMatchObject({
+      store_id: maputoStoreId,
+      cash_sales_cents: 30000,
+      expected_cash_cents: 35000,
+    });
+
+    const { error: denied } = await manager.rpc("get_cash_dashboard", {
+      p_store: matolaStoreId,
+    });
+    expect(denied?.message).toContain("store_access_denied");
+  });
+
+  it("painel do dono consolida Maputo e Matola sem misturar as linhas", async () => {
+    await owner.rpc("open_cash_session", { p_store: maputoStoreId, p_float: 5000 });
+    await owner.rpc("open_cash_session", { p_store: matolaStoreId, p_float: 10000 });
+    await createPaidOrder({ amountCents: 30000, method: "cash", storeId: maputoStoreId });
+    await createPaidOrder({ amountCents: 20000, method: "mpesa", storeId: matolaStoreId });
+
+    const { data: dashboard, error } = await owner.rpc("get_cash_dashboard");
+    expect(error).toBeNull();
+    expect(dashboard.stores).toHaveLength(2);
+    expect(dashboard.stores.map((store: { store_id: string }) => store.store_id).sort()).toEqual(
+      [maputoStoreId, matolaStoreId].sort(),
+    );
+    expect(dashboard.consolidated).toMatchObject({
+      total_faturado_cents: 50000,
+      cash_sales_cents: 30000,
+      mpesa_cents: 20000,
+      expected_cash_cents: 45000,
+    });
   });
 });

@@ -156,8 +156,8 @@ _Os dias são referência de calendário, não paragens: a corrida não pára en
       `add_cash_movement(...)` — todas com perfil e `event_log`
 - [x] Esperado = fundo + dinheiro − sangrias + reforços − despesas; móvel/cartão em linhas separadas
 - [x] Fecho: impressão do fecho + PDF + email ao dono; diferença acima da tolerância exige motivo
-- [ ] Painel Caixa por loja + consolidado das duas
-- [ ] Testes: cálculo do esperado com movimentos; fecho com diferença; período desde o último fecho
+- [x] Painel Caixa por loja + consolidado das duas
+- [x] Testes: cálculo do esperado com movimentos; fecho com diferença; período desde o último fecho
 
 **PROMPT:** *"Executa a F5: caixa por loja e por turno conforme `CLAUDE.md §9`. Migration 1007, RPCs com perfil e auditoria, fecho com contagem, PDF e email. Testa o cálculo do esperado com sangrias e reforços e o período desde o último fecho (nunca desde a meia-noite UTC)."*
 

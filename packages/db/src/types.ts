@@ -90,12 +90,15 @@ export type Database = {
           counted_cash_cents: number | null
           created_at: string
           difference_cents: number | null
+          difference_reason: string | null
           expected_cash_cents: number | null
           id: string
           notes: string | null
+          opening_float_cents: number
           opened_at: string
           opened_by: string | null
           report: Json
+          shift_label: string
           store_id: string
         }
         Insert: {
@@ -104,12 +107,15 @@ export type Database = {
           counted_cash_cents?: number | null
           created_at?: string
           difference_cents?: number | null
+          difference_reason?: string | null
           expected_cash_cents?: number | null
           id?: string
           notes?: string | null
+          opening_float_cents?: number
           opened_at?: string
           opened_by?: string | null
           report?: Json
+          shift_label: string
           store_id?: string
         }
         Update: {
@@ -118,17 +124,68 @@ export type Database = {
           counted_cash_cents?: number | null
           created_at?: string
           difference_cents?: number | null
+          difference_reason?: string | null
           expected_cash_cents?: number | null
           id?: string
           notes?: string | null
+          opening_float_cents?: number
           opened_at?: string
           opened_by?: string | null
           report?: Json
+          shift_label?: string
           store_id?: string
         }
         Relationships: [
           {
             foreignKeyName: "cash_sessions_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      cash_movements: {
+        Row: {
+          amount_cents: number
+          created_at: string
+          created_by: string
+          id: string
+          reason: string
+          session_id: string
+          store_id: string
+          type: string
+        }
+        Insert: {
+          amount_cents: number
+          created_at?: string
+          created_by: string
+          id?: string
+          reason: string
+          session_id: string
+          store_id: string
+          type: string
+        }
+        Update: {
+          amount_cents?: number
+          created_at?: string
+          created_by?: string
+          id?: string
+          reason?: string
+          session_id?: string
+          store_id?: string
+          type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cash_movements_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "cash_sessions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cash_movements_store_id_fkey"
             columns: ["store_id"]
             isOneToOne: false
             referencedRelation: "stores"
@@ -1075,6 +1132,7 @@ export type Database = {
       settings: {
         Row: {
           accepting_orders: boolean
+          cash_diff_tolerance_cents: number
           close_hour: number
           emola_name: string | null
           emola_number: string | null
@@ -1103,6 +1161,7 @@ export type Database = {
         }
         Insert: {
           accepting_orders?: boolean
+          cash_diff_tolerance_cents?: number
           close_hour?: number
           emola_name?: string | null
           emola_number?: string | null
@@ -1131,6 +1190,7 @@ export type Database = {
         }
         Update: {
           accepting_orders?: boolean
+          cash_diff_tolerance_cents?: number
           close_hour?: number
           emola_name?: string | null
           emola_number?: string | null
@@ -1495,8 +1555,17 @@ export type Database = {
         }
         Returns: Json
       }
+      add_cash_movement: {
+        Args: {
+          p_amount_cents: number
+          p_reason: string
+          p_store: string
+          p_type: string
+        }
+        Returns: string
+      }
       close_cash_session: {
-        Args: { p_counted_cents: number; p_notes?: string }
+        Args: { p_counted: number; p_reason: string | null; p_store: string }
         Returns: Json
       }
       confirm_payment: {
@@ -1525,7 +1594,7 @@ export type Database = {
         Args: { p_payload: Json; p_store_slug: string }
         Returns: string
       }
-      get_cash_dashboard: { Args: never; Returns: Json }
+      get_cash_dashboard: { Args: { p_store?: string | null }; Returns: Json }
       get_customer_orders: { Args: { p_phone: string }; Returns: Json }
       get_dashboard_metrics: { Args: { p_period?: string }; Returns: Json }
       get_device_status: { Args: never; Returns: Json }
@@ -1553,7 +1622,10 @@ export type Database = {
         Args: { p_device_id: string; p_reason: string; p_request_id: string }
         Returns: Json
       }
-      open_cash_session: { Args: never; Returns: string }
+      open_cash_session: {
+        Args: { p_float: number; p_store: string }
+        Returns: string
+      }
       pos_pin_status: { Args: { p_device_id: string }; Returns: Json }
       recover_stale_print_jobs: { Args: { p_store_id: string }; Returns: Json }
       reprint: {
