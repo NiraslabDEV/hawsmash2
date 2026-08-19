@@ -873,9 +873,11 @@ export type Database = {
           attempts: number
           created_at: string
           id: string
-          order_id: string
+          kind: string
+          order_id: string | null
           payload: Json
           printed_at: string | null
+          reprint_seq: number
           station: string
           status: string
           store_id: string
@@ -884,9 +886,11 @@ export type Database = {
           attempts?: number
           created_at?: string
           id?: string
-          order_id: string
+          kind?: string
+          order_id?: string | null
           payload?: Json
           printed_at?: string | null
+          reprint_seq?: number
           station: string
           status?: string
           store_id?: string
@@ -895,9 +899,11 @@ export type Database = {
           attempts?: number
           created_at?: string
           id?: string
-          order_id?: string
+          kind?: string
+          order_id?: string | null
           payload?: Json
           printed_at?: string | null
+          reprint_seq?: number
           station?: string
           status?: string
           store_id?: string

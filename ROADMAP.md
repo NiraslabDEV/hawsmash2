@@ -117,7 +117,7 @@ _Os dias são referência de calendário, não paragens: a corrida não pára en
 
 ## F3 🔴 Impressão nas duas cozinhas + gaveta
 
-- [ ] Migration `1006_print_jobs.sql`: `store_id`, `kind`, `reprint_seq`, unique `(order_id,station,kind,reprint_seq)`
+- [x] Migration `1006_print_jobs.sql`: `store_id`, `kind`, `reprint_seq`, unique `(order_id,station,kind,reprint_seq)`
 - [ ] `print-bridge` por loja: `STORE_ID` no `.env`, poll só da sua loja, duas impressoras (cozinha + balcão)
 - [ ] **Servidor HTTP local** (`POST /print`, `POST /drawer`, `GET /health`) autenticado por `LOCAL_TOKEN`
 - [ ] **Gaveta**: pulso `1B 70 00 19 FA`; abertura fora de venda exige perfil e grava `event_log`
