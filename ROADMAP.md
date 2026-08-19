@@ -141,7 +141,7 @@ _Os dias são referência de calendário, não paragens: a corrida não pára en
 - [x] Sincronização automática ao voltar a ligação, com backoff; zero duplicados (idempotência da F2)
 - [x] Divergência de preço na sincronização → `needs_review` + lista **Conciliação** no painel
 - [x] Banner de estado (`SEM LIGAÇÃO · N por sincronizar`) e confirmação verde ao sincronizar
-- [ ] Testes: fila persiste a reinício do browser; 3 vendas offline → 3 pedidos; reenvio → nenhum duplicado
+- [x] Testes: fila persiste a reinício do browser; 3 vendas offline → 3 pedidos; reenvio → nenhum duplicado
 - [ ] Playwright com rede desligada (offline emulation) na venda de balcão
 
 **PROMPT:** *"Executa a F4: modo offline do POS conforme `CLAUDE.md §7.5`. PWA + IndexedDB + impressão pela LAN + sincronização idempotente + conciliação. Testes de reinício e de reenvio. Offline o operador nunca escreve um preço."*

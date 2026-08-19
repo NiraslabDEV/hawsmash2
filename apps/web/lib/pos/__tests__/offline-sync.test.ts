@@ -50,4 +50,30 @@ describe('sincronização das vendas offline', () => {
     expect(success).toHaveBeenCalledOnce();
     expect(success.mock.calls[0][0].clientSaleId).toBe(sale.clientSaleId);
   });
+
+  it('mantém a fila após reabrir a base e sincroniza três vendas sem duplicar no reenvio', async () => {
+    const ids = [
+      '11111111-1111-4111-8111-111111111111',
+      '44444444-4444-4444-8444-444444444444',
+      '55555555-5555-4555-8555-555555555555',
+    ];
+    for (const clientSaleId of ids) await enqueueOfflineSale({ ...sale, clientSaleId });
+
+    // listOfflineSales abre uma nova ligação IndexedDB: simula o browser reaberto.
+    expect((await listOfflineSales()).map((entry) => entry.clientSaleId)).toEqual(ids);
+
+    const serverOrders = new Map<string, string>();
+    const send = vi.fn(async (entry: { clientSaleId: string }) => {
+      const orderId = serverOrders.get(entry.clientSaleId) ?? crypto.randomUUID();
+      serverOrders.set(entry.clientSaleId, orderId);
+      return { order_id: orderId };
+    });
+    expect(await syncOfflineSales(send, 30_000)).toEqual({ synced: 3, failed: 0 });
+    expect(serverOrders.size).toBe(3);
+
+    for (const clientSaleId of ids) await enqueueOfflineSale({ ...sale, clientSaleId });
+    expect(await syncOfflineSales(send, 40_000)).toEqual({ synced: 3, failed: 0 });
+    expect(serverOrders.size).toBe(3);
+    expect(await listOfflineSales()).toEqual([]);
+  });
 });
