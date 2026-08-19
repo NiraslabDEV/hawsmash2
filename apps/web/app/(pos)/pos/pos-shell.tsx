@@ -9,21 +9,13 @@ import {
   calculateChange,
   type CounterPaymentMethod,
 } from '@/lib/pos/payment';
+import {
+  loadMenuWithFallback,
+  MENU_REFRESH_MS,
+  type PosMenuCategory as Category,
+  type PosMenuItem as MenuItem,
+} from '@/lib/pos/offline-store';
 import { isPosPin, POS_IDLE_TIMEOUT_MS } from '@/lib/pos/session';
-
-type MenuItem = {
-  id: string;
-  name: string;
-  description: string | null;
-  price_cents: number;
-  available?: boolean;
-};
-
-type Category = {
-  id: string;
-  name: string;
-  items: MenuItem[];
-};
 
 type PosContext = {
   deviceId: string;
@@ -50,6 +42,15 @@ const METHODS: Array<{ id: CounterPaymentMethod; label: string }> = [
 ];
 
 const mt = (value: number) => formatMT(value as Cents);
+
+async function fetchMenu(storeSlug: string): Promise<unknown> {
+  const response = await fetch(`/api/menu?store=${encodeURIComponent(storeSlug)}`, {
+    cache: 'no-store',
+  });
+  if (!response.ok) throw new Error('Não foi possível carregar o cardápio.');
+  const body = await response.json();
+  return body.categories;
+}
 
 function errorMessage(message?: string): string {
   if (!message) return 'Não foi possível concluir a venda.';
@@ -190,16 +191,15 @@ export function PosShell() {
       return;
     }
 
-    const response = await fetch(`/api/menu?store=${encodeURIComponent(store.slug)}`, {
-      cache: 'no-store',
-    });
-    if (!response.ok) {
-      setError('Não foi possível carregar o cardápio.');
+    let nextCategories: Category[];
+    try {
+      const menu = await loadMenuWithFallback(store.slug, () => fetchMenu(store.slug));
+      nextCategories = menu.categories;
+    } catch (menuError) {
+      setError(errorMessage(menuError instanceof Error ? menuError.message : undefined));
       setLoading(false);
       return;
     }
-    const menu = await response.json();
-    const nextCategories: Category[] = menu.categories ?? [];
     setCategories(nextCategories);
     setActiveCategory((current) => current ?? nextCategories[0]?.id ?? null);
     const { data: pinStatus, error: pinStatusError } = await supabase.rpc('pos_pin_status', {
@@ -224,6 +224,25 @@ export function PosShell() {
   useEffect(() => {
     void loadPos();
   }, [loadPos]);
+
+  useEffect(() => {
+    if (!context) return;
+    const refresh = async () => {
+      try {
+        const menu = await loadMenuWithFallback(context.storeSlug, () => fetchMenu(context.storeSlug));
+        setCategories(menu.categories);
+        setActiveCategory((current) =>
+          menu.categories.some((category) => category.id === current)
+            ? current
+            : (menu.categories[0]?.id ?? null),
+        );
+      } catch {
+        // A última cache válida continua visível; a venda não pára por uma atualização falhada.
+      }
+    };
+    const timer = window.setInterval(() => void refresh(), MENU_REFRESH_MS);
+    return () => window.clearInterval(timer);
+  }, [context]);
 
   const lockDevice = useCallback(async () => {
     if (!context || locked) return;
