@@ -165,7 +165,7 @@ _Os dias são referência de calendário, não paragens: a corrida não pára en
 
 ## F6 🟡 Estoque por loja
 
-- [ ] Migration `1008_stock.sql`: `stock_movements` + índices; `low_stock_qty` em `store_items`
+- [x] Migration `1008_stock.sql`: `stock_movements` + índices; `low_stock_qty` em `store_items` (já vinha da 1003)
 - [ ] Baixa atómica na mesma transação da venda (balcão e online); reposição na anulação
 - [ ] Esgotado → indisponível no site e no POS **daquela loja**, automaticamente
 - [ ] Aba **Estoque** no painel: contagem, entrada, quebra, histórico de movimentos por item
