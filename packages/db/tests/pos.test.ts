@@ -488,6 +488,48 @@ describe("F2 — create_counter_sale", () => {
   });
 });
 
+describe("F4 — sync_counter_sale", () => {
+  it("sincroniza sem duplicar a venda nem o papel já emitido localmente", async () => {
+    const clientSaleId = crypto.randomUUID();
+    const payload = {
+      clientSaleId,
+      deviceId: posDeviceId,
+      items: [{ menuItemId: classicSmashId, qty: 1 }],
+      payments: [{ method: "cash", amountCents: 30000 }],
+      cashReceivedCents: 30000,
+    };
+    const localPrint = { receipt: true, drawer: true, stations: ["kitchen"] };
+
+    const first = await manager.rpc("sync_counter_sale", {
+      p_payload: payload,
+      p_local_print: localPrint,
+    });
+    const retry = await manager.rpc("sync_counter_sale", {
+      p_payload: payload,
+      p_local_print: localPrint,
+    });
+
+    expect(first.error).toBeNull();
+    expect(retry.error).toBeNull();
+    expect(retry.data.order_id).toBe(first.data.order_id);
+    createdOrderIds.push(first.data.order_id);
+
+    const { count: orderCount } = await admin
+      .from("orders")
+      .select("id", { count: "exact", head: true })
+      .eq("client_sale_id", clientSaleId);
+    expect(orderCount).toBe(1);
+
+    const { data: jobs, error: jobsError } = await admin
+      .from("print_jobs")
+      .select("kind,station,status")
+      .eq("order_id", first.data.order_id);
+    expect(jobsError).toBeNull();
+    expect(jobs?.length).toBeGreaterThanOrEqual(3);
+    expect(jobs?.every((job) => job.status === "printed")).toBe(true);
+  });
+});
+
 describe("F2 — void_sale", () => {
   it("exige gerente, anula por advance_order e repõe stock uma só vez", async () => {
     const { error: stockSetupError } = await admin

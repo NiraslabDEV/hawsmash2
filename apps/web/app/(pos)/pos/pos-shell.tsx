@@ -25,6 +25,7 @@ import {
   readLocalBridgeConfig,
   saveLocalBridgeConfig,
 } from '@/lib/pos/offline-sales';
+import { syncOfflineSales } from '@/lib/pos/offline-sync';
 import { isPosPin, POS_IDLE_TIMEOUT_MS } from '@/lib/pos/session';
 
 type PosContext = {
@@ -256,6 +257,43 @@ export function PosShell() {
     const timer = window.setInterval(() => void refresh(), MENU_REFRESH_MS);
     return () => window.clearInterval(timer);
   }, [context]);
+
+  useEffect(() => {
+    if (!context) return;
+    let running = false;
+    const sync = async () => {
+      if (!navigator.onLine || running) return;
+      running = true;
+      try {
+        await syncOfflineSales(async (sale) => {
+          const { data, error: syncError } = await supabase.rpc('sync_counter_sale', {
+            p_payload: {
+              clientSaleId: sale.clientSaleId,
+              deviceId: sale.deviceId,
+              items: sale.items.map((item) => ({ menuItemId: item.menuItemId, qty: item.qty })),
+              payments: sale.payments,
+              ...(sale.cashReceivedCents == null
+                ? {}
+                : { cashReceivedCents: sale.cashReceivedCents }),
+            },
+            p_local_print: sale.localPrint,
+          });
+          if (syncError) throw new Error(syncError.message);
+          return data;
+        });
+      } finally {
+        running = false;
+      }
+    };
+    const onOnline = () => void sync();
+    window.addEventListener('online', onOnline);
+    const timer = window.setInterval(() => void sync(), 5000);
+    void sync();
+    return () => {
+      window.removeEventListener('online', onOnline);
+      window.clearInterval(timer);
+    };
+  }, [context, supabase]);
 
   const lockDevice = useCallback(async () => {
     if (!context || locked) return;

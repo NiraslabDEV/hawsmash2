@@ -1570,6 +1570,10 @@ export type Database = {
         }
         Returns: Json
       }
+      sync_counter_sale: {
+        Args: { p_local_print?: Json; p_payload: Json }
+        Returns: Json
+      }
       unlock_pos_device: {
         Args: { p_device_id: string; p_pin: string }
         Returns: Json
