@@ -738,3 +738,115 @@ describe("F3 — talões da venda", () => {
     });
   });
 });
+
+describe("F3 — reimpressão auditada", () => {
+  it("é idempotente por pedido de reimpressão e incrementa a sequência", async () => {
+    const { error: stockSetupError } = await admin
+      .from("store_items")
+      .update({ available: true, track_stock: true, stock_qty: 5 })
+      .eq("store_id", maputoStoreId)
+      .eq("menu_item_id", classicSmashId);
+    expect(stockSetupError).toBeNull();
+
+    const sale = await manager.rpc("create_counter_sale", {
+      p_payload: {
+        clientSaleId: crypto.randomUUID(),
+        deviceId: posDeviceId,
+        items: [{ menuItemId: classicSmashId, qty: 1 }],
+        payments: [{ method: "mpesa", amountCents: 30000 }],
+      },
+    });
+    expect(sale.error).toBeNull();
+    createdOrderIds.push(sale.data.order_id);
+
+    const requestId = crypto.randomUUID();
+    const [first, concurrentRetry] = await Promise.all([
+      cashier.rpc("reprint", {
+        p_order_id: sale.data.order_id,
+        p_kind: "receipt",
+        p_request_id: requestId,
+      }),
+      cashier.rpc("reprint", {
+        p_order_id: sale.data.order_id,
+        p_kind: "receipt",
+        p_request_id: requestId,
+      }),
+    ]);
+    expect(first.error).toBeNull();
+    expect(concurrentRetry.error).toBeNull();
+    expect([first.data.duplicate, concurrentRetry.data.duplicate].sort()).toEqual([false, true]);
+    expect(first.data.reprint_seq).toBe(1);
+    expect(concurrentRetry.data.reprint_seq).toBe(1);
+
+    const secondRequestId = crypto.randomUUID();
+    const second = await manager.rpc("reprint", {
+      p_order_id: sale.data.order_id,
+      p_kind: "receipt",
+      p_request_id: secondRequestId,
+    });
+    expect(second.error).toBeNull();
+    expect(second.data).toMatchObject({ duplicate: false, reprint_seq: 2 });
+
+    const [{ data: jobs }, { data: events }] = await Promise.all([
+      admin
+        .from("print_jobs")
+        .select("kind,station,reprint_seq,request_id,payload")
+        .eq("order_id", sale.data.order_id)
+        .eq("kind", "receipt")
+        .gt("reprint_seq", 0)
+        .order("reprint_seq"),
+      admin
+        .from("event_log")
+        .select("actor_user_id,type,payload")
+        .eq("order_id", sale.data.order_id)
+        .eq("type", "print.reprinted")
+        .order("created_at"),
+    ]);
+    expect(jobs).toHaveLength(2);
+    expect(jobs?.map((job) => job.reprint_seq)).toEqual([1, 2]);
+    expect(jobs?.[0]).toMatchObject({
+      kind: "receipt",
+      station: "counter",
+      request_id: requestId,
+      payload: { template: "receipt", order_number: sale.data.order_number },
+    });
+    expect(events).toHaveLength(2);
+    expect(events?.every((event) => Boolean(event.actor_user_id))).toBe(true);
+  });
+
+  it("recusa tipos perigosos e pedidos de outra loja", async () => {
+    const suffix = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    const { data: otherOrder, error: otherOrderError } = await admin
+      .from("orders")
+      .insert({
+        store_id: matolaStoreId,
+        order_number: `MAT-RP-${suffix}`,
+        status: "paid",
+        flow: "manual",
+        fulfillment_type: "pickup",
+        channel: "counter",
+        customer_name: "Teste entre lojas",
+        subtotal_cents: 30000,
+        total_cents: 30000,
+        payment_method: "cash",
+      })
+      .select("id")
+      .single();
+    expect(otherOrderError).toBeNull();
+    createdOrderIds.push(otherOrder.id);
+
+    const crossStore = await manager.rpc("reprint", {
+      p_order_id: otherOrder.id,
+      p_kind: "receipt",
+      p_request_id: crypto.randomUUID(),
+    });
+    expect(crossStore.error?.message).toContain("order_not_found_or_unauthorised");
+
+    const drawer = await manager.rpc("reprint", {
+      p_order_id: otherOrder.id,
+      p_kind: "drawer",
+      p_request_id: crypto.randomUUID(),
+    });
+    expect(drawer.error?.message).toContain("invalid_reprint_kind");
+  });
+});

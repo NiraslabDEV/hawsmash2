@@ -1503,6 +1503,10 @@ export type Database = {
         Args: { p_payload: Json }
         Returns: Json
       }
+      create_counter_sale_without_tickets: {
+        Args: { p_payload: Json }
+        Returns: Json
+      }
       create_order: {
         Args: { p_payload: Json; p_store_slug: string }
         Returns: string
@@ -1537,6 +1541,10 @@ export type Database = {
       }
       open_cash_session: { Args: never; Returns: string }
       pos_pin_status: { Args: { p_device_id: string }; Returns: Json }
+      reprint: {
+        Args: { p_kind: string; p_order_id: string; p_request_id?: string }
+        Returns: Json
+      }
       set_own_pos_pin: {
         Args: { p_device_id: string; p_pin: string }
         Returns: Json

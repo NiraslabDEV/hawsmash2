@@ -108,6 +108,7 @@ export default function PedidosPage() {
   const [denyReason, setDenyReason] = useState('');
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [hideFaturado, setHideFaturado] = useState(false);
+  const [reprinting, setReprinting] = useState<string | null>(null);
 
   useEffect(() => {
     if (typeof window !== 'undefined') setHideFaturado(window.localStorage.getItem(FATURADO_HIDDEN_KEY) === '1');
@@ -192,6 +193,25 @@ export default function PedidosPage() {
     if (ok) { setShowDenyModal(false); setSelectedOrder(null); setDenyReason(''); }
   };
 
+  const reprintOrder = async (order: Order, kind: 'order' | 'receipt') => {
+    const actionKey = `${order.id}:${kind}`;
+    setReprinting(actionKey);
+    const { data, error } = await supabase.rpc('reprint', {
+      p_order_id: order.id,
+      p_kind: kind,
+      p_request_id: crypto.randomUUID(),
+    });
+    setReprinting(null);
+    if (error) {
+      setMessage({ type: 'error', text: `Não foi possível reimprimir: ${error.message}` });
+      return;
+    }
+    setMessage({
+      type: 'success',
+      text: `${kind === 'receipt' ? 'Talão do cliente' : 'Comanda da cozinha'} em fila (via ${data.reprint_seq}).`,
+    });
+  };
+
   const formatDate = (s: string | null) => (s ? format(parseISO(s), "dd/MM 'às' HH:mm", { locale: pt }) : 'Agora');
   // quando o pedido ENTROU (created_at) em relativo: "há 5 minutos"
   const relativeTime = (s: string) => formatDistanceToNow(parseISO(s), { locale: pt, addSuffix: true });
@@ -206,6 +226,8 @@ export default function PedidosPage() {
     }
   };
   const isActive = (s: string) => ['approved', 'paid', 'in_preparation', 'ready'].includes(s);
+  const isPrintable = (s: string) =>
+    ['approved', 'paid', 'in_preparation', 'ready', 'delivered'].includes(s);
 
   const printer = deviceStatus?.devices.find((d) => d.kind === 'printer');
   const printerOnline = !!printer?.online;
@@ -240,6 +262,26 @@ export default function PedidosPage() {
         )}
         {isActive(order.status) && (
           <button onClick={() => { setSelectedOrder(order); setShowDenyModal(true); }} className="px-3 py-1.5 text-xs font-semibold bg-white/[0.06] text-red-400 rounded-xl hover:bg-red-900/20 transition-all">Cancelar</button>
+        )}
+        {isPrintable(order.status) && (
+          <>
+            <button
+              type="button"
+              disabled={reprinting === `${order.id}:receipt`}
+              onClick={() => void reprintOrder(order, 'receipt')}
+              className="rounded-xl bg-white/[0.06] px-3 py-1.5 text-xs font-semibold text-[#F5A623] transition-all hover:bg-white/[0.10] disabled:opacity-40"
+            >
+              {reprinting === `${order.id}:receipt` ? 'A enviar…' : '2.ª via cliente'}
+            </button>
+            <button
+              type="button"
+              disabled={reprinting === `${order.id}:order`}
+              onClick={() => void reprintOrder(order, 'order')}
+              className="rounded-xl bg-white/[0.06] px-3 py-1.5 text-xs font-semibold text-[#C9BCAC] transition-all hover:bg-white/[0.10] disabled:opacity-40"
+            >
+              {reprinting === `${order.id}:order` ? 'A enviar…' : 'Reimprimir cozinha'}
+            </button>
+          </>
         )}
       </div>
     );

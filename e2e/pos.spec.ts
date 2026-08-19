@@ -167,6 +167,20 @@ test('vende em dinheiro com troco e anula com motivo', async ({ page }) => {
     return orderId;
   }).not.toBeNull();
 
+  await expect(page.getByText('VENDA REGISTADA')).toBeHidden();
+  await page.getByRole('button', { name: /Reimprimir talão #/ }).click();
+  await expect(page.getByText(/Talão em fila · via 1/)).toBeVisible();
+  await expect.poll(async () => {
+    if (!orderId) return 0;
+    const { count } = await admin
+      .from('event_log')
+      .select('id', { count: 'exact', head: true })
+      .eq('order_id', orderId)
+      .eq('actor_user_id', userId)
+      .eq('type', 'print.reprinted');
+    return count ?? 0;
+  }).toBe(1);
+
   const voidButton = page.getByRole('button', { name: /Anular #/ });
   await expect(voidButton).toBeVisible();
   await voidButton.click();

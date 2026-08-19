@@ -106,6 +106,36 @@ export function PosShell() {
   const [lastSale, setLastSale] = useState<{ orderId: string; dailyNumber: number } | null>(null);
   const [voidOpen, setVoidOpen] = useState(false);
   const [voidReason, setVoidReason] = useState('');
+  const [reprintPending, setReprintPending] = useState(false);
+  const [reprintFeedback, setReprintFeedback] = useState<string | null>(null);
+
+  const reprintLastReceipt = useCallback(async () => {
+    if (!lastSale || reprintPending || locked) return;
+    setReprintPending(true);
+    setError(null);
+    const { data, error: reprintError } = await supabase.rpc('reprint', {
+      p_order_id: lastSale.orderId,
+      p_kind: 'receipt',
+      p_request_id: crypto.randomUUID(),
+    });
+    setReprintPending(false);
+    if (reprintError) {
+      setError(errorMessage(reprintError.message));
+      return;
+    }
+    setReprintFeedback(`Talão em fila · via ${data.reprint_seq}`);
+    window.setTimeout(() => setReprintFeedback(null), 3000);
+  }, [lastSale, locked, reprintPending, supabase]);
+
+  useEffect(() => {
+    const onShortcut = (event: KeyboardEvent) => {
+      if (event.key !== 'F2' || !lastSale || locked) return;
+      event.preventDefault();
+      void reprintLastReceipt();
+    };
+    window.addEventListener('keydown', onShortcut);
+    return () => window.removeEventListener('keydown', onShortcut);
+  }, [lastSale, locked, reprintLastReceipt]);
 
   const loadPos = useCallback(async () => {
     setLoading(true);
@@ -527,13 +557,23 @@ export function PosShell() {
           <p className="text-xs text-[#847e72]">{context.storeName} · {context.deviceLabel}</p>
         </div>
         {lastSale && (
-          <button
-            type="button"
-            onClick={() => setVoidOpen(true)}
-            className="min-h-16 rounded-xl border border-red-500/40 px-4 text-sm font-bold text-red-300 active:bg-red-950"
-          >
-            Anular #{lastSale.dailyNumber}
-          </button>
+          <>
+            <button
+              type="button"
+              disabled={reprintPending}
+              onClick={() => void reprintLastReceipt()}
+              className="min-h-16 rounded-xl border border-[#e5a93c]/40 px-4 text-sm font-bold text-[#e5a93c] active:bg-[#e5a93c]/10 disabled:opacity-40"
+            >
+              {reprintPending ? 'A reimprimir…' : `Reimprimir talão #${lastSale.dailyNumber}`}
+            </button>
+            <button
+              type="button"
+              onClick={() => setVoidOpen(true)}
+              className="min-h-16 rounded-xl border border-red-500/40 px-4 text-sm font-bold text-red-300 active:bg-red-950"
+            >
+              Anular #{lastSale.dailyNumber}
+            </button>
+          </>
         )}
         <button
           type="button"
@@ -543,7 +583,7 @@ export function PosShell() {
           Bloquear
         </button>
         <div className="rounded-full bg-emerald-500/15 px-3 py-2 text-sm font-bold text-emerald-300">
-          ONLINE
+          {reprintFeedback ?? 'ONLINE'}
         </div>
       </header>
 
