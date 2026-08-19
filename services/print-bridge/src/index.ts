@@ -1,6 +1,7 @@
 // Print-bridge service entry point — single-tenant Delivery OS
 import { startPrinterSimulator, stopPrinterSimulator } from './simulator';
 import { pollPrintJobs } from './polling';
+import { loadBridgeConfig } from './config';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -10,6 +11,7 @@ const SIMULATOR_PORT = parseInt(process.env.SIMULATOR_PORT ?? '9100', 10);
 const SIMULATOR_VERBOSE = process.env.SIMULATOR_VERBOSE === 'true';
 
 async function main(): Promise<void> {
+  const config = loadBridgeConfig(process.env);
   console.log('='.repeat(60));
   console.log('DELIVERY OS — Print Bridge Service');
   console.log('='.repeat(60));
@@ -20,7 +22,7 @@ async function main(): Promise<void> {
 
     const simulator = startPrinterSimulator({ port: SIMULATOR_PORT, verbose: SIMULATOR_VERBOSE });
     await new Promise(resolve => setTimeout(resolve, 1000));
-    await pollPrintJobs();
+    await pollPrintJobs(config);
 
     process.on('SIGINT', async () => {
       console.log('\n[Shutdown] Received SIGINT');
@@ -29,9 +31,10 @@ async function main(): Promise<void> {
     });
   } else {
     console.log('\n[Mode] Production Mode (Real Printer)');
-    console.log(`[Config] Supabase URL: ${process.env.SUPABASE_URL}`);
-    console.log(`[Config] Printer IP: ${process.env.PRINTER_IP}:${process.env.PRINTER_PORT ?? 9100}\n`);
-    await pollPrintJobs();
+    console.log(`[Config] Loja: ${config.storeId}`);
+    console.log(`[Config] Cozinha: ${config.printers.kitchen.ip}:${config.printers.kitchen.port}`);
+    console.log(`[Config] Balcão: ${config.printers.counter.ip}:${config.printers.counter.port}\n`);
+    await pollPrintJobs(config);
   }
 }
 

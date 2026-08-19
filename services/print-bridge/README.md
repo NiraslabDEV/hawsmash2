@@ -1,7 +1,7 @@
-# Print-bridge — impressora térmica ESC/POS (single-tenant)
+# Print-bridge — impressão ESC/POS por loja
 
-Serviço Node leve que corre no **mini-PC local** do restaurante (24/7). Faz poll de `print_jobs.queued`
-no Supabase (3s) → render ESC/POS → TCP `PRINTER_IP:9100` → marca `printed`. Retry 3× com backoff
+Serviço Node leve que corre no **PC local de cada loja** (24/7). Faz poll de `print_jobs.queued`
+filtrado pelo seu `STORE_ID` (3s) → escolhe cozinha/balcão → ESC/POS TCP 9100 → marca `printed`. Retry 3× com backoff
 (1s, 3s, 9s) → `failed` + `event_log`. **Falha de impressão nunca esconde o pedido no painel.**
 
 > Corre no mini-PC, **não na cloud** — precisa de ligação TCP à impressora na LAN do restaurante.
@@ -19,7 +19,9 @@ cp .env.example .env
 ```env
 SUPABASE_URL=https://your-project.supabase.co
 SUPABASE_SERVICE_ROLE_KEY=your-service-role-key   # SECRETO — só no mini-PC
-PRINTER_IP=192.168.1.100
+STORE_ID=00000000-0000-4000-8000-000000000101
+PRINTER_IP_KITCHEN=192.168.1.50
+PRINTER_IP_COUNTER=192.168.1.51
 PRINTER_PORT=9100
 USE_SIMULATOR=false        # true = simulador TCP (sem hardware)
 ```
@@ -63,13 +65,15 @@ sudo systemctl status print-bridge
 
 O job nasce quando o pedido fica `paid` (Paysuite) ou `approved` (manual), na mesma transação.
 Estados: `queued` → `printing` → `printed` | `failed`.
+Cada bridge consulta e actualiza apenas jobs do seu `STORE_ID`. `order` vai para a cozinha; `receipt`,
+`drawer`, `cash_close` e `test` vão para a impressora do balcão.
 
 ## Troubleshooting
 
 | Sintoma | Verificar |
 |---|---|
 | Impressora não responde | `ping <PRINTER_IP>`, `telnet <PRINTER_IP> 9100`, papel/online, firewall porta 9100 |
-| Jobs não imprimem | credenciais Supabase, `print_jobs` com `status='queued'`, logs do bridge |
+| Jobs não imprimem | `STORE_ID`, credenciais Supabase, fila `queued` dessa loja e logs do bridge |
 | Simulador não arranca | `USE_SIMULATOR=true`, porta 9100 livre (`netstat -an \| grep 9100`) |
 
 ## Notas de segurança

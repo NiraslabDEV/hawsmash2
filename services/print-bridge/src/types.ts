@@ -2,8 +2,11 @@
 
 export interface PrintJob {
   id: string;
-  order_id: string;
-  station: 'kitchen' | 'bar' | 'cold_kitchen';
+  store_id: string;
+  order_id: string | null;
+  station: 'kitchen' | 'counter' | 'bar';
+  kind: 'order' | 'receipt' | 'drawer' | 'cash_close' | 'test';
+  reprint_seq: number;
   payload: PrintPayload;
   status: 'queued' | 'printing' | 'printed' | 'failed';
   attempts: number;
