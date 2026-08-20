@@ -333,7 +333,7 @@ export type Database = {
           id: number
           order_id: string | null
           payload: Json
-          store_id: string
+          store_id: string | null
           type: string
         }
         Insert: {
@@ -342,7 +342,7 @@ export type Database = {
           id?: number
           order_id?: string | null
           payload?: Json
-          store_id?: string
+          store_id?: string | null
           type: string
         }
         Update: {
@@ -351,7 +351,7 @@ export type Database = {
           id?: number
           order_id?: string | null
           payload?: Json
-          store_id?: string
+          store_id?: string | null
           type?: string
         }
         Relationships: [
@@ -1407,6 +1407,29 @@ export type Database = {
           },
         ]
       }
+      store_order_sequences: {
+        Row: {
+          seq: number
+          store_id: string
+        }
+        Insert: {
+          seq?: number
+          store_id: string
+        }
+        Update: {
+          seq?: number
+          store_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "store_order_sequences_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: true
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       stores: {
         Row: {
           accepting_orders: boolean
@@ -1597,6 +1620,17 @@ export type Database = {
         }
         Returns: Json
       }
+      adjust_store_stock: {
+        Args: {
+          p_delta?: number
+          p_menu_item_id: string
+          p_new_qty?: number
+          p_note?: string
+          p_reason: string
+          p_store_id: string
+        }
+        Returns: Json
+      }
       admin_list_feedbacks: {
         Args: { p_limit?: number; p_offset?: number }
         Returns: Json
@@ -1657,8 +1691,14 @@ export type Database = {
         Args: { p_payload: Json; p_store_slug: string }
         Returns: string
       }
+      deactivate_staff: {
+        Args: { p_reason: string; p_user_id: string }
+        Returns: Json
+      }
+      delete_delivery_zone: { Args: { p_zone_id: string }; Returns: Json }
       get_cash_dashboard: { Args: { p_store?: string }; Returns: Json }
       get_customer_orders: { Args: { p_phone: string }; Returns: Json }
+      get_daily_digest: { Args: { p_day?: string }; Returns: Json }
       get_dashboard_metrics: { Args: { p_period?: string }; Returns: Json }
       get_device_status: { Args: never; Returns: Json }
       get_funnel_metrics: { Args: never; Returns: Json }
@@ -1674,6 +1714,10 @@ export type Database = {
       get_order_status: { Args: { p_order_id: string }; Returns: Json }
       get_orders: { Args: { p_filters?: Json }; Returns: Json }
       get_secret_settings: { Args: never; Returns: Json }
+      get_store_admin: { Args: { p_store_id: string }; Returns: Json }
+      get_store_board: { Args: { p_store_slug: string }; Returns: Json }
+      get_store_queue: { Args: { p_store_slug: string }; Returns: Json }
+      get_system_status: { Args: never; Returns: Json }
       get_table_by_token: { Args: { p_token: string }; Returns: Json }
       identify_customer: {
         Args: { p_name?: string; p_phone: string }
@@ -1684,6 +1728,28 @@ export type Database = {
         Args: { p_name: string; p_notes?: string; p_phone: string }
         Returns: Json
       }
+      list_public_stores: { Args: never; Returns: Json }
+      list_staff: { Args: never; Returns: Json }
+      list_stock_alerts: { Args: { p_store_id?: string }; Returns: Json }
+      list_stock_movements: {
+        Args: {
+          p_limit?: number
+          p_menu_item_id?: string
+          p_offset?: number
+          p_store_id: string
+        }
+        Returns: Json
+      }
+      list_store_stock: {
+        Args: {
+          p_limit?: number
+          p_offset?: number
+          p_only_tracked?: boolean
+          p_store_id: string
+        }
+        Returns: Json
+      }
+      list_system_alerts: { Args: never; Returns: Json }
       lock_pos_device: { Args: { p_device_id: string }; Returns: Json }
       open_cash_drawer: {
         Args: { p_device_id: string; p_reason: string; p_request_id: string }
@@ -1698,8 +1764,44 @@ export type Database = {
         Args: { p_kind: string; p_order_id: string; p_request_id?: string }
         Returns: Json
       }
+      save_delivery_zone: {
+        Args: { p_store_id: string; p_zone: Json }
+        Returns: Json
+      }
+      save_store: { Args: { p_payload: Json }; Returns: Json }
       set_own_pos_pin: {
         Args: { p_device_id: string; p_pin: string }
+        Returns: Json
+      }
+      set_staff_access: {
+        Args: {
+          p_active?: boolean
+          p_full_name?: string
+          p_role: string
+          p_store_ids: string[]
+          p_user_id: string
+        }
+        Returns: Json
+      }
+      set_staff_pin: {
+        Args: { p_pin: string; p_user_id: string }
+        Returns: Json
+      }
+      set_stock_tracking: {
+        Args: {
+          p_low_stock_qty?: number
+          p_menu_item_id: string
+          p_store_id: string
+          p_track_stock: boolean
+        }
+        Returns: Json
+      }
+      set_store_accepting_orders: {
+        Args: { p_accepting: boolean; p_reason?: string; p_store_id: string }
+        Returns: Json
+      }
+      set_store_hours: {
+        Args: { p_hours: Json; p_store_id: string }
         Returns: Json
       }
       submit_feedback: {

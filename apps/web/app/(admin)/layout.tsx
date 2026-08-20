@@ -23,6 +23,7 @@ function Icon({ name }: { name: string }) {
     estoque: <path d="M3 7.5 12 3l9 4.5v9L12 21l-9-4.5v-9ZM3 7.5 12 12m0 0 9-4.5M12 12v9" />,
     equipa: <path d="M17 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9.5 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" />,
     sistema: <path d="M4 5h16v10H4zM2 19h20M9 19v-4M15 19v-4M8 9h.01M12 9h4" />,
+    lojas: <path d="M4 9h16l-1-4H5L4 9Zm0 0v10a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1V9M9 20v-6h6v6" />,
   };
   return (
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
@@ -41,6 +42,7 @@ const NAV = [
   { href: '/feedback', label: 'Avaliações', icon: 'feedback' },
   { href: '/lista-espera', label: 'Clientes', icon: 'clientes' },
   { href: '/marketing', label: 'Marketing', icon: 'marketing' },
+  { href: '/lojas', label: 'Lojas', icon: 'lojas' },
   { href: '/equipa', label: 'Equipa', icon: 'equipa' },
   { href: '/sistema', label: 'Sistema', icon: 'sistema' },
   { href: '/definicoes', label: 'Definições', icon: 'definicoes' },

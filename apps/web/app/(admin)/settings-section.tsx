@@ -155,7 +155,6 @@ function SettingsModal({
   const [openHour, setOpenHour] = useState(settings.open_hour);
   const [closeHour, setCloseHour] = useState(settings.close_hour);
   const [slotMinutes, setSlotMinutes] = useState(settings.slot_minutes);
-  const [acceptingOrders, setAcceptingOrders] = useState(settings.accepting_orders);
 
   return (
     <div className="fixed inset-0 bg-black/70 backdrop-blur-[4px] z-50 flex items-center justify-center p-4">
@@ -174,7 +173,7 @@ function SettingsModal({
             open_hour: openHour,
             close_hour: closeHour,
             slot_minutes: slotMinutes,
-            accepting_orders: acceptingOrders,
+            accepting_orders: settings.accepting_orders,
           });
         }}
         className="border border-white/[0.08] bg-white/[0.04] backdrop-blur-[12px] shadow-[0_4px_24px_rgba(0,0,0,0.4)] rounded-2xl w-full max-w-lg p-5 space-y-4 max-h-[90vh] overflow-y-auto"
@@ -279,18 +278,12 @@ function SettingsModal({
 
           <div>
             <h3 className="text-sm font-semibold text-[#F5A623] mb-2">Estado da Loja</h3>
-            <div className="flex items-center gap-2">
-              <input
-                type="checkbox"
-                id="acceptingOrders"
-                checked={acceptingOrders}
-                onChange={(e) => setAcceptingOrders(e.target.checked)}
-                className="rounded bg-black/20 border-white/[0.08] text-[#F5A623] focus:ring-[#F5A623]"
-              />
-              <label htmlFor="acceptingOrders" className="text-xs font-semibold text-[#C9BCAC]">
-                Aceitar pedidos
-              </label>
-            </div>
+            {/* Cada loja abre e fecha na sua ficha: aqui seria um interruptor
+                da empresa, que o checkout multi-loja ignora (CLAUDE §5.6). */}
+            <p className="text-xs text-[#C9BCAC]">
+              Abrir ou fechar uma loja faz-se na aba <strong className="text-white">Lojas</strong>, com
+              motivo registado. Estas definições são da empresa, não de uma unidade.
+            </p>
           </div>
 
           <div>

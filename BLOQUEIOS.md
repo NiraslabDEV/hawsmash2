@@ -47,6 +47,8 @@
 - Como avancei: `stores.paysuite_api_key`/`paysuite_webhook_secret` existem por loja, com **fallback** para as
   chaves globais em `settings`. Uma conta só funciona hoje; duas contas só exigem preencher as colunas.
 - Onde está: `stores` (migration 1001) · `apps/web/lib/payments/config.ts`
+- Nota da F10: as chaves do Paysuite **não** são editáveis nem legíveis no painel (são segredo; o grant por
+  coluna tira-as do alcance do browser). Entram por migration ou pelo Supabase, nunca pelo ecrã.
 - Se a resposta for outra: zero reescrita — é preencher dados.
 
 ### B-002 · [F7] Zonas e taxas de entrega da Matola
@@ -57,7 +59,8 @@
   (a taxa é a mesma que o 1.0 cobra em Maputo). Maputo mantém a zona real do 1.0.
   `scripts/check-placeholders.mjs` **falha o go-live** enquanto esta zona existir com este nome.
 - Onde está: `supabase/seed.sql` · marcador `BLOQUEIO: B-002` · guarda em `scripts/check-placeholders.mjs`
-- Se a resposta for outra: minutos — renomear/acrescentar linhas em `delivery_zones` pelo painel.
+- Se a resposta for outra: **minutos, pelo painel** — aba Lojas → Matola → zonas de entrega (F10). Já não
+  precisa de ninguém a mexer na base de dados.
 
 ### B-003 · [F2] Terminal de cartão
 - Estado: aberto
@@ -81,8 +84,8 @@
 - Desbloqueia: cliente
 - Pergunta exacta: que texto/NUIT aparece no rodapé do talão (sem certificação fiscal)?
 - Como avancei: `stores.receipt_footer` com `PLACEHOLDER_RODAPE` = "Obrigado! Bom apetite!" (formato do 1.0).
-- Onde está: seed + `services/print-bridge/src/escpos.*`
-- Se a resposta for outra: minutos — é um campo de texto no painel.
+- Onde está: seed + `services/print-bridge/src/escpos.*` · edição na aba **Lojas** (F10)
+- Se a resposta for outra: minutos — é um campo de texto na aba Lojas, por loja.
 
 ### B-006 · [F3] Hardware físico para validação
 - Estado: aberto

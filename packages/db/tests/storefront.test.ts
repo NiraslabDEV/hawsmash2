@@ -240,3 +240,50 @@ describe("F9 — ecrãs de TV", () => {
     ).toBe(false);
   });
 });
+
+describe("F10 — numeração do pedido ao longo dos dias", () => {
+  it("não repete o número do pedido quando o contador do dia recomeça", async () => {
+    const first = await createOrder("maputo", "Cliente numeração 1");
+    expect(first.error).toBeNull();
+
+    // Simula a viragem do dia: o contador diário volta a zero.
+    const today = new Date().toLocaleDateString("en-CA", { timeZone: "Africa/Maputo" });
+    await admin
+      .from("order_counters")
+      .update({ seq: 0 })
+      .eq("store_id", maputoStoreId)
+      .eq("day", today);
+
+    const second = await createOrder("maputo", "Cliente numeração 2");
+    expect(second.error).toBeNull();
+
+    const { data: orders } = await admin
+      .from("orders")
+      .select("id,order_number,daily_number")
+      .in("id", [first.data, second.data]);
+
+    const one = orders!.find((order) => order.id === first.data)!;
+    const two = orders!.find((order) => order.id === second.data)!;
+
+    // O número do pedido é contínuo por loja; o número do dia é que reinicia.
+    expect(two.order_number).not.toBe(one.order_number);
+    expect(Number(two.order_number.split("-")[1])).toBeGreaterThan(
+      Number(one.order_number.split("-")[1]),
+    );
+    expect(two.daily_number).toBe(1);
+  });
+
+  it("dá número do dia ao pedido online, para a cozinha e para a TV de senhas", async () => {
+    const order = await createOrder("matola", "Cliente senha online");
+    expect(order.error).toBeNull();
+
+    const { data: row } = await admin
+      .from("orders")
+      .select("daily_number,order_number")
+      .eq("id", order.data)
+      .single();
+
+    expect(row?.daily_number).toBeGreaterThan(0);
+    expect(row?.order_number?.startsWith("MTL-")).toBe(true);
+  });
+});

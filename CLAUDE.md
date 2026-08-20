@@ -206,6 +206,35 @@ create table order_counters (store_id uuid, day date, seq int, primary key (stor
 | **Painel** | Selector no topo: `Maputo · Matola · Todas`. "Todas" é **só leitura consolidada**; qualquer acção (aprovar, imprimir, fechar caixa) exige loja concreta. |
 | **print-bridge** | `.env` com `STORE_ID` — só puxa `print_jobs` da sua loja. |
 
+### 5.6 Gestão das lojas pelo painel (aba **Lojas**)
+
+Uma loja não é código: é uma linha em `stores` com o seu horário, zonas e números. Quem abre, fecha,
+muda uma taxa ou corrige o rodapé do talão é o **painel**, nunca uma migration à mão.
+
+| Quem | Pode |
+|---|---|
+| `owner` | criar loja, editar tudo (morada, contactos, números de pagamento, rodapé, canais, horário, zonas) |
+| `manager` | **só** o kill switch da sua loja (`accepting_orders`), com motivo — é decisão de operação, não de configuração |
+| `cashier` / `kitchen` | nada |
+
+**Regras que não se negoceiam aqui:**
+
+- **O kill switch real é `stores.accepting_orders`.** `settings.accepting_orders` é herança do motor
+  single-store e **não fecha loja nenhuma** — a aba Definições não deve fingir que fecha.
+- **`slug` e `order_prefix` são imutáveis depois de criados.** Mudá-los partiria o histórico de pedidos
+  (`MPT-0042`), os cookies dos clientes e o `.env` do print-bridge daquela loja.
+- **Criar uma loja é criar operação, não só uma linha:** a nova loja nasce com `store_items` para todo o
+  cardápio (trigger da 1003) mas **sem horário, sem zonas e sem números de pagamento** — até isso estar
+  preenchido a loja não deve aceitar pedidos. A aba mostra o que falta antes de a deixar abrir.
+- **Segredos nunca chegam ao browser:** `stores.paysuite_api_key` e `paysuite_webhook_secret` não são
+  legíveis pelo cliente autenticado (grant por coluna) e nunca voltam numa RPC de leitura.
+- Toda a alteração grava `event_log` com autor e loja: `store.created`, `store.updated`,
+  `store.hours_changed`, `store.zone_saved`, `store.accepting_orders_changed`.
+
+> **Âmbito:** editar as lojas existentes é operação normal do contrato. A criação de uma **3.ª loja** continua
+> fora do âmbito comercial fechado (§0) — o painel suporta-a, mas abrir uma unidade nova implica hardware,
+> formação e suporte que se orçamentam à parte.
+
 ---
 
 ## 6. EQUIPA, PERFIS E AUDITORIA

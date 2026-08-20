@@ -12,6 +12,7 @@
 | **Caixa** | Abertura, sangria/reforço, fecho com contagem, por loja e consolidado |
 | **Estoque** | Entrada, quebra, contagem e histórico de movimentos, por loja |
 | **Cardápio** | Produtos, preços e fotos (catálogo partilhado pelas duas lojas) |
+| **Lojas** | Morada, contactos, números de pagamento, rodapé do talão, horário, zonas e o **fecho da loja** |
 | **Equipa** | Contas, perfis, lojas e PIN — só tu mexes aqui |
 | **Sistema** | Semáforo de cada loja: POS, impressão, último pedido, fila, caixa, estoque |
 | **Análise** | Vendas, produtos, horas de pico |
@@ -55,8 +56,9 @@ O sistema avisa-te **antes** de alguém te ligar. Recebes email quando:
 
 Cada email traz um botão para **falar com a loja no WhatsApp**. A aba **Sistema** mostra o mesmo ao vivo.
 
-**Fechar uma loja temporariamente** (falta de luz, obras): Definições da loja → desligar *aceitar pedidos*.
-O site deixa de aceitar encomendas **dessa loja** e a outra continua a vender.
+**Fechar uma loja temporariamente** (falta de luz, obras): aba **Lojas** → escolher a loja → escrever o
+motivo → *Fechar loja agora*. O site deixa de aceitar encomendas **dessa loja** e a outra continua a vender.
+O gerente da loja também o pode fazer; fica registado quem fechou, quando e porquê.
 
 ---
 

@@ -32,7 +32,7 @@ posterior) e preenche a secção PACOTE FINAL do BLOQUEIOS.md.
 **Legenda:** 🔴 bloqueia a abertura · 🟡 bloqueia a operação confortável · 🟢 melhoria
 **Estado:** `[ ]` por fazer · `[x]` feito · `[x] ⏳` feito, falta validar em runtime/hardware · `[~] B-0NN` bloqueado (ver `BLOQUEIOS.md`)
 
-**Ordem:** F0 → F1 → (F2 ‖ F3) → F4 → F5 → F6 → F7 → F8 → F9.
+**Ordem:** F0 → F1 → (F2 ‖ F3) → F4 → F5 → F6 → F7 → F8 → F9 → **F10**.
 **F1 bloqueia tudo** — mexer no POS antes de o `store_id` existir é retrabalho garantido.
 Um item `[~]` **nunca** trava a fase: se o resto da fase estiver verde, a fase avança e o bloqueio fica registado.
 
@@ -217,6 +217,40 @@ _Os dias são referência de calendário, não paragens: a corrida não pára en
 - [~] B-010 Cutover: DNS para o 2.0, 1.0 em read-only, acompanhamento reforçado nos primeiros dias
 
 **PROMPT:** *"Executa a F9: migração do HAWSMASH 1.0 (dry-run primeiro), ecrãs de TV, ensaio geral guiado, manuais em português e checklist de abertura. Nada é apagado no 1.0."*
+
+---
+
+## F10 🔴 Aba Lojas — configurar a operação sem tocar na base de dados
+
+> **Porquê depois da F9:** a corrida F0→F9 deixou a configuração das lojas (horário, zonas, números de
+> pagamento, rodapé) só acessível por SQL, e o interruptor "Aceitando pedidos" das Definições escreve em
+> `settings`, que o checkout multi-loja **ignora** — ou seja, hoje **não há forma de fechar uma loja pelo
+> painel**. Isso é operação do dia a dia, não configuração de instalação. Ver `CLAUDE.md §5.6`.
+
+- [x] Migration `1011_stores_admin.sql`: RPCs `save_store`, `set_store_hours`, `save_delivery_zone`,
+      `delete_delivery_zone`, `set_store_accepting_orders`, `get_store_admin` — dono para tudo, gerente só
+      para o kill switch da sua loja
+- [x] `slug` e `order_prefix` imutáveis depois de criados (histórico de pedidos e `.env` do bridge dependem deles)
+- [x] Segredos do Paysuite deixam de ser legíveis pelo cliente autenticado (grant por coluna em `stores`)
+- [x] Aba **Lojas** no painel: criar loja, editar contactos/pagamento/rodapé/canais, horário por dia,
+      zonas e taxas, kill switch com motivo
+- [x] Definições deixa de mostrar um interruptor que não fecha nada; aponta para a aba Lojas
+- [x] Testes: só o dono cria/edita; gerente fecha a **sua** loja e não a outra; `slug`/`order_prefix` recusam
+      alteração; horário inválido recusado; zona em uso desactiva em vez de apagar; tudo auditado
+      (`packages/db/tests/stores-admin.test.ts` + `e2e/lojas.spec.ts`)
+- [x] Loja nova nasce utilizável: `store_items` para todo o cardápio e aviso do que falta antes de abrir
+
+### Corrigido pelo caminho (apanhado pelos testes da F10)
+
+- **`order_number` repetia na viragem do dia** — era gerado a partir do contador diário, que reinicia todos os
+  dias, contra uma coluna `unique`. Na manhã seguinte à abertura, **nenhuma venda entrava** (online ou balcão).
+  Migrations `1012` e `1013`: sequência contínua por loja (`store_order_sequences`) para o `order_number`,
+  contador diário só para o `daily_number`, e o pedido online passa também a receber número do dia — sem ele
+  nunca aparecia na TV de senhas.
+
+**PROMPT:** *"Executa a F10: aba Lojas conforme `CLAUDE.md §5.6`. Migration 1011 com RPCs auditadas, ecrã de
+gestão no painel e o kill switch por loja onde faz sentido. Testa perfil, imutabilidade do slug/prefixo e
+isolamento entre lojas."*
 
 ---
 
