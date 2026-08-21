@@ -75,6 +75,68 @@ export const brand = {
       subtitle: 'Smash burgers artesanais em Maputo e Matola.',
       cta: 'Ver Cardápio',
     },
+    // ── Landing HAWSMASH (pele portada do 1.0) ────────────────────────────
+    // Conteúdo editorial da loja pública: o que NÃO vem da base de dados.
+    // Cardápio, preços, horários e estado da loja vêm sempre do servidor;
+    // aqui vive só a marca — copy, imagens de marca e listas fixas.
+    landing: {
+      logoCircle: '/assets/hawsmash/logo-hawsmash.jpg',
+      // Foto de produto, não o flyer do 1.0: o flyer traz horário, morada e
+      // números gravados na imagem, que hoje já estão errados. O que muda vive
+      // na base de dados, nunca dentro de um JPG.
+      storyImage: '/assets/hawsmash/smoked-brisket.webp',
+      wordmark: 'HAWSMASH',
+      wordmarkTag: 'Smash Burgers · Pastéis de Nata',
+      hero: {
+        // O fim do título é a loja escolhida — {loja} é substituído em runtime.
+        titleLead: 'Encomenda agora.',
+        titleAccent: 'Recebes',
+        titleTail: 'em {loja}.',
+        subtitle: 'Pagamento por M-Pesa ou e-Mola · Entrega ou levantamento no balcão',
+        ctaMenu: 'Ver Menu',
+        ctaCart: 'Ver Carrinho',
+      },
+      marquee: [
+        'Classic Smash',
+        'Double Smash',
+        'Smoked Brisket',
+        'Hawsmash Signature',
+        'Pastéis de Nata',
+        'Made in Maputo',
+        'Serious Smash',
+      ],
+      menu: {
+        eyebrow: 'O cardápio',
+        title: 'Da nossa chapa',
+        lead: 'Pão tostado, carne prensada na chapa e queijo a derreter na hora. Escolhe, monta o pedido e paga por M-Pesa ou e-Mola.',
+      },
+      story: {
+        eyebrow: 'Quem somos',
+        titleLead: 'Smash',
+        titleAccent: 'Sério',
+        titleTail: 'Sabor que marca Maputo e Matola.',
+        paragraphs: [
+          'Nascemos em Maputo com uma ideia simples: um smash burger feito a sério — pão tostado, carne 100% bovina prensada na chapa, queijo a derreter na hora. Sem atalhos. Sem corte de tempo. Sem corte de qualidade.',
+          'Levámos esse sabor às maiores feiras e eventos da cidade. Agora somos duas casas — Maputo e Matola — com a mesma chapa e o mesmo molho.',
+        ],
+        stats: [
+          { n: '2', l: 'Lojas · Maputo e Matola' },
+          { n: '100%', l: 'Carne fresca' },
+          { n: '10+', l: 'Eventos · 2026' },
+          { n: '2K26', l: 'Ano de fundação' },
+        ],
+        tagKey: 'Hawsmash · Made in Maputo',
+        tagValue: 'Serious Smash',
+      },
+      footer: {
+        ctaLead: 'Pronto para',
+        ctaAccent: 'Smash?',
+        blurb: 'Smash burgers a sério em Maputo e Matola. Encomenda no site, levanta no balcão ou recebe em casa.',
+        rights: '© 2026 HAWSMASH · Todos os direitos reservados',
+        madeIn: 'Made in Maputo',
+      },
+    },
+
     // Contactos confirmados no HAWSMASH 1.0.
     contact: {
       phone: '+258 86 076 0009',

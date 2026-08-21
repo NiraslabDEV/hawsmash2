@@ -1,6 +1,6 @@
 import { notFound } from 'next/navigation';
 
-import { MenuExperience } from '../../menu/menu-experience';
+import { Storefront } from '../../_hawsmash/storefront';
 import { RememberStore } from './remember-store';
 import { createClient } from '@/utils/supabase/server';
 import { InvalidStoreSlugError, resolveStoreSlug } from '@/lib/store-context';
@@ -23,13 +23,16 @@ export default async function StorePage({ params }: { params: Promise<{ slug: st
   const { data, error } = await supabase.rpc('list_public_stores');
   if (error) throw new Error('Não foi possível carregar as lojas.');
 
-  const store = publicStoreListSchema.parse(data ?? []).find((entry) => entry.slug === slug);
+  const stores = publicStoreListSchema.parse(data ?? []);
+  const store = stores.find((entry) => entry.slug === slug);
   if (!store) notFound();
 
   return (
     <>
       <RememberStore slug={store.slug} />
-      <MenuExperience storeSlug={store.slug} storeName={store.short_name} />
+      {/* A lista completa vai com a página: trocar de loja é um clique, sem
+          esperar por outro pedido ao servidor. */}
+      <Storefront store={store} stores={stores} />
     </>
   );
 }

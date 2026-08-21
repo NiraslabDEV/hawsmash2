@@ -170,6 +170,16 @@
 - Onde está: `scripts/backup.mjs` · `docs/RUNBOOK.md` (registo de testes de restauro)
 - Se a resposta for outra: 30 minutos — correr os 4 comandos do RUNBOOK e preencher a linha do registo.
 
+### B-015 · [F7] Morada e contacto de cada loja
+- Estado: aberto
+- Desbloqueia: cliente
+- Pergunta exacta: qual a morada exacta (e telefone) de cada loja — Maputo e Matola — para aparecer no site?
+- Como avancei: `stores.address`, `stores.phone` e `stores.maps_url` estão vazios; o ecrã de escolha mostra
+  "Morada por confirmar" e o rodapé simplesmente omite a linha em falta — nada quebra, mas o cliente não
+  sabe onde levantar. A pele nova do site (portada do 1.0) tornou isto visível em dois sítios.
+- Onde está: `apps/web/app/(public)/page.tsx` · `_hawsmash/sections.tsx` (rodapé) · dados em `stores`
+- Se a resposta for outra: minutos, pelo painel — aba **Lojas** → morada, telefone e link do mapa.
+
 ---
 
 ## RESOLVIDOS
@@ -180,7 +190,7 @@
 
 ## PACOTE FINAL — para atacar de uma vez só
 
-> Preenchido no fim da corrida (F0→F9). **14 bloqueios abertos**: 5 do cliente, 6 do Gabriel,
+> Preenchido no fim da corrida (F0→F9). **15 bloqueios abertos**: 6 do cliente, 6 do Gabriel,
 > 3 à espera de hardware/agenda. Nenhum impede o sistema de funcionar hoje em staging.
 
 ### Para o cliente (mensagem pronta a enviar)
@@ -197,6 +207,7 @@
 > 5. **Cartão:** confirmo que o terminal de cartão é do banco e o sistema só regista que foi cartão — certo?
 > 6. **TVs:** quantos ecrãs por loja e o que mostra cada um — **cardápio** ou **senhas**?
 > 7. **Abertura:** em que dia exacto passamos o hawsmash.com para o sistema novo?
+> 8. **Moradas:** qual é a morada exacta de cada loja (Maputo e Matola) para pôr no site e no talão?
 
 | # | ID | Sem isto… |
 |---|---|---|
@@ -207,6 +218,7 @@
 | 5 | B-003 | (só confirmação — nada bloqueia) |
 | 6 | B-011 | as TVs ficam por apontar |
 | 7 | B-010 | não há data de cutover |
+| 8 | B-015 | o site diz "morada por confirmar" nas duas lojas |
 
 ### Para o Gabriel (decisões e acessos)
 

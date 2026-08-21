@@ -4,6 +4,8 @@ import { useState, useEffect, useMemo, useRef } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { formatMT, type Cents } from '@delivery/core';
+
+import '../_hawsmash/landing.css';
 import { createClient } from '@/utils/supabase/client';
 import { useStoreSlug } from '@/utils/useStore';
 import { buildScheduleSlots, type StoreHour } from '@/lib/store-hours';
@@ -337,7 +339,7 @@ export default function CheckoutPage() {
 
   if (isLoadingMenu) {
     return (
-      <div className="min-h-screen flex items-center justify-center p-4 bg-[var(--st-bg)]">
+      <div className="hs hs-checkout min-h-screen flex items-center justify-center p-4 bg-[var(--st-bg)]">
         <div className="text-center">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[var(--st-primary)] mx-auto mb-4"></div>
           <p className="text-[var(--st-muted)]">A carregar…</p>
@@ -355,7 +357,7 @@ export default function CheckoutPage() {
     const emolaName   = menuData?.emola_name;
 
     return (
-      <div className="min-h-screen bg-[var(--st-bg)] p-4">
+      <div className="hs hs-checkout min-h-screen bg-[var(--st-bg)] p-4">
         <div className="max-w-[480px] mx-auto">
           <div className={CARD + ' p-6'}>
             <h2 className="text-2xl font-bold text-[var(--st-text)] mb-2 text-center">Pagamento Manual</h2>
@@ -440,13 +442,22 @@ export default function CheckoutPage() {
   const isSubmitting = createOrderMutation.isPending || autoSubmitting;
 
   return (
-    <div className="min-h-screen bg-[var(--st-bg)]">
+    <div className="hs hs-checkout min-h-screen bg-[var(--st-bg)]">
       <div className="max-w-[480px] mx-auto pb-8">
         {/* Header */}
         <header className="sticky top-0 z-10 bg-[var(--st-bg)]/95 backdrop-blur border-b border-[var(--st-line)]">
           <div className="px-4 py-4 flex items-center gap-3">
-            <button onClick={() => router.push('/menu')} className="text-2xl text-[var(--st-text)] leading-none" aria-label="Voltar">←</button>
+            <button
+              onClick={() => router.push(`/l/${storeSlug}`)}
+              className="text-2xl text-[var(--st-text)] leading-none"
+              aria-label="Voltar"
+            >
+              ←
+            </button>
             <h1 className="text-xl font-extrabold text-[var(--st-text)]">Finalizar pedido</h1>
+            {menuData?.store?.short_name && (
+              <span className="hs-drawer-store ml-auto">{menuData.store.short_name}</span>
+            )}
           </div>
         </header>
 

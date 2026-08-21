@@ -10,6 +10,40 @@
 
 ---
 
+## 0. HAWSMASH: a loja usa a pele do 1.0, não "The Box"
+
+> **Decisão (2026-08-21, dono do produto):** a loja pública desta instância **não** usa o layout
+> "The Box" descrito neste ficheiro. Usa o **front do HAWSMASH 1.0** — o site que os clientes já
+> conhecem de `hawsmash.com` — portado para o motor do 2.0 e adaptado às duas lojas.
+
+| | |
+|---|---|
+| **Onde vive** | `apps/web/app/(public)/_hawsmash/` (`landing.css`, `storefront.tsx`, `sections.tsx`, `menu-banners.tsx`, `cart-drawer.tsx`, `icons.tsx`) |
+| **Quem a usa** | `/` (escolha de loja) · `/l/[slug]` (loja) · `/checkout` (só a voz: títulos, foco, cantos) |
+| **De onde veio** | `Desktop/0001. Clientes/HawSmash` — `styles.css` + `src/app.jsx` do 1.0; fotos em `public/assets/hawsmash/` |
+| **O que continua igual** | `useCart` e a forma de `localStorage['cart']`, `GET /api/menu`, `create_order`, tracking, `formatMT` — **nada da lógica mudou** |
+
+**Regras próprias desta pele:**
+
+- Continua a valer a §4 (whitelabel): o conteúdo editorial vive em `config/brand.ts` →
+  `storefront.landing` (hero, marquee, história, rodapé) e as cores em `brand.theme` → `var(--hs-*)`.
+  **Nenhum hex nem texto de marca dentro dos componentes.**
+- Tudo o que é da pele fica debaixo da classe `.hs` — o painel e o POS têm temas próprios e não podem
+  ser tocados por estas regras.
+- Os resets (`img`, `a`, `button`) escrevem-se em `:where(.hs)`, para valerem 0 de especificidade.
+  Com `.hs button` o reset ganhava às classes dos botões e comia bordas e dourado.
+- O **carrinho pertence a uma loja** (`localStorage['cart_store']`, `lib/cart-store.ts`): ao entrar numa
+  loja diferente da dona do carrinho, o carrinho é esvaziado — venha-se do diálogo de troca, de um link
+  partilhado ou do histórico do browser.
+- Os nomes acessíveis são contrato dos testes e2e (`e2e/loja.spec.ts`): `Escolhe a tua loja`,
+  `Ver cardápio de <Loja>`, `Adicionar <Item>`, `Trocar de loja`, e o aviso `o teu carrinho é esvaziado`.
+  Mudar-lhes o texto é mudar o teste — deliberadamente, nunca por acidente.
+- **"The Box" continua a ser a base whitelabel** para as outras instâncias do motor. O resto deste
+  ficheiro descreve-a e mantém-se válido para elas — e para os ecrãs que a pele HAWSMASH ainda não
+  cobre (`/m/[token]`, `/order-status`).
+
+---
+
 ## ⚡ COMO TRABALHAR NESTE FRONT (regras para o agente)
 
 1. **Uma fase do `(public)/ROADMAP.md` por sessão.** Não antecipar fases.

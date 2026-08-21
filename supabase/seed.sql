@@ -71,30 +71,44 @@ begin
   select id into v_extras
   from public.menu_categories where name = 'Extras';
 
+  -- Descrições e fotos: as mesmas que o HAWSMASH 1.0 já vende (a lista de
+  -- ingredientes é o que aparece por baixo do nome no cartão do produto).
   insert into public.menu_items (
-    category_id, name, description, price_cents, sort, available
+    category_id, name, description, photo_url, price_cents, sort, available
   ) values (
-    v_burgers, 'Classic Smash', 'Smash burger artesanal HAWSMASH.', 30000, 1, true
+    v_burgers, 'Classic Smash',
+    'Pão Brioche · Carne Smash Suculenta · Queijo Cheddar · Cebola Caramelizada · Jalapeños · Pickles · Molho Hawsmash',
+    '/assets/hawsmash/classic-smash.webp', 30000, 1, true
   ) returning id into v_classic;
 
   insert into public.menu_items (
-    category_id, name, description, price_cents, sort, available
+    category_id, name, description, photo_url, price_cents, sort, available
   ) values (
-    v_burgers, 'Double Smash', 'Double smash burger artesanal HAWSMASH.', 40000, 2, true
+    v_burgers, 'Double Smash',
+    'Pão Brioche · 2 Carnes Smash Suculentas · Queijo Cheddar · Cebola Caramelizada · Jalapeños · Pickles · Molho Hawsmash',
+    '/assets/hawsmash/double-smash.webp', 40000, 2, true
   ) returning id into v_double;
 
   insert into public.menu_items (
-    category_id, name, description, price_cents, sort, available
+    category_id, name, description, photo_url, price_cents, sort, available
   ) values (
-    v_burgers, 'Smoked Brisket', 'Smash burger com brisket fumado.', 45000, 3, true
+    v_burgers, 'Smoked Brisket',
+    'Pão Brioche · Carne Smash Suculenta · Smoked Brisket · Cebola Caramelizada · Jalapeños · Pickles · Molho Hawsmash',
+    '/assets/hawsmash/smoked-brisket.webp', 45000, 3, true
   ) returning id into v_brisket;
 
   insert into public.menu_items (
-    category_id, name, description, price_cents, sort, available
+    category_id, name, description, photo_url, price_cents, sort, available
   ) values
-    (v_burgers, 'Hawsmash Signature', 'Burger assinatura HAWSMASH.', 60000, 4, true),
-    (v_sobremesas, 'Pastéis de Nata', 'Pastéis de nata.', 9000, 1, true),
-    (v_extras, 'Joe''s Chips', 'Batata frita Joe''s Chips.', 15000, 1, true);
+    (v_burgers, 'Hawsmash Signature',
+     'Pão Brioche · Carne Hawsmash Suculenta · Carne Wagyu · Smoked Brisket · Queijo Cheddar · Cebola Caramelizada · Jalapeños · Pickles · Molho Hawsmash',
+     '/assets/hawsmash/hawsmash-signature.webp', 60000, 4, true),
+    (v_sobremesas, 'Pastéis de Nata',
+     'Massa folhada estaladiça · Creme de ovos · Canela',
+     '/assets/hawsmash/pasteis-de-nata.webp', 9000, 1, true),
+    (v_extras, 'Joe''s Chips',
+     'Batata frita estaladiça · Sal marinho',
+     '/assets/hawsmash/joes-chips.webp', 15000, 1, true);
 
   insert into public.menu_item_variants (
     menu_item_id, name, price_cents, sort, is_default, active
