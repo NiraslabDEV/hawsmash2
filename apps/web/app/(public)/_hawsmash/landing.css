@@ -1032,6 +1032,11 @@
     place-items: center;
   }
   .hs-toast { bottom: 100px; }
+
+  /* O aviso de cookies vive fora da pele (é do motor). No telemóvel a barra
+     flutuante ocupa o fundo, por isso levanta-se o aviso para não ficarem um
+     por cima do outro. */
+  [data-consent-banner] { bottom: 88px; }
 }
 
 @media (prefers-reduced-motion: reduce) {

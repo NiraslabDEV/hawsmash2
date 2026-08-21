@@ -54,7 +54,9 @@ export function AnalyticsProvider() {
   if (decided || !hasAnyTag) return null;
 
   return (
-    <div className="fixed bottom-0 inset-x-0 z-50 p-4">
+    // O atributo é o gancho para cada pele o levantar do fundo quando tem
+    // barra flutuante (ver (public)/_hawsmash/landing.css).
+    <div data-consent-banner className="fixed bottom-0 inset-x-0 z-50 p-4">
       <div className="max-w-2xl mx-auto bg-[#1a1612] border border-[#e5a93c]/30 rounded-xl p-4 shadow-2xl flex flex-col sm:flex-row items-start sm:items-center gap-3">
         <p className="text-sm text-gray-300 flex-1">
           Usamos cookies para medir e melhorar a sua experiência. Pode aceitar ou continuar sem
