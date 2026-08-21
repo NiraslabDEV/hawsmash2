@@ -4,6 +4,10 @@ const config: Config = {
   content: [
     './app/**/*.{js,ts,jsx,tsx,mdx}',
     './components/**/*.{js,ts,jsx,tsx,mdx}',
+    // O aviso de cookies vive em lib/analytics: sem esta linha, o Tailwind
+    // nunca gerava as classes dele e o aviso saía transparente por cima do
+    // conteúdo (bug antigo, visível em todas as páginas da loja).
+    './lib/**/*.{js,ts,jsx,tsx}',
     '../../config/brand.ts',
   ],
   theme: {
