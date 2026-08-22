@@ -19,6 +19,9 @@ interface Settings {
   slot_minutes: number;
   accepting_orders: boolean;
   payment_provider: string;
+  upsell_enabled: boolean;
+  upsell_title: string;
+  upsell_subtitle: string;
 }
 
 // ─── Secção ───────────────────────────────────────────────────────────────────
@@ -53,6 +56,9 @@ export function SettingsSection() {
         close_hour: s.close_hour,
         slot_minutes: s.slot_minutes,
         accepting_orders: s.accepting_orders,
+        upsell_enabled: s.upsell_enabled,
+        upsell_title: s.upsell_title,
+        upsell_subtitle: s.upsell_subtitle,
       })
       .eq('id', 1);
     if (err) { setError(`Erro ao guardar definições: ${err.message}`); return; }
@@ -155,6 +161,9 @@ function SettingsModal({
   const [openHour, setOpenHour] = useState(settings.open_hour);
   const [closeHour, setCloseHour] = useState(settings.close_hour);
   const [slotMinutes, setSlotMinutes] = useState(settings.slot_minutes);
+  const [upsellEnabled, setUpsellEnabled] = useState(settings.upsell_enabled ?? true);
+  const [upsellTitle, setUpsellTitle] = useState(settings.upsell_title ?? '');
+  const [upsellSubtitle, setUpsellSubtitle] = useState(settings.upsell_subtitle ?? '');
 
   return (
     <div className="fixed inset-0 bg-black/70 backdrop-blur-[4px] z-50 flex items-center justify-center p-4">
@@ -173,6 +182,9 @@ function SettingsModal({
             open_hour: openHour,
             close_hour: closeHour,
             slot_minutes: slotMinutes,
+            upsell_enabled: upsellEnabled,
+            upsell_title: upsellTitle.trim() || 'Falta alguma coisa?',
+            upsell_subtitle: upsellSubtitle.trim() || 'Uma bebida gelada cai sempre bem com o smash.',
             accepting_orders: settings.accepting_orders,
           });
         }}
@@ -283,6 +295,39 @@ function SettingsModal({
             <p className="text-xs text-[#C9BCAC]">
               Abrir ou fechar uma loja faz-se na aba <strong className="text-white">Lojas</strong>, com
               motivo registado. Estas definições são da empresa, não de uma unidade.
+            </p>
+          </div>
+
+          <div>
+            <h3 className="text-sm font-semibold text-[#F5A623] mb-2">Oferta no fim do pedido</h3>
+            {/* Que itens são oferecidos escolhe-se no Cardápio ("Oferecer no fim
+                do pedido"); aqui decide-se se o ecrã aparece e o que diz. */}
+            <label className="flex items-center gap-2 text-xs font-semibold text-[#C9BCAC] mb-2">
+              <input
+                type="checkbox"
+                checked={upsellEnabled}
+                onChange={(e) => setUpsellEnabled(e.target.checked)}
+                className="rounded bg-black/20 border-white/[0.08] text-[#F5A623] focus:ring-[#F5A623]"
+              />
+              Mostrar o ecrã de oferta antes do pagamento
+            </label>
+            <input
+              type="text"
+              value={upsellTitle}
+              onChange={(e) => setUpsellTitle(e.target.value)}
+              placeholder="Falta alguma coisa?"
+              className="w-full bg-black/20 border border-white/[0.08] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-[#F5A623] mb-2"
+            />
+            <input
+              type="text"
+              value={upsellSubtitle}
+              onChange={(e) => setUpsellSubtitle(e.target.value)}
+              placeholder="Uma bebida gelada cai sempre bem com o smash."
+              className="w-full bg-black/20 border border-white/[0.08] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-[#F5A623]"
+            />
+            <p className="text-[11px] text-[#C9BCAC]/70 mt-1">
+              Os itens oferecidos marcam-se no <strong className="text-white">Cardápio</strong>.
+              Sem nada marcado, o ecrã salta sozinho — nunca trava o pedido.
             </p>
           </div>
 

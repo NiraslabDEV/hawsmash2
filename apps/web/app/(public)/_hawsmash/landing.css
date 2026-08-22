@@ -529,15 +529,15 @@
 }
 
 .hs-vtoggle {
-  display: grid;
-  grid-auto-flow: column;
-  grid-auto-columns: 1fr;
+  display: flex;
+  flex-wrap: wrap;
   gap: 6px;
   background: rgba(255, 255, 255, 0.06);
   border-radius: 10px;
   padding: 4px;
 }
 .hs-vtog {
+  flex: 1 1 40%;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -950,6 +950,172 @@
 /* O grão do resto da loja distrai num formulário — aqui fica de fora. */
 .hs-checkout::before { content: none; }
 
+/* ---------- UPSELL (entre o carrinho e o pagamento) ---------- */
+/* O fundo tem de dar folga à barra fixa do CTA: sem isto, a última linha de
+   cartões fica debaixo dela e os botões deixam de se conseguir tocar. */
+.hs-upsell { min-height: 100vh; padding-bottom: 184px; }
+.hs-upsell-loading {
+  min-height: 60vh;
+  display: grid;
+  place-items: center;
+  color: var(--hs-ink-mute);
+  font-size: 14px;
+}
+.hs-upsell-main { padding-top: 104px; max-width: 900px; }
+.hs-upsell-head { text-align: center; margin-bottom: 36px; }
+.hs-upsell-head h1 {
+  font-family: var(--font-display);
+  text-transform: uppercase;
+  font-size: clamp(34px, 6vw, 62px);
+  line-height: 0.9;
+  margin: 14px 0 10px;
+}
+.hs-upsell-head p { color: var(--hs-ink-dim); margin: 0; font-size: 15px; }
+
+.hs-upsell-block { margin-bottom: 36px; }
+.hs-upsell-block h2 {
+  font-family: var(--font-condensed);
+  font-size: 20px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--hs-ink);
+  margin: 0 0 14px;
+}
+
+/* Subir de gama: a oferta que mais vale, por isso é uma faixa larga. */
+.hs-upgrade {
+  display: grid;
+  grid-template-columns: 88px 1fr auto;
+  align-items: center;
+  gap: 16px;
+  padding: 14px 18px;
+  margin-bottom: 12px;
+  border: 1px solid var(--hs-line-strong);
+  border-radius: 18px;
+  background: var(--hs-bg-2);
+  transition: border-color 0.25s, background 0.25s, box-shadow 0.25s;
+}
+.hs-upgrade.is-on {
+  border-color: rgba(229, 169, 60, 0.55);
+  background: linear-gradient(120deg, rgba(229, 169, 60, 0.12), var(--hs-bg-2) 60%);
+  box-shadow: 0 0 26px -12px rgba(229, 169, 60, 0.6);
+}
+.hs-upgrade img { width: 88px; height: 88px; object-fit: contain; }
+.hs-upgrade-text h3 {
+  font-family: var(--font-condensed);
+  font-size: 22px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin: 0;
+}
+.hs-upgrade-text h3 .qty { color: var(--hs-ink-mute); }
+.hs-upgrade-text p { margin: 4px 0 0; color: var(--hs-ink-dim); font-size: 14px; }
+.hs-upgrade-text strong { color: var(--hs-gold); }
+.hs-upgrade-btn {
+  padding: 12px 18px;
+  border-radius: 999px;
+  border: 1px solid var(--hs-gold);
+  color: var(--hs-gold);
+  font-family: var(--font-condensed);
+  font-size: 16px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  transition: background 0.2s, color 0.2s;
+}
+.hs-upgrade-btn.is-on { background: var(--hs-gold); color: #1a1208; }
+
+/* Para acompanhar: cartões com foto grande, sabor e um toque para juntar. */
+.hs-upsell-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(168px, 1fr));
+  gap: 14px;
+}
+.hs-upsell-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid var(--hs-line);
+  border-radius: 18px;
+  background: var(--hs-bg-2);
+}
+/* Altura fixa em vez de aspect-ratio: uma lata em ecrã largo enchia meia
+   página e empurrava os botões para fora do campo de visão. */
+.hs-upsell-photo {
+  height: 170px;
+  display: grid;
+  place-items: center;
+  border-radius: 14px;
+  background: radial-gradient(120% 100% at 50% 20%, rgba(232, 116, 42, 0.22), transparent 68%);
+}
+/* contain, não cover: latas e garrafas ficam cortadas com cover.
+   `pointer-events: none` porque a foto é decoração — sem isto a imagem
+   apanhava os toques destinados aos botões de sabor por baixo. */
+.hs-upsell-photo img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  padding: 10%;
+  pointer-events: none;
+  filter: drop-shadow(0 16px 18px rgba(0, 0, 0, 0.5));
+}
+.hs-upsell-card h3 {
+  font-family: var(--font-condensed);
+  font-size: 19px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin: 0;
+}
+.hs-flavours { display: flex; flex-wrap: wrap; gap: 6px; }
+.hs-flavour {
+  min-height: 34px;
+  padding: 8px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--hs-line-strong);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--hs-ink-dim);
+  transition: background 0.2s, color 0.2s, border-color 0.2s;
+}
+.hs-flavour.is-active {
+  background: var(--hs-gold);
+  border-color: transparent;
+  color: #1a1208;
+  font-weight: 700;
+}
+.hs-upsell-foot {
+  margin-top: auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.hs-upsell-price {
+  font-family: var(--font-display);
+  font-size: 22px;
+  color: var(--hs-gold);
+}
+
+/* CTA fixo: avança sempre, com ou sem juntar nada. */
+.hs-upsell-cta {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 60;
+  padding: 40px 20px 22px;
+  background: linear-gradient(180deg, transparent, var(--hs-bg-1) 38%);
+}
+.hs-upsell-cta .hs-btn {
+  width: 100%;
+  max-width: 520px;
+  margin: 0 auto;
+  display: flex;
+}
+.hs-upsell-cta .total { opacity: 0.75; }
+
 /* ---------- RESPONSIVO ---------- */
 @media (max-width: 1024px) {
   .hs-story-grid { grid-template-columns: 1fr; gap: 40px; }
@@ -1032,6 +1198,11 @@
     place-items: center;
   }
   .hs-toast { bottom: 100px; }
+  .hs-upsell-main { padding-top: 92px; }
+  .hs-upsell-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+  .hs-upgrade { grid-template-columns: 64px 1fr; row-gap: 10px; padding: 14px; }
+  .hs-upgrade img { width: 64px; height: 64px; }
+  .hs-upgrade-btn { grid-column: 1 / -1; width: 100%; }
 
   /* O aviso de cookies vive fora da pele (é do motor). No telemóvel a barra
      flutuante ocupa o fundo, por isso levanta-se o aviso para não ficarem um

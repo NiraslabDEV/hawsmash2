@@ -19,7 +19,7 @@
 | | |
 |---|---|
 | **Onde vive** | `apps/web/app/(public)/_hawsmash/` (`landing.css`, `storefront.tsx`, `sections.tsx`, `menu-banners.tsx`, `cart-drawer.tsx`, `icons.tsx`) |
-| **Quem a usa** | `/` (escolha de loja) · `/l/[slug]` (loja) · `/checkout` (só a voz: títulos, foco, cantos) |
+| **Quem a usa** | `/` (escolha de loja) · `/l/[slug]` (loja) · `/upsell` (oferta antes do pagamento) · `/checkout` (só a voz: títulos, foco, cantos) |
 | **De onde veio** | `Desktop/0001. Clientes/HawSmash` — `styles.css` + `src/app.jsx` do 1.0; fotos em `public/assets/hawsmash/` |
 | **O que continua igual** | `useCart` e a forma de `localStorage['cart']`, `GET /api/menu`, `create_order`, tracking, `formatMT` — **nada da lógica mudou** |
 
@@ -38,6 +38,12 @@
 - Os nomes acessíveis são contrato dos testes e2e (`e2e/loja.spec.ts`): `Escolhe a tua loja`,
   `Ver cardápio de <Loja>`, `Adicionar <Item>`, `Trocar de loja`, e o aviso `o teu carrinho é esvaziado`.
   Mudar-lhes o texto é mudar o teste — deliberadamente, nunca por acidente.
+- **Upsell** (`/upsell`, entre o carrinho e o pagamento): duas ofertas — subir de gama a uma linha que
+  levou a variante barata (HAW → WAGYU) e itens marcados `is_upsell` no painel (bebidas, batatas, natas).
+  A decisão de mostrar/saltar é pura e testada (`lib/upsell.ts`); **nunca bloqueia a venda** e não insiste
+  com quem já leva bebida. Textos e interruptor em Definições; que itens entram marca-se no Cardápio.
+- **Bebidas**: cada bebida é um item com os sabores em `menu_item_variants` e **foto por sabor**
+  (`menu_item_variants.photo_url`) — a foto do cartão troca com o sabor escolhido, como no 1.0.
 - **"The Box" continua a ser a base whitelabel** para as outras instâncias do motor. O resto deste
   ficheiro descreve-a e mantém-se válido para elas — e para os ecrãs que a pele HAWSMASH ainda não
   cobre (`/m/[token]`, `/order-status`).

@@ -125,11 +125,18 @@ export default function LojasPage() {
     void loadConfig();
   }, [loadConfig]);
 
+  // A ficha aberta pode ainda ser da loja anterior: entre clicar noutra loja e
+  // o `get_store_admin` responder, `config` continua a ser a de antes. Sem esta
+  // guarda, quem clicasse "Matola" e logo a seguir "Fechar loja agora" fechava
+  // MAPUTO — a loja errada, no dia errado (apanhado pelo e2e da F10).
+  const stale = !config || config.store.id !== selectedId;
+
   function updateField<K extends keyof StoreConfig>(field: K, value: StoreConfig[K]) {
     setConfig((current) => (current ? { ...current, store: { ...current.store, [field]: value } } : current));
   }
 
   async function saveStore() {
+    if (stale) return;
     if (!config) return;
     setBusy(true);
     const { store } = config;
@@ -163,6 +170,7 @@ export default function LojasPage() {
   }
 
   async function saveHours() {
+    if (stale) return;
     if (!config) return;
     setBusy(true);
     const { error } = await supabase.rpc('set_store_hours', {
@@ -191,6 +199,7 @@ export default function LojasPage() {
   }
 
   async function saveZone() {
+    if (stale) return;
     if (!config) return;
     const fee = parseMTInput(zoneDraft.fee);
     if (zoneDraft.name.trim().length < 2 || fee === null) {
@@ -217,6 +226,7 @@ export default function LojasPage() {
   }
 
   async function removeZone(zone: Zone) {
+    if (stale) return;
     setBusy(true);
     const { data, error } = await supabase.rpc('delete_delivery_zone', { p_zone_id: zone.id });
     setBusy(false);
@@ -234,6 +244,7 @@ export default function LojasPage() {
   }
 
   async function toggleAccepting() {
+    if (stale) return;
     if (!config) return;
     if (switchReason.trim().length < 3) {
       setMessage({ tone: 'error', text: 'Escreve o motivo — fica no registo de auditoria.' });
@@ -400,7 +411,7 @@ export default function LojasPage() {
               </label>
               <button
                 type="button"
-                disabled={busy}
+                disabled={busy || stale}
                 onClick={() => void toggleAccepting()}
                 className={`rounded-xl px-4 py-3 text-sm font-black disabled:opacity-50 ${
                   store.accepting_orders ? 'bg-[#7a2b2b] text-white' : 'bg-[#e5a93c] text-black'
@@ -495,7 +506,7 @@ export default function LojasPage() {
           <div className="flex justify-end">
             <button
               type="button"
-              disabled={busy}
+              disabled={busy || stale}
               onClick={() => void saveStore()}
               className="rounded-xl bg-[#e5a93c] px-5 py-3 text-sm font-black text-black disabled:opacity-50"
             >
@@ -561,7 +572,7 @@ export default function LojasPage() {
             <div className="mt-4 flex justify-end">
               <button
                 type="button"
-                disabled={busy}
+                disabled={busy || stale}
                 onClick={() => void saveHours()}
                 className="rounded-xl border border-white/10 px-4 py-2 text-sm font-bold text-[#C9BCAC] hover:bg-white/[0.05] disabled:opacity-50"
               >
@@ -596,7 +607,7 @@ export default function LojasPage() {
                   </button>
                   <button
                     type="button"
-                    disabled={busy}
+                    disabled={busy || stale}
                     onClick={() => void removeZone(zone)}
                     className="rounded-lg border border-[#7a2b2b] px-3 py-1 text-xs font-bold text-[#ffb0b0] hover:bg-[#2a1616] disabled:opacity-50"
                   >
@@ -627,7 +638,7 @@ export default function LojasPage() {
               </label>
               <button
                 type="button"
-                disabled={busy}
+                disabled={busy || stale}
                 onClick={() => void saveZone()}
                 className="rounded-xl border border-white/10 px-4 py-3 text-sm font-bold text-[#C9BCAC] hover:bg-white/[0.05] disabled:opacity-50"
               >
@@ -707,7 +718,7 @@ export default function LojasPage() {
               </button>
               <button
                 type="button"
-                disabled={busy}
+                disabled={busy || stale}
                 onClick={() => void createStore()}
                 className="rounded-xl bg-[#e5a93c] px-4 py-2 text-sm font-black text-black disabled:opacity-50"
               >

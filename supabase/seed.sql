@@ -8,6 +8,9 @@ declare
   v_burgers uuid;
   v_sobremesas uuid;
   v_extras uuid;
+  v_bebidas uuid;
+  v_drink record;
+  v_drink_id uuid;
   v_classic uuid;
   v_double uuid;
   v_brisket uuid;
@@ -62,7 +65,8 @@ begin
   values
     ('Burgers', 'kitchen', 1, true),
     ('Sobremesas', 'cold_kitchen', 2, true),
-    ('Extras', 'kitchen', 3, true);
+    ('Extras', 'kitchen', 3, true),
+    ('Bebidas', 'bar', 4, true);
 
   select id into v_burgers
   from public.menu_categories where name = 'Burgers';
@@ -70,6 +74,8 @@ begin
   from public.menu_categories where name = 'Sobremesas';
   select id into v_extras
   from public.menu_categories where name = 'Extras';
+  select id into v_bebidas
+  from public.menu_categories where name = 'Bebidas';
 
   -- Descrições e fotos: as mesmas que o HAWSMASH 1.0 já vende (a lista de
   -- ingredientes é o que aparece por baixo do nome no cartão do produto).
@@ -128,6 +134,60 @@ begin
   ) values
     (v_nata, '1 unidade', 9000, 1, true, true),
     (v_nata, '6 unidades', 50000, 2, false, true);
+
+  -- Bebidas herdadas do HAWSMASH 1.0: cada bebida é um item com sabores, e cada
+  -- sabor tem a sua foto (a foto do cartão troca com o sabor escolhido).
+  -- Todas nascem marcadas para o upsell — são o que se oferece no fim do pedido.
+  for v_drink in
+    select *
+    from (values
+      ('Coca-Cola',        10000, 1, '/assets/hawsmash/bebidas/coca-normal.webp'),
+      ('Sprite',           10000, 2, '/assets/hawsmash/bebidas/sprite.webp'),
+      ('Fanta',            10000, 3, '/assets/hawsmash/bebidas/fanta-laranja.webp'),
+      ('Schweppes',        10000, 4, '/assets/hawsmash/bebidas/schweppes-pomegranate.webp'),
+      ('Sparletta',        10000, 5, '/assets/hawsmash/bebidas/sparletta-morango.webp'),
+      ('Red Bull',         15000, 6, '/assets/hawsmash/bebidas/redbull-normal.webp'),
+      ('Red Bull Edition', 15000, 7, '/assets/hawsmash/bebidas/redbull-peach.webp')
+    ) as d(name, price_cents, sort, photo_url)
+  loop
+    insert into public.menu_items (
+      category_id, name, description, photo_url, price_cents, sort, available, is_upsell
+    ) values (
+      v_bebidas, v_drink.name, 'Bebida gelada.', v_drink.photo_url,
+      v_drink.price_cents, v_drink.sort, true, true
+    )
+    returning id into v_drink_id;
+
+    insert into public.menu_item_variants (
+      menu_item_id, name, price_cents, sort, is_default, active, photo_url
+    )
+    select v_drink_id, f.name, v_drink.price_cents, f.sort, f.sort = 1, true, f.photo_url
+    from (values
+      ('Coca-Cola',        'Normal',      1, '/assets/hawsmash/bebidas/coca-normal.webp'),
+      ('Coca-Cola',        'Zero',        2, '/assets/hawsmash/bebidas/coca-zero.webp'),
+      ('Fanta',            'Laranja',     1, '/assets/hawsmash/bebidas/fanta-laranja.webp'),
+      ('Fanta',            'Uva',         2, '/assets/hawsmash/bebidas/fanta-uva.webp'),
+      ('Fanta',            'Ananás',      3, '/assets/hawsmash/bebidas/fanta-ananas.webp'),
+      ('Schweppes',        'Pomegranate', 1, '/assets/hawsmash/bebidas/schweppes-pomegranate.webp'),
+      ('Schweppes',        'Pineapple',   2, '/assets/hawsmash/bebidas/schweppes-pineapple.webp'),
+      ('Schweppes',        'Tangerine',   3, '/assets/hawsmash/bebidas/schweppes-tangerine.webp'),
+      ('Schweppes',        'Ginger Ale',  4, '/assets/hawsmash/bebidas/schweppes-ginger.webp'),
+      ('Sparletta',        'Morango',     1, '/assets/hawsmash/bebidas/sparletta-morango.webp'),
+      ('Sparletta',        'Creme Soda',  2, '/assets/hawsmash/bebidas/sparletta-creme-soda.webp'),
+      ('Red Bull',         'Normal',      1, '/assets/hawsmash/bebidas/redbull-normal.webp'),
+      ('Red Bull',         'Zero',        2, '/assets/hawsmash/bebidas/redbull-zero.webp'),
+      ('Red Bull Edition', 'Peach',       1, '/assets/hawsmash/bebidas/redbull-peach.webp'),
+      ('Red Bull Edition', 'Tangerine',   2, '/assets/hawsmash/bebidas/redbull-tangerine.webp'),
+      ('Red Bull Edition', 'Watermelon',  3, '/assets/hawsmash/bebidas/redbull-watermelon.webp'),
+      ('Red Bull Edition', 'Yellow',      4, '/assets/hawsmash/bebidas/redbull-yellow.webp')
+    ) as f(item_name, name, sort, photo_url)
+    where f.item_name = v_drink.name;
+  end loop;
+
+  -- Acompanhamentos que também entram no upsell.
+  update public.menu_items
+  set is_upsell = true
+  where name in ('Joe''s Chips', 'Pastéis de Nata');
 
   -- DECISÃO confirmada: preços iguais nas duas lojas via override NULL.
   update public.store_items set price_cents_override = null;

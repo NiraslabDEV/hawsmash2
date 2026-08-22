@@ -174,7 +174,9 @@ export function Storefront({
         qty: line.qty,
       })),
     );
-    router.push('/checkout');
+    // O upsell fica entre o carrinho e o pagamento; se não houver nada para
+    // oferecer, esse ecrã salta sozinho para /checkout (lib/upsell.ts).
+    router.push('/upsell');
   }, [lines, router]);
 
   /* ── trocar de loja ───────────────────────────────────────── */

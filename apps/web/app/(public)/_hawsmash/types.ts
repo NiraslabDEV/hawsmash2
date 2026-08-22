@@ -12,6 +12,8 @@ export interface MenuVariant {
   price_cents: number;
   is_default?: boolean;
   available?: boolean;
+  /** Foto do sabor (bebidas): a foto do cartão troca com a escolha. */
+  photo_url?: string | null;
 }
 
 export interface MenuItem {
@@ -21,6 +23,8 @@ export interface MenuItem {
   price_cents: number;
   photo_url: string | null;
   available?: boolean;
+  /** Oferecido no ecrã de upsell (marcado no painel). */
+  is_upsell?: boolean;
   variants?: MenuVariant[];
 }
 
@@ -60,6 +64,9 @@ export interface MenuPayload {
   emola_name: string | null;
   zones: { id: string; name: string; fee_cents: number; sort: number }[];
   hours: MenuHour[];
+  upsell_enabled?: boolean;
+  upsell_title?: string;
+  upsell_subtitle?: string;
 }
 
 /** Linha do carrinho já cruzada com o cardápio (para o drawer mostrar nome e preço). */

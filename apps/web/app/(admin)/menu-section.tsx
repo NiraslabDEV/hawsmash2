@@ -32,6 +32,7 @@ interface Item {
   photo_url: string | null;
   available: boolean;
   available_delivery: boolean;
+  is_upsell: boolean;
   available_dine_in: boolean;
   track_stock: boolean;
   stock_qty: number;
@@ -129,7 +130,7 @@ export function MenuSection() {
     const [{ data: cats }, { data: its }] = await Promise.all([
       supabase.from('menu_categories').select('id, name, station, sort, active, photo_url, parent_id').order('sort'),
       supabase.from('menu_items')
-        .select('id, category_id, name, description, price_cents, photo_url, available, available_delivery, available_dine_in, track_stock, stock_qty, sort')
+        .select('id, category_id, name, description, price_cents, photo_url, available, available_delivery, available_dine_in, track_stock, stock_qty, is_upsell, sort')
         .order('sort'),
     ]);
     setCategories((cats ?? []) as Category[]);
@@ -604,6 +605,7 @@ function ItemModal({
   const [stockQty, setStockQty] = useState(item?.stock_qty ?? 0);
   const [availableDelivery, setAvailableDelivery] = useState(item?.available_delivery ?? true);
   const [availableDineIn, setAvailableDineIn] = useState(item?.available_dine_in ?? true);
+  const [isUpsell, setIsUpsell] = useState(item?.is_upsell ?? false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
@@ -652,6 +654,7 @@ function ItemModal({
       stock_qty: trackStock ? stockQty : 0,
       available_delivery: availableDelivery,
       available_dine_in: availableDineIn,
+      is_upsell: isUpsell,
     };
 
     const { error: err } = item
@@ -748,6 +751,22 @@ function ItemModal({
           </div>
           <p className="text-[11px] text-[#C9BCAC]/70 mt-1">
             Escolhe onde este prato aparece — só no delivery, só na mesa, ou em ambos.
+          </p>
+        </div>
+
+        <div>
+          <label className="flex items-center gap-2 text-xs font-semibold text-[#C9BCAC]">
+            <input
+              type="checkbox"
+              checked={isUpsell}
+              onChange={(e) => setIsUpsell(e.target.checked)}
+              className="rounded bg-black/20 border-white/[0.08] text-[#F5A623] focus:ring-[#F5A623]"
+            />
+            Oferecer no fim do pedido
+          </label>
+          <p className="text-[11px] text-[#C9BCAC]/70 mt-1">
+            Aparece no ecrã que surge entre o carrinho e o pagamento (bebidas, batatas,
+            sobremesas). Quem já leva um destes não volta a ser incomodado.
           </p>
         </div>
 

@@ -28,33 +28,31 @@ function defaultVariant(item: MenuItem): MenuVariant | null {
 
 function PriceChip({
   item,
-  qtyFor,
+  variants,
+  active,
+  onPick,
+  qty,
   disabled,
   onAdd,
   onDec,
   onInc,
 }: {
   item: MenuItem;
-  qtyFor: (variant: MenuVariant | null) => number;
+  variants: MenuVariant[];
+  active: MenuVariant | null;
+  onPick: (variant: MenuVariant) => void;
+  qty: number;
   disabled: boolean;
-  onAdd: (variant: MenuVariant | null) => void;
-  onDec: (variant: MenuVariant | null) => void;
-  onInc: (variant: MenuVariant | null) => void;
+  onAdd: () => void;
+  onDec: () => void;
+  onInc: () => void;
 }) {
-  const variants = (item.variants ?? []).filter((v) => v.available !== false);
-  const [chosen, setChosen] = useState<MenuVariant | null>(() => defaultVariant(item));
-
-  const active = variants.length ? (chosen ?? variants[0]) : null;
   // O preço é sempre o do servidor: da variante quando há, do item quando não há.
-  const cents = active ? active.price_cents : item.price_cents;
-  const [value, unit] = splitMT(cents);
+  const [value, unit] = splitMT(active ? active.price_cents : item.price_cents);
 
   // WAGYU (ou qualquer variante mais cara que a primeira) ganha o brilho premium
   // do 1.0 — é o sinal visual de que se está a subir de gama.
   const premium = Boolean(active && variants.length > 1 && active.price_cents > variants[0].price_cents);
-  // A quantidade é a da variante escolhida: HAW e WAGYU são linhas distintas
-  // no carrinho, tal como o servidor as trata.
-  const qty = qtyFor(active);
 
   return (
     <div className={`hs-chip${premium ? ' is-premium' : ''}`}>
@@ -69,7 +67,7 @@ function PriceChip({
                 type="button"
                 className={`hs-vtog${isActive ? ' is-active' : ''}${isActive && isPremium ? ' is-premium' : ''}`}
                 aria-pressed={isActive}
-                onClick={() => setChosen(variant)}
+                onClick={() => onPick(variant)}
               >
                 {variant.name}
               </button>
@@ -86,11 +84,11 @@ function PriceChip({
 
         {qty > 0 ? (
           <span className="hs-chip-qty">
-            <button type="button" aria-label={`Menos um ${item.name}`} onClick={() => onDec(active)}>
+            <button type="button" aria-label={`Menos um ${item.name}`} onClick={onDec}>
               −
             </button>
             <span>{qty}</span>
-            <button type="button" aria-label={`Mais um ${item.name}`} onClick={() => onInc(active)}>
+            <button type="button" aria-label={`Mais um ${item.name}`} onClick={onInc}>
               +
             </button>
           </span>
@@ -100,7 +98,7 @@ function PriceChip({
             className="hs-chip-add"
             disabled={disabled}
             aria-label={`Adicionar ${item.name}`}
-            onClick={() => onAdd(active)}
+            onClick={onAdd}
           >
             <CartIcon size={14} />
             Adicionar
@@ -108,6 +106,68 @@ function PriceChip({
         )}
       </div>
     </div>
+  );
+}
+
+/* ───────────────────── banner de um produto ───────────────────── */
+
+function Banner({
+  item,
+  index,
+  acceptingOrders,
+  qtyFor,
+  onAdd,
+  onDec,
+  onInc,
+}: {
+  item: MenuItem;
+  index: number;
+  acceptingOrders: boolean;
+  qtyFor: (item: MenuItem, variant: MenuVariant | null) => number;
+  onAdd: (item: MenuItem, variant: MenuVariant | null) => void;
+  onDec: (item: MenuItem, variant: MenuVariant | null) => void;
+  onInc: (item: MenuItem, variant: MenuVariant | null) => void;
+}) {
+  const variants = (item.variants ?? []).filter((v) => v.available !== false);
+  const [chosen, setChosen] = useState<MenuVariant | null>(() => defaultVariant(item));
+  const active = variants.length ? (chosen ?? variants[0]) : null;
+
+  // Foto do sabor escolhido (bebidas do 1.0: cada sabor tem a sua lata).
+  const photo = active?.photo_url ?? item.photo_url;
+  const soldOut = item.available === false;
+
+  return (
+    <article className={`hs-banner ${index % 2 === 0 ? 'is-orange' : 'is-dark'}`}>
+      <div className="hs-bn-photo">
+        <span className="hs-bn-board" aria-hidden />
+        {photo && (
+          <Image
+            key={photo}
+            src={photo}
+            alt={item.name}
+            width={400}
+            height={400}
+            sizes="(max-width: 900px) 78vw, 400px"
+          />
+        )}
+      </div>
+
+      <div className="hs-bn-info">
+        <h3 className="hs-bn-name">{item.name}</h3>
+        {item.description && <p className="hs-bn-ing">{item.description}</p>}
+        <PriceChip
+          item={item}
+          variants={variants}
+          active={active}
+          onPick={setChosen}
+          qty={qtyFor(item, active)}
+          disabled={!acceptingOrders || soldOut}
+          onAdd={() => onAdd(item, active)}
+          onDec={() => onDec(item, active)}
+          onInc={() => onInc(item, active)}
+        />
+      </div>
+    </article>
   );
 }
 
@@ -172,41 +232,18 @@ export function MenuBanners({
         )}
 
         <div className="hs-banners">
-          {(active?.items ?? []).map((item, index) => {
-            const soldOut = item.available === false;
-            return (
-              <article
-                key={item.id}
-                className={`hs-banner ${index % 2 === 0 ? 'is-orange' : 'is-dark'}`}
-              >
-                <div className="hs-bn-photo">
-                  <span className="hs-bn-board" aria-hidden />
-                  {item.photo_url && (
-                    <Image
-                      src={item.photo_url}
-                      alt={item.name}
-                      width={400}
-                      height={400}
-                      sizes="(max-width: 900px) 78vw, 400px"
-                    />
-                  )}
-                </div>
-
-                <div className="hs-bn-info">
-                  <h3 className="hs-bn-name">{item.name}</h3>
-                  {item.description && <p className="hs-bn-ing">{item.description}</p>}
-                  <PriceChip
-                    item={item}
-                    qtyFor={(chosen) => qtyFor(item, chosen)}
-                    disabled={!acceptingOrders || soldOut}
-                    onAdd={(chosen) => onAdd(item, chosen)}
-                    onDec={(chosen) => onDec(item, chosen)}
-                    onInc={(chosen) => onInc(item, chosen)}
-                  />
-                </div>
-              </article>
-            );
-          })}
+          {(active?.items ?? []).map((item, index) => (
+            <Banner
+              key={item.id}
+              item={item}
+              index={index}
+              acceptingOrders={acceptingOrders}
+              qtyFor={qtyFor}
+              onAdd={onAdd}
+              onDec={onDec}
+              onInc={onInc}
+            />
+          ))}
         </div>
       </div>
     </section>

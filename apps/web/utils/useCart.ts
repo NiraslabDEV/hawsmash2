@@ -111,6 +111,23 @@ export function useCart() {
     []
   );
 
+  // Troca a variante de uma linha (subir de tamanho/gama no upsell). Se já
+  // existir uma linha com a assinatura de destino, as duas juntam-se — senão
+  // ficavam duas linhas do mesmo produto com a mesma escolha.
+  const setLineVariantByIndex = useCallback((index: number, variantId: string) => {
+    setCart((prev) => {
+      const line = prev[index];
+      if (!line || line.variantId === variantId) return prev;
+      const updated: CartLine = { ...line, variantId };
+      const sig = lineSignature(updated);
+      const twinIndex = prev.findIndex((l, i) => i !== index && lineSignature(l) === sig);
+      if (twinIndex < 0) return prev.map((l, i) => (i === index ? updated : l));
+      return prev
+        .map((l, i) => (i === twinIndex ? { ...l, qty: l.qty + line.qty } : l))
+        .filter((_, i) => i !== index);
+    });
+  }, []);
+
   // Operações por menuItemId — agem na linha SIMPLES (sem variante/adicionais).
   // Mantêm os cards de itens simples a funcionar como antes.
   const setQty = useCallback((menuItemId: string, qty: number) => {
@@ -139,5 +156,17 @@ export function useCart() {
 
   const count = cart.reduce((s, l) => s + l.qty, 0);
 
-  return { cart, hydrated, add, setQty, setQtyByIndex, removeByIndex, remove, clear, qtyOf, count };
+  return {
+    cart,
+    hydrated,
+    add,
+    setQty,
+    setQtyByIndex,
+    setLineVariantByIndex,
+    removeByIndex,
+    remove,
+    clear,
+    qtyOf,
+    count,
+  };
 }

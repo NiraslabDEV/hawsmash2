@@ -242,6 +242,12 @@ _Os dias são referência de calendário, não paragens: a corrida não pára en
 
 ### Corrigido pelo caminho (apanhado pelos testes da F10)
 
+- **O painel podia fechar a loja errada** — o interruptor "Aceitando pedidos" agia sobre a ficha
+  **carregada**, não sobre a loja **escolhida**. Entre clicar noutra loja e a ficha chegar do servidor,
+  um clique rápido em "Fechar loja agora" fechava a anterior. Agora nenhuma acção de escrita corre
+  enquanto a ficha não for da loja seleccionada (`stale`), e os botões ficam desligados até lá.
+  Apanhado pelo `e2e/lojas.spec.ts` ao correr com o resto da suite.
+
 - **`order_number` repetia na viragem do dia** — era gerado a partir do contador diário, que reinicia todos os
   dias, contra uma coluna `unique`. Na manhã seguinte à abertura, **nenhuma venda entrava** (online ou balcão).
   Migrations `1012` e `1013`: sequência contínua por loja (`store_order_sequences`) para o `order_number`,
