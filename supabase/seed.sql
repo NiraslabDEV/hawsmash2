@@ -64,16 +64,16 @@ begin
   insert into public.menu_categories (name, station, sort, active)
   values
     ('Burgers', 'kitchen', 1, true),
-    ('Sobremesas', 'cold_kitchen', 2, true),
-    ('Extras', 'kitchen', 3, true),
-    ('Bebidas', 'bar', 4, true);
+    ('Bebidas', 'bar', 2, true),
+    ('Acompanhamentos', 'kitchen', 3, true),
+    ('Sobremesas', 'cold_kitchen', 4, true);
 
   select id into v_burgers
   from public.menu_categories where name = 'Burgers';
   select id into v_sobremesas
   from public.menu_categories where name = 'Sobremesas';
   select id into v_extras
-  from public.menu_categories where name = 'Extras';
+  from public.menu_categories where name = 'Acompanhamentos';
   select id into v_bebidas
   from public.menu_categories where name = 'Bebidas';
 

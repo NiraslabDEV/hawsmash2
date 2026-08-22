@@ -955,11 +955,28 @@
    cartões fica debaixo dela e os botões deixam de se conseguir tocar. */
 .hs-upsell { min-height: 100vh; padding-bottom: 184px; }
 .hs-upsell-loading {
-  min-height: 60vh;
-  display: grid;
-  place-items: center;
-  color: var(--hs-ink-mute);
+  min-height: 70vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  color: var(--hs-ink-dim);
   font-size: 14px;
+  text-align: center;
+  padding: 0 24px;
+}
+.hs-upsell-loading p { margin: 0; }
+.hs-spinner {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.12);
+  border-top-color: var(--hs-gold);
+  animation: hs-spin 0.8s linear infinite;
+}
+@keyframes hs-spin {
+  to { transform: rotate(360deg); }
 }
 .hs-upsell-main { padding-top: 104px; max-width: 900px; }
 .hs-upsell-head { text-align: center; margin-bottom: 36px; }

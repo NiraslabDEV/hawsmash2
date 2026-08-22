@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Image from 'next/image';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { formatMT, type Cents } from '@delivery/core';
@@ -44,6 +45,15 @@ export default function UpsellPage() {
   // Subidas de gama marcadas: só entram no carrinho no "Continuar", para o ecrã
   // não se reordenar debaixo do dedo a cada toque.
   const [upgrades, setUpgrades] = useState<Record<number, boolean>>({});
+  // Já se carregou em continuar: o ecrã passa a dizer o que está a acontecer.
+  const [leaving, setLeaving] = useState(false);
+
+  // O pagamento é sempre o passo seguinte: pede-se o código à chegada, para o
+  // salto ser instantâneo em vez de descarregar a página no momento do clique
+  // (era isto que fazia o ecrã ficar parado a "preparar o pedido").
+  useEffect(() => {
+    router.prefetch('/checkout');
+  }, [router]);
 
   const { data, isLoading } = useQuery<MenuPayload>({
     queryKey: ['menu', storeSlug],
@@ -79,6 +89,15 @@ export default function UpsellPage() {
     if (decision === 'checkout') router.replace('/checkout');
   }, [decision, router, storeSlug]);
 
+  // Rede lenta ou cardápio em baixo: ao fim de 6 s segue-se para o pagamento.
+  // Uma oferta perdida não custa nada; um cliente preso num ecrã de espera
+  // custa a venda (CLAUDE §1, regra 1).
+  useEffect(() => {
+    if (decision !== 'wait') return;
+    const timer = window.setTimeout(() => router.replace('/checkout'), 6000);
+    return () => window.clearTimeout(timer);
+  }, [decision, router]);
+
   // Total de pré-visualização, já com as subidas de gama marcadas. O servidor
   // recalcula tudo no create_order — isto é só para o cliente ver o efeito.
   const previewTotal = useMemo(() => {
@@ -112,6 +131,7 @@ export default function UpsellPage() {
   );
 
   const handleContinue = useCallback(() => {
+    setLeaving(true);
     // Aplica as subidas de gama de baixo para cima: mudar uma linha pode
     // juntá-la a outra e mexer nos índices seguintes.
     const chosen = offers.filter((offer) => upgrades[offer.index]).sort((a, b) => b.index - a.index);
@@ -127,10 +147,17 @@ export default function UpsellPage() {
     router.push('/checkout');
   }, [offers, router, setLineVariantByIndex, upgrades]);
 
-  if (decision !== 'show') {
+  if (decision !== 'show' || leaving) {
     return (
       <div className="hs hs-upsell" style={{ minHeight: '100vh' }}>
-        <div className="hs-upsell-loading">A preparar o teu pedido…</div>
+        <div className="hs-upsell-loading">
+          <span className="hs-spinner" aria-hidden />
+          <p>{leaving ? 'A abrir o pagamento…' : 'A preparar o teu pedido…'}</p>
+          {/* Saída à mão: se a ligação estiver má, ninguém fica encalhado. */}
+          <Link href="/checkout" className="hs-btn hs-btn-ghost hs-btn-sm">
+            Continuar para o pagamento
+          </Link>
+        </div>
       </div>
     );
   }

@@ -94,7 +94,9 @@ export function upgradeOffers(cart: UpsellCartLine[], items: UpsellItem[]): Upgr
 export function companionOffers(
   cart: UpsellCartLine[],
   items: UpsellItem[],
-  limit = 8,
+  // Tecto generoso de propósito: com as bebidas à frente no cardápio, um limite
+  // apertado deixava as natas de fora — e a sobremesa vende.
+  limit = 12,
 ): UpsellItem[] {
   const inCart = new Set(cart.map((line) => line.menuItemId));
   return items

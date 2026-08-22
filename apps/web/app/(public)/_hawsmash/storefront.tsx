@@ -75,6 +75,12 @@ export function Storefront({
     window.localStorage.setItem(CART_STORE_KEY, store.slug);
   }, [clear, hydrated, store.slug]);
 
+  // Com o carrinho aberto, o passo seguinte é sempre o upsell: pede-se o código
+  // agora para o salto ser imediato quando a pessoa carregar em finalizar.
+  useEffect(() => {
+    if (cartOpen) router.prefetch('/upsell');
+  }, [cartOpen, router]);
+
   // Nav ganha fundo depois do hero (igual ao 1.0).
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 40);
