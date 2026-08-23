@@ -456,10 +456,19 @@ export function PosShell() {
     });
     setBinding(false);
     if (bindError || !data?.device_id) {
+      // Dizer só "exige um gerente" deixa quem está à frente do ecrã sem saída:
+      // é um caixa a ver um botão que nunca lhe vai funcionar. A instrução tem
+      // de vir com a mensagem — vincula-se uma vez, e depois a caixa entra na
+      // sua própria conta neste mesmo PC.
       setError(
         bindError?.message.includes('device_binding_access_denied')
-          ? 'A vinculação deste PC exige um gerente ou o dono.'
-          : errorMessage(bindError?.message),
+          ? 'Esta conta não pode vincular o PC. Sai e entra com a conta do gerente '
+            + 'desta loja (ou a do dono), vincula uma vez, e depois volta à tua conta — '
+            + 'a vinculação fica guardada neste computador.'
+          : bindError?.message.includes('device_binding_store_denied')
+            ? 'A tua conta não tem acesso a esta loja. Escolhe a loja certa ou pede '
+              + 'ao dono para te dar acesso em Equipa.'
+            : errorMessage(bindError?.message),
       );
       return;
     }
