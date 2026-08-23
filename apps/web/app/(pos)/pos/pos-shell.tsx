@@ -98,6 +98,31 @@ type AvailableStore = {
   short_name: string;
 };
 
+type DeliveryOrder = {
+  id: string;
+  order_number: string;
+  daily_number: number | null;
+  channel: string | null;
+  status: string;
+  customer_name: string;
+  customer_phone: string;
+  address: string | null;
+  total_cents: number;
+  created_at: string;
+  items: Array<{ id: string; name: string; qty: number }>;
+};
+
+const DELIVERY_STATUS_META: Record<string, { label: string; className: string }> = {
+  awaiting_approval: { label: 'Novo', className: 'bg-amber-500/15 text-amber-300' },
+  awaiting_payment: { label: 'A pagar', className: 'bg-blue-500/15 text-blue-300' },
+  paid: { label: 'Pago', className: 'bg-blue-500/15 text-blue-300' },
+  approved: { label: 'Aceite', className: 'bg-emerald-500/15 text-emerald-300' },
+  in_preparation: { label: 'Em preparo', className: 'bg-orange-500/15 text-orange-300' },
+  ready: { label: 'Pronto', className: 'bg-purple-500/15 text-purple-300' },
+  delivered: { label: 'Entregue', className: 'bg-green-500/15 text-green-400' },
+  cancelled: { label: 'Cancelado', className: 'bg-red-500/15 text-red-300' },
+};
+
 // O carrinho vive em `lib/pos/cart.ts`: é lá que se decide o preço da variante
 // e o que conta como a mesma linha. Aqui só se desenha.
 type AllocationMap = Partial<Record<CounterPaymentMethod, number>>;
@@ -164,6 +189,11 @@ export function PosShell() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
   const warmedPhotoUrls = useRef<Set<string>>(new Set());
+  // 'delivery' é só consulta — o cashier acompanha o que está a sair pela
+  // loja online sem sair do POS nem precisar de acesso ao painel admin.
+  const [posView, setPosView] = useState<'menu' | 'delivery'>('menu');
+  const [deliveryOrders, setDeliveryOrders] = useState<DeliveryOrder[]>([]);
+  const [deliveryLoading, setDeliveryLoading] = useState(false);
   const [cart, setCart] = useState<Cart>({});
   /** Item à espera de escolha de variante (HAW/WAGYU, Zero, 6 unidades…). */
   const [variantPick, setVariantPick] = useState<MenuItem | null>(null);
@@ -378,6 +408,32 @@ export function PosShell() {
     const timer = window.setInterval(() => void refresh(), MENU_REFRESH_MS);
     return () => window.clearInterval(timer);
   }, [context]);
+
+  const fetchDeliveryOrders = useCallback(async () => {
+    if (!context) return;
+    setDeliveryLoading(true);
+    try {
+      const { data, error } = await supabase.rpc('get_orders', {
+        p_filters: { store: context.storeSlug, limit: 50 },
+      });
+      if (!error && data) {
+        const all = (data.orders ?? []) as DeliveryOrder[];
+        setDeliveryOrders(all.filter((order) => order.channel === 'delivery'));
+      }
+    } finally {
+      setDeliveryLoading(false);
+    }
+  }, [context, supabase]);
+
+  // Só faz polling enquanto a aba Delivery está aberta — o balcão já sofreu
+  // com tráfego de fundo desnecessário em wifi fraco (aquecimento de fotos),
+  // não vale a pena repetir o erro aqui.
+  useEffect(() => {
+    if (posView !== 'delivery' || !context) return;
+    void fetchDeliveryOrders();
+    const timer = window.setInterval(() => void fetchDeliveryOrders(), 20_000);
+    return () => window.clearInterval(timer);
+  }, [posView, context, fetchDeliveryOrders]);
 
   useEffect(() => {
     if (!context) return;
@@ -1142,9 +1198,12 @@ export function PosShell() {
             <button
               key={category.id}
               type="button"
-              onClick={() => setActiveCategory(category.id)}
+              onClick={() => {
+                setPosView('menu');
+                setActiveCategory(category.id);
+              }}
               className={`min-h-16 min-w-28 whitespace-normal rounded-2xl px-2 text-sm font-black leading-tight active:scale-[0.98] lg:mb-2 lg:w-full lg:min-w-0 ${
-                activeCategory === category.id
+                posView === 'menu' && activeCategory === category.id
                   ? 'bg-[#e5a93c] text-black'
                   : 'bg-white/[0.06] text-[#c8bfb0]'
               }`}
@@ -1152,16 +1211,73 @@ export function PosShell() {
               {category.name}
             </button>
           ))}
+          {/* O cashier fecha vendas no balcão, mas também precisa de ver o
+              que está a sair pela loja online — sem sair do POS nem
+              depender de acesso ao painel admin, que o perfil não tem. */}
+          <button
+            type="button"
+            onClick={() => setPosView('delivery')}
+            className={`min-h-16 min-w-28 whitespace-normal rounded-2xl px-2 text-sm font-black leading-tight active:scale-[0.98] lg:mb-2 lg:mt-2 lg:w-full lg:min-w-0 lg:border-t lg:border-white/10 lg:pt-4 ${
+              posView === 'delivery'
+                ? 'bg-[#e5a93c] text-black'
+                : 'bg-white/[0.06] text-[#c8bfb0]'
+            }`}
+          >
+            Delivery
+          </button>
         </nav>
 
         <section className="overflow-y-auto p-3 lg:p-4">
-          <div
-            className={
-              isDrinksCategory
-                ? 'grid grid-cols-4 gap-2 md:grid-cols-6 2xl:grid-cols-8'
-                : 'grid grid-cols-2 gap-3 md:grid-cols-3 2xl:grid-cols-4'
-            }
-          >
+          {posView === 'delivery' ? (
+            <div className="mx-auto flex w-full max-w-3xl flex-col gap-3">
+              <div className="flex items-center justify-between gap-3">
+                <h2 className="text-xl font-black">Delivery · {context.storeName}</h2>
+                <button
+                  type="button"
+                  onClick={() => void fetchDeliveryOrders()}
+                  disabled={deliveryLoading}
+                  className="min-h-12 shrink-0 rounded-xl bg-white/[0.07] px-4 text-sm font-bold active:bg-white/15 disabled:opacity-40"
+                >
+                  {deliveryLoading ? 'A actualizar…' : 'Actualizar'}
+                </button>
+              </div>
+              {deliveryOrders.length === 0 && !deliveryLoading && (
+                <p className="rounded-2xl border border-white/10 bg-[#1a1816] p-6 text-center text-[#847e72]">
+                  Sem pedidos de delivery neste momento.
+                </p>
+              )}
+              {deliveryOrders.map((order) => {
+                const meta =
+                  DELIVERY_STATUS_META[order.status] ??
+                  ({ label: order.status, className: 'bg-white/10 text-white' } as const);
+                return (
+                  <div key={order.id} className="rounded-2xl border border-white/10 bg-[#1a1816] p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-lg font-black">
+                          #{order.daily_number ?? order.order_number} · {order.customer_name}
+                        </p>
+                        <p className="truncate text-sm text-[#847e72]">
+                          {order.customer_phone}
+                          {order.address ? ` · ${order.address}` : ''}
+                        </p>
+                      </div>
+                      <span
+                        className={`shrink-0 rounded-full px-3 py-1 text-xs font-black uppercase ${meta.className}`}
+                      >
+                        {meta.label}
+                      </span>
+                    </div>
+                    <p className="mt-2 text-sm text-[#c8bfb0]">
+                      {order.items.map((it) => `${it.qty}× ${it.name}`).join(', ')}
+                    </p>
+                    <p className="mt-2 text-lg font-black text-[#e5a93c]">{mt(order.total_cents)}</p>
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-3 2xl:grid-cols-4">
             {visibleItems.map((item) => {
               const availability = posItemAvailability(item);
               const qty = qtyOfItem(cart, item.id);
@@ -1171,15 +1287,9 @@ export function PosShell() {
                   type="button"
                   disabled={!availability.sellable}
                   onClick={() => tapItem(item)}
-                  className={`flex flex-col overflow-hidden rounded-2xl border border-white/10 bg-[#1a1816] text-left shadow-lg active:scale-[0.98] disabled:opacity-35 ${
-                    isDrinksCategory ? 'rounded-xl' : ''
-                  }`}
+                  className="flex flex-col overflow-hidden rounded-2xl border border-white/10 bg-[#1a1816] text-left shadow-lg active:scale-[0.98] disabled:opacity-35"
                 >
-                  <span
-                    className={`relative block w-full overflow-hidden bg-black/40 ${
-                      isDrinksCategory ? 'aspect-square' : 'aspect-[4/3]'
-                    }`}
-                  >
+                  <span className="relative block aspect-[4/3] w-full overflow-hidden bg-black/40">
                     {item.photo_url && (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img
@@ -1188,20 +1298,20 @@ export function PosShell() {
                         loading="lazy"
                         decoding="async"
                         draggable={false}
+                        // object-contain nas bebidas: latas e garrafas são altas
+                        // e o cover cortava-lhes o rótulo. O cartão continua do
+                        // mesmo tamanho dos lanches — só a foto encolhe para
+                        // caber inteira lá dentro.
                         className={
                           isDrinksCategory
-                            ? 'h-full w-full object-contain p-1.5'
+                            ? 'h-full w-full object-contain p-3'
                             : 'h-full w-full object-cover'
                         }
                       />
                     )}
                     {availability.badge && (
                       <span
-                        className={`absolute rounded-full font-black uppercase ${
-                          isDrinksCategory
-                            ? 'left-1 top-1 px-1.5 py-0.5 text-[9px]'
-                            : 'left-2 top-2 px-2 py-1 text-[11px]'
-                        } ${
+                        className={`absolute left-2 top-2 rounded-full px-2 py-1 text-[11px] font-black uppercase ${
                           availability.sellable
                             ? 'bg-black/70 text-[#d8d2c6]'
                             : 'bg-[#7a2b2b] text-white'
@@ -1211,36 +1321,14 @@ export function PosShell() {
                       </span>
                     )}
                     {qty && (
-                      <span
-                        className={`absolute grid place-items-center rounded-full bg-[#e5a93c] font-black text-black shadow-lg ${
-                          isDrinksCategory
-                            ? 'right-1 top-1 h-7 min-w-7 px-1 text-sm'
-                            : 'right-2 top-2 h-11 min-w-11 px-2 text-xl'
-                        }`}
-                      >
+                      <span className="absolute right-2 top-2 grid h-11 min-w-11 place-items-center rounded-full bg-[#e5a93c] px-2 text-xl font-black text-black shadow-lg">
                         {qty}
                       </span>
                     )}
                   </span>
-                  <span
-                    className={
-                      isDrinksCategory
-                        ? 'flex flex-1 flex-col justify-between gap-0.5 p-1.5'
-                        : 'flex flex-1 flex-col justify-between gap-1 p-3'
-                    }
-                  >
-                    <span
-                      className={`block font-black leading-tight ${
-                        isDrinksCategory ? 'text-[11px]' : 'text-base'
-                      }`}
-                    >
-                      {item.name}
-                    </span>
-                    <span
-                      className={`block font-black text-[#e5a93c] ${
-                        isDrinksCategory ? 'text-xs' : 'text-xl'
-                      }`}
-                    >
+                  <span className="flex flex-1 flex-col justify-between gap-1 p-3">
+                    <span className="block text-base font-black leading-tight">{item.name}</span>
+                    <span className="block text-xl font-black text-[#e5a93c]">
                       {mt(item.price_cents)}
                     </span>
                   </span>
@@ -1248,6 +1336,7 @@ export function PosShell() {
               );
             })}
           </div>
+          )}
         </section>
 
         <aside className="flex min-h-[36rem] flex-col border-t border-white/10 bg-[#111110] lg:min-h-0 lg:border-l lg:border-t-0">
