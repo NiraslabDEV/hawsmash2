@@ -1,6 +1,7 @@
 import { createHash, timingSafeEqual } from 'node:crypto';
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import type { PrintPayload } from './types';
+import type { DisplayLine } from './customer-display';
 import type { RequestLedger } from './request-ledger';
 
 const MAX_BODY_BYTES = 1024 * 1024;
@@ -13,6 +14,11 @@ export interface LocalPrintRequest {
   payload: PrintPayload;
 }
 
+/** O que o POS manda para o visor do cliente. Ver `customer-display.ts`. */
+export type LocalDisplayRequest =
+  | { mode: 'idle' }
+  | { mode: 'text'; top: DisplayLine; bottom: DisplayLine };
+
 interface LocalServerOptions {
   token: string;
   storeId: string;
@@ -20,6 +26,30 @@ interface LocalServerOptions {
   ledger: RequestLedger;
   print(request: LocalPrintRequest): Promise<boolean>;
   drawer(requestId: string): Promise<boolean>;
+  /**
+   * Opcional: um bridge sem visor configurado continua a responder 200 ao POS.
+   * O mostrador nao e' papel nem dinheiro — nao ha `requestId` nem idempotencia
+   * a defender, e um POS que ficasse a tratar isto como erro so' produzia ruido.
+   */
+  display?(request: LocalDisplayRequest): void;
+}
+
+function validDisplayLine(value: unknown): value is DisplayLine {
+  if (!value || typeof value !== 'object') return false;
+  const line = value as Record<string, unknown>;
+  if (typeof line.left !== 'string' || line.left.length > 200) return false;
+  if (line.right !== undefined && (typeof line.right !== 'string' || line.right.length > 200)) {
+    return false;
+  }
+  return true;
+}
+
+function parseDisplayRequest(body: Record<string, unknown>): LocalDisplayRequest | null {
+  if (body.mode === 'idle') return { mode: 'idle' };
+  if (body.mode === 'text' && validDisplayLine(body.top) && validDisplayLine(body.bottom)) {
+    return { mode: 'text', top: body.top, bottom: body.bottom };
+  }
+  return null;
 }
 
 function json(response: ServerResponse, status: number, body: Record<string, unknown>): void {
@@ -108,7 +138,19 @@ export function createLocalServer(options: LocalServerOptions): Server {
           ok: true,
           storeId: options.storeId,
           uptimeSeconds: Math.floor(process.uptime()),
+          display: options.display !== undefined,
         });
+        return;
+      }
+
+      if (request.method === 'POST' && url.pathname === '/display') {
+        const frame = parseDisplayRequest(await readJson(request));
+        if (!frame) {
+          json(response, 400, { ok: false, error: 'invalid_display_request' });
+          return;
+        }
+        options.display?.(frame);
+        json(response, 200, { ok: true, shown: options.display !== undefined });
         return;
       }
 

@@ -1,3 +1,5 @@
+import type { CustomerDisplayConfig } from './customer-display';
+
 export interface PrinterEndpoint {
   ip: string;
   port: number;
@@ -19,6 +21,7 @@ export interface BridgeConfig {
   localToken: string;
   localAllowedOrigins: string[];
   localStateFile: string;
+  customerDisplay: CustomerDisplayConfig;
 }
 
 type Environment = Record<string, string | undefined>;
@@ -81,5 +84,32 @@ export function loadBridgeConfig(env: Environment): BridgeConfig {
     localToken,
     localAllowedOrigins,
     localStateFile: env.LOCAL_STATE_FILE?.trim() || './data/printed-requests.log',
+    customerDisplay: loadCustomerDisplayConfig(env),
+  };
+}
+
+/**
+ * O visor do cliente e opcional de propriedade: um bridge sem
+ * `CUSTOMER_DISPLAY_PORT` corre exactamente como antes. Nenhuma loja pode
+ * deixar de imprimir porque o mostrador nao esta configurado.
+ */
+export function loadCustomerDisplayConfig(env: Environment): CustomerDisplayConfig {
+  const protocol = (env.CUSTOMER_DISPLAY_PROTOCOL?.trim() || 'cd5220').toLowerCase();
+  if (protocol !== 'cd5220' && protocol !== 'escpos') {
+    throw new Error('CUSTOMER_DISPLAY_PROTOCOL invalido (cd5220 | escpos)');
+  }
+  const port = env.CUSTOMER_DISPLAY_PORT?.trim() ?? '';
+  if (port && port !== 'sim' && !/^COM\d{1,3}$/i.test(port)) {
+    throw new Error('CUSTOMER_DISPLAY_PORT invalido (COM1..COM255 | sim | vazio)');
+  }
+  return {
+    port: port === 'sim' ? 'sim' : port.toUpperCase(),
+    baud: positiveInteger(env.CUSTOMER_DISPLAY_BAUD, 9600, 'CUSTOMER_DISPLAY_BAUD', 921_600),
+    columns: positiveInteger(env.CUSTOMER_DISPLAY_COLUMNS, 20, 'CUSTOMER_DISPLAY_COLUMNS', 40),
+    protocol,
+    idleText: env.CUSTOMER_DISPLAY_IDLE_TEXT?.trim() || 'HAWSMASH',
+    idleSubtext: env.CUSTOMER_DISPLAY_IDLE_SUBTEXT?.trim() || 'BEM-VINDO',
+    idleStepMs: positiveInteger(env.CUSTOMER_DISPLAY_IDLE_STEP_MS, 300, 'CUSTOMER_DISPLAY_IDLE_STEP_MS', 5_000),
+    idleAfterMs: positiveInteger(env.CUSTOMER_DISPLAY_IDLE_AFTER_MS, 90_000, 'CUSTOMER_DISPLAY_IDLE_AFTER_MS'),
   };
 }

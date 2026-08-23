@@ -31,11 +31,16 @@ export function saveLocalBridgeConfig(storage: Storage, config: LocalBridgeConfi
   storage.setItem(BRIDGE_TOKEN_KEY, config.token.trim());
 }
 
-async function post(
+/**
+ * O único sítio que sabe falar com o print-bridge da LAN. Devolve sempre um
+ * booleano — nunca lança. Papel, gaveta e visor são best-effort (CLAUDE §1):
+ * um bridge em baixo não pode produzir uma excepção no caminho da venda.
+ */
+export async function postToBridge(
   config: LocalBridgeConfig,
-  path: '/print' | '/drawer',
+  path: '/print' | '/drawer' | '/display',
   body: Record<string, unknown>,
-  fetcher: Fetcher,
+  fetcher: Fetcher = fetch,
 ): Promise<boolean> {
   try {
     const response = await fetcher(`${config.baseUrl.replace(/\/$/, '')}${path}`, {
@@ -62,7 +67,7 @@ export async function printOfflineSale(
   for (const station of ['kitchen', 'bar'] as const) {
     const items = sale.items.filter((item) => item.station === station);
     if (items.length === 0 || printedStations.has(station)) continue;
-    const ok = await post(config, '/print', {
+    const ok = await postToBridge(config, '/print', {
       requestId: `${sale.clientSaleId}:order:${station}`,
       station,
       kind: 'order',
@@ -83,7 +88,7 @@ export async function printOfflineSale(
 
   let receipt = sale.localPrint.receipt;
   if (!receipt) {
-    receipt = await post(config, '/print', {
+    receipt = await postToBridge(config, '/print', {
       requestId: `${sale.clientSaleId}:receipt:counter`,
       station: 'counter',
       kind: 'receipt',
@@ -119,7 +124,7 @@ export async function printOfflineSale(
   let drawer = sale.localPrint.drawer;
   const hasCash = sale.payments.some((payment) => payment.method === 'cash');
   if (hasCash && !drawer) {
-    drawer = await post(config, '/drawer', {
+    drawer = await postToBridge(config, '/drawer', {
       requestId: `${sale.clientSaleId}:drawer:counter`,
     }, fetcher);
   }

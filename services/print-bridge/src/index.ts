@@ -7,6 +7,7 @@ import { FileRequestLedger } from './request-ledger';
 import { sendToPrinter } from './printer-client';
 import { sendDrawerPulse } from './drawer';
 import { startOperationalLoops } from './operations';
+import { CustomerDisplay } from './customer-display';
 import { initObservability, observabilityEnabled, reportError } from './observability';
 import dotenv from 'dotenv';
 
@@ -48,6 +49,20 @@ async function main(): Promise<void> {
 
   const ledger = new FileRequestLedger(config.localStateFile);
   await ledger.initialize();
+
+  // Visor do cliente. Sem `CUSTOMER_DISPLAY_PORT` fica desligado e o bridge
+  // corre como sempre correu — nenhuma loja deixa de imprimir por causa disto.
+  const display = new CustomerDisplay(config.customerDisplay);
+  if (display.enabled) {
+    console.log(
+      `[Visor] ${config.customerDisplay.port} · ${config.customerDisplay.protocol} · ` +
+        `${config.customerDisplay.columns} colunas`,
+    );
+    display.idle();
+  } else {
+    console.log('[Visor] desligado (sem CUSTOMER_DISPLAY_PORT) — B-018');
+  }
+
   const localServer = createLocalServer({
     token: config.localToken,
     storeId: config.storeId,
@@ -66,6 +81,14 @@ async function main(): Promise<void> {
       );
     },
     drawer: (requestId) => sendDrawerPulse(config.printers.counter, requestId),
+    ...(display.enabled
+      ? {
+          display: (frame) => {
+            if (frame.mode === 'idle') display.idle();
+            else display.show(frame.top, frame.bottom);
+          },
+        }
+      : {}),
   });
   await new Promise<void>((resolve, reject) => {
     localServer.once('error', reject);
@@ -82,6 +105,7 @@ async function main(): Promise<void> {
 
   process.once('SIGINT', () => {
     console.log('\n[Shutdown] A terminar print-bridge');
+    display.stop();
     stopOperationalLoops();
     localServer.close(() => process.exit(0));
   });

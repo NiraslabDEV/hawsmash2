@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { formatMT, type Cents } from '@delivery/core';
 import { createClient } from '@/utils/supabase/client';
@@ -31,6 +31,20 @@ import { syncOfflineSales } from '@/lib/pos/offline-sync';
 import { connectionStatus } from '@/lib/pos/connection-status';
 import { buildPosUpsellFunnel, type PosUpsellStep } from '@/lib/pos/pos-upsell';
 import { isPosPin, POS_IDLE_TIMEOUT_MS } from '@/lib/pos/session';
+import {
+  EMPTY_PAYMENT_INFO,
+  parsePaymentInfo,
+  paymentInstructions,
+  readCachedPaymentInfo,
+  writeCachedPaymentInfo,
+  type PosPaymentInfo,
+} from '@/lib/pos/payment-info';
+import {
+  buildDisplayFrame,
+  frameKey,
+  sendDisplayFrame,
+  type DisplayState,
+} from '@/lib/pos/customer-display';
 
 type DeliveryZone = { id: string; name: string; fee_cents: number };
 
@@ -273,6 +287,15 @@ export function PosShell() {
         deliveryEnabled: full.store?.delivery_enabled !== false,
       });
     }
+    // Os números do M-Pesa/e-Mola desta loja, ao contrário dos canais, ficam
+    // guardados: sem rede o balcão continua a vender e o cliente continua a
+    // poder pagar por móvel. Um número que só aparece com internet falha
+    // exactamente no dia em que faz falta.
+    const numeros = payload
+      ? parsePaymentInfo(payload)
+      : readCachedPaymentInfo(window.localStorage, store.slug) ?? EMPTY_PAYMENT_INFO;
+    setPaymentInfo(numeros);
+    if (payload) writeCachedPaymentInfo(window.localStorage, store.slug, numeros);
     setActiveCategory((current) => current ?? nextCategories[0]?.id ?? null);
     const { data: pinStatus, error: pinStatusError } = await supabase.rpc('pos_pin_status', {
       p_device_id: device.id,
@@ -556,6 +579,9 @@ export function PosShell() {
   const [funnel, setFunnel] = useState<PosUpsellStep[]>([]);
   const [funnelIndex, setFunnelIndex] = useState(0);
   const funnelStep = funnel[funnelIndex] ?? null;
+  const [paymentInfo, setPaymentInfo] = useState<PosPaymentInfo>(EMPTY_PAYMENT_INFO);
+  /** Último artigo tocado — é o que o visor do cliente mostra a seguir. */
+  const [lastTouched, setLastTouched] = useState<{ id: string; name: string } | null>(null);
 
   /**
    * O carrinho não vai directo ao pagamento: passa pelo funil de upsell.
@@ -590,6 +616,16 @@ export function PosShell() {
     }
     setFunnelIndex(proximo);
   }
+
+  /**
+   * Voltar ao carrinho a meio da oferta. Não é uma porta de saída do funil: o
+   * `startCheckout` volta a construí-lo no PAGAR seguinte. Serve só para ir
+   * corrigir o que já lá estava — e é a diferença entre um engano e um estorno.
+   */
+  function cancelFunnel() {
+    setFunnel([]);
+    setFunnelIndex(0);
+  }
   const visibleItems =
     categories.find((category) => category.id === activeCategory)?.items ?? [];
   const paymentPlan = useMemo(
@@ -603,7 +639,91 @@ export function PosShell() {
     return calculateChange(cashPaymentCents, cashReceivedCents);
   }, [cashPaymentCents, cashReceivedCents]);
 
+  /**
+   * Pagamento móvel: o guião que o operador diz e o número que o cliente marca.
+   *
+   * Estava tudo na cabeça de quem está ao balcão — e o número dito de cor é o
+   * género de erro que só se descobre quando o dinheiro não chega. O número vem
+   * da loja (`stores.mpesa_number`), nunca do código.
+   */
+  const mobileMethod = methods.find(
+    (method): method is 'mpesa' | 'emola' => method === 'mpesa' || method === 'emola',
+  );
+  const mobileInstructions = useMemo(() => {
+    if (!mobileMethod) return null;
+    const due = !mixed
+      ? totalCents
+      : (allocations[mobileMethod] ?? 0) || Math.max(0, paymentPlan.remainingCents);
+    return paymentInstructions(mobileMethod, paymentInfo, due);
+  }, [allocations, mixed, mobileMethod, paymentInfo, paymentPlan.remainingCents, totalCents]);
+
+  /**
+   * O que aparece no visor virado para o cliente, passo a passo. Sem venda em
+   * curso volta ao ocioso e é o bridge que passa o nome da casa a andar.
+   */
+  const displayState = useMemo<DisplayState>(() => {
+    if (confirmation) return { step: 'thanks', dailyNumber: confirmation.dailyNumber };
+    if (lines.length === 0) return { step: 'idle' };
+    if (paying) {
+      // Troco em primeiro lugar: é o número que o cliente quer confirmar.
+      if (cashPaymentCents > 0 && changeCents !== null) {
+        return { step: 'change', receivedCents: cashReceivedCents, changeCents };
+      }
+      const method = methods[0] ?? 'cash';
+      return {
+        step: 'payment',
+        method,
+        totalCents,
+        number: mobileInstructions?.prettyNumber ?? null,
+      };
+    }
+    const touched = lastTouched ? lines.find((line) => line.id === lastTouched.id) : undefined;
+    if (touched) {
+      return {
+        step: 'item',
+        name: touched.name,
+        qty: touched.qty,
+        lineTotalCents: touched.price_cents * touched.qty,
+      };
+    }
+    return { step: 'cart', itemCount: count, totalCents };
+  }, [
+    cashPaymentCents,
+    cashReceivedCents,
+    changeCents,
+    confirmation,
+    count,
+    lastTouched,
+    lines,
+    methods,
+    mobileInstructions,
+    paying,
+    totalCents,
+  ]);
+
+  // O artigo fica no visor o tempo de o cliente o ler e depois dá lugar ao
+  // total. Um visor preso no último produto não diz quanto se vai pagar.
+  useEffect(() => {
+    if (!lastTouched) return;
+    const timer = window.setTimeout(() => setLastTouched(null), 2500);
+    return () => window.clearTimeout(timer);
+  }, [lastTouched]);
+
+  // Best-effort puro: sem bridge, sem visor ou sem cabo não acontece nada e
+  // ninguém dá por isso do lado de cá do balcão (CLAUDE §1).
+  const lastDisplayFrame = useRef('');
+  useEffect(() => {
+    const bridge = readLocalBridgeConfig(window.localStorage);
+    if (!bridge) return;
+    const frame = buildDisplayFrame(displayState);
+    const key = frameKey(frame);
+    if (key === lastDisplayFrame.current) return;
+    lastDisplayFrame.current = key;
+    void sendDisplayFrame(bridge, frame);
+  }, [displayState]);
+
   function changeQty(item: MenuItem, delta: number) {
+    setLastTouched({ id: item.id, name: item.name });
     setCart((current) => {
       const existing = current[item.id];
       const qty = (existing?.qty ?? 0) + delta;
@@ -1151,10 +1271,24 @@ export function PosShell() {
       {funnelStep && (
         <div className="fixed inset-0 z-40 flex flex-col bg-[#0a0807] text-[#f6f1e6]">
           <header className="shrink-0 border-b border-white/10 px-6 py-3">
-            <p className="text-xs font-black tracking-[0.25em] text-[#847e72]">
-              PASSO {funnelIndex + 1} DE {funnel.length}
-            </p>
-            <h2 className="text-3xl font-black">{funnelStep.title}</h2>
+            <div className="flex items-start justify-between gap-4">
+              <div className="min-w-0">
+                <p className="text-xs font-black tracking-[0.25em] text-[#847e72]">
+                  PASSO {funnelIndex + 1} DE {funnel.length}
+                </p>
+                <h2 className="text-3xl font-black">{funnelStep.title}</h2>
+              </div>
+              {/* O funil é obrigatório, o caminho de volta não pode ser. Quem
+                  precisa de mexer no que já estava no carrinho vai lá, corrige,
+                  e volta a passar pela oferta — não fica preso a olhar para ela. */}
+              <button
+                type="button"
+                onClick={cancelFunnel}
+                className="min-h-16 shrink-0 rounded-2xl bg-white/10 px-5 text-base font-black active:bg-white/20"
+              >
+                ← Carrinho
+              </button>
+            </div>
             {/* A frase existe para ser dita em voz alta. É o que separa um balcão
                 que oferece de um que não oferece — e quem tem fila à frente não
                 inventa uma boa pergunta de cada vez. */}
@@ -1166,41 +1300,73 @@ export function PosShell() {
           <div className="min-h-0 flex-1 overflow-y-auto p-4">
             <div className="mx-auto flex w-full max-w-5xl flex-wrap justify-center gap-3">
               {funnelStep.items.map((item) => {
-                const qty = cart[item.id]?.qty;
+                const posItem = item as (typeof visibleItems)[number];
+                const qty = cart[item.id]?.qty ?? 0;
                 return (
-                  <button
+                  <div
                     key={item.id}
-                    type="button"
-                    onClick={() => changeQty(item as (typeof visibleItems)[number], 1)}
-                    className="flex w-60 flex-col overflow-hidden rounded-2xl border border-white/10 bg-[#1a1816] text-left shadow-lg active:scale-[0.98]"
+                    className="flex w-60 flex-col overflow-hidden rounded-2xl border border-white/10 bg-[#1a1816] text-left shadow-lg"
                   >
-                    <span className="relative block aspect-[3/2] w-full overflow-hidden bg-black/40">
-                      {item.photo_url && (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img
-                          src={item.photo_url}
-                          alt=""
-                          loading="lazy"
-                          draggable={false}
-                          // object-contain e nao object-cover: as latas e garrafas
-                          // sao altas e o cover cortava-lhes o rotulo — ficavam
-                          // sete rectangulos vermelhos indistinguiveis.
-                          className="h-full w-full object-contain p-2"
-                        />
-                      )}
-                      {qty && (
-                        <span className="absolute right-2 top-2 grid h-11 min-w-11 place-items-center rounded-full bg-[#e5a93c] px-2 text-xl font-black text-black shadow-lg">
+                    <button
+                      type="button"
+                      onClick={() => changeQty(posItem, 1)}
+                      className="flex flex-1 flex-col text-left active:scale-[0.98]"
+                    >
+                      <span className="relative block aspect-[3/2] w-full overflow-hidden bg-black/40">
+                        {item.photo_url && (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={item.photo_url}
+                            alt=""
+                            loading="lazy"
+                            draggable={false}
+                            // object-contain e nao object-cover: as latas e garrafas
+                            // sao altas e o cover cortava-lhes o rotulo — ficavam
+                            // sete rectangulos vermelhos indistinguiveis.
+                            className="h-full w-full object-contain p-2"
+                          />
+                        )}
+                        {qty > 0 && (
+                          <span className="absolute right-2 top-2 grid h-11 min-w-11 place-items-center rounded-full bg-[#e5a93c] px-2 text-xl font-black text-black shadow-lg">
+                            {qty}
+                          </span>
+                        )}
+                      </span>
+                      <span className="flex flex-1 flex-col justify-between gap-1 px-3 py-2">
+                        <span className="block text-base font-black leading-tight">{item.name}</span>
+                        <span className="block text-xl font-black text-[#e5a93c]">
+                          {mt(item.price_cents)}
+                        </span>
+                      </span>
+                    </button>
+
+                    {/* Tocar sem querer num ecrã touch é normal; ficar preso ao
+                        engano não é. Até aqui o item só saía voltando ao carrinho
+                        — que daqui nem se via. Tirar tem de estar onde se pôs. */}
+                    {qty > 0 && (
+                      <div className="flex items-stretch border-t border-white/10 bg-black/30">
+                        <button
+                          type="button"
+                          aria-label={`Tirar um ${item.name}`}
+                          onClick={() => changeQty(posItem, -1)}
+                          className="min-h-16 flex-1 text-3xl font-black text-red-300 active:bg-red-500/20"
+                        >
+                          −
+                        </button>
+                        <span className="grid min-h-16 w-14 place-items-center border-x border-white/10 text-2xl font-black">
                           {qty}
                         </span>
-                      )}
-                    </span>
-                    <span className="flex flex-1 flex-col justify-between gap-1 px-3 py-2">
-                      <span className="block text-base font-black leading-tight">{item.name}</span>
-                      <span className="block text-xl font-black text-[#e5a93c]">
-                        {mt(item.price_cents)}
-                      </span>
-                    </span>
-                  </button>
+                        <button
+                          type="button"
+                          aria-label={`Juntar um ${item.name}`}
+                          onClick={() => changeQty(posItem, 1)}
+                          className="min-h-16 flex-1 text-3xl font-black text-[#e5a93c] active:bg-white/10"
+                        >
+                          +
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 );
               })}
             </div>
@@ -1305,6 +1471,16 @@ export function PosShell() {
                   </p>
                 )}
 
+                {/* Loja sem número configurado não pode fingir que tem um.
+                    Melhor dizer o que falta do que mostrar um campo vazio. */}
+                {mobileMethod && !mobileInstructions && (
+                  <p className="rounded-2xl bg-amber-500/10 p-4 text-base font-bold text-amber-200">
+                    Esta loja ainda não tem número de{' '}
+                    {mobileMethod === 'mpesa' ? 'M-Pesa' : 'e-Mola'} configurado. Cobra pelo número
+                    do costume e avisa o gerente para o preencher em Lojas.
+                  </p>
+                )}
+
                 {error && (
                   <p
                     role="alert"
@@ -1405,6 +1581,40 @@ export function PosShell() {
                       Preencher restante
                     </button>
                   )}
+                </div>
+              )}
+
+              {/* O número grande é para o cliente ver de longe e o operador ler
+                  em voz alta sem o dizer de cor. Os passos são o guião de quem
+                  paga por M-Pesa pela primeira vez — e são os mesmos que saem
+                  no visor virado para ele. */}
+              {mobileInstructions && (
+                <div className="rounded-2xl border border-[#e5a93c]/40 bg-[#e5a93c]/[0.07] p-5">
+                  <p className="text-xs font-black tracking-[0.25em] text-[#847e72]">
+                    {mobileInstructions.label.toUpperCase()} · NÚMERO DA LOJA
+                  </p>
+                  <p className="mt-1 select-all text-5xl font-black leading-tight text-[#e5a93c]">
+                    {mobileInstructions.prettyNumber}
+                  </p>
+                  {mobileInstructions.holder && (
+                    <p className="text-lg font-bold text-[#c8bfb0]">{mobileInstructions.holder}</p>
+                  )}
+                  <p className="mt-3 rounded-xl bg-black/30 px-4 py-3 text-2xl font-black">
+                    Enviar {mobileInstructions.amount}
+                  </p>
+                  <ol className="mt-4 space-y-2">
+                    {mobileInstructions.steps.map((step, index) => (
+                      <li key={step} className="flex gap-3 text-base font-bold text-[#c8bfb0]">
+                        <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-white/10 text-sm font-black text-[#f6f1e6]">
+                          {index + 1}
+                        </span>
+                        <span>{step}</span>
+                      </li>
+                    ))}
+                  </ol>
+                  <p className="mt-3 text-sm font-black text-amber-300">
+                    Só finalizar depois de ver a SMS de confirmação.
+                  </p>
                 </div>
               )}
             </div>

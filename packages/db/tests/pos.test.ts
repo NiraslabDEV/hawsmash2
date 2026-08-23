@@ -476,7 +476,6 @@ describe("F2 — create_counter_sale", () => {
     expect(sale.error).toBeNull();
     expect(sale.data.total_cents).toBe(40000);
     expect(sale.data.change_cents).toBe(10000);
-    createdOrderIds.push(sale.data.order_id);
 
     // O nome da variante fica gravado no item: o talão e a comanda têm de dizer
     // WAGYU, senão a cozinha faz o hambúrguer errado.
@@ -488,6 +487,11 @@ describe("F2 — create_counter_sale", () => {
       unit_price_cents: 40000,
       variant_name_snapshot: "WAGYU",
     });
+
+    // Apagar já, não no afterAll: o cash-v2 corre sobre esta mesma loja e
+    // soma as vendas em dinheiro do período. Uma venda de teste esquecida
+    // aqui aparece lá como diferença de caixa inexplicada.
+    await admin.from("orders").delete().eq("id", sale.data.order_id);
   });
 
   it("mantém o preço base quando a variante escolhida é a base", async () => {
@@ -504,7 +508,7 @@ describe("F2 — create_counter_sale", () => {
 
     expect(sale.error).toBeNull();
     expect(sale.data.total_cents).toBe(30000);
-    createdOrderIds.push(sale.data.order_id);
+    await admin.from("orders").delete().eq("id", sale.data.order_id);
   });
 
   it("recusa uma variante que não pertence ao item", async () => {
@@ -544,13 +548,13 @@ describe("F2 — create_counter_sale", () => {
 
     expect(sale.error).toBeNull();
     expect(sale.data.total_cents).toBe(30000);
-    createdOrderIds.push(sale.data.order_id);
 
     const { data: items } = await admin
       .from("order_items")
       .select("variant_name_snapshot")
       .eq("order_id", sale.data.order_id);
     expect(items?.[0].variant_name_snapshot).toBeNull();
+    await admin.from("orders").delete().eq("id", sale.data.order_id);
   });
 
   it("rejeita produto esgotado sem criar pedido nem pagamento", async () => {
