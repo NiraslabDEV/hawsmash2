@@ -32,6 +32,21 @@ import { connectionStatus } from '@/lib/pos/connection-status';
 import { buildPosUpsellFunnel, type PosUpsellStep } from '@/lib/pos/pos-upsell';
 import { isPosPin, POS_IDLE_TIMEOUT_MS } from '@/lib/pos/session';
 import {
+  cartCount,
+  cartLines,
+  cartTotalCents,
+  changeQty as applyQty,
+  defaultVariant,
+  needsVariantChoice,
+  qtyOfItem,
+  removeOneOfItem,
+  resolveSellable,
+  salePayloadItems,
+  type Cart,
+  type CartLine,
+  type PosVariant,
+} from '@/lib/pos/cart';
+import {
   EMPTY_PAYMENT_INFO,
   parsePaymentInfo,
   paymentInstructions,
@@ -83,7 +98,8 @@ type AvailableStore = {
   short_name: string;
 };
 
-type CartLine = MenuItem & { qty: number };
+// O carrinho vive em `lib/pos/cart.ts`: é lá que se decide o preço da variante
+// e o que conta como a mesma linha. Aqui só se desenha.
 type AllocationMap = Partial<Record<CounterPaymentMethod, number>>;
 
 const DEVICE_STORAGE_KEY = 'hs_pos_device_id';
@@ -148,7 +164,9 @@ export function PosShell() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
   const warmedPhotoUrls = useRef<Set<string>>(new Set());
-  const [cart, setCart] = useState<Record<string, CartLine>>({});
+  const [cart, setCart] = useState<Cart>({});
+  /** Item à espera de escolha de variante (HAW/WAGYU, Zero, 6 unidades…). */
+  const [variantPick, setVariantPick] = useState<MenuItem | null>(null);
   const [saleId, setSaleId] = useState(() => crypto.randomUUID());
   const [methods, setMethods] = useState<CounterPaymentMethod[]>(['cash']);
   const [mixed, setMixed] = useState(false);
@@ -375,7 +393,11 @@ export function PosShell() {
             p_payload: {
               clientSaleId: sale.clientSaleId,
               deviceId: sale.deviceId,
-              items: sale.items.map((item) => ({ menuItemId: item.menuItemId, qty: item.qty })),
+              items: sale.items.map((item) => ({
+                menuItemId: item.menuItemId,
+                qty: item.qty,
+                ...(item.variantId ? { variantId: item.variantId } : {}),
+              })),
               payments: sale.payments,
               offlineTotalCents: sale.totalCents,
               ...(sale.cashReceivedCents == null
@@ -523,12 +545,12 @@ export function PosShell() {
     setLocked(false);
   }
 
-  const lines = useMemo(() => Object.values(cart), [cart]);
+  const lines = useMemo(() => cartLines(cart), [cart]);
   const totalCents = useMemo(
-    () => lines.reduce((sum, line) => sum + line.price_cents * line.qty, 0),
-    [lines],
+    () => cartTotalCents(cart),
+    [cart],
   );
-  const count = useMemo(() => lines.reduce((sum, line) => sum + line.qty, 0), [lines]);
+  const count = useMemo(() => cartCount(cart), [cart]);
 
   // Aquece o cache das fotos do cardápio INTEIRO, não só o da categoria aberta.
   // Sem isto, uma categoria que ninguém abriu com rede aparece sem imagens
@@ -614,7 +636,7 @@ export function PosShell() {
     const passos = buildPosUpsellFunnel({
       enabled: channels.upsellEnabled,
       categories,
-      cart: lines.map((line) => ({ menuItemId: line.id, qty: line.qty })),
+      cart: lines.map((line) => ({ menuItemId: line.menuItemId, qty: line.qty })),
       // Estável durante esta venda, diferente na próxima: roda as frases sem as
       // fazer piscar enquanto o operador está a ler.
       seed: Math.floor(Date.now() / 1000),
@@ -747,18 +769,38 @@ export function PosShell() {
     void sendDisplayFrame(bridge, frame);
   }, [displayState]);
 
-  function changeQty(item: MenuItem, delta: number) {
-    setLastTouched({ id: item.id, name: item.name });
-    setCart((current) => {
-      const existing = current[item.id];
-      const qty = (existing?.qty ?? 0) + delta;
-      if (qty <= 0) {
-        const next = { ...current };
-        delete next[item.id];
-        return next;
-      }
-      return { ...current, [item.id]: { ...item, qty } };
-    });
+  function changeQty(item: MenuItem, delta: number, variant?: PosVariant | null) {
+    // Sem variante indicada assume-se a de omissão. É o que faz um produto sem
+    // escolha (batata) e um produto de escolha única continuarem a ser um toque.
+    const sellable = resolveSellable(item, variant ?? defaultVariant(item));
+    setLastTouched({ id: sellable.id, name: sellable.name });
+    setCart((current) => applyQty(current, sellable, delta));
+  }
+
+  /**
+   * O toque na grelha.
+   *
+   * Um Classic Smash não é um preço só: HAW são 300 e WAGYU são 400. Enquanto
+   * o balcão não perguntava, o WAGYU **não se conseguia vender** — e o servidor
+   * (migration 1018) já sabia cobrá-lo. Pergunta-se apenas quando há mesmo
+   * escolha; o resto do cardápio continua a entrar com um toque.
+   */
+  function tapItem(item: MenuItem) {
+    if (needsVariantChoice(item)) {
+      setVariantPick(item);
+      return;
+    }
+    changeQty(item, 1);
+  }
+
+  /**
+   * O ± da lista do carrinho. Age sobre a linha que já existe, e por isso não
+   * volta a perguntar a variante: quem já escolheu WAGYU e carrega no + quer
+   * outro WAGYU, não outra pergunta.
+   */
+  function changeLineQty(line: CartLine, delta: number) {
+    setLastTouched({ id: line.id, name: line.name });
+    setCart((current) => applyQty(current, line, delta));
   }
 
   function selectMethod(method: CounterPaymentMethod) {
@@ -844,7 +886,10 @@ export function PosShell() {
         storeName: context.storeName,
         createdAt,
         items: lines.map((line) => ({
-          menuItemId: line.id,
+          menuItemId: line.menuItemId,
+          // Sem o variantId aqui, um WAGYU vendido sem rede sincronizava ao
+          // preco base: cobrado 400 ao cliente, lancado 300 no servidor.
+          ...(line.variantId ? { variantId: line.variantId } : {}),
           name: line.name,
           qty: line.qty,
           unitPriceCents: line.price_cents,
@@ -891,7 +936,7 @@ export function PosShell() {
       p_payload: {
         clientSaleId: saleId,
         deviceId: context.deviceId,
-        items: lines.map((line) => ({ menuItemId: line.id, qty: line.qty })),
+        items: salePayloadItems(lines),
         payments: paymentPlan.payments,
         ...(cashPaymentCents > 0 ? { cashReceivedCents } : {}),
         // Campos que a RPC sempre aceitou e o POS nunca enviou. Só vão no
@@ -1119,13 +1164,13 @@ export function PosShell() {
           >
             {visibleItems.map((item) => {
               const availability = posItemAvailability(item);
-              const qty = cart[item.id]?.qty;
+              const qty = qtyOfItem(cart, item.id);
               return (
                 <button
                   key={item.id}
                   type="button"
                   disabled={!availability.sellable}
-                  onClick={() => changeQty(item, 1)}
+                  onClick={() => tapItem(item)}
                   className={`flex flex-col overflow-hidden rounded-2xl border border-white/10 bg-[#1a1816] text-left shadow-lg active:scale-[0.98] disabled:opacity-35 ${
                     isDrinksCategory ? 'rounded-xl' : ''
                   }`}
@@ -1288,7 +1333,7 @@ export function PosShell() {
                     <div className="flex items-center gap-1">
                       <button
                         type="button"
-                        onClick={() => changeQty(line, -1)}
+                        onClick={() => changeLineQty(line, -1)}
                         className="grid min-h-16 min-w-16 place-items-center rounded-xl bg-white/10 text-xl font-black active:bg-white/20"
                         aria-label={`Retirar ${line.name}`}
                       >
@@ -1297,7 +1342,7 @@ export function PosShell() {
                       <span className="min-w-9 text-center text-lg font-black">{line.qty}</span>
                       <button
                         type="button"
-                        onClick={() => changeQty(line, 1)}
+                        onClick={() => changeLineQty(line, 1)}
                         className="grid min-h-16 min-w-16 place-items-center rounded-xl bg-white/10 text-xl font-black active:bg-white/20"
                         aria-label={`Adicionar ${line.name}`}
                       >
@@ -1336,6 +1381,48 @@ export function PosShell() {
         </aside>
       </div>
 
+      {/* Selector de variante.
+          O Classic Smash não tem um preço: HAW são 300 e WAGYU são 400. Até
+          aqui o balcão não perguntava e o WAGYU simplesmente não se vendia,
+          enquanto o servidor (migration 1018) já o sabia cobrar. Aparece só
+          quando há mesmo escolha — um toque a mais em cada batata frita seriam
+          segundos que ao balcão não existem. */}
+      {variantPick && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 p-4 sm:items-center">
+          <div className="w-full max-w-2xl rounded-3xl border border-white/10 bg-[#141210] p-5 shadow-2xl">
+            <p className="text-xs font-black tracking-[0.25em] text-[#847e72]">QUAL?</p>
+            <h2 className="mb-4 text-3xl font-black text-[#f6f1e6]">{variantPick.name}</h2>
+
+            <div className="grid gap-3 sm:grid-cols-2">
+              {(variantPick.variants ?? []).map((variante) => (
+                <button
+                  key={variante.id}
+                  type="button"
+                  onClick={() => {
+                    changeQty(variantPick, 1, variante);
+                    setVariantPick(null);
+                  }}
+                  className="flex min-h-24 items-center justify-between gap-3 rounded-2xl border border-white/10 bg-[#1a1816] px-5 text-left active:scale-[0.98]"
+                >
+                  <span className="text-2xl font-black text-[#f6f1e6]">{variante.name}</span>
+                  <span className="shrink-0 text-2xl font-black text-[#e5a93c]">
+                    {mt(variante.price_cents)}
+                  </span>
+                </button>
+              ))}
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setVariantPick(null)}
+              className="mt-4 min-h-16 w-full rounded-2xl bg-white/10 text-lg font-black text-[#f6f1e6] active:bg-white/20"
+            >
+              Cancelar
+            </button>
+          </div>
+        </div>
+      )}
+
       {funnelStep && (
         <div className="fixed inset-0 z-40 flex flex-col bg-[#0a0807] text-[#f6f1e6]">
           <header className="shrink-0 border-b border-white/10 px-6 py-3">
@@ -1369,7 +1456,7 @@ export function PosShell() {
             <div className="mx-auto flex w-full max-w-5xl flex-wrap justify-center gap-3">
               {funnelStep.items.map((item) => {
                 const posItem = item as (typeof visibleItems)[number];
-                const qty = cart[item.id]?.qty ?? 0;
+                const qty = qtyOfItem(cart, item.id);
                 return (
                   <div
                     key={item.id}
@@ -1377,7 +1464,7 @@ export function PosShell() {
                   >
                     <button
                       type="button"
-                      onClick={() => changeQty(posItem, 1)}
+                      onClick={() => tapItem(posItem)}
                       className="flex flex-1 flex-col text-left active:scale-[0.98]"
                     >
                       <span className="relative block aspect-[3/2] w-full overflow-hidden bg-black/40">
@@ -1416,7 +1503,7 @@ export function PosShell() {
                         <button
                           type="button"
                           aria-label={`Tirar um ${item.name}`}
-                          onClick={() => changeQty(posItem, -1)}
+                          onClick={() => setCart((atual) => removeOneOfItem(atual, posItem.id))}
                           className="min-h-16 flex-1 text-3xl font-black text-red-300 active:bg-red-500/20"
                         >
                           −
@@ -1427,7 +1514,7 @@ export function PosShell() {
                         <button
                           type="button"
                           aria-label={`Juntar um ${item.name}`}
-                          onClick={() => changeQty(posItem, 1)}
+                          onClick={() => tapItem(posItem)}
                           className="min-h-16 flex-1 text-3xl font-black text-[#e5a93c] active:bg-white/10"
                         >
                           +

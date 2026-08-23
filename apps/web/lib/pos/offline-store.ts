@@ -82,6 +82,13 @@ export type OfflineSaleDraft = {
   createdAt: string;
   items: Array<{
     menuItemId: string;
+    /**
+     * Variante escolhida (HAW/WAGYU, Zero, 6 unidades…). Sem isto uma venda
+     * feita sem rede sincronizava ao **preço base** — um WAGYU cobrado ao
+     * cliente a 400 e lançado no servidor a 300. É dinheiro a fugir num
+     * caminho que ninguém olha.
+     */
+    variantId?: string;
     name: string;
     qty: number;
     unitPriceCents: number;
@@ -110,6 +117,7 @@ const offlineSaleDraftSchema: z.ZodType<OfflineSaleDraft> = z.object({
   createdAt: z.string().datetime(),
   items: z.array(z.object({
     menuItemId: z.string().uuid(),
+    variantId: z.string().uuid().optional(),
     name: z.string().min(1),
     qty: z.number().int().positive(),
     unitPriceCents: z.number().int().nonnegative(),
