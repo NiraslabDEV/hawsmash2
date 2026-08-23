@@ -1,3 +1,4 @@
+import { LOGO_RASTER } from '../logo';
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -71,7 +72,9 @@ describe('formatos HAWSMASH de 80 mm', () => {
     const document = createKitchenTicket(kitchen);
     const text = decodeReceipt(document);
 
-    expect(text).toContain('HAWSMASH MAPUTO');
+    // 'HAWSMASH' passou a ser o logo em raster; no texto fica so a loja.
+    expect(document.includes(LOGO_RASTER)).toBe(true);
+    expect(text).toContain('MAPUTO');
     expect(text).toContain('Nº 42');
     expect(text).toContain('BALCÃO');
     expect(text).toContain('2x Classic Smash');
@@ -86,7 +89,9 @@ describe('formatos HAWSMASH de 80 mm', () => {
     const document = createCustomerReceipt(receipt);
     const text = decodeReceipt(document);
 
-    expect(text).toContain('HAWSMASH MAPUTO');
+    // 'HAWSMASH' passou a ser o logo em raster; no texto fica so a loja.
+    expect(document.includes(LOGO_RASTER)).toBe(true);
+    expect(text).toContain('MAPUTO');
     expect(text).toContain('Av. 24 de Julho, Maputo');
     expect(text).toContain('PEDIDO MPT-0042');
     expect(text).toContain('2x Classic Smash');
@@ -106,7 +111,9 @@ describe('formatos HAWSMASH de 80 mm', () => {
     const text = decodeReceipt(document);
 
     expect(text).toContain('FECHO DE CAIXA');
-    expect(text).toContain('HAWSMASH MAPUTO');
+    // 'HAWSMASH' passou a ser o logo em raster; no texto fica so a loja.
+    expect(document.includes(LOGO_RASTER)).toBe(true);
+    expect(text).toContain('MAPUTO');
     expect(text).toContain('Fundo inicial');
     expect(text).toContain('Vendas dinheiro');
     expect(text).toContain('Esperado na gaveta');

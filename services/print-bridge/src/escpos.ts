@@ -3,6 +3,7 @@
 // Acentos: CP1252 (WPC1252) selecionada na impressora; texto em latin1
 // cujos bytes coincidem com CP1252 para acentos do portugues.
 import { cents, formatMT } from '@delivery/core';
+import { LOGO_RASTER } from './logo';
 import type {
   CashClosePayload,
   CustomerReceiptPayload,
@@ -17,6 +18,11 @@ const ESC = 0x1b;
 const GS = 0x1d;
 
 const INIT = Buffer.from([ESC, 0x40]);
+// FS . cancela o modo Kanji. E ESSENCIAL nas termicas chinesas (a XP-T80Q tem
+// "Chinese character: Yes"): sem isto os bytes >=0x80 dos acentos portugueses
+// sao lidos como inicio de um caractere de duplo-byte e sai lixo no papel.
+// Licao aprendida em producao no HAWSMASH 1.0 — nao repetir.
+const CANCEL_KANJI = Buffer.from([0x1c, 0x2e]);
 const CODEPAGE_CP1252 = Buffer.from([ESC, 0x74, 16]);
 const ALIGN_LEFT = Buffer.from([ESC, 0x61, 0]);
 const ALIGN_CENTER = Buffer.from([ESC, 0x61, 1]);
@@ -24,6 +30,7 @@ const BOLD_ON = Buffer.from([ESC, 0x45, 1]);
 const BOLD_OFF = Buffer.from([ESC, 0x45, 0]);
 const SIZE_NORMAL = Buffer.from([GS, 0x21, 0x00]);
 const SIZE_DOUBLE = Buffer.from([GS, 0x21, 0x11]);
+const SIZE_TRIPLE = Buffer.from([GS, 0x21, 0x22]);
 export const CUT_FULL = Buffer.from([GS, 0x56, 0x00]);
 const WIDTH = 48;
 
@@ -139,9 +146,27 @@ function channelLabel(channel: KitchenTicketPayload['channel']): string {
   return labels[channel];
 }
 
+/**
+ * O cabecalho da casa: logo em raster e o nome da loja por baixo.
+ *
+ * O raster vem do bridge do 1.0, onde correu meses em producao — e e por isso
+ * que o talao do HAWSMASH se reconhece de longe. Se por alguma razao o logo
+ * nao estiver disponivel, cai para o nome em corpo triplo em vez de sair um
+ * talao anonimo.
+ */
+function brandHeader(storeShortName: string): Buffer[] {
+  const chunks: Buffer[] = [INIT, CANCEL_KANJI, CODEPAGE_CP1252, ALIGN_CENTER];
+  if (LOGO_RASTER.length > 0) {
+    chunks.push(LOGO_RASTER, feed(1));
+  } else {
+    chunks.push(BOLD_ON, SIZE_TRIPLE, line('HAWSMASH'), SIZE_NORMAL, BOLD_OFF);
+  }
+  chunks.push(BOLD_ON, line(storeShortName.toUpperCase()), BOLD_OFF);
+  return chunks;
+}
+
 export function createKitchenTicket(payload: KitchenTicketPayload): Buffer {
-  const chunks: Buffer[] = [INIT, CODEPAGE_CP1252, ALIGN_CENTER];
-  chunks.push(BOLD_ON, line(`HAWSMASH ${payload.store_short_name.toUpperCase()}`), BOLD_OFF);
+  const chunks: Buffer[] = brandHeader(payload.store_short_name);
   chunks.push(SIZE_DOUBLE, BOLD_ON, line(`Nº ${payload.daily_number}`), BOLD_OFF, SIZE_NORMAL);
   chunks.push(BOLD_ON, line(channelLabel(payload.channel)), BOLD_OFF);
   chunks.push(line(maputoTime(payload.created_at)), ALIGN_LEFT, line(rule('=')));
@@ -163,8 +188,7 @@ export function createKitchenTicket(payload: KitchenTicketPayload): Buffer {
 }
 
 export function createCustomerReceipt(payload: CustomerReceiptPayload): Buffer {
-  const chunks: Buffer[] = [INIT, CODEPAGE_CP1252, ALIGN_CENTER];
-  chunks.push(BOLD_ON, line(`HAWSMASH ${payload.store_short_name.toUpperCase()}`), BOLD_OFF);
+  const chunks: Buffer[] = brandHeader(payload.store_short_name);
   if (payload.store_address) {
     for (const addressLine of wrap(payload.store_address)) chunks.push(line(addressLine));
   }
@@ -214,8 +238,8 @@ export function createCustomerReceipt(payload: CustomerReceiptPayload): Buffer {
 }
 
 export function createCashCloseReceipt(payload: CashClosePayload): Buffer {
-  const chunks: Buffer[] = [INIT, CODEPAGE_CP1252, ALIGN_CENTER];
-  chunks.push(BOLD_ON, line(`HAWSMASH ${payload.store_short_name.toUpperCase()}`), BOLD_OFF);
+  // O fecho de caixa vai para o dono e para o arquivo: leva a marca como no 1.0.
+  const chunks: Buffer[] = brandHeader(payload.store_short_name);
   chunks.push(SIZE_DOUBLE, BOLD_ON, line('FECHO DE CAIXA'), BOLD_OFF, SIZE_NORMAL);
   chunks.push(line(payload.shift_label), line(`${maputoTime(payload.opened_at)} - ${maputoTime(payload.closed_at)}`));
   chunks.push(ALIGN_LEFT, line(rule('=')));
