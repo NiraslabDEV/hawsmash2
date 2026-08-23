@@ -64,7 +64,7 @@ describe('integração ESC/POS com o simulador TCP', () => {
     await once(firstServer, 'listening');
     const firstAddress = firstServer.address();
     if (!firstAddress || typeof firstAddress === 'string') throw new Error('Simulador sem porta TCP');
-    expect(await sendToPrinter('127.0.0.1', firstAddress.port, kitchen, 'job-order', 'order')).toBe(true);
+    expect(await sendToPrinter({ kind: 'tcp', ip: '127.0.0.1', port: firstAddress.port }, kitchen, 'job-order', 'order')).toBe(true);
     expect(decodeReceipt(await firstDocument)).toContain('Nº 17');
 
     const secondDocument = nextDocument();
@@ -72,7 +72,7 @@ describe('integração ESC/POS com o simulador TCP', () => {
     await once(secondServer, 'listening');
     const secondAddress = secondServer.address();
     if (!secondAddress || typeof secondAddress === 'string') throw new Error('Simulador sem porta TCP');
-    expect(await sendToPrinter('127.0.0.1', secondAddress.port, receipt, 'job-receipt', 'receipt')).toBe(true);
+    expect(await sendToPrinter({ kind: 'tcp', ip: '127.0.0.1', port: secondAddress.port }, receipt, 'job-receipt', 'receipt')).toBe(true);
     expect(decodeReceipt(await secondDocument)).toContain('TOTAL 450 MT');
     expect(received).toHaveLength(2);
   });

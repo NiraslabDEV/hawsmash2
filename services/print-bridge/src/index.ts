@@ -8,6 +8,7 @@ import { sendToPrinter } from './printer-client';
 import { sendDrawerPulse } from './drawer';
 import { startOperationalLoops } from './operations';
 import { CustomerDisplay } from './customer-display';
+import { describeTarget } from './printer-target';
 import { initObservability, observabilityEnabled, reportError } from './observability';
 import dotenv from 'dotenv';
 
@@ -24,8 +25,8 @@ async function main(): Promise<void> {
     ? {
         ...loadedConfig,
         printers: {
-          kitchen: { ip: '127.0.0.1', port: SIMULATOR_PORT },
-          counter: { ip: '127.0.0.1', port: SIMULATOR_PORT },
+          kitchen: { kind: 'tcp' as const, ip: '127.0.0.1', port: SIMULATOR_PORT },
+          counter: { kind: 'tcp' as const, ip: '127.0.0.1', port: SIMULATOR_PORT },
         },
       }
     : loadedConfig;
@@ -43,8 +44,8 @@ async function main(): Promise<void> {
   } else {
     console.log('\n[Mode] Production Mode (Real Printer)');
     console.log(`[Config] Loja: ${config.storeId}`);
-    console.log(`[Config] Cozinha: ${config.printers.kitchen.ip}:${config.printers.kitchen.port}`);
-    console.log(`[Config] Balcão: ${config.printers.counter.ip}:${config.printers.counter.port}\n`);
+    console.log(`[Config] Cozinha: ${describeTarget(config.printers.kitchen)}`);
+    console.log(`[Config] Balcão: ${describeTarget(config.printers.counter)}\n`);
   }
 
   const ledger = new FileRequestLedger(config.localStateFile);
@@ -73,8 +74,7 @@ async function main(): Promise<void> {
         ? config.printers.kitchen
         : config.printers.counter;
       return sendToPrinter(
-        printer.ip,
-        printer.port,
+        printer,
         request.payload,
         request.requestId,
         request.kind,

@@ -1,9 +1,7 @@
 import type { CustomerDisplayConfig } from './customer-display';
+import { parsePrinterTarget, type PrinterTarget } from './printer-target';
 
-export interface PrinterEndpoint {
-  ip: string;
-  port: number;
-}
+export type PrinterEndpoint = PrinterTarget;
 
 export interface BridgeConfig {
   supabaseUrl: string;
@@ -45,6 +43,30 @@ function positiveInteger(
   return parsed;
 }
 
+/**
+ * Onde imprime cada estação.
+ *
+ * `PRINTER_KITCHEN` / `PRINTER_COUNTER` aceitam o destino completo
+ * (`windows://POS80`, `serial://COM3`, `tcp://192.168.1.50:9100`). O
+ * `PRINTER_IP_*` de sempre continua a valer e continua a significar TCP — os
+ * `.env` que já existem nas lojas não podem deixar de funcionar por causa disto.
+ */
+function resolvePrinter(
+  env: Environment,
+  station: 'KITCHEN' | 'COUNTER',
+  defaultPort: number,
+): PrinterTarget {
+  const alvo = env[`PRINTER_${station}`]?.trim();
+  if (alvo) {
+    try {
+      return parsePrinterTarget(alvo, defaultPort);
+    } catch (error) {
+      throw new Error(`PRINTER_${station} inválido: ${(error as Error).message}`);
+    }
+  }
+  return { kind: 'tcp', ip: required(env, `PRINTER_IP_${station}`), port: defaultPort };
+}
+
 export function loadBridgeConfig(env: Environment): BridgeConfig {
   const storeId = required(env, 'STORE_ID');
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(storeId)) {
@@ -75,8 +97,8 @@ export function loadBridgeConfig(env: Environment): BridgeConfig {
     bridgeDeviceId,
     appVersion: env.BRIDGE_APP_VERSION?.trim() || '2.0.0',
     printers: {
-      kitchen: { ip: required(env, 'PRINTER_IP_KITCHEN'), port: printerPort },
-      counter: { ip: required(env, 'PRINTER_IP_COUNTER'), port: printerPort },
+      kitchen: resolvePrinter(env, 'KITCHEN', printerPort),
+      counter: resolvePrinter(env, 'COUNTER', printerPort),
     },
     pollIntervalMs: positiveInteger(env.POLL_INTERVAL_MS, 3000, 'POLL_INTERVAL_MS'),
     localHttpHost: env.LOCAL_HTTP_HOST?.trim() || '0.0.0.0',

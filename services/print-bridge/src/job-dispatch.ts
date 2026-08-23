@@ -15,7 +15,7 @@ interface DispatchDependencies {
 
 const defaultDependencies: DispatchDependencies = {
   print: (printer, kind, payload, requestId) =>
-    sendToPrinter(printer.ip, printer.port, payload, requestId, kind),
+    sendToPrinter(printer, payload, requestId, kind),
   drawer: sendDrawerPulse,
 };
 

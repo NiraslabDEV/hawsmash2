@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { dispatchPrintJob } from '../job-dispatch';
 import type { PrintJob } from '../types';
 
-const printer = { ip: '192.168.1.51', port: 9100 };
+const printer = { kind: 'tcp' as const, ip: '192.168.1.51', port: 9100 };
 const baseJob: PrintJob = {
   id: '00000000-0000-4000-8000-000000000201',
   store_id: '00000000-0000-4000-8000-000000000101',

@@ -1,7 +1,8 @@
-import type { BridgeConfig, PrinterEndpoint } from './config';
+import type { BridgeConfig } from './config';
+import type { PrinterTarget } from './printer-target';
 import type { PrintJob } from './types';
 
-export function resolvePrinter(job: PrintJob, config: BridgeConfig): PrinterEndpoint {
+export function resolvePrinter(job: PrintJob, config: BridgeConfig): PrinterTarget {
   if (job.kind === 'order' && job.station !== 'counter') {
     return config.printers.kitchen;
   }

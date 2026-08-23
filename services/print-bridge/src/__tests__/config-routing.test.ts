@@ -48,8 +48,8 @@ describe('configuração multi-loja do print-bridge', () => {
     expect(config.storeId).toBe(validEnv.STORE_ID);
     expect(config.bridgeDeviceId).toBe(validEnv.BRIDGE_DEVICE_ID);
     expect(config.printers).toEqual({
-      kitchen: { ip: '192.168.10.50', port: 9100 },
-      counter: { ip: '192.168.10.51', port: 9100 },
+      kitchen: { kind: 'tcp', ip: '192.168.10.50', port: 9100 },
+      counter: { kind: 'tcp', ip: '192.168.10.51', port: 9100 },
     });
     expect(config.localAllowedOrigins).toEqual(['https://staging.hawsmash.test']);
   });

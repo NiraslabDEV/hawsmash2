@@ -4,6 +4,7 @@ import type { PrintJob } from './types';
 import type { BridgeConfig } from './config';
 import { claimPrintJob, fetchQueuedJobs } from './repository';
 import { resolvePrinter } from './printer-routing';
+import { describeTarget } from './printer-target';
 import { dispatchPrintJob } from './job-dispatch';
 
 export function createBridgeClient(config: BridgeConfig): SupabaseClient {
@@ -67,7 +68,7 @@ async function processJob(
   if (!claimed) return;
 
   const printer = resolvePrinter(job, config);
-  console.log(`[Poller] Enviando para ${printer.ip}:${printer.port}`);
+  console.log(`[Poller] Enviando para ${describeTarget(printer)}`);
   const success = await dispatchPrintJob(job, printer);
 
   if (success) {

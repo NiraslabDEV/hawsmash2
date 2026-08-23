@@ -1,6 +1,12 @@
-// TCP printer client com retry/backoff.
+// Cliente de impressora com retry/backoff.
+//
+// Tres destinos possiveis (ver `printer-target.ts`): TCP para as impressoras de
+// rede das lojas, fila do Windows para a impressora acoplada ao PC touch, e
+// porta serie. O retry e o backoff sao os mesmos para os tres — falhar a
+// imprimir nunca pode travar nem esconder a venda (CLAUDE §8.2).
 import { createConnection } from 'net';
 import { createPrintDocument } from './escpos';
+import { describeTarget, sendToSerialPrinter, sendToWindowsQueue, type PrinterTarget } from './printer-target';
 import type { PrintPayload } from './types';
 
 const RETRY_ATTEMPTS = 3;
@@ -14,19 +20,17 @@ export interface SendOptions {
 }
 
 export async function sendToPrinter(
-  ip: string,
-  port: number,
+  target: PrinterTarget,
   job: PrintPayload,
   jobId: string,
   kind = 'order',
   opts: SendOptions = {},
 ): Promise<boolean> {
-  return sendBufferToPrinter(ip, port, createPrintDocument(kind, job), jobId, opts);
+  return sendBufferToPrinter(target, createPrintDocument(kind, job), jobId, opts);
 }
 
 export async function sendBufferToPrinter(
-  ip: string,
-  port: number,
+  target: PrinterTarget,
   bytes: Buffer,
   jobId: string,
   opts: SendOptions = {},
@@ -36,7 +40,7 @@ export async function sendBufferToPrinter(
   const timeoutMs = opts.timeoutMs ?? CONNECT_TIMEOUT;
   for (let attempt = 1; attempt <= attempts; attempt++) {
     try {
-      await sendOnce(ip, port, bytes, timeoutMs);
+      await deliver(target, bytes, timeoutMs);
       return true;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -48,8 +52,21 @@ export async function sendBufferToPrinter(
     }
   }
 
-  console.error(`[Printer ${jobId}] FALHOU após ${attempts} tentativas em ${ip}:${port}`);
+  console.error(
+    `[Printer ${jobId}] FALHOU após ${attempts} tentativas em ${describeTarget(target)}`,
+  );
   return false;
+}
+
+function deliver(target: PrinterTarget, bytes: Buffer, timeoutMs: number): Promise<void> {
+  switch (target.kind) {
+    case 'tcp':
+      return sendOnce(target.ip, target.port, bytes, timeoutMs);
+    case 'windows':
+      return sendToWindowsQueue(target.share, bytes);
+    case 'serial':
+      return sendToSerialPrinter(target.port, target.baud, bytes);
+  }
 }
 
 function sendOnce(ip: string, port: number, bytes: Buffer, timeoutMs: number): Promise<void> {
