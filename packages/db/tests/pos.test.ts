@@ -19,6 +19,9 @@ let cashier: SupabaseClient;
 let maputoStoreId: string;
 let matolaStoreId: string;
 let classicSmashId: string;
+let wagyuVariantId: string;
+let hawVariantId: string;
+let doubleSmashVariantId: string;
 let posDeviceId: string;
 let matolaPosDeviceId: string;
 let managerUserId: string;
@@ -66,6 +69,39 @@ beforeAll(async () => {
     throw new Error(`Setup POS: Classic Smash inválido — ${itemError?.message}`);
   }
   classicSmashId = item.id;
+
+  // Variantes: o preço da variante SUBSTITUI o do item base (HAW 300, WAGYU 400).
+  // É assim que o create_order já preça na loja online, e o balcão tem de fazer
+  // a mesma conta — duas contas diferentes para o mesmo preço é o que a Regra 2
+  // existe para impedir.
+  const { data: variants, error: variantsError } = await admin
+    .from("menu_item_variants")
+    .select("id,name,price_cents,menu_item_id")
+    .eq("menu_item_id", classicSmashId);
+  if (variantsError || !variants?.length) {
+    throw new Error(`Setup POS: variantes do Classic Smash — ${variantsError?.message}`);
+  }
+  const wagyu = variants.find((v) => v.name === "WAGYU");
+  const haw = variants.find((v) => v.name === "HAW");
+  if (!wagyu || !haw) throw new Error("Setup POS: faltam as variantes HAW/WAGYU");
+  if (wagyu.price_cents !== 40000) {
+    throw new Error(`Setup POS: WAGYU está a ${wagyu.price_cents}, esperado 40000`);
+  }
+  wagyuVariantId = wagyu.id;
+  hawVariantId = haw.id;
+
+  // Variante de OUTRO item, para provar que não se pode colar a um item qualquer.
+  const { data: outroItem } = await admin
+    .from("menu_items")
+    .select("id")
+    .eq("name", "Double Smash")
+    .single();
+  const { data: outrasVariantes } = await admin
+    .from("menu_item_variants")
+    .select("id")
+    .eq("menu_item_id", outroItem?.id ?? "")
+    .limit(1);
+  doubleSmashVariantId = outrasVariantes?.[0]?.id ?? "";
 
   const { data: storeItem, error: storeItemError } = await admin
     .from("store_items")
@@ -417,6 +453,104 @@ describe("F2 — create_counter_sale", () => {
     expect(payments).toEqual([
       { method: "cash", amount_cents: 30000, status: "confirmed" },
     ]);
+  });
+
+  // ─── Variantes: o balcão vende WAGYU ao preço de WAGYU ───────────────────
+  //
+  // Antes disto o POS preçava só por menuItemId e cobrava sempre o preço base:
+  // cada WAGYU vendido ao balcão perdia 100 MT, com o talão a sair certinho e
+  // o preço errado. A loja online já vendia bem — só o balcão é que não.
+
+  it("cobra o preço da variante, não o do item base", async () => {
+    const clientSaleId = crypto.randomUUID();
+    const sale = await manager.rpc("create_counter_sale", {
+      p_payload: {
+        clientSaleId,
+        deviceId: posDeviceId,
+        items: [{ menuItemId: classicSmashId, qty: 1, variantId: wagyuVariantId }],
+        payments: [{ method: "cash", amountCents: 40000 }],
+        cashReceivedCents: 50000,
+      },
+    });
+
+    expect(sale.error).toBeNull();
+    expect(sale.data.total_cents).toBe(40000);
+    expect(sale.data.change_cents).toBe(10000);
+    createdOrderIds.push(sale.data.order_id);
+
+    // O nome da variante fica gravado no item: o talão e a comanda têm de dizer
+    // WAGYU, senão a cozinha faz o hambúrguer errado.
+    const { data: items } = await admin
+      .from("order_items")
+      .select("unit_price_cents,variant_name_snapshot")
+      .eq("order_id", sale.data.order_id);
+    expect(items?.[0]).toMatchObject({
+      unit_price_cents: 40000,
+      variant_name_snapshot: "WAGYU",
+    });
+  });
+
+  it("mantém o preço base quando a variante escolhida é a base", async () => {
+    const clientSaleId = crypto.randomUUID();
+    const sale = await manager.rpc("create_counter_sale", {
+      p_payload: {
+        clientSaleId,
+        deviceId: posDeviceId,
+        items: [{ menuItemId: classicSmashId, qty: 1, variantId: hawVariantId }],
+        payments: [{ method: "cash", amountCents: 30000 }],
+        cashReceivedCents: 30000,
+      },
+    });
+
+    expect(sale.error).toBeNull();
+    expect(sale.data.total_cents).toBe(30000);
+    createdOrderIds.push(sale.data.order_id);
+  });
+
+  it("recusa uma variante que não pertence ao item", async () => {
+    const clientSaleId = crypto.randomUUID();
+    const sale = await manager.rpc("create_counter_sale", {
+      p_payload: {
+        clientSaleId,
+        deviceId: posDeviceId,
+        items: [{ menuItemId: classicSmashId, qty: 1, variantId: doubleSmashVariantId }],
+        payments: [{ method: "cash", amountCents: 30000 }],
+        cashReceivedCents: 30000,
+      },
+    });
+
+    expect(sale.error).not.toBeNull();
+    expect(sale.error?.message).toContain("invalid_variant");
+
+    // E não fica meia venda para trás.
+    const { data: orders } = await admin
+      .from("orders")
+      .select("id")
+      .eq("client_sale_id", clientSaleId);
+    expect(orders ?? []).toHaveLength(0);
+  });
+
+  it("continua a vender itens sem variantes como antes", async () => {
+    const clientSaleId = crypto.randomUUID();
+    const sale = await manager.rpc("create_counter_sale", {
+      p_payload: {
+        clientSaleId,
+        deviceId: posDeviceId,
+        items: [{ menuItemId: classicSmashId, qty: 1 }],
+        payments: [{ method: "cash", amountCents: 30000 }],
+        cashReceivedCents: 30000,
+      },
+    });
+
+    expect(sale.error).toBeNull();
+    expect(sale.data.total_cents).toBe(30000);
+    createdOrderIds.push(sale.data.order_id);
+
+    const { data: items } = await admin
+      .from("order_items")
+      .select("variant_name_snapshot")
+      .eq("order_id", sale.data.order_id);
+    expect(items?.[0].variant_name_snapshot).toBeNull();
   });
 
   it("rejeita produto esgotado sem criar pedido nem pagamento", async () => {
