@@ -29,6 +29,7 @@ import {
 } from '@/lib/pos/offline-sales';
 import { syncOfflineSales } from '@/lib/pos/offline-sync';
 import { connectionStatus } from '@/lib/pos/connection-status';
+import { buildPosUpsellFunnel, type PosUpsellStep } from '@/lib/pos/pos-upsell';
 import { isPosPin, POS_IDLE_TIMEOUT_MS } from '@/lib/pos/session';
 
 type PosContext = {
@@ -480,8 +481,50 @@ export function PosShell() {
   // carrinho esvazia — e o passo de pagamento fecha-se sozinho, sem ninguém ter
   // de se lembrar de o fechar em cada caminho de saída (venda, anulação, offline).
   useEffect(() => {
-    if (lines.length === 0) setPaying(false);
+    if (lines.length === 0) {
+      setPaying(false);
+      setFunnel([]);
+      setFunnelIndex(0);
+    }
   }, [lines.length]);
+
+  const [funnel, setFunnel] = useState<PosUpsellStep[]>([]);
+  const [funnelIndex, setFunnelIndex] = useState(0);
+  const funnelStep = funnel[funnelIndex] ?? null;
+
+  /**
+   * O carrinho não vai directo ao pagamento: passa pelo funil de upsell.
+   * `buildPosUpsellFunnel` devolve lista vazia quando não há nada a oferecer
+   * (pedido já completo, só uma bebida, upsell desligado) — e aí não se perde
+   * um segundo. O funil nunca inventa um passo sem produtos.
+   */
+  function startCheckout() {
+    const passos = buildPosUpsellFunnel({
+      enabled: true,
+      categories,
+      cart: lines.map((line) => ({ menuItemId: line.id, qty: line.qty })),
+      // Estável durante esta venda, diferente na próxima: roda as frases sem as
+      // fazer piscar enquanto o operador está a ler.
+      seed: Math.floor(Date.now() / 1000),
+    });
+    if (passos.length === 0) {
+      setPaying(true);
+      return;
+    }
+    setFunnel(passos);
+    setFunnelIndex(0);
+  }
+
+  function advanceFunnel() {
+    const proximo = funnelIndex + 1;
+    if (proximo >= funnel.length) {
+      setFunnel([]);
+      setFunnelIndex(0);
+      setPaying(true);
+      return;
+    }
+    setFunnelIndex(proximo);
+  }
   const visibleItems =
     categories.find((category) => category.id === activeCategory)?.items ?? [];
   const paymentPlan = useMemo(
@@ -955,7 +998,7 @@ export function PosShell() {
             <button
               type="button"
               disabled={lines.length === 0}
-              onClick={() => setPaying(true)}
+              onClick={startCheckout}
               className="min-h-20 w-full rounded-2xl bg-[#e5a93c] px-4 text-2xl font-black text-black shadow-[0_10px_30px_rgba(229,169,60,.22)] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-35"
             >
               PAGAR
@@ -963,6 +1006,91 @@ export function PosShell() {
           </section>
         </aside>
       </div>
+
+      {funnelStep && (
+        <div className="fixed inset-0 z-40 flex flex-col bg-[#0a0807] text-[#f6f1e6]">
+          <header className="shrink-0 border-b border-white/10 px-6 py-3">
+            <p className="text-xs font-black tracking-[0.25em] text-[#847e72]">
+              PASSO {funnelIndex + 1} DE {funnel.length}
+            </p>
+            <h2 className="text-3xl font-black">{funnelStep.title}</h2>
+            {/* A frase existe para ser dita em voz alta. É o que separa um balcão
+                que oferece de um que não oferece — e quem tem fila à frente não
+                inventa uma boa pergunta de cada vez. */}
+            <p className="mt-2 rounded-2xl bg-[#e5a93c]/10 px-5 py-3 text-xl font-bold italic text-[#e5a93c]">
+              “{funnelStep.script}”
+            </p>
+          </header>
+
+          <div className="min-h-0 flex-1 overflow-y-auto p-4">
+            <div className="mx-auto flex w-full max-w-5xl flex-wrap justify-center gap-3">
+              {funnelStep.items.map((item) => {
+                const qty = cart[item.id]?.qty;
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => changeQty(item as (typeof visibleItems)[number], 1)}
+                    className="flex w-60 flex-col overflow-hidden rounded-2xl border border-white/10 bg-[#1a1816] text-left shadow-lg active:scale-[0.98]"
+                  >
+                    <span className="relative block aspect-[3/2] w-full overflow-hidden bg-black/40">
+                      {item.photo_url && (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={item.photo_url}
+                          alt=""
+                          loading="lazy"
+                          draggable={false}
+                          // object-contain e nao object-cover: as latas e garrafas
+                          // sao altas e o cover cortava-lhes o rotulo — ficavam
+                          // sete rectangulos vermelhos indistinguiveis.
+                          className="h-full w-full object-contain p-2"
+                        />
+                      )}
+                      {qty && (
+                        <span className="absolute right-2 top-2 grid h-11 min-w-11 place-items-center rounded-full bg-[#e5a93c] px-2 text-xl font-black text-black shadow-lg">
+                          {qty}
+                        </span>
+                      )}
+                    </span>
+                    <span className="flex flex-1 flex-col justify-between gap-1 px-3 py-2">
+                      <span className="block text-base font-black leading-tight">{item.name}</span>
+                      <span className="block text-xl font-black text-[#e5a93c]">
+                        {mt(item.price_cents)}
+                      </span>
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <footer className="shrink-0 border-t border-white/10 p-4">
+            <div className="mx-auto flex w-full max-w-5xl items-center gap-3">
+              {/* Saltar tem de ser fácil: o que se força é a oferta, não a compra.
+                  Um cliente que diz que não é um toque, não uma negociação. */}
+              <button
+                type="button"
+                onClick={advanceFunnel}
+                className="min-h-20 flex-1 rounded-2xl bg-white/10 px-4 text-xl font-black active:bg-white/20"
+              >
+                Não quis
+              </button>
+              <div className="hidden shrink-0 px-4 text-right sm:block">
+                <p className="text-xs font-black tracking-[0.2em] text-[#847e72]">TOTAL</p>
+                <p className="text-2xl font-black text-[#e5a93c]">{mt(totalCents)}</p>
+              </div>
+              <button
+                type="button"
+                onClick={advanceFunnel}
+                className="min-h-20 flex-1 rounded-2xl bg-[#e5a93c] px-4 text-xl font-black text-black shadow-[0_10px_30px_rgba(229,169,60,.22)] active:scale-[0.98]"
+              >
+                {funnelIndex + 1 < funnel.length ? 'Continuar →' : 'Ir pagar →'}
+              </button>
+            </div>
+          </footer>
+        </div>
+      )}
 
       {paying && (
         <div className="fixed inset-0 z-40 flex flex-col bg-[#0a0807] text-[#f6f1e6]">

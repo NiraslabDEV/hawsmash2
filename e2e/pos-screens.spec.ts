@@ -105,6 +105,12 @@ test('captura os ecrãs do POS a 1366x768', async ({ page }) => {
   // 3. Teclado de dinheiro com troco
   await page.getByRole('button', { name: 'PAGAR' }).click();
   await page.waitForTimeout(600);
+  await page.screenshot({ path: `${DIR}/04-funil-acompanhar.png` });
+  await page.getByRole('button', { name: 'Continuar →' }).click();
+  await page.waitForTimeout(400);
+  await page.screenshot({ path: `${DIR}/05-funil-sobremesa.png` });
+  await page.getByRole('button', { name: 'Ir pagar →' }).click();
+  await page.waitForTimeout(600);
   await page.screenshot({ path: `${DIR}/03a-pagamento.png` });
   await page.getByRole('button', { name: /^Recebido:/ }).click().catch(() => {});
   await page.waitForTimeout(300);

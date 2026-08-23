@@ -8,6 +8,14 @@ const COUNTERS_STORE = 'counters';
 
 export const MENU_REFRESH_MS = 120_000;
 
+const rawMenuVariantSchema = z.object({
+  id: z.string().min(1),
+  name: z.string().min(1),
+  price_cents: z.number().int().nonnegative(),
+  photo_url: z.string().nullable().optional(),
+  is_default: z.boolean().optional(),
+});
+
 const rawMenuItemSchema = z.object({
   id: z.string().min(1),
   name: z.string().min(1),
@@ -17,6 +25,11 @@ const rawMenuItemSchema = z.object({
   available: z.boolean().optional(),
   track_stock: z.boolean().optional(),
   stock_qty: z.number().int().nonnegative().nullable().optional(),
+  // O funil de upsell do balcão precisa destes dois. Sem eles o Zod deitava-os
+  // fora em silêncio — foi o que aconteceu ao photo_url e por isso o POS nunca
+  // teve fotos. Ficam também na cache IndexedDB, logo o funil funciona offline.
+  is_upsell: z.boolean().optional(),
+  variants: z.array(rawMenuVariantSchema).optional(),
 });
 
 const rawMenuCategorySchema = z.object({

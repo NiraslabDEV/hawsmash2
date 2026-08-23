@@ -158,6 +158,8 @@ test('vende em dinheiro com troco e anula com motivo', async ({ page }) => {
 
   await page.getByRole('button', { name: /Classic Smash/ }).click();
   await page.getByRole('button', { name: 'PAGAR' }).click();
+  await page.getByRole('button', { name: 'Continuar →' }).click();
+  await page.getByRole('button', { name: 'Ir pagar →' }).click();
   await page.getByRole('button', { name: /^Recebido:/ }).click();
   await page.getByRole('button', { name: '5', exact: true }).click();
   await page.getByRole('button', { name: '0', exact: true }).click();
@@ -237,6 +239,8 @@ test('guarda a venda com a rede desligada e sincroniza ao regressar', async ({ c
 
   await page.getByRole('button', { name: /Classic Smash/ }).click();
   await page.getByRole('button', { name: 'PAGAR' }).click();
+  await page.getByRole('button', { name: 'Continuar →' }).click();
+  await page.getByRole('button', { name: 'Ir pagar →' }).click();
   await page.getByRole('button', { name: 'M-Pesa', exact: true }).click();
   await page.getByRole('button', { name: 'FINALIZAR VENDA' }).click();
 
