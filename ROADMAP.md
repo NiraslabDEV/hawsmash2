@@ -271,6 +271,7 @@ isolamento entre lojas."*
 | G5 🟢 | **Relatórios consolidados** — margem por produto, comparativo entre lojas, horas de pico | motor §16.9 |
 | G6 🟢 | **Paysuite por loja** + CAPI server-side + tracking por unidade | depende da §16 P1 |
 | G7 🟢 | **PWA do painel + push** — campainha de pedido novo no telemóvel do dono | motor F9.2 |
+| G8 🟢 | **Criar loja copiando outra** — "copiar configuração de: Maputo · Matola" na aba Lojas. Nunca copia segredos do Paysuite | [ADR 0002](docs/decisions/0002-criar-loja-a-partir-de-outra.md) |
 
 ---
 

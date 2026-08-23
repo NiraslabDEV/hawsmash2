@@ -42,6 +42,7 @@ Alerta é sempre accionável: diz **qual loja, qual dispositivo, desde quando e 
 - [ ] **Teste de restauro** de backup para uma BD temporária — registar abaixo
 - [ ] Rever contas de equipa: alguém saiu? Remover acesso
 - [ ] Relatório ao dono: vendas por loja, produtos, horas de pico, incidentes e o que foi melhorado
+- [ ] Rever o registo de **riscos assumidos** (§8): continua verdade? mudou alguma coisa? chegou a data do plano?
 
 ### Como correr o backup nocturno
 
@@ -88,7 +89,8 @@ dropdb hawsmash_restore_teste
 
 ### 3.1 "A loja não consegue vender"
 1. O POS abre? Se sim, vende offline — confirmar com a equipa que **continuem a vender**.
-2. Se o PC não arranca → talonário de papel (`docs/HARDWARE.md §5`) e substituição/assistência.
+2. Se o PC não arranca → talonário de papel (`docs/HARDWARE.md §5`) e **PC de substituição**
+   (`docs/HARDWARE.md §5.1`) — qualquer PC com Windows 64-bit e Chrome serve; as impressoras e os IPs não mudam.
 3. Confirmar no painel se a outra loja está a vender (isola loja vs sistema).
 4. Se for o sistema: verificar Supabase (status), Railway (deploy), último merge. **Rollback do último deploy**
    é a acção mais rápida e quase sempre a certa.
@@ -181,6 +183,8 @@ Manuais a entregar no fim: [`manual-caixa.md`](manual-caixa.md), [`manual-cozinh
 - [ ] Impressora da cozinha: teste OK · Impressora do balcão: teste OK · Gaveta: abre OK
 - [ ] POS instalado em kiosk, arranca sozinho, ligado à loja certa
 - [ ] print-bridge com `STORE_ID` correcto, heartbeat verde no painel
+- [ ] Cópia cifrada do `.env` e do `.exe` do bridge guardada **fora** da máquina, e ensaio de PC de substituição registado (§8)
+- [ ] **(Matola)** mitigações do Windows 10 aplicadas e conferidas uma a uma — `docs/HARDWARE.md §3`
 - [ ] `node scripts/check-placeholders.mjs` contra **produção** sai a zero (nenhum `PLACEHOLDER_` na BD)
 - [ ] Cardápio conferido (nomes, preços, fotos, disponibilidade) pelo dono
 - [ ] Horário e zonas de entrega da loja conferidos
@@ -193,3 +197,39 @@ Manuais a entregar no fim: [`manual-caixa.md`](manual-caixa.md), [`manual-cozinh
 - [ ] Equipa formada (caixa, cozinha, responsável) e manual entregue
 
 **Assinatura Niraslab: ____________  Assinatura HAWSMASH: ____________**
+
+
+---
+
+## 8. Riscos assumidos
+
+> Riscos conhecidos, aceites por decisão consciente, com data, mitigação e plano. Esta secção existe para que
+> nenhum deles apareça como surpresa daqui a um ano. Rever na rotina mensal (§2).
+
+### R-001 · Windows 10 sem actualizações de segurança — **Matola**
+
+| | |
+|---|---|
+| **O quê** | O PC do balcão da Matola (WINTEC AnyPOS100, Intel i5-7200U) corre Windows 10 Pro 22H2. A Microsoft terminou o suporte de segurança a **14/10/2025** |
+| **Porque não se resolve já** | O i5-7200U é de 7.ª geração e fica abaixo do requisito de CPU do Windows 11. Forçar a instalação deixava a máquina sem actualizações na mesma e com mais superfície para partir — numa máquina que vende, não se faz |
+| **Aceite em** | 22/08/2026 — Gabriel dos Santos (Niraslab), com o dono informado por escrito antes da compra da segunda máquina |
+| **Mitigações** | Conta sem admin · sem navegação (kiosk) · sem portas de entrada · Defender activo · AnyDesk trancado · nada mais instalado. Lista completa em [`HARDWARE.md §3`](HARDWARE.md) |
+| **O que reduz o impacto** | A service key do bridge é **restrita** · o dinheiro não vive na máquina · a venda offline grava em IndexedDB e sincroniza, não depende do SO estar são |
+| **Plano** | Substituir o PC da Matola em **2027**. Maputo abre já com CPU de 8.ª geração ou superior |
+| **Revisão** | Mensal (§2). Qualquer indício de compromisso é incidente **L1 imediato** (§4) |
+
+### Registo de ensaios de PC de substituição
+
+Procedimento em [`HARDWARE.md §5.1`](HARDWARE.md). Meta: primeiro talão impresso em menos de 30 minutos.
+
+| Data | Loja | Tempo até ao primeiro talão | Por |
+|---|---|---|---|
+| — | Maputo | **por executar** | — |
+| — | Matola | **por executar** | — |
+
+### Quem tem acesso remoto (AnyDesk)
+
+| Loja | Máquina | Quem | Revisto em |
+|---|---|---|---|
+| Matola | AnyPOS100 | **a preencher antes da abertura** | — |
+| Maputo | a adquirir | **a preencher antes da abertura** | — |

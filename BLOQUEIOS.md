@@ -93,6 +93,21 @@
 - Pergunta exacta: — (é chegada de equipamento, não é pergunta)
 - Como avancei: tudo desenvolvido e testado contra o **simulador** (`pnpm bridge:dev`) com testes de snapshot
   do ESC/POS. O pulso da gaveta está implementado mas **nunca abriu uma gaveta real**.
+- **2026-08-22 — primeira sessão com equipamento real (AnyPOS100 da Matola):**
+  - Impressora integrada `POS80` (fila Windows, porta `VPORT-USB:`) **imprime** — página de teste OK.
+  - Gaveta ligada à porta **`CD`** do terminal (estava indevidamente no `COM 3`; corrigido).
+  - Pulso `1B 70 00 19 FA` (pinos 2 e 5) tentado por **todos** os caminhos, sem resultado: as seis portas
+    série (`COM1`–`COM6`), RAW para a fila partilhada da `POS80`, e a opção do próprio driver
+    `Cash-Box: Open After print` em Device Settings.
+  - **Conclusão provisória:** o caminho de software está provado (a impressora responde); a suspeita passa
+    para hardware — cabo (6P6C vs 4 fios), tensão da gaveta (a porta do terminal é 12 V) ou a fechadura.
+  - Nota para o futuro: `Print Mode: Graphic` + `Enable advanced printing features` fazem o Windows
+    rasterizar os trabalhos, o que destrói ESC/POS em bruto enviado pelo driver.
+  - Plano B inalterado: a gaveta liga à `XP-T80Q` do balcão, como `docs/HARDWARE.md §2` sempre previu.
+  - **Causa encontrada (2026-08-22):** o cabo que veio com a gaveta é **6P4C (4 pinos)** — cabo de telefone.
+    Os dois contactos em falta, os de fora, são os que alimentam o solenóide. Encaixa na `CD`, parece bom,
+    e nunca abre. **Todos** os pulsos que enviámos chegaram à porta e não tinham fio por onde seguir.
+    Resolve-se com um cabo de gaveta **6P6C (6 pinos)**. Nada de código a mudar.
 - Onde está: `services/print-bridge/src/` · testes em `__tests__`
 - Se a resposta for outra: os 10 testes de aceitação de `docs/HARDWARE.md §4` são o que valida — 1 a 2 horas
   com o equipamento na mão.
