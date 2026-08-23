@@ -21,3 +21,6 @@ playwright-report/
 services/print-bridge/build/
 
 README-add.md
+
+# Artefactos de teste (screenshots, resultados do Playwright)
+output/

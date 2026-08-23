@@ -12,6 +12,7 @@ const rawMenuItemSchema = z.object({
   id: z.string().min(1),
   name: z.string().min(1),
   description: z.string().nullable(),
+  photo_url: z.string().nullable().optional(),
   price_cents: z.number().int().nonnegative(),
   available: z.boolean().optional(),
   track_stock: z.boolean().optional(),

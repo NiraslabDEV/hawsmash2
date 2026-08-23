@@ -127,6 +127,7 @@ export function PosShell() {
     offline?: boolean;
   } | null>(null);
   const [lastSale, setLastSale] = useState<{ orderId: string; dailyNumber: number } | null>(null);
+  const [paying, setPaying] = useState(false);
   const [voidOpen, setVoidOpen] = useState(false);
   const [voidReason, setVoidReason] = useState('');
   const [reprintPending, setReprintPending] = useState(false);
@@ -449,6 +450,38 @@ export function PosShell() {
     [lines],
   );
   const count = useMemo(() => lines.reduce((sum, line) => sum + line.qty, 0), [lines]);
+
+  // Aquece o cache das fotos do cardápio INTEIRO, não só o da categoria aberta.
+  // Sem isto, uma categoria que ninguém abriu com rede aparece sem imagens
+  // quando a ligação cai — e a ligação cai sempre no pior momento. O service
+  // worker (`/pos-sw.js`) é quem guarda; aqui só se pedem os ficheiros.
+  useEffect(() => {
+    if (categories.length === 0) return;
+    const urls = Array.from(
+      new Set(
+        categories.flatMap((category) =>
+          category.items.map((item) => item.photo_url).filter((url): url is string => !!url),
+        ),
+      ),
+    );
+    let cancelled = false;
+    void (async () => {
+      for (const url of urls) {
+        if (cancelled) return;
+        await fetch(url).catch(() => undefined);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [categories]);
+
+  // O ecrã de pagamento vive enquanto houver carrinho. Ao finalizar a venda o
+  // carrinho esvazia — e o passo de pagamento fecha-se sozinho, sem ninguém ter
+  // de se lembrar de o fechar em cada caminho de saída (venda, anulação, offline).
+  useEffect(() => {
+    if (lines.length === 0) setPaying(false);
+  }, [lines.length]);
   const visibleItems =
     categories.find((category) => category.id === activeCategory)?.items ?? [];
   const paymentPlan = useMemo(
@@ -797,14 +830,14 @@ export function PosShell() {
         </div>
       </header>
 
-      <div className="grid lg:h-[calc(100vh-4rem)] lg:grid-cols-[8rem_minmax(0,1fr)_25rem]">
+      <div className="grid lg:h-[calc(100vh-4rem)] lg:grid-cols-[10rem_minmax(0,1fr)_25rem]">
         <nav className="flex gap-2 overflow-x-auto border-b border-white/10 bg-[#111110] p-2 lg:block lg:overflow-y-auto lg:border-b-0 lg:border-r">
           {categories.map((category) => (
             <button
               key={category.id}
               type="button"
               onClick={() => setActiveCategory(category.id)}
-              className={`min-h-16 min-w-28 rounded-2xl px-3 text-sm font-black active:scale-[0.98] lg:mb-2 lg:w-full lg:min-w-0 ${
+              className={`min-h-16 min-w-28 whitespace-normal rounded-2xl px-2 text-sm font-black leading-tight active:scale-[0.98] lg:mb-2 lg:w-full lg:min-w-0 ${
                 activeCategory === category.id
                   ? 'bg-[#e5a93c] text-black'
                   : 'bg-white/[0.06] text-[#c8bfb0]'
@@ -816,43 +849,51 @@ export function PosShell() {
         </nav>
 
         <section className="overflow-y-auto p-3 lg:p-4">
-          <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-4">
+          <div className="grid grid-cols-2 gap-3 md:grid-cols-3 2xl:grid-cols-4">
             {visibleItems.map((item) => {
               const availability = posItemAvailability(item);
+              const qty = cart[item.id]?.qty;
               return (
                 <button
                   key={item.id}
                   type="button"
                   disabled={!availability.sellable}
                   onClick={() => changeQty(item, 1)}
-                  className="flex min-h-36 flex-col justify-between rounded-2xl border border-white/10 bg-[#1a1816] p-4 text-left shadow-lg active:scale-[0.98] disabled:opacity-35"
+                  className="flex flex-col overflow-hidden rounded-2xl border border-white/10 bg-[#1a1816] text-left shadow-lg active:scale-[0.98] disabled:opacity-35"
                 >
-                  <span>
-                    <span className="block text-lg font-black leading-tight">{item.name}</span>
-                    {item.description && (
-                      <span className="mt-2 line-clamp-2 block text-xs text-[#847e72]">
-                        {item.description}
-                      </span>
+                  <span className="relative block aspect-[4/3] w-full overflow-hidden bg-black/40">
+                    {item.photo_url && (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={item.photo_url}
+                        alt=""
+                        loading="lazy"
+                        draggable={false}
+                        className="h-full w-full object-cover"
+                      />
                     )}
-                  </span>
-                  <span className="mt-3 flex items-end justify-between gap-2">
-                    <span className="font-black text-[#e5a93c]">{mt(item.price_cents)}</span>
                     {availability.badge && (
                       <span
-                        className={`rounded-full px-2 py-1 text-[11px] font-black uppercase ${
+                        className={`absolute left-2 top-2 rounded-full px-2 py-1 text-[11px] font-black uppercase ${
                           availability.sellable
-                            ? 'bg-white/10 text-[#d8d2c6]'
+                            ? 'bg-black/70 text-[#d8d2c6]'
                             : 'bg-[#7a2b2b] text-white'
                         }`}
                       >
                         {availability.badge}
                       </span>
                     )}
-                    {cart[item.id] && (
-                      <span className="grid h-9 min-w-9 place-items-center rounded-full bg-[#e5a93c] px-2 font-black text-black">
-                        {cart[item.id].qty}
+                    {qty && (
+                      <span className="absolute right-2 top-2 grid h-11 min-w-11 place-items-center rounded-full bg-[#e5a93c] px-2 text-xl font-black text-black shadow-lg">
+                        {qty}
                       </span>
                     )}
+                  </span>
+                  <span className="flex flex-1 flex-col justify-between gap-1 p-3">
+                    <span className="block text-base font-black leading-tight">{item.name}</span>
+                    <span className="block text-xl font-black text-[#e5a93c]">
+                      {mt(item.price_cents)}
+                    </span>
                   </span>
                 </button>
               );
@@ -861,14 +902,14 @@ export function PosShell() {
         </section>
 
         <aside className="flex min-h-[36rem] flex-col border-t border-white/10 bg-[#111110] lg:min-h-0 lg:border-l lg:border-t-0">
-          <div className="border-b border-white/10 p-4">
+          <div className="shrink-0 border-b border-white/10 p-4">
             <div className="flex items-center justify-between">
               <h2 className="text-xl font-black">Carrinho</h2>
               <span className="text-sm text-[#847e72]">{count} artigos</span>
             </div>
           </div>
 
-          <div className="max-h-60 flex-1 space-y-2 overflow-y-auto p-3 lg:max-h-none">
+          <div className="min-h-0 flex-1 space-y-2 overflow-y-auto p-3">
             {lines.length === 0 ? (
               <p className="grid h-full min-h-28 place-items-center text-sm text-[#847e72]">
                 Toca num produto para começar.
@@ -906,123 +947,171 @@ export function PosShell() {
             )}
           </div>
 
-          <section className="border-t border-white/10 p-3">
+          <section className="shrink-0 border-t border-white/10 p-3">
             <div className="mb-3 flex items-center justify-between">
               <span className="text-sm font-bold text-[#c8bfb0]">TOTAL</span>
               <strong className="text-3xl text-[#e5a93c]">{mt(totalCents)}</strong>
             </div>
+            <button
+              type="button"
+              disabled={lines.length === 0}
+              onClick={() => setPaying(true)}
+              className="min-h-20 w-full rounded-2xl bg-[#e5a93c] px-4 text-2xl font-black text-black shadow-[0_10px_30px_rgba(229,169,60,.22)] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-35"
+            >
+              PAGAR
+            </button>
+          </section>
+        </aside>
+      </div>
 
-            <label className="mb-2 flex min-h-12 items-center justify-between rounded-xl bg-white/[0.05] px-3 text-sm font-bold">
-              Pagamento misto
-              <input
-                type="checkbox"
-                checked={mixed}
-                onChange={(event) => setMixedMode(event.target.checked)}
-                className="h-6 w-6 accent-[#e5a93c]"
-              />
-            </label>
-
-            <div className="grid grid-cols-2 gap-2">
-              {METHODS.map((method) => {
-                const selected = methods.includes(method.id);
-                return (
-                  <button
-                    key={method.id}
-                    type="button"
-                    onClick={() => selectMethod(method.id)}
-                    className={`min-h-16 rounded-xl px-2 text-sm font-black active:scale-[0.98] ${
-                      selected ? 'bg-[#e5a93c] text-black' : 'bg-white/[0.07] text-[#c8bfb0]'
-                    }`}
-                  >
-                    {method.label}
-                    {mixed && selected && (
-                      <span className="mt-1 block text-xs">
-                        {mt(allocations[method.id] ?? 0)}
-                      </span>
-                    )}
-                  </button>
-                );
-              })}
+      {paying && (
+        <div className="fixed inset-0 z-40 flex flex-col bg-[#0a0807] text-[#f6f1e6]">
+          <header className="flex shrink-0 items-center justify-between gap-4 border-b border-white/10 px-6 py-4">
+            <div>
+              <p className="text-xs font-black tracking-[0.25em] text-[#847e72]">TOTAL A PAGAR</p>
+              <p className="text-5xl font-black leading-tight text-[#e5a93c]">{mt(totalCents)}</p>
             </div>
+            <button
+              type="button"
+              onClick={() => setPaying(false)}
+              className="min-h-16 shrink-0 rounded-2xl bg-white/10 px-6 text-lg font-black active:bg-white/20"
+            >
+              ← Voltar ao carrinho
+            </button>
+          </header>
 
-            {(mixed || methods[0] === 'cash') && (
-              <div className="mt-3 rounded-2xl border border-white/10 p-3">
-                {mixed && (
-                  <div className="mb-2 flex gap-2 overflow-x-auto">
-                    {methods.map((method) => (
+          <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4">
+            <div className="mx-auto grid w-full max-w-5xl gap-5 lg:grid-cols-2">
+              <div className="space-y-3">
+                <label className="flex min-h-14 items-center justify-between rounded-xl bg-white/[0.05] px-4 text-base font-bold">
+                  Pagamento misto
+                  <input
+                    type="checkbox"
+                    checked={mixed}
+                    onChange={(event) => setMixedMode(event.target.checked)}
+                    className="h-6 w-6 accent-[#e5a93c]"
+                  />
+                </label>
+
+                <div className="grid grid-cols-2 gap-3">
+                  {METHODS.map((method) => {
+                    const selected = methods.includes(method.id);
+                    return (
                       <button
-                        key={method}
+                        key={method.id}
                         type="button"
-                        onClick={() => setKeypadTarget(method)}
-                        className={`min-h-16 min-w-24 rounded-xl px-2 text-xs font-bold ${
-                          keypadTarget === method ? 'bg-white text-black' : 'bg-white/10'
+                        onClick={() => selectMethod(method.id)}
+                        className={`min-h-20 rounded-2xl px-3 text-lg font-black active:scale-[0.98] ${
+                          selected ? 'bg-[#e5a93c] text-black' : 'bg-white/[0.07] text-[#c8bfb0]'
                         }`}
                       >
-                        {METHODS.find((entry) => entry.id === method)?.label}
+                        {method.label}
+                        {mixed && selected && (
+                          <span className="mt-1 block text-sm">{mt(allocations[method.id] ?? 0)}</span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {mixed && (
+                  <p
+                    className={`rounded-xl py-3 text-center text-base font-bold ${
+                      paymentPlan.complete
+                        ? 'bg-emerald-500/10 text-emerald-300'
+                        : 'bg-amber-500/10 text-amber-300'
+                    }`}
+                  >
+                    {paymentPlan.complete
+                      ? 'Pagamento completo'
+                      : paymentPlan.remainingCents > 0
+                        ? `Faltam ${mt(paymentPlan.remainingCents)}`
+                        : `Excede ${mt(Math.abs(paymentPlan.remainingCents))}`}
+                  </p>
+                )}
+
+                {changeCents !== null && cashPaymentCents > 0 && (
+                  <p className="rounded-2xl bg-emerald-500/15 py-5 text-center text-4xl font-black text-emerald-300">
+                    TROCO {mt(changeCents)}
+                  </p>
+                )}
+
+                {error && (
+                  <p
+                    role="alert"
+                    className="rounded-xl bg-red-950/60 p-4 text-base font-bold text-red-200"
+                  >
+                    {error}
+                  </p>
+                )}
+              </div>
+
+              {(mixed || methods[0] === 'cash') && (
+                <div className="rounded-2xl border border-white/10 p-4">
+                  {mixed && (
+                    <div className="mb-3 flex gap-2 overflow-x-auto">
+                      {methods.map((method) => (
+                        <button
+                          key={method}
+                          type="button"
+                          onClick={() => setKeypadTarget(method)}
+                          className={`min-h-14 min-w-28 rounded-xl px-3 text-sm font-bold ${
+                            keypadTarget === method ? 'bg-white text-black' : 'bg-white/10'
+                          }`}
+                        >
+                          {METHODS.find((entry) => entry.id === method)?.label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
+                  {cashPaymentCents > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setKeypadTarget('cash_received')}
+                      className={`mb-3 min-h-16 w-full rounded-xl px-4 text-left text-base font-bold ${
+                        keypadTarget === 'cash_received'
+                          ? 'bg-emerald-400 text-black'
+                          : 'bg-white/10'
+                      }`}
+                    >
+                      Recebido: {mt(cashReceivedCents)}
+                    </button>
+                  )}
+
+                  <div className="mb-3 flex items-center justify-between rounded-xl bg-black/30 px-4 py-3">
+                    <span className="text-sm text-[#847e72]">
+                      {keypadTarget === 'cash_received' ? 'Valor recebido' : 'Parcela'}
+                    </span>
+                    <strong className="text-3xl font-black">{mt(targetValue())}</strong>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-2">
+                    {['1', '2', '3', '4', '5', '6', '7', '8', '9', 'C', '0', '⌫'].map((key) => (
+                      <button
+                        key={key}
+                        type="button"
+                        onClick={() => pressKey(key)}
+                        className="min-h-16 rounded-xl bg-white/[0.08] text-2xl font-black active:bg-white/20"
+                      >
+                        {key}
                       </button>
                     ))}
                   </div>
-                )}
 
-                {cashPaymentCents > 0 && (
                   <button
                     type="button"
-                    onClick={() => setKeypadTarget('cash_received')}
-                    className={`mb-2 min-h-16 w-full rounded-xl px-3 text-left text-sm font-bold ${
-                      keypadTarget === 'cash_received' ? 'bg-emerald-400 text-black' : 'bg-white/10'
-                    }`}
+                    onClick={fillRemaining}
+                    className="mt-3 min-h-16 w-full rounded-xl bg-white/10 text-base font-bold active:bg-white/20"
                   >
-                    Recebido: {mt(cashReceivedCents)}
+                    {keypadTarget === 'cash_received' ? 'Recebido exacto' : 'Preencher restante'}
                   </button>
-                )}
-
-                <div className="mb-2 flex items-center justify-between rounded-xl bg-black/30 px-3 py-2">
-                  <span className="text-xs text-[#847e72]">
-                    {keypadTarget === 'cash_received' ? 'Valor recebido' : 'Parcela'}
-                  </span>
-                  <strong className="text-xl">{mt(targetValue())}</strong>
                 </div>
-                <div className="grid grid-cols-3 gap-2">
-                  {['1', '2', '3', '4', '5', '6', '7', '8', '9', 'C', '0', '⌫'].map((key) => (
-                    <button
-                      key={key}
-                      type="button"
-                      onClick={() => pressKey(key)}
-                      className="min-h-16 rounded-xl bg-white/[0.08] text-lg font-black active:bg-white/20"
-                    >
-                      {key}
-                    </button>
-                  ))}
-                </div>
-                <button
-                  type="button"
-                  onClick={fillRemaining}
-                  className="mt-2 min-h-16 w-full rounded-xl bg-white/10 text-sm font-bold active:bg-white/20"
-                >
-                  {keypadTarget === 'cash_received' ? 'Recebido exacto' : 'Preencher restante'}
-                </button>
-              </div>
-            )}
+              )}
+            </div>
+          </div>
 
-            {mixed && (
-              <p className={`mt-2 text-center text-sm font-bold ${paymentPlan.complete ? 'text-emerald-300' : 'text-amber-300'}`}>
-                {paymentPlan.complete
-                  ? 'Pagamento completo'
-                  : paymentPlan.remainingCents > 0
-                    ? `Faltam ${mt(paymentPlan.remainingCents)}`
-                    : `Excede ${mt(Math.abs(paymentPlan.remainingCents))}`}
-              </p>
-            )}
-            {changeCents !== null && cashPaymentCents > 0 && (
-              <p className="mt-2 rounded-xl bg-emerald-500/15 py-2 text-center text-xl font-black text-emerald-300">
-                Troco: {mt(changeCents)}
-              </p>
-            )}
-            {error && (
-              <p role="alert" className="mt-2 rounded-xl bg-red-950/60 p-3 text-sm font-bold text-red-200">
-                {error}
-              </p>
-            )}
+          <footer className="shrink-0 border-t border-white/10 p-4">
             <button
               type="button"
               disabled={
@@ -1032,14 +1121,13 @@ export function PosShell() {
                 (cashPaymentCents > 0 && changeCents === null)
               }
               onClick={() => void finalizeSale()}
-              className="mt-3 min-h-16 w-full rounded-2xl bg-[#e5a93c] px-4 text-lg font-black text-black shadow-[0_10px_30px_rgba(229,169,60,.22)] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-35"
+              className="mx-auto block min-h-20 w-full max-w-5xl rounded-2xl bg-[#e5a93c] px-4 text-2xl font-black text-black shadow-[0_10px_30px_rgba(229,169,60,.22)] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-35"
             >
               {submitting ? 'A registar…' : 'FINALIZAR VENDA'}
             </button>
-          </section>
-        </aside>
-      </div>
-
+          </footer>
+        </div>
+      )}
       {confirmation && (
         <div className="fixed inset-0 z-50 grid place-items-center bg-black/85 p-6">
           <section className="w-full max-w-md rounded-[2rem] border border-emerald-400/40 bg-[#111110] p-8 text-center shadow-2xl">

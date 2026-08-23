@@ -157,11 +157,12 @@ test('vende em dinheiro com troco e anula com motivo', async ({ page }) => {
   await dismissCookies(page);
 
   await page.getByRole('button', { name: /Classic Smash/ }).click();
+  await page.getByRole('button', { name: 'PAGAR' }).click();
   await page.getByRole('button', { name: /^Recebido:/ }).click();
   await page.getByRole('button', { name: '5', exact: true }).click();
   await page.getByRole('button', { name: '0', exact: true }).click();
   await page.getByRole('button', { name: '0', exact: true }).click();
-  await expect(page.getByText('Troco: 200 MT')).toBeVisible();
+  await expect(page.getByText('TROCO 200 MT')).toBeVisible();
 
   await page.getByRole('button', { name: 'FINALIZAR VENDA' }).click();
   await expect(page.getByText('VENDA REGISTADA')).toBeVisible();
@@ -235,6 +236,7 @@ test('guarda a venda com a rede desligada e sincroniza ao regressar', async ({ c
   await expect(page.getByText('SEM LIGAÇÃO · 0 vendas por sincronizar')).toBeVisible();
 
   await page.getByRole('button', { name: /Classic Smash/ }).click();
+  await page.getByRole('button', { name: 'PAGAR' }).click();
   await page.getByRole('button', { name: 'M-Pesa', exact: true }).click();
   await page.getByRole('button', { name: 'FINALIZAR VENDA' }).click();
 
