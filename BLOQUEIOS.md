@@ -195,6 +195,40 @@
 - Onde está: `apps/web/app/(public)/page.tsx` · `_hawsmash/sections.tsx` (rodapé) · dados em `stores`
 - Se a resposta for outra: minutos, pelo painel — aba **Lojas** → morada, telefone e link do mapa.
 
+
+### B-016 · [F0] Deploy automático do Railway a partir de `dev`
+- Estado: **aberto — descoberto em 2026-08-23**
+- Desbloqueia: Gabriel (painel do Railway)
+- Pergunta exacta: — (é reconectar a origem, não é pergunta)
+- O que se passa: o `git push origin dev` **não dispara build nenhum**. O último deploy automático
+  é de 2026-08-22 13:20. Confirmado de duas formas: estado do deploy pelo CLI, e o `/pos-sw.js`
+  publicado a servir a versão antiga depois de um push. A ligação ao GitHub caiu algures.
+- Porque importa: o fluxo `dev → testar staging → merge main` do `CLAUDE.md §2` deixa de funcionar
+  sozinho. O risco não é o deploy falhar — é alguém corrigir uma coisa, meter no `dev`, e ficar
+  convencido de que está em staging quando não está. Isso mente sobre o que foi testado.
+- Como avancei: publiquei por CLI (`railway up --detach`) com o projecto ligado a esta pasta.
+  Funciona e é rápido (~80 s), mas é manual e depende de mim estar à frente do teclado.
+- Onde está: painel do Railway → projecto `hawsmash2` → ambiente `staging` → serviço `web` →
+  Settings → Source. Domínio: `web-staging-7805.up.railway.app`
+- Se a resposta for outra: minutos — reconectar o repositório e escolher o ramo `dev`.
+- **Tem de estar resolvido antes da abertura.**
+
+### B-017 · [F6] Stock dos combos vendidos como produto único
+- Estado: **aberto — decisão consciente, não é bug**
+- Desbloqueia: ninguém por agora (não morde enquanto o stock estiver desligado)
+- O que se passa: os combos (`lanche + batata e bebida`, base + 190 MT) entram no cardápio como
+  **produtos próprios**, por decisão do dono — o que evita variantes, modificadores e uma migration
+  no caminho do dinheiro. O senão: vender um combo desconta stock do **combo**, não da Joe's Chips
+  nem da bebida que saíram de facto.
+- Porque não morde hoje: confirmado em 2026-08-23 que **0 de 26 linhas** de `store_items` têm
+  `track_stock`. Ninguém controla stock ainda.
+- Quando morde: no dia em que ligarem controlo de stock na batata ou nas bebidas. As contagens
+  começam a fugir e o desvio não tem explicação óbvia — é o género de coisa que se descobre num
+  inventário, três semanas depois, sem se perceber porquê.
+- Saídas quando chegar a altura: (a) receita por produto — o combo declara o que consome; ou
+  (b) `menu_modifier_groups`, que já existem na base de dados e estão por preencher.
+- Onde está: `menu_items` (combos) · `store_items.track_stock` · `CLAUDE.md §10`
+
 ---
 
 ## RESOLVIDOS
