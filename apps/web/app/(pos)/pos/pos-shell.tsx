@@ -147,6 +147,7 @@ export function PosShell() {
   const [pinError, setPinError] = useState<string | null>(null);
   const [categories, setCategories] = useState<Category[]>([]);
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
+  const warmedPhotoUrls = useRef<Set<string>>(new Set());
   const [cart, setCart] = useState<Record<string, CartLine>>({});
   const [saleId, setSaleId] = useState(() => crypto.randomUUID());
   const [methods, setMethods] = useState<CounterPaymentMethod[]>(['cash']);
@@ -533,6 +534,12 @@ export function PosShell() {
   // Sem isto, uma categoria que ninguém abriu com rede aparece sem imagens
   // quando a ligação cai — e a ligação cai sempre no pior momento. O service
   // worker (`/pos-sw.js`) é quem guarda; aqui só se pedem os ficheiros.
+  //
+  // `warmedPhotoUrls` lembra o que já foi pedido nesta sessão: o menu
+  // refresca a cada 2 min (MENU_REFRESH_MS) e cria arrays novos mesmo quando
+  // nada mudou, e sem esta memória o efeito pedia TODAS as fotos outra vez a
+  // cada ciclo — em wifi fraco isso competia com a venda a decorrer e dava a
+  // sensação de o POS estar a travar. Só se pede o que ainda não se pediu.
   useEffect(() => {
     if (categories.length === 0) return;
     const urls = Array.from(
@@ -541,12 +548,17 @@ export function PosShell() {
           category.items.map((item) => item.photo_url).filter((url): url is string => !!url),
         ),
       ),
-    );
+    ).filter((url) => !warmedPhotoUrls.current.has(url));
+    if (urls.length === 0) return;
     let cancelled = false;
     void (async () => {
       for (const url of urls) {
         if (cancelled) return;
-        await fetch(url).catch(() => undefined);
+        const ok = await fetch(url).then(
+          () => true,
+          () => false,
+        );
+        if (ok) warmedPhotoUrls.current.add(url);
       }
     })();
     return () => {
@@ -635,8 +647,12 @@ export function PosShell() {
     setFunnel([]);
     setFunnelIndex(0);
   }
-  const visibleItems =
-    categories.find((category) => category.id === activeCategory)?.items ?? [];
+  const activeCategoryObj = categories.find((category) => category.id === activeCategory);
+  const visibleItems = activeCategoryObj?.items ?? [];
+  // Bebidas são lata/garrafa: a foto não vende como a do prato e cartões
+  // grandes só fazem scroll a mais no ecrã que devia ser o mais rápido do
+  // balcão. Cartão pequeno, mais por linha, mesma grelha.
+  const isDrinksCategory = /bebida/i.test(activeCategoryObj?.name ?? '');
   const paymentPlan = useMemo(
     () => buildPaymentPlan({ totalCents, methods, mixed, allocations }),
     [allocations, methods, mixed, totalCents],
@@ -1094,7 +1110,13 @@ export function PosShell() {
         </nav>
 
         <section className="overflow-y-auto p-3 lg:p-4">
-          <div className="grid grid-cols-2 gap-3 md:grid-cols-3 2xl:grid-cols-4">
+          <div
+            className={
+              isDrinksCategory
+                ? 'grid grid-cols-4 gap-2 md:grid-cols-6 2xl:grid-cols-8'
+                : 'grid grid-cols-2 gap-3 md:grid-cols-3 2xl:grid-cols-4'
+            }
+          >
             {visibleItems.map((item) => {
               const availability = posItemAvailability(item);
               const qty = cart[item.id]?.qty;
@@ -1104,22 +1126,37 @@ export function PosShell() {
                   type="button"
                   disabled={!availability.sellable}
                   onClick={() => changeQty(item, 1)}
-                  className="flex flex-col overflow-hidden rounded-2xl border border-white/10 bg-[#1a1816] text-left shadow-lg active:scale-[0.98] disabled:opacity-35"
+                  className={`flex flex-col overflow-hidden rounded-2xl border border-white/10 bg-[#1a1816] text-left shadow-lg active:scale-[0.98] disabled:opacity-35 ${
+                    isDrinksCategory ? 'rounded-xl' : ''
+                  }`}
                 >
-                  <span className="relative block aspect-[4/3] w-full overflow-hidden bg-black/40">
+                  <span
+                    className={`relative block w-full overflow-hidden bg-black/40 ${
+                      isDrinksCategory ? 'aspect-square' : 'aspect-[4/3]'
+                    }`}
+                  >
                     {item.photo_url && (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img
                         src={item.photo_url}
                         alt=""
                         loading="lazy"
+                        decoding="async"
                         draggable={false}
-                        className="h-full w-full object-cover"
+                        className={
+                          isDrinksCategory
+                            ? 'h-full w-full object-contain p-1.5'
+                            : 'h-full w-full object-cover'
+                        }
                       />
                     )}
                     {availability.badge && (
                       <span
-                        className={`absolute left-2 top-2 rounded-full px-2 py-1 text-[11px] font-black uppercase ${
+                        className={`absolute rounded-full font-black uppercase ${
+                          isDrinksCategory
+                            ? 'left-1 top-1 px-1.5 py-0.5 text-[9px]'
+                            : 'left-2 top-2 px-2 py-1 text-[11px]'
+                        } ${
                           availability.sellable
                             ? 'bg-black/70 text-[#d8d2c6]'
                             : 'bg-[#7a2b2b] text-white'
@@ -1129,14 +1166,36 @@ export function PosShell() {
                       </span>
                     )}
                     {qty && (
-                      <span className="absolute right-2 top-2 grid h-11 min-w-11 place-items-center rounded-full bg-[#e5a93c] px-2 text-xl font-black text-black shadow-lg">
+                      <span
+                        className={`absolute grid place-items-center rounded-full bg-[#e5a93c] font-black text-black shadow-lg ${
+                          isDrinksCategory
+                            ? 'right-1 top-1 h-7 min-w-7 px-1 text-sm'
+                            : 'right-2 top-2 h-11 min-w-11 px-2 text-xl'
+                        }`}
+                      >
                         {qty}
                       </span>
                     )}
                   </span>
-                  <span className="flex flex-1 flex-col justify-between gap-1 p-3">
-                    <span className="block text-base font-black leading-tight">{item.name}</span>
-                    <span className="block text-xl font-black text-[#e5a93c]">
+                  <span
+                    className={
+                      isDrinksCategory
+                        ? 'flex flex-1 flex-col justify-between gap-0.5 p-1.5'
+                        : 'flex flex-1 flex-col justify-between gap-1 p-3'
+                    }
+                  >
+                    <span
+                      className={`block font-black leading-tight ${
+                        isDrinksCategory ? 'text-[11px]' : 'text-base'
+                      }`}
+                    >
+                      {item.name}
+                    </span>
+                    <span
+                      className={`block font-black text-[#e5a93c] ${
+                        isDrinksCategory ? 'text-xs' : 'text-xl'
+                      }`}
+                    >
                       {mt(item.price_cents)}
                     </span>
                   </span>
