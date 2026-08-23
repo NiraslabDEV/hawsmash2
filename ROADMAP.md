@@ -110,6 +110,13 @@ _Os dias são referência de calendário, não paragens: a corrida não pára en
 - [x] Vinculação do dispositivo à loja (`devices`) + sessão longa + bloqueio de ecrã com PIN
 - [x] Testes Vitest: idempotência (mesma `client_sale_id` 2× → 1 pedido), troco, esgotado, anulação
 - [x] Playwright: venda ponta a ponta (dinheiro com troco) e anulação com motivo
+- [x] **Tirar no upsell o que se pôs no upsell** — cada cartão do funil tem `−` / `+` e há caminho de volta
+      ao carrinho. Antes, um toque a mais no ecrã da oferta só se desfazia depois de pagar
+- [x] **Guião do pagamento móvel no ecrã** — ao escolher M-Pesa/e-Mola aparece o número **da loja**
+      (`stores.mpesa_number`), o titular, o valor e os passos do USSD. Loja sem número diz o que falta
+      em vez de mostrar um campo vazio. Guardado em `localStorage` para funcionar offline
+- [x] **Resumo do pedido no ecrã de pagamento** — itens, quantidades e total ao lado das formas de
+      pagamento; conferir deixa de obrigar a voltar ao carrinho
 
 **PROMPT:** *"Executa a F2: POS de balcão online. Migration 1005 + `create_counter_sale` idempotente + `void_sale` + a rota `/pos` (touch, sem hover, alvos ≥64px). Testes ANTES do código para idempotência, troco, stock esgotado e anulação. O POS nunca envia preços — só ids, quantidades e `client_sale_id`."*
 
@@ -125,7 +132,13 @@ _Os dias são referência de calendário, não paragens: a corrida não pára en
 - [x] Reimpressão pelo painel e pelo POS (`reprint`), sempre logada
 - [x] `heartbeat` de 60 s + watchdog + arranque automático no Windows + `.exe` (SEA, herdado do 1.0)
 - [x] Testes do render ESC/POS (snapshot) + integração com o simulador
+- [x] **Visor do cliente** (`POST /display`): o POS manda a trama a cada passo da venda — artigo, total,
+      número do M-Pesa, troco, senha — e o bridge escreve nas duas linhas. Ocioso: o nome da casa a andar,
+      mantido pelo bridge para continuar mesmo com o POS fechado. CD5220 e Epson DM-D, sem módulo nativo
+      (o binding do `serialport` partiria o `.exe` SEA)
 - [~] B-006 **Validação física** com a XP-T80Q e a gaveta reais (o cliente envia o equipamento)
+- [~] B-018 **Visor do cliente no equipamento real** — falta a porta COM, a velocidade e qual dos dois
+      protocolos fala. Desligado por omissão; `CUSTOMER_DISPLAY_PORT=sim` escreve na consola
 
 **PROMPT:** *"Executa a F3: impressão multi-loja + gaveta. Estende `services/print-bridge` conforme `CLAUDE.md §8`, incluindo o servidor HTTP local na LAN e o pulso da gaveta. Testes de snapshot dos dois talões contra o simulador. A falha de impressão nunca pode bloquear nem esconder o pedido."*
 

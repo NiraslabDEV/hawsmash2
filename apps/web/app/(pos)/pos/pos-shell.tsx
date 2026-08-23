@@ -1418,6 +1418,42 @@ export function PosShell() {
           <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4">
             <div className="mx-auto grid w-full max-w-5xl gap-5 lg:grid-cols-2">
               <div className="space-y-3">
+                {/* O que se está a cobrar, à vista de quem cobra. Sem isto o
+                    ecrã pede um valor sem dizer de quê, e conferir obrigava a
+                    voltar ao carrinho — e a repetir o funil de oferta. */}
+                <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
+                  <div className="flex items-baseline justify-between gap-3">
+                    <p className="text-xs font-black tracking-[0.25em] text-[#847e72]">
+                      RESUMO · {count} {count === 1 ? 'ARTIGO' : 'ARTIGOS'}
+                    </p>
+                    {fulfillment !== 'counter' && (
+                      <p className="text-xs font-black tracking-[0.2em] text-[#e5a93c]">
+                        {FULFILLMENT_LABELS[fulfillment].toUpperCase()}
+                        {customerName.trim() ? ` · ${customerName.trim()}` : ''}
+                      </p>
+                    )}
+                  </div>
+                  <ul className="mt-2 max-h-52 space-y-1 overflow-y-auto">
+                    {lines.map((line) => (
+                      <li
+                        key={line.id}
+                        className="flex items-baseline justify-between gap-3 text-base font-bold"
+                      >
+                        <span className="min-w-0">
+                          <span className="text-[#e5a93c]">{line.qty}×</span> {line.name}
+                        </span>
+                        <span className="shrink-0 tabular-nums text-[#c8bfb0]">
+                          {mt(line.price_cents * line.qty)}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                  <p className="mt-2 flex items-baseline justify-between border-t border-white/10 pt-2 text-xl font-black">
+                    <span>TOTAL</span>
+                    <span className="text-[#e5a93c]">{mt(totalCents)}</span>
+                  </p>
+                </div>
+
                 <label className="flex min-h-14 items-center justify-between rounded-xl bg-white/[0.05] px-4 text-base font-bold">
                   Pagamento misto
                   <input

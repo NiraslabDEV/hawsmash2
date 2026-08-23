@@ -23,9 +23,39 @@
 | 8 | **UPS (nobreak)** | ≥ 650 VA, ligado a PC + impressora do balcão + switch + router | **Falha de energia é o risco mais comum em Maputo.** Sem UPS, corte de luz = venda perdida e caixa por fechar |
 | 9 | **TV** (opcional na abertura) | qualquer TV com HDMI + **box Android** (ou mini-PC) com browser em modo kiosk | Menu board e ecrã de senhas |
 | 10 | **Consumíveis** | rolos de papel térmico 80 mm × 80 mm — **stock para 1 mês por loja** | Ficar sem papel a meio de um sábado |
+| 11 | **Visor do cliente** (se o PC touch já o trouxer) | mostrador de **2 linhas × 20 caracteres**, ligado por porta série/USB-série, protocolo **CD5220** ou **Epson DM-D (ESC/POS)** | Total, número do M-Pesa e troco virados para quem paga. Ver §1.2 |
 
 > **Cartão:** o terminal (POS bancário) é do banco e continua separado. O sistema apenas **regista** que o
 > pagamento foi em cartão — não comunica com o terminal. Confirmar com o cliente antes da abertura.
+
+### 1.2 Visor do cliente
+
+O PC touch do HAWSMASH traz um mostrador de duas linhas montado por trás do ecrã. É o print-bridge que
+escreve nele — nunca o browser — pela mesma razão da impressora: é o bridge que continua a correr quando o
+POS está fechado, bloqueado ou adormecido, e é ele que mantém o nome da casa a andar quando não há venda.
+
+**O que aparece, passo a passo:**
+
+| Momento no POS | Linha de cima | Linha de baixo |
+|---|---|---|
+| Sem venda | `HAWSMASH` a atravessar o visor | `BEM-VINDO` |
+| Artigo tocado (2,5 s) | nome do artigo | `2 x` · total da linha |
+| Carrinho | `3 artigos` | `TOTAL` · valor |
+| Pagamento M-Pesa/e-Mola | `M-PESA` · **número da loja** | `A PAGAR` · valor |
+| Dinheiro com troco calculado | `RECEBIDO` · valor | `TROCO` · valor |
+| Venda concluída | `OBRIGADO!` | `SENHA` · número do dia |
+
+**Instalação (por loja):**
+
+1. Ligar o visor e ver a porta em **Gestor de Dispositivos → Portas (COM e LPT)** (`COM1`, `COM3`…).
+2. No `.env` do bridge: `CUSTOMER_DISPLAY_PORT=COM3` (e `CUSTOMER_DISPLAY_BAUD` se não for 9600 — vem no
+   manual do visor; 9600 é o mais comum).
+3. Reiniciar o bridge. Se o `HAWSMASH` começar a andar, está feito.
+4. Se saírem caracteres estranhos ou nada, trocar `CUSTOMER_DISPLAY_PROTOCOL=cd5220` por `escpos` e repetir.
+   São os dois protocolos que 95% destes visores falam; se nenhum funcionar, é preciso o modelo do
+   mostrador (**B-018**).
+
+**Sem visor configurado o bridge corre exactamente como antes** — a linha fica vazia no `.env` e nada muda.
 
 ### 1.1 PC do balcão — configuração real por loja
 

@@ -229,6 +229,24 @@
   (b) `menu_modifier_groups`, que já existem na base de dados e estão por preencher.
 - Onde está: `menu_items` (combos) · `store_items.track_stock` · `CLAUDE.md §10`
 
+### B-018 · [F3] Visor do cliente: porta, velocidade e protocolo
+- Estado: aberto
+- Desbloqueia: hardware (5 minutos em cada loja, com o PC ligado)
+- Pergunta exacta: em que **porta COM** está o mostrador de cada PC touch, a que **velocidade**, e
+  fala **CD5220** ou **Epson DM-D (ESC/POS)**?
+- Como avancei: o visor está inteiro e testado — o POS manda a trama a cada passo da venda e o bridge
+  escreve nas duas linhas, com o nome da casa a andar quando não há venda. Os dois protocolos estão
+  implementados e escolhem-se por `CUSTOMER_DISPLAY_PROTOCOL`. Com `CUSTOMER_DISPLAY_PORT` vazio o
+  visor fica **desligado** e o bridge corre exactamente como antes; com `sim` escreve na consola, que
+  é como foi desenvolvido e testado sem hardware.
+- Onde está: `services/print-bridge/src/customer-display.ts` · `.env.example` · `docs/HARDWARE.md §1.2`
+- Se a resposta for outra: **zero reescrita** — são três linhas de `.env`. O único caso que obriga a
+  código é o mostrador falar um terceiro protocolo (nem CD5220 nem DM-D); aí é meia hora, com o
+  manual do modelo à frente.
+- Nota: a escrita na porta série é feita com `mode.com` + `\\.\COMx` e **não** com o módulo
+  `serialport`, de propósito — um binding nativo partiria o empacotamento `.exe` (SEA) do bridge que
+  já corre nas lojas.
+
 ---
 
 ## RESOLVIDOS
@@ -239,8 +257,8 @@
 
 ## PACOTE FINAL — para atacar de uma vez só
 
-> Preenchido no fim da corrida (F0→F9). **15 bloqueios abertos**: 6 do cliente, 6 do Gabriel,
-> 3 à espera de hardware/agenda. Nenhum impede o sistema de funcionar hoje em staging.
+> Preenchido no fim da corrida (F0→F9). **16 bloqueios abertos**: 6 do cliente, 6 do Gabriel,
+> 4 à espera de hardware/agenda. Nenhum impede o sistema de funcionar hoje em staging.
 
 ### Para o cliente (mensagem pronta a enviar)
 
@@ -286,6 +304,7 @@
 |---|---|---|
 | B-006 | Impressão real nas duas cozinhas, **gaveta a abrir**, POS em kiosk no PC touch, watchdog do bridge no Windows | 1–2 h por loja (10 testes de `docs/HARDWARE.md §4`) |
 | B-006 | **Ensaio geral** por loja: 20 vendas, 5 delivery, falha de rede, falha de impressora, fecho de caixa | ~90 min por loja (guião em `docs/RUNBOOK.md §6`) |
+| B-018 | Ligar o **visor do cliente** de cada PC touch: porta COM, velocidade e protocolo (CD5220 ou ESC/POS) | 5 min por loja |
 | B-011 | Apontar as TVs aos URLs `/tv/[loja]/menu` e `/tv/[loja]/senhas` | minutos |
 
 ### Ordenado por impacto na abertura
