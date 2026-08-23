@@ -767,23 +767,38 @@ describe("§6 — dinheiro é visível por perfil, não só por loja", () => {
       sessionIsOurs = true;
     }
 
+    // `cash_movements.created_by` é obrigatório e aponta para auth.users: um
+    // movimento de caixa sem autor não existe, por desenho.
+    const { data: managerUser } = await maputoManager.auth.getUser();
+    if (!managerUser.user) throw new Error("Setup §6: sessão do gerente perdida");
+
     const { error: movementError } = await admin.from("cash_movements").insert({
       session_id: sessionId,
       store_id: maputoStoreId,
       type: "reforco",
       amount_cents: 500_00,
       reason: "Setup do teste §6",
+      created_by: managerUser.user.id,
     });
     if (movementError) throw new Error(`Setup §6: movimento — ${movementError.message}`);
 
+    // Fixture explícito: `orders` exige order_number, flow, fulfillment_type,
+    // subtotal_cents e payment_method além do óbvio. Escrever todos à mão é
+    // mais legível do que descobri-los um a um por CI vermelha.
+    const marca = `T6-${Date.now()}`;
     const { data: order, error: orderError } = await admin
       .from("orders")
       .insert({
         store_id: maputoStoreId,
-        channel: "counter",
+        order_number: marca,
         status: "paid",
+        flow: "manual",
+        channel: "counter",
+        fulfillment_type: "pickup",
         customer_name: "Teste §6",
+        subtotal_cents: 300_00,
         total_cents: 300_00,
+        payment_method: "cash",
       })
       .select("id")
       .single();
@@ -793,9 +808,11 @@ describe("§6 — dinheiro é visível por perfil, não só por loja", () => {
     const { error: paymentError } = await admin.from("payments").insert({
       order_id: orderId,
       store_id: maputoStoreId,
+      provider: "manual",
       method: "cash",
       amount_cents: 300_00,
       status: "confirmed",
+      idempotency_key: marca,
     });
     if (paymentError) throw new Error(`Setup §6: pagamento — ${paymentError.message}`);
   });
