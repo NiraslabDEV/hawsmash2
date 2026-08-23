@@ -32,6 +32,30 @@ import { connectionStatus } from '@/lib/pos/connection-status';
 import { buildPosUpsellFunnel, type PosUpsellStep } from '@/lib/pos/pos-upsell';
 import { isPosPin, POS_IDLE_TIMEOUT_MS } from '@/lib/pos/session';
 
+type DeliveryZone = { id: string; name: string; fee_cents: number };
+
+/**
+ * O `get_menu` sempre devolveu muito mais do que categorias — zonas de entrega,
+ * o interruptor do upsell e os canais activos da loja. O POS deitava tudo fora
+ * e ficava a adivinhar. Estes campos vivem só em memória, de propósito: offline
+ * o POS vende balcão e não cria pedidos de entrega (CLAUDE §7.5), logo não faz
+ * sentido guardá-los na cache como se fossem utilizáveis sem rede.
+ */
+type StoreChannels = {
+  zones: DeliveryZone[];
+  upsellEnabled: boolean;
+  pickupEnabled: boolean;
+  deliveryEnabled: boolean;
+};
+
+type FulfillmentType = 'counter' | 'pickup' | 'delivery';
+
+const FULFILLMENT_LABELS: Record<FulfillmentType, string> = {
+  counter: 'Balcão',
+  pickup: 'Levantamento',
+  delivery: 'Entrega',
+};
+
 type PosContext = {
   deviceId: string;
   deviceLabel: string;
@@ -69,7 +93,7 @@ async function fetchMenu(
     p_include_unavailable: true,
   });
   if (error || !data) throw new Error('Não foi possível carregar o cardápio.');
-  return (data as { categories: unknown }).categories;
+  return data;
 }
 
 function errorMessage(message?: string): string {
@@ -219,8 +243,16 @@ export function PosShell() {
     }
 
     let nextCategories: Category[];
+    // Offline o fetcher rebenta e o `loadMenuWithFallback` serve a cache — este
+    // payload fica a null e os canais mantêm o que já tinham. É o comportamento
+    // certo: sem rede não se criam pedidos de entrega.
+    let payload: Record<string, unknown> | null = null;
     try {
-      const menu = await loadMenuWithFallback(store.slug, () => fetchMenu(supabase, store.slug));
+      const menu = await loadMenuWithFallback(store.slug, async () => {
+        const full = (await fetchMenu(supabase, store.slug)) as Record<string, unknown>;
+        payload = full;
+        return full.categories;
+      });
       nextCategories = menu.categories;
     } catch (menuError) {
       setError(errorMessage(menuError instanceof Error ? menuError.message : undefined));
@@ -228,6 +260,19 @@ export function PosShell() {
       return;
     }
     setCategories(nextCategories);
+    if (payload) {
+      const full = payload as {
+        zones?: DeliveryZone[];
+        upsell_enabled?: boolean;
+        store?: { pickup_enabled?: boolean; delivery_enabled?: boolean };
+      };
+      setChannels({
+        zones: full.zones ?? [],
+        upsellEnabled: full.upsell_enabled !== false,
+        pickupEnabled: full.store?.pickup_enabled !== false,
+        deliveryEnabled: full.store?.delivery_enabled !== false,
+      });
+    }
     setActiveCategory((current) => current ?? nextCategories[0]?.id ?? null);
     const { data: pinStatus, error: pinStatusError } = await supabase.rpc('pos_pin_status', {
       p_device_id: device.id,
@@ -485,9 +530,29 @@ export function PosShell() {
       setPaying(false);
       setFunnel([]);
       setFunnelIndex(0);
+      // A venda seguinte é de outro cliente: nome, telefone, zona e nota não
+      // podem transitar. Um talão com o nome do cliente anterior é o género de
+      // erro que só se descobre com o cliente à frente.
+      setFulfillment('counter');
+      setCustomerName('');
+      setCustomerPhone('');
+      setZoneId('');
+      setOrderNote('');
     }
   }, [lines.length]);
 
+  const [channels, setChannels] = useState<StoreChannels>({
+    zones: [],
+    upsellEnabled: true,
+    pickupEnabled: true,
+    deliveryEnabled: true,
+  });
+  const [fulfillment, setFulfillment] = useState<FulfillmentType>('counter');
+  const [customerName, setCustomerName] = useState('');
+  const [customerPhone, setCustomerPhone] = useState('');
+  const [zoneId, setZoneId] = useState('');
+  const [orderNote, setOrderNote] = useState('');
+  const [noteOpen, setNoteOpen] = useState(false);
   const [funnel, setFunnel] = useState<PosUpsellStep[]>([]);
   const [funnelIndex, setFunnelIndex] = useState(0);
   const funnelStep = funnel[funnelIndex] ?? null;
@@ -500,7 +565,7 @@ export function PosShell() {
    */
   function startCheckout() {
     const passos = buildPosUpsellFunnel({
-      enabled: true,
+      enabled: channels.upsellEnabled,
       categories,
       cart: lines.map((line) => ({ menuItemId: line.id, qty: line.qty })),
       // Estável durante esta venda, diferente na próxima: roda as frases sem as
@@ -684,6 +749,14 @@ export function PosShell() {
         items: lines.map((line) => ({ menuItemId: line.id, qty: line.qty })),
         payments: paymentPlan.payments,
         ...(cashPaymentCents > 0 ? { cashReceivedCents } : {}),
+        // Campos que a RPC sempre aceitou e o POS nunca enviou. Só vão no
+        // caminho online: offline o POS vende balcão e não cria entregas
+        // (CLAUDE §7.5), por isso a fila local não os transporta.
+        fulfillmentType: fulfillment,
+        ...(fulfillment === 'delivery' && zoneId ? { deliveryZoneId: zoneId } : {}),
+        ...(customerName.trim() ? { customerName: customerName.trim() } : {}),
+        ...(customerPhone.trim() ? { customerPhone: customerPhone.trim() } : {}),
+        ...(orderNote.trim() ? { notes: orderNote.trim() } : {}),
       },
     });
     setSubmitting(false);
@@ -945,11 +1018,70 @@ export function PosShell() {
         </section>
 
         <aside className="flex min-h-[36rem] flex-col border-t border-white/10 bg-[#111110] lg:min-h-0 lg:border-l lg:border-t-0">
-          <div className="shrink-0 border-b border-white/10 p-4">
-            <div className="flex items-center justify-between">
+          <div className="shrink-0 border-b border-white/10 p-3">
+            <div className="mb-2 flex items-center justify-between px-1">
               <h2 className="text-xl font-black">Carrinho</h2>
               <span className="text-sm text-[#847e72]">{count} artigos</span>
             </div>
+
+            {/* Tipo de pedido. Só aparecem os canais que a loja tem ligados —
+                oferecer entrega numa loja sem entrega é prometer o que não se
+                cumpre. Offline fica só o balcão (CLAUDE §7.5). */}
+            <div className="grid grid-cols-3 gap-2">
+              {(['counter', 'pickup', 'delivery'] as FulfillmentType[]).map((tipo) => {
+                const permitido =
+                  tipo === 'counter' ||
+                  (online &&
+                    (tipo === 'pickup' ? channels.pickupEnabled : channels.deliveryEnabled));
+                if (!permitido) return null;
+                return (
+                  <button
+                    key={tipo}
+                    type="button"
+                    onClick={() => setFulfillment(tipo)}
+                    className={`min-h-16 rounded-xl px-2 text-sm font-black active:scale-[0.98] ${
+                      fulfillment === tipo
+                        ? 'bg-[#e5a93c] text-black'
+                        : 'bg-white/[0.07] text-[#c8bfb0]'
+                    }`}
+                  >
+                    {FULFILLMENT_LABELS[tipo]}
+                  </button>
+                );
+              })}
+            </div>
+
+            {fulfillment !== 'counter' && (
+              <div className="mt-2 space-y-2">
+                <input
+                  value={customerName}
+                  onChange={(event) => setCustomerName(event.target.value)}
+                  placeholder="Nome do cliente"
+                  className="min-h-14 w-full rounded-xl border border-white/10 bg-black/30 px-3 text-base text-white outline-none focus:border-[#e5a93c]"
+                />
+                <input
+                  value={customerPhone}
+                  onChange={(event) => setCustomerPhone(event.target.value)}
+                  inputMode="tel"
+                  placeholder="Telefone"
+                  className="min-h-14 w-full rounded-xl border border-white/10 bg-black/30 px-3 text-base text-white outline-none focus:border-[#e5a93c]"
+                />
+                {fulfillment === 'delivery' && (
+                  <select
+                    value={zoneId}
+                    onChange={(event) => setZoneId(event.target.value)}
+                    className="min-h-14 w-full rounded-xl border border-white/10 bg-black/30 px-3 text-base font-bold text-white outline-none focus:border-[#e5a93c]"
+                  >
+                    <option value="">Zona de entrega…</option>
+                    {channels.zones.map((zona) => (
+                      <option key={zona.id} value={zona.id}>
+                        {zona.name} · {mt(zona.fee_cents)}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </div>
+            )}
           </div>
 
           <div className="min-h-0 flex-1 space-y-2 overflow-y-auto p-3">
@@ -991,6 +1123,15 @@ export function PosShell() {
           </div>
 
           <section className="shrink-0 border-t border-white/10 p-3">
+            <button
+              type="button"
+              onClick={() => setNoteOpen(true)}
+              className={`mb-2 min-h-14 w-full rounded-xl px-3 text-left text-sm font-bold active:scale-[0.98] ${
+                orderNote.trim() ? 'bg-white/[0.12] text-[#f6f1e6]' : 'bg-white/[0.05] text-[#847e72]'
+              }`}
+            >
+              {orderNote.trim() ? `Nota: ${orderNote.trim()}` : '+ Nota do pedido'}
+            </button>
             <div className="mb-3 flex items-center justify-between">
               <span className="text-sm font-bold text-[#c8bfb0]">TOTAL</span>
               <strong className="text-3xl text-[#e5a93c]">{mt(totalCents)}</strong>
@@ -1207,6 +1348,31 @@ export function PosShell() {
                     </button>
                   )}
 
+                  {/* Valores rápidos: é o que a caixa recebe em nove de cada dez
+                      vendas. Poupa três toques por venda e um erro de digitação
+                      num campo onde o erro vira troco errado. */}
+                  {keypadTarget === 'cash_received' && (
+                    <div className="mb-3 grid grid-cols-4 gap-2">
+                      {[50_000, 100_000, 200_000].map((valor) => (
+                        <button
+                          key={valor}
+                          type="button"
+                          onClick={() => setTargetValue(valor)}
+                          className="min-h-16 rounded-xl bg-white/[0.12] text-lg font-black active:bg-white/20"
+                        >
+                          {valor / 100}
+                        </button>
+                      ))}
+                      <button
+                        type="button"
+                        onClick={fillRemaining}
+                        className="min-h-16 rounded-xl bg-emerald-500/20 text-base font-black text-emerald-200 active:bg-emerald-500/30"
+                      >
+                        Exacto
+                      </button>
+                    </div>
+                  )}
+
                   <div className="mb-3 flex items-center justify-between rounded-xl bg-black/30 px-4 py-3">
                     <span className="text-sm text-[#847e72]">
                       {keypadTarget === 'cash_received' ? 'Valor recebido' : 'Parcela'}
@@ -1227,13 +1393,18 @@ export function PosShell() {
                     ))}
                   </div>
 
-                  <button
-                    type="button"
-                    onClick={fillRemaining}
-                    className="mt-3 min-h-16 w-full rounded-xl bg-white/10 text-base font-bold active:bg-white/20"
-                  >
-                    {keypadTarget === 'cash_received' ? 'Recebido exacto' : 'Preencher restante'}
-                  </button>
+                  {/* Em dinheiro o "Exacto" já está na fila rápida, por cima do
+                      teclado. Este botão fica só para as parcelas do pagamento
+                      misto — dois botões com a mesma função é um deles a mais. */}
+                  {keypadTarget !== 'cash_received' && (
+                    <button
+                      type="button"
+                      onClick={fillRemaining}
+                      className="mt-3 min-h-16 w-full rounded-xl bg-white/10 text-base font-bold active:bg-white/20"
+                    >
+                      Preencher restante
+                    </button>
+                  )}
                 </div>
               )}
             </div>
@@ -1256,6 +1427,42 @@ export function PosShell() {
           </footer>
         </div>
       )}
+      {noteOpen && (
+        <div className="fixed inset-0 z-[60] grid place-items-center bg-black/80 p-4">
+          <section className="w-full max-w-lg rounded-3xl border border-white/10 bg-[#1a1816] p-6">
+            <h2 className="text-2xl font-black">Nota do pedido</h2>
+            <p className="mt-2 text-sm text-[#c8bfb0]">
+              Sai na comanda da cozinha. Ex.: sem cebola, para levar, cliente aguarda.
+            </p>
+            <textarea
+              value={orderNote}
+              onChange={(event) => setOrderNote(event.target.value)}
+              placeholder="Escreve a nota"
+              className="mt-4 min-h-28 w-full rounded-2xl border border-white/10 bg-black/30 p-4 text-white outline-none focus:border-[#e5a93c]"
+            />
+            <div className="mt-4 grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setOrderNote('');
+                  setNoteOpen(false);
+                }}
+                className="min-h-16 rounded-2xl bg-white/10 font-black active:bg-white/20"
+              >
+                Apagar
+              </button>
+              <button
+                type="button"
+                onClick={() => setNoteOpen(false)}
+                className="min-h-16 rounded-2xl bg-[#e5a93c] font-black text-black active:scale-[0.98]"
+              >
+                Guardar
+              </button>
+            </div>
+          </section>
+        </div>
+      )}
+
       {confirmation && (
         <div className="fixed inset-0 z-50 grid place-items-center bg-black/85 p-6">
           <section className="w-full max-w-md rounded-[2rem] border border-emerald-400/40 bg-[#111110] p-8 text-center shadow-2xl">
