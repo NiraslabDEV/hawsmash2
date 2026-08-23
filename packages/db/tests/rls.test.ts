@@ -733,21 +733,39 @@ describe("get_order_status() — cliente faz polling do pedido", () => {
 
 describe("§6 — dinheiro é visível por perfil, não só por loja", () => {
   let sessionId: string;
+  let sessionIsOurs = false;
   let orderId: string;
 
   beforeAll(async () => {
-    const { data: session, error: sessionError } = await admin
+    // `cash_sessions` tem um trigger `before insert` que devolve NULL — em
+    // silêncio — quando a loja já tem caixa aberta (1007_cash.sql). É a
+    // serialização certa: uma caixa aberta por loja. Aqui isso significa
+    // reaproveitar a que existir em vez de tentar abrir outra e receber zero
+    // linhas sem erro nenhum.
+    const { data: aberta } = await admin
       .from("cash_sessions")
-      .insert({
-        store_id: maputoStoreId,
-        shift_label: "Turno RLS §6",
-        opened_by: null,
-        opening_float_cents: 100_00,
-      })
       .select("id")
-      .single();
-    if (sessionError || !session) throw new Error(`Setup §6: caixa — ${sessionError?.message}`);
-    sessionId = session.id;
+      .eq("store_id", maputoStoreId)
+      .is("closed_at", null)
+      .limit(1)
+      .maybeSingle();
+
+    if (aberta) {
+      sessionId = aberta.id;
+    } else {
+      const { data: session, error: sessionError } = await admin
+        .from("cash_sessions")
+        .insert({
+          store_id: maputoStoreId,
+          shift_label: "Turno RLS §6",
+          opening_float_cents: 100_00,
+        })
+        .select("id")
+        .single();
+      if (sessionError || !session) throw new Error(`Setup §6: caixa — ${sessionError?.message}`);
+      sessionId = session.id;
+      sessionIsOurs = true;
+    }
 
     const { error: movementError } = await admin.from("cash_movements").insert({
       session_id: sessionId,
@@ -785,8 +803,9 @@ describe("§6 — dinheiro é visível por perfil, não só por loja", () => {
   afterAll(async () => {
     await admin.from("payments").delete().eq("order_id", orderId);
     await admin.from("orders").delete().eq("id", orderId);
-    await admin.from("cash_movements").delete().eq("session_id", sessionId);
-    await admin.from("cash_sessions").delete().eq("id", sessionId);
+    await admin.from("cash_movements").delete().eq("reason", "Setup do teste §6");
+    // Só fechamos o que abrimos: a caixa pode ser de outro teste ou do seed.
+    if (sessionIsOurs) await admin.from("cash_sessions").delete().eq("id", sessionId);
   });
 
   it("o caixa vê a caixa da loja dele — precisa dela para fechar o turno", async () => {
