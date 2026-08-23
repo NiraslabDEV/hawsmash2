@@ -32,20 +32,46 @@ function Icon({ name }: { name: string }) {
   );
 }
 
-const NAV = [
-  { href: '/pedidos', label: 'Pedidos', icon: 'pedidos', badge: true },
-  { href: '/cardapio', label: 'Cardápio', icon: 'cardapio' },
-  { href: '/mesas', label: 'Mesas', icon: 'mesas' },
-  { href: '/caixa', label: 'Caixa', icon: 'caixa' },
-  { href: '/estoque', label: 'Estoque', icon: 'estoque' },
-  { href: '/analise', label: 'Análise', icon: 'analise' },
-  { href: '/feedback', label: 'Avaliações', icon: 'feedback' },
-  { href: '/lista-espera', label: 'Clientes', icon: 'clientes' },
-  { href: '/marketing', label: 'Marketing', icon: 'marketing' },
-  { href: '/lojas', label: 'Lojas', icon: 'lojas' },
-  { href: '/equipa', label: 'Equipa', icon: 'equipa' },
-  { href: '/sistema', label: 'Sistema', icon: 'sistema' },
-  { href: '/definicoes', label: 'Definições', icon: 'definicoes' },
+/**
+ * Perfis e o que cada um vê no painel.
+ *
+ * A base de dados já recusa o que estes perfis não podem escrever — isto não é
+ * a fechadura, é a porta. Mostrar treze separadores a quem só usa dois ensina a
+ * equipa a clicar em coisas que não guardam, e a desconfiar do sistema.
+ *
+ * `kitchen` não entra de todo: tem o ecrã dela.
+ */
+type StaffRole = 'owner' | 'manager' | 'cashier' | 'kitchen';
+
+const ROLE_LABEL: Record<StaffRole, string> = {
+  owner: 'Dono',
+  manager: 'Gerente',
+  cashier: 'Balcão',
+  kitchen: 'Cozinha',
+};
+
+type NavItem = {
+  href: string;
+  label: string;
+  icon: string;
+  badge?: boolean;
+  roles: StaffRole[];
+};
+
+const NAV: NavItem[] = [
+  { href: '/pedidos', label: 'Pedidos', icon: 'pedidos', badge: true, roles: ['owner', 'manager', 'cashier'] },
+  { href: '/cardapio', label: 'Cardápio', icon: 'cardapio', roles: ['owner', 'manager'] },
+  { href: '/mesas', label: 'Mesas', icon: 'mesas', roles: ['owner', 'manager'] },
+  { href: '/caixa', label: 'Caixa', icon: 'caixa', roles: ['owner', 'manager', 'cashier'] },
+  { href: '/estoque', label: 'Estoque', icon: 'estoque', roles: ['owner', 'manager'] },
+  { href: '/analise', label: 'Análise', icon: 'analise', roles: ['owner', 'manager'] },
+  { href: '/feedback', label: 'Avaliações', icon: 'feedback', roles: ['owner', 'manager'] },
+  { href: '/lista-espera', label: 'Clientes', icon: 'clientes', roles: ['owner', 'manager'] },
+  { href: '/marketing', label: 'Marketing', icon: 'marketing', roles: ['owner', 'manager'] },
+  { href: '/lojas', label: 'Lojas', icon: 'lojas', roles: ['owner', 'manager'] },
+  { href: '/equipa', label: 'Equipa', icon: 'equipa', roles: ['owner'] },
+  { href: '/sistema', label: 'Sistema', icon: 'sistema', roles: ['owner', 'manager'] },
+  { href: '/definicoes', label: 'Definições', icon: 'definicoes', roles: ['owner'] },
 ];
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
@@ -56,13 +82,27 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [badge, setBadge] = useState<number | null>(null);
   const [storeOpen, setStoreOpen] = useState<boolean | null>(null);
+  const [role, setRole] = useState<StaffRole | null>(null);
 
   useEffect(() => {
     const supabase = createClient();
     async function checkAuth() {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) { router.replace('/login'); return; }
-      if (session.user.user_metadata?.role === 'kitchen') { router.replace('/'); return; }
+
+      // O perfil verdadeiro vive em `staff_profiles`. O `user_metadata.role` que
+      // este ecrã lia nunca é preenchido por ninguém — nem pela API que cria as
+      // contas — portanto o bloqueio da cozinha nunca disparava.
+      const { data: profile } = await supabase
+        .from('staff_profiles')
+        .select('role')
+        .eq('user_id', session.user.id)
+        .maybeSingle();
+
+      const staffRole = (profile?.role ?? null) as StaffRole | null;
+      if (!staffRole || staffRole === 'kitchen') { router.replace('/'); return; }
+
+      setRole(staffRole);
       setUser(session.user);
       setLoading(false);
       // badge (pedidos ativos) + estado da loja
@@ -114,7 +154,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
       {/* Nav */}
       <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-1">
-        {NAV.map((item) => {
+        {NAV.filter((item) => !role || item.roles.includes(role)).map((item) => {
           const active = pathname === item.href;
           return (
             <Link
@@ -198,7 +238,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             </div>
             <div className="hidden md:block leading-tight">
               <p className="text-sm font-medium text-white truncate max-w-[160px]">{user?.email}</p>
-              <p className="text-[11px] text-[#8A7A69]">Administrador</p>
+              <p className="text-[11px] text-[#8A7A69]">{role ? ROLE_LABEL[role] : '—'}</p>
             </div>
             <button onClick={signOut} className="ml-1 text-sm text-[#C9BCAC] hover:text-[#F5A623] transition-colors">Sair</button>
           </div>

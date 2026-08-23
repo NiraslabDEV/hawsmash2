@@ -44,6 +44,8 @@ function nextMaputoDow(dow: number, hour: number, minute: number): string {
 }
 
 let maputoManager: SupabaseClient;
+let maputoCashier: SupabaseClient;
+let maputoKitchen: SupabaseClient;
 let matolaManager: SupabaseClient;
 let owner: SupabaseClient;
 let maputoStoreId: string;
@@ -52,7 +54,7 @@ const testUserIds: string[] = [];
 
 async function createStaffClient(
   email: string,
-  role: "owner" | "manager",
+  role: "owner" | "manager" | "cashier" | "kitchen",
   storeIds: string[],
 ): Promise<SupabaseClient> {
   const password = "Rls-F1-Teste-2026!";
@@ -133,6 +135,16 @@ beforeAll(async () => {
     [matolaStoreId],
   );
   owner = await createStaffClient(`rls-owner-${suffix}@delivery.test`, "owner", []);
+  maputoCashier = await createStaffClient(
+    `rls-caixa-${suffix}@delivery.test`,
+    "cashier",
+    [maputoStoreId],
+  );
+  maputoKitchen = await createStaffClient(
+    `rls-cozinha-${suffix}@delivery.test`,
+    "kitchen",
+    [maputoStoreId],
+  );
 });
 
 afterAll(async () => {
@@ -708,5 +720,124 @@ describe("get_order_status() — cliente faz polling do pedido", () => {
 
     expect(error).not.toBeNull();
     expect(error!.message).toContain("order_not_found");
+  });
+});
+
+// ─── Dinheiro por perfil: a cozinha não vê caixa nem pagamentos ────────────
+//
+// A RLS protegia dinheiro por LOJA (`auth_can_store`) mas não por PERFIL, e o
+// `CLAUDE.md §6` é explícito: `kitchen` não vê dinheiro. Estes testes criam
+// linhas reais antes de verificar — sem isso, "leu 0 linhas" tanto pode ser a
+// RLS a bloquear como a tabela a estar vazia, e essa confusão já custou um
+// diagnóstico errado nesta base de código.
+
+describe("§6 — dinheiro é visível por perfil, não só por loja", () => {
+  let sessionId: string;
+  let orderId: string;
+
+  beforeAll(async () => {
+    const { data: session, error: sessionError } = await admin
+      .from("cash_sessions")
+      .insert({
+        store_id: maputoStoreId,
+        shift_label: "Turno RLS §6",
+        opened_by: null,
+        opening_float_cents: 100_00,
+      })
+      .select("id")
+      .single();
+    if (sessionError || !session) throw new Error(`Setup §6: caixa — ${sessionError?.message}`);
+    sessionId = session.id;
+
+    const { error: movementError } = await admin.from("cash_movements").insert({
+      session_id: sessionId,
+      store_id: maputoStoreId,
+      type: "reforco",
+      amount_cents: 500_00,
+      reason: "Setup do teste §6",
+    });
+    if (movementError) throw new Error(`Setup §6: movimento — ${movementError.message}`);
+
+    const { data: order, error: orderError } = await admin
+      .from("orders")
+      .insert({
+        store_id: maputoStoreId,
+        channel: "counter",
+        status: "paid",
+        customer_name: "Teste §6",
+        total_cents: 300_00,
+      })
+      .select("id")
+      .single();
+    if (orderError || !order) throw new Error(`Setup §6: pedido — ${orderError?.message}`);
+    orderId = order.id;
+
+    const { error: paymentError } = await admin.from("payments").insert({
+      order_id: orderId,
+      store_id: maputoStoreId,
+      method: "cash",
+      amount_cents: 300_00,
+      status: "confirmed",
+    });
+    if (paymentError) throw new Error(`Setup §6: pagamento — ${paymentError.message}`);
+  });
+
+  afterAll(async () => {
+    await admin.from("payments").delete().eq("order_id", orderId);
+    await admin.from("orders").delete().eq("id", orderId);
+    await admin.from("cash_movements").delete().eq("session_id", sessionId);
+    await admin.from("cash_sessions").delete().eq("id", sessionId);
+  });
+
+  it("o caixa vê a caixa da loja dele — precisa dela para fechar o turno", async () => {
+    const { data, error } = await maputoCashier
+      .from("cash_sessions")
+      .select("id")
+      .eq("id", sessionId);
+    expect(error).toBeNull();
+    expect(data?.length).toBe(1);
+  });
+
+  it("a cozinha não vê sessões de caixa", async () => {
+    const { data, error } = await maputoKitchen
+      .from("cash_sessions")
+      .select("id")
+      .eq("id", sessionId);
+    expect(error).toBeNull();
+    expect(data ?? []).toHaveLength(0);
+  });
+
+  it("a cozinha não vê movimentos de caixa", async () => {
+    const { data, error } = await maputoKitchen
+      .from("cash_movements")
+      .select("id")
+      .eq("session_id", sessionId);
+    expect(error).toBeNull();
+    expect(data ?? []).toHaveLength(0);
+  });
+
+  it("a cozinha não vê pagamentos", async () => {
+    const { data, error } = await maputoKitchen
+      .from("payments")
+      .select("id")
+      .eq("order_id", orderId);
+    expect(error).toBeNull();
+    expect(data ?? []).toHaveLength(0);
+  });
+
+  it("a cozinha continua a ver o pedido — precisa dele para cozinhar", async () => {
+    const { data, error } = await maputoKitchen
+      .from("orders")
+      .select("id")
+      .eq("id", orderId);
+    expect(error).toBeNull();
+    expect(data?.length).toBe(1);
+  });
+
+  it("o gerente vê tudo o que é dinheiro da loja dele", async () => {
+    const caixa = await maputoManager.from("cash_sessions").select("id").eq("id", sessionId);
+    const pagamentos = await maputoManager.from("payments").select("id").eq("order_id", orderId);
+    expect(caixa.data?.length).toBe(1);
+    expect(pagamentos.data?.length).toBe(1);
   });
 });
