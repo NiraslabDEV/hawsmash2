@@ -31,6 +31,7 @@ import { syncOfflineSales } from '@/lib/pos/offline-sync';
 import { connectionStatus } from '@/lib/pos/connection-status';
 import { buildPosUpsellFunnel, type PosUpsellStep } from '@/lib/pos/pos-upsell';
 import { isPosPin, POS_IDLE_TIMEOUT_MS } from '@/lib/pos/session';
+import { OrdersBoard } from './orders-board';
 import {
   cartCount,
   cartLines,
@@ -87,6 +88,7 @@ const FULFILLMENT_LABELS: Record<FulfillmentType, string> = {
 
 type PosContext = {
   deviceId: string;
+  storeId: string;
   deviceLabel: string;
   storeSlug: string;
   storeName: string;
@@ -216,6 +218,7 @@ export function PosShell() {
   } | null>(null);
   const [lastSale, setLastSale] = useState<{ orderId: string; dailyNumber: number } | null>(null);
   const [paying, setPaying] = useState(false);
+  const [boardOpen, setBoardOpen] = useState(false);
   const [voidOpen, setVoidOpen] = useState(false);
   const [voidReason, setVoidReason] = useState('');
   const [reprintPending, setReprintPending] = useState(false);
@@ -356,6 +359,7 @@ export function PosShell() {
     }
     setContext({
       deviceId: device.id,
+      storeId: device.store_id,
       deviceLabel: device.label,
       storeSlug: store.slug,
       storeName: store.short_name,
@@ -1165,6 +1169,15 @@ export function PosShell() {
           <p className="text-lg font-black tracking-wide text-[#e5a93c]">HAWSMASH POS</p>
           <p className="text-xs text-[#847e72]">{context.storeName} · {context.deviceLabel}</p>
         </div>
+        {/* O caixa gere as entregas sem sair do terminal. E daqui que se ve
+            o que ja foi pago e ainda nao saiu pela porta. */}
+        <button
+          type="button"
+          onClick={() => setBoardOpen(true)}
+          className="min-h-14 shrink-0 rounded-xl bg-white/[0.08] px-5 text-base font-black active:bg-white/20"
+        >
+          Pedidos
+        </button>
         {lastSale && (
           <>
             <button
@@ -1487,6 +1500,10 @@ export function PosShell() {
           enquanto o servidor (migration 1018) já o sabia cobrar. Aparece só
           quando há mesmo escolha — um toque a mais em cada batata frita seriam
           segundos que ao balcão não existem. */}
+      {boardOpen && (
+        <OrdersBoard storeId={context.storeId} onClose={() => setBoardOpen(false)} />
+      )}
+
       {variantPick && (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 p-4 sm:items-center">
           <div className="w-full max-w-2xl rounded-3xl border border-white/10 bg-[#141210] p-5 shadow-2xl">
