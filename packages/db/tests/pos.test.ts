@@ -1055,3 +1055,143 @@ describe("F3 — reimpressão auditada", () => {
     expect(drawer.error?.message).toContain("invalid_reprint_kind");
   });
 });
+
+// ─── Entrega vendida ao balcão ──────────────────────────────────────────────
+//
+// Medido em staging antes desta correcção: TODAS as vendas de balcão ficavam
+// gravadas com fulfillment_type='pickup', delivery_zone_id a null e
+// delivery_fee_cents=0 — incluindo aquelas em que o operador escolheu Entrega
+// e preencheu nome, telefone e zona. O `insert` da RPC escrevia 'pickup' à
+// força e ignorava o que o POS mandava.
+//
+// A consequência que dói é a taxa: uma entrega de balcão em Maputo devia
+// somar 150 MT ao total. O cliente pagava o subtotal, o sistema registava o
+// subtotal, e a loja perdia a taxa em cada entrega — todos os dias, sem sair
+// no talão, portanto sem ninguém dar por ela.
+describe("F2 — entrega vendida ao balcão", () => {
+  let maputoZoneId: string;
+  let maputoZoneFee: number;
+
+  beforeAll(async () => {
+    const { data: zone } = await admin
+      .from("delivery_zones")
+      .select("id,fee_cents")
+      .eq("store_id", maputoStoreId)
+      .eq("active", true)
+      .limit(1)
+      .single();
+    maputoZoneId = zone!.id;
+    maputoZoneFee = zone!.fee_cents;
+  });
+
+  it("grava a entrega como entrega e cobra a taxa da zona", async () => {
+    const sale = await manager.rpc("create_counter_sale", {
+      p_payload: {
+        clientSaleId: crypto.randomUUID(),
+        deviceId: posDeviceId,
+        items: [{ menuItemId: classicSmashId, qty: 1, variantId: hawVariantId }],
+        fulfillmentType: "delivery",
+        deliveryZoneId: maputoZoneId,
+        customerName: "Cliente de Entrega",
+        customerPhone: "840000000",
+        payments: [{ method: "cash", amountCents: 30000 + maputoZoneFee }],
+        cashReceivedCents: 50000,
+      },
+    });
+
+    expect(sale.error).toBeNull();
+    // O total do servidor tem de incluir a taxa. É o número que vai ao papel,
+    // à caixa e ao relatório do dono.
+    expect(sale.data.total_cents).toBe(30000 + maputoZoneFee);
+
+    const { data: order } = await admin
+      .from("orders")
+      .select("fulfillment_type,delivery_zone_id,delivery_fee_cents,subtotal_cents,total_cents,customer_name")
+      .eq("id", sale.data.order_id)
+      .single();
+
+    expect(order).toMatchObject({
+      fulfillment_type: "delivery",
+      delivery_zone_id: maputoZoneId,
+      delivery_fee_cents: maputoZoneFee,
+      subtotal_cents: 30000,
+      total_cents: 30000 + maputoZoneFee,
+      customer_name: "Cliente de Entrega",
+    });
+
+    await admin.from("orders").delete().eq("id", sale.data.order_id);
+  });
+
+  it("o levantamento continua sem taxa e sem zona", async () => {
+    const sale = await manager.rpc("create_counter_sale", {
+      p_payload: {
+        clientSaleId: crypto.randomUUID(),
+        deviceId: posDeviceId,
+        items: [{ menuItemId: classicSmashId, qty: 1, variantId: hawVariantId }],
+        fulfillmentType: "pickup",
+        customerName: "Cliente de Levantamento",
+        payments: [{ method: "cash", amountCents: 30000 }],
+        cashReceivedCents: 30000,
+      },
+    });
+
+    expect(sale.error).toBeNull();
+    expect(sale.data.total_cents).toBe(30000);
+
+    const { data: order } = await admin
+      .from("orders")
+      .select("fulfillment_type,delivery_zone_id,delivery_fee_cents")
+      .eq("id", sale.data.order_id)
+      .single();
+
+    expect(order).toMatchObject({
+      fulfillment_type: "pickup",
+      delivery_zone_id: null,
+      delivery_fee_cents: 0,
+    });
+
+    await admin.from("orders").delete().eq("id", sale.data.order_id);
+  });
+
+  // Regra 3: uma zona da Matola não pode ser cobrada num pedido de Maputo.
+  // Sem isto, um operador com a loja errada no ecrã cobrava a taxa de outra
+  // unidade e o dinheiro caía na contabilidade errada.
+  it("recusa uma zona que não é da loja do terminal", async () => {
+    const { data: matolaZone } = await admin
+      .from("delivery_zones")
+      .select("id")
+      .eq("store_id", matolaStoreId)
+      .eq("active", true)
+      .limit(1)
+      .single();
+
+    const sale = await manager.rpc("create_counter_sale", {
+      p_payload: {
+        clientSaleId: crypto.randomUUID(),
+        deviceId: posDeviceId,
+        items: [{ menuItemId: classicSmashId, qty: 1, variantId: hawVariantId }],
+        fulfillmentType: "delivery",
+        deliveryZoneId: matolaZone!.id,
+        payments: [{ method: "cash", amountCents: 30000 }],
+        cashReceivedCents: 30000,
+      },
+    });
+
+    expect(sale.error?.message).toContain("delivery_zone");
+  });
+
+  it("recusa uma entrega sem zona escolhida", async () => {
+    const sale = await manager.rpc("create_counter_sale", {
+      p_payload: {
+        clientSaleId: crypto.randomUUID(),
+        deviceId: posDeviceId,
+        items: [{ menuItemId: classicSmashId, qty: 1, variantId: hawVariantId }],
+        fulfillmentType: "delivery",
+        payments: [{ method: "cash", amountCents: 30000 }],
+        cashReceivedCents: 30000,
+      },
+    });
+
+    expect(sale.error?.message).toContain("delivery_zone_required");
+  });
+});

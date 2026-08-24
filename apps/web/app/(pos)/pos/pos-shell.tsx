@@ -602,10 +602,7 @@ export function PosShell() {
   }
 
   const lines = useMemo(() => cartLines(cart), [cart]);
-  const totalCents = useMemo(
-    () => cartTotalCents(cart),
-    [cart],
-  );
+  const subtotalCents = useMemo(() => cartTotalCents(cart), [cart]);
   const count = useMemo(() => cartCount(cart), [cart]);
 
   // Aquece o cache das fotos do cardápio INTEIRO, não só o da categoria aberta.
@@ -673,6 +670,20 @@ export function PosShell() {
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
   const [zoneId, setZoneId] = useState('');
+
+  /**
+   * A taxa da zona escolhida.
+   *
+   * Quem manda no preco e o servidor (Regra 2): a RPC volta a procurar a zona
+   * e a somar a taxa. Isto e so para o operador ver o total certo antes de
+   * cobrar e para o plano de pagamento fechar — se o POS cobrasse o subtotal,
+   * a venda passava a ser recusada com payment_total_mismatch.
+   */
+  const deliveryFeeCents = useMemo(() => {
+    if (fulfillment !== 'delivery' || !zoneId) return 0;
+    return channels.zones.find((zone) => zone.id === zoneId)?.fee_cents ?? 0;
+  }, [channels.zones, fulfillment, zoneId]);
+  const totalCents = subtotalCents + deliveryFeeCents;
   const [orderNote, setOrderNote] = useState('');
   const [noteOpen, setNoteOpen] = useState(false);
   const [funnel, setFunnel] = useState<PosUpsellStep[]>([]);
@@ -1692,6 +1703,12 @@ export function PosShell() {
                       </li>
                     ))}
                   </ul>
+                  {deliveryFeeCents > 0 && (
+                    <p className="mt-2 flex items-baseline justify-between gap-3 border-t border-white/10 pt-2 text-base font-bold text-[#c8bfb0]">
+                      <span>Taxa de entrega</span>
+                      <span className="tabular-nums">{mt(deliveryFeeCents)}</span>
+                    </p>
+                  )}
                   <p className="mt-2 flex items-baseline justify-between border-t border-white/10 pt-2 text-xl font-black">
                     <span>TOTAL</span>
                     <span className="text-[#e5a93c]">{mt(totalCents)}</span>
