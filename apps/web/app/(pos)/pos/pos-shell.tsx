@@ -32,6 +32,7 @@ import { connectionStatus } from '@/lib/pos/connection-status';
 import { buildPosUpsellFunnel, type PosUpsellStep } from '@/lib/pos/pos-upsell';
 import { isPosPin, POS_IDLE_TIMEOUT_MS } from '@/lib/pos/session';
 import { OrdersBoard } from './orders-board';
+import { buildPickupSlots } from '@/lib/pos/schedule';
 import {
   cartCount,
   cartLines,
@@ -73,6 +74,8 @@ type DeliveryZone = { id: string; name: string; fee_cents: number };
  */
 type StoreChannels = {
   zones: DeliveryZone[];
+  /** Horario do dia de hoje, para saber ate quando se pode agendar. */
+  closesAt: string | null;
   upsellEnabled: boolean;
   pickupEnabled: boolean;
   deliveryEnabled: boolean;
@@ -329,11 +332,15 @@ export function PosShell() {
     if (payload) {
       const full = payload as {
         zones?: DeliveryZone[];
+        hours?: Array<{ dow: number; opens: string; closes: string; active?: boolean }>;
         upsell_enabled?: boolean;
         store?: { pickup_enabled?: boolean; delivery_enabled?: boolean };
       };
+      const hoje = new Date().getDay();
+      const horarioDeHoje = (full.hours ?? []).find((h) => h.dow === hoje && h.active !== false);
       setChannels({
         zones: full.zones ?? [],
+        closesAt: horarioDeHoje?.closes ?? null,
         upsellEnabled: full.upsell_enabled !== false,
         pickupEnabled: full.store?.pickup_enabled !== false,
         deliveryEnabled: full.store?.delivery_enabled !== false,
@@ -661,11 +668,13 @@ export function PosShell() {
       setCustomerPhone('');
       setZoneId('');
       setOrderNote('');
+      setScheduledFor('');
     }
   }, [lines.length]);
 
   const [channels, setChannels] = useState<StoreChannels>({
     zones: [],
+    closesAt: null,
     upsellEnabled: true,
     pickupEnabled: true,
     deliveryEnabled: true,
@@ -689,6 +698,8 @@ export function PosShell() {
   }, [channels.zones, fulfillment, zoneId]);
   const totalCents = subtotalCents + deliveryFeeCents;
   const [orderNote, setOrderNote] = useState('');
+  /** Hora marcada, em ISO com fuso. Vazio = para agora. */
+  const [scheduledFor, setScheduledFor] = useState('');
   const [noteOpen, setNoteOpen] = useState(false);
   const [funnel, setFunnel] = useState<PosUpsellStep[]>([]);
   const [funnelIndex, setFunnelIndex] = useState(0);
@@ -1018,6 +1029,7 @@ export function PosShell() {
         ...(customerName.trim() ? { customerName: customerName.trim() } : {}),
         ...(customerPhone.trim() ? { customerPhone: customerPhone.trim() } : {}),
         ...(orderNote.trim() ? { notes: orderNote.trim() } : {}),
+        ...(scheduledFor ? { scheduledFor } : {}),
       },
     });
     setSubmitting(false);
@@ -1412,6 +1424,35 @@ export function PosShell() {
                   placeholder="Telefone"
                   className="min-h-14 w-full rounded-xl border border-white/10 bg-black/30 px-3 text-base text-white outline-none focus:border-[#e5a93c]"
                 />
+                {/* Quem leva mais tarde escolhe a janela aqui. Janelas de 30
+                    minutos ate ao fecho da loja: a hora vem do horario dela,
+                    por isso nunca se promete uma hora a que ja nao ha ninguem. */}
+                <div className="flex gap-2 overflow-x-auto pb-1">
+                  <button
+                    type="button"
+                    onClick={() => setScheduledFor('')}
+                    className={`min-h-14 shrink-0 rounded-xl px-4 text-base font-black ${
+                      scheduledFor === '' ? 'bg-[#e5a93c] text-black' : 'bg-white/[0.07] text-[#c8bfb0]'
+                    }`}
+                  >
+                    Agora
+                  </button>
+                  {buildPickupSlots({ now: new Date(), closesAt: channels.closesAt }).map((slot) => (
+                    <button
+                      key={slot.value}
+                      type="button"
+                      onClick={() => setScheduledFor(slot.value)}
+                      className={`min-h-14 shrink-0 rounded-xl px-4 text-base font-black ${
+                        scheduledFor === slot.value
+                          ? 'bg-[#e5a93c] text-black'
+                          : 'bg-white/[0.07] text-[#c8bfb0]'
+                      }`}
+                    >
+                      {slot.label}
+                    </button>
+                  ))}
+                </div>
+
                 {fulfillment === 'delivery' && (
                   <select
                     value={zoneId}

@@ -129,4 +129,17 @@ describe('formatos HAWSMASH de 80 mm', () => {
     expect(decodeReceipt(createReceipt(kitchen))).toContain('Nº 42');
     expect(decodeReceipt(createReceipt(receipt))).toContain('TOTAL');
   });
+
+  // Um agendamento que passa despercebido no meio do talao vira comida feita a
+  // hora errada, ou um cliente a chegar e a esperar de pe.
+  it("poe a hora marcada em destaque, e nao poe nada quando e para ja", () => {
+    const comHora = decodeReceipt(
+      createKitchenTicket({ ...kitchen, scheduled_for: "2026-08-24T18:30:00.000Z" }),
+    );
+    expect(comHora).toContain("HORARIO:");
+    expect(comHora).toContain("20:30");
+
+    const paraJa = decodeReceipt(createKitchenTicket(kitchen));
+    expect(paraJa).not.toContain("HORARIO:");
+  });
 });

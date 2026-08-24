@@ -57,6 +57,8 @@ export default function EquipaPage() {
   const [revokeReason, setRevokeReason] = useState('');
   const [pinTarget, setPinTarget] = useState<StaffMember | null>(null);
   const [pinValue, setPinValue] = useState('');
+  const [passwordTarget, setPasswordTarget] = useState<StaffMember | null>(null);
+  const [passwordValue, setPasswordValue] = useState('');
 
   const refresh = useCallback(async () => {
     const [staffResult, storesResult] = await Promise.all([
@@ -194,6 +196,35 @@ export default function EquipaPage() {
     setPinTarget(null);
     setPinValue('');
     await refresh();
+  }
+
+  async function resetPassword() {
+    if (!passwordTarget) return;
+    if (passwordValue.length < 8) {
+      setMessage({ tone: 'error', text: 'A senha tem de ter 8+ caracteres.' });
+      return;
+    }
+    setBusy(true);
+    const { data: sessionData } = await supabase.auth.getSession();
+    const response = await fetch(`/api/staff/${passwordTarget.user_id}/password`, {
+      method: 'PATCH',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${sessionData.session?.access_token ?? ''}`,
+      },
+      body: JSON.stringify({ password: passwordValue }),
+    });
+    setBusy(false);
+
+    if (!response.ok) {
+      const body = await response.json().catch(() => ({ error: 'Falha desconhecida.' }));
+      setMessage({ tone: 'error', text: `Senha não redefinida: ${body.error}` });
+      return;
+    }
+
+    setMessage({ tone: 'ok', text: `Senha de ${passwordTarget.full_name} redefinida.` });
+    setPasswordTarget(null);
+    setPasswordValue('');
   }
 
   if (denied) {
@@ -340,6 +371,16 @@ export default function EquipaPage() {
                       className="rounded-lg border border-white/10 px-3 py-1 text-xs font-bold text-[#C9BCAC] hover:bg-white/[0.05]"
                     >
                       Definir PIN
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPasswordTarget(member);
+                        setPasswordValue('');
+                      }}
+                      className="rounded-lg border border-white/10 px-3 py-1 text-xs font-bold text-[#C9BCAC] hover:bg-white/[0.05]"
+                    >
+                      Redefinir senha
                     </button>
                     {member.active ? (
                       <button
@@ -509,6 +550,41 @@ export default function EquipaPage() {
                 className="rounded-xl bg-[#7a2b2b] px-4 py-2 text-sm font-black text-white disabled:opacity-50"
               >
                 Remover agora
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {passwordTarget && (
+        <div className="fixed inset-0 z-50 grid place-items-center bg-black/70 p-4">
+          <div className="w-full max-w-md rounded-2xl border border-white/10 bg-[#151311] p-5">
+            <h2 className="text-lg font-black text-white">Redefinir senha de {passwordTarget.full_name}</h2>
+            <p className="mt-2 text-sm text-[#8b8378]">
+              A senha antiga deixa de funcionar de imediato. Avisa a pessoa da nova senha.
+            </p>
+            <input
+              type="text"
+              value={passwordValue}
+              onChange={(event) => setPasswordValue(event.target.value)}
+              placeholder="Nova senha (8+ caracteres)"
+              className="mt-4 w-full rounded-xl border border-white/10 bg-[#0f0e0c] px-4 py-3 text-sm text-white"
+            />
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setPasswordTarget(null)}
+                className="rounded-xl border border-white/10 px-4 py-2 text-sm font-bold text-[#C9BCAC]"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => void resetPassword()}
+                className="rounded-xl bg-[#e5a93c] px-4 py-2 text-sm font-black text-black disabled:opacity-50"
+              >
+                Redefinir
               </button>
             </div>
           </div>

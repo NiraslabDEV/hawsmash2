@@ -165,11 +165,28 @@ function brandHeader(storeShortName: string): Buffer[] {
   return chunks;
 }
 
+/**
+ * A hora marcada, em corpo duplo.
+ *
+ * E a linha que diz a cozinha que aquilo NAO e para ja. No 1.0 saia assim, a
+ * dobrar, e por boa razao: um agendamento que passa despercebido no meio do
+ * talao vira comida feita a hora errada — ou um cliente a chegar e a esperar.
+ */
+function scheduleBlock(scheduledFor?: string | null): Buffer[] {
+  if (!scheduledFor) return [];
+  return [
+    line(rule('-')),
+    line('HORARIO:'),
+    SIZE_DOUBLE, BOLD_ON, line(maputoTime(scheduledFor)), BOLD_OFF, SIZE_NORMAL,
+  ];
+}
+
 export function createKitchenTicket(payload: KitchenTicketPayload): Buffer {
   const chunks: Buffer[] = brandHeader(payload.store_short_name);
   chunks.push(SIZE_DOUBLE, BOLD_ON, line(`Nº ${payload.daily_number}`), BOLD_OFF, SIZE_NORMAL);
   chunks.push(BOLD_ON, line(channelLabel(payload.channel)), BOLD_OFF);
   chunks.push(line(maputoTime(payload.created_at)), ALIGN_LEFT, line(rule('=')));
+  chunks.push(...scheduleBlock(payload.scheduled_for));
 
   for (const item of payload.items) {
     chunks.push(BOLD_ON, line(`${item.quantity}x ${item.name}`), BOLD_OFF);
@@ -195,6 +212,7 @@ export function createCustomerReceipt(payload: CustomerReceiptPayload): Buffer {
   if (payload.store_phone) chunks.push(line(`Tel: ${payload.store_phone}`));
   chunks.push(ALIGN_LEFT, line(rule('=')));
   chunks.push(line(twoColumns(`PEDIDO ${payload.order_number}`, maputoTime(payload.created_at))));
+  chunks.push(...scheduleBlock(payload.scheduled_for));
   chunks.push(line(rule('-')));
 
   for (const item of payload.items) {

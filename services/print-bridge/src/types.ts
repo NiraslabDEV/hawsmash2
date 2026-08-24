@@ -57,6 +57,8 @@ export interface KitchenTicketPayload {
   daily_number: number;
   channel: 'counter' | 'delivery' | 'pickup' | 'dine_in';
   customer_name: string;
+  /** Hora marcada. null = para já. */
+  scheduled_for?: string | null;
   items: Array<{ name: string; quantity: number; notes?: string | null }>;
   notes?: string | null;
   created_at: string;
@@ -71,6 +73,7 @@ export interface CustomerReceiptPayload {
   order_number: string;
   daily_number: number;
   customer_name: string;
+  scheduled_for?: string | null;
   items: Array<{
     name: string;
     quantity: number;

@@ -1195,3 +1195,55 @@ describe("F2 — entrega vendida ao balcão", () => {
     expect(sale.error?.message).toContain("delivery_zone_required");
   });
 });
+// ─── Hora marcada ───────────────────────────────────────────────────────────
+describe("F2 — agendamento no balcão", () => {
+  it("grava a hora marcada e recusa o passado", async () => {
+    const daquiA2h = new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString();
+    const sale = await manager.rpc("create_counter_sale", {
+      p_payload: {
+        clientSaleId: crypto.randomUUID(),
+        deviceId: posDeviceId,
+        items: [{ menuItemId: classicSmashId, qty: 1, variantId: hawVariantId }],
+        scheduledFor: daquiA2h,
+        payments: [{ method: "cash", amountCents: 30000 }],
+        cashReceivedCents: 30000,
+      },
+    });
+    expect(sale.error).toBeNull();
+
+    const { data: order } = await admin
+      .from("orders").select("scheduled_for").eq("id", sale.data.order_id).single();
+    expect(new Date(order!.scheduled_for as string).toISOString()).toBe(daquiA2h);
+    await admin.from("orders").delete().eq("id", sale.data.order_id);
+
+    // Um agendamento para trás entra na cozinha como se fosse para já.
+    const passado = await manager.rpc("create_counter_sale", {
+      p_payload: {
+        clientSaleId: crypto.randomUUID(),
+        deviceId: posDeviceId,
+        items: [{ menuItemId: classicSmashId, qty: 1, variantId: hawVariantId }],
+        scheduledFor: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
+        payments: [{ method: "cash", amountCents: 30000 }],
+        cashReceivedCents: 30000,
+      },
+    });
+    expect(passado.error?.message).toContain("scheduled_for_in_past");
+  });
+
+  it("sem hora marcada continua a ser para já", async () => {
+    const sale = await manager.rpc("create_counter_sale", {
+      p_payload: {
+        clientSaleId: crypto.randomUUID(),
+        deviceId: posDeviceId,
+        items: [{ menuItemId: classicSmashId, qty: 1, variantId: hawVariantId }],
+        payments: [{ method: "cash", amountCents: 30000 }],
+        cashReceivedCents: 30000,
+      },
+    });
+    expect(sale.error).toBeNull();
+    const { data: order } = await admin
+      .from("orders").select("scheduled_for").eq("id", sale.data.order_id).single();
+    expect(order!.scheduled_for).toBeNull();
+    await admin.from("orders").delete().eq("id", sale.data.order_id);
+  });
+});
