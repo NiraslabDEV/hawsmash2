@@ -56,7 +56,15 @@ export interface KitchenTicketPayload {
   order_number: string;
   daily_number: number;
   channel: 'counter' | 'delivery' | 'pickup' | 'dine_in';
+  /**
+   * Como sai o pedido. É isto — e não o `channel` — que a cozinha e o
+   * entregador leem: uma entrega vendida ao balcão tem channel='counter'.
+   */
+  fulfillment_type?: 'counter' | 'delivery' | 'pickup' | 'dine_in' | null;
   customer_name: string;
+  customer_phone?: string | null;
+  address?: string | null;
+  delivery_zone?: string | null;
   /** Hora marcada. null = para já. */
   scheduled_for?: string | null;
   items: Array<{ name: string; quantity: number; notes?: string | null }>;
@@ -73,6 +81,10 @@ export interface CustomerReceiptPayload {
   order_number: string;
   daily_number: number;
   customer_name: string;
+  customer_phone?: string | null;
+  fulfillment_type?: 'counter' | 'delivery' | 'pickup' | 'dine_in' | null;
+  address?: string | null;
+  delivery_zone?: string | null;
   scheduled_for?: string | null;
   items: Array<{
     name: string;

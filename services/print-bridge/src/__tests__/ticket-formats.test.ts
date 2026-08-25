@@ -143,3 +143,54 @@ describe('formatos HAWSMASH de 80 mm', () => {
     expect(paraJa).not.toContain("HORARIO:");
   });
 });
+
+describe('entrega vendida ao balcão', () => {
+  const entrega: KitchenTicketPayload = {
+    ...kitchen,
+    // É este o caso que saía errado: vendida ao balcão (channel), mas entregue.
+    channel: 'counter',
+    fulfillment_type: 'delivery',
+    customer_name: 'Ridwan',
+    customer_phone: '84 000 0000',
+    delivery_zone: 'Baixa',
+    address: 'Av. Julius Nyerere 1234, 3.º andar',
+  };
+
+  it('a comanda carimba ENTREGA, não BALCÃO, e leva a morada', () => {
+    const texto = decodeReceipt(createKitchenTicket(entrega));
+    expect(texto).toContain('ENTREGA');
+    expect(texto).not.toContain('BALCÃO');
+    expect(texto).toContain('Ridwan');
+    expect(texto).toContain('84 000 0000');
+    expect(texto).toContain('Baixa');
+    expect(texto).toContain('Av. Julius Nyerere 1234');
+  });
+
+  // Sem morada o entregador tem de telefonar — e o papel tem de o dizer,
+  // em vez de deixar um espaço em branco que ninguém repara.
+  it('sem morada, o talão diz que é preciso telefonar', () => {
+    const texto = decodeReceipt(createKitchenTicket({ ...entrega, address: null }));
+    expect(texto).toContain('MORADA: A CONFIRMAR POR TELEFONE');
+  });
+
+  it('a venda de balcão normal não ganha bloco de entrega nenhum', () => {
+    const texto = decodeReceipt(createKitchenTicket(kitchen));
+    expect(texto).toContain('BALCÃO');
+    expect(texto).not.toContain('ENTREGA');
+  });
+
+  it('o talão do cliente leva a mesma morada', () => {
+    const texto = decodeReceipt(
+      createCustomerReceipt({
+        ...receipt,
+        fulfillment_type: 'delivery',
+        customer_name: 'Ridwan',
+        customer_phone: '84 000 0000',
+        delivery_zone: 'Baixa',
+        address: 'Av. Julius Nyerere 1234',
+      }),
+    );
+    expect(texto).toContain('Morada: Av. Julius Nyerere 1234');
+  });
+});
+

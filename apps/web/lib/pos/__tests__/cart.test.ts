@@ -11,6 +11,7 @@ import {
   removeOneOfItem,
   resolveSellable,
   salePayloadItems,
+  setLineNotes,
   type Cart,
 } from '../cart';
 import type { PosMenuItem } from '../offline-store';
@@ -154,5 +155,51 @@ describe('carrinho do balcão com variantes', () => {
   it('a chave distingue variantes e mantém o item simples legível', () => {
     expect(cartKey('item-chips')).toBe('item-chips');
     expect(cartKey('item-classic', 'var-wagyu')).toBe('item-classic:var-wagyu');
+  });
+
+  // O pedido do dono: quem quer sem jalapeño tem de conseguir pedir sem.
+  it('a nota faz da linha uma linha própria e vai no payload', () => {
+    let cart: Cart = changeQty({}, resolveSellable(chips), 1);
+    const [linha] = cartLines(cart);
+    cart = setLineNotes(cart, linha, 'SEM JALAPENO');
+    cart = changeQty(cart, resolveSellable(chips), 1);
+
+    const linhas = cartLines(cart);
+    expect(linhas).toHaveLength(2);
+    expect(linhas.map((l) => l.notes)).toEqual(expect.arrayContaining([null, 'SEM JALAPENO']));
+    // Contas e emblema continuam a ver os dois como o mesmo produto.
+    expect(qtyOfItem(cart, 'item-chips')).toBe(2);
+    expect(cartTotalCents(cart)).toBe(chips.price_cents * 2);
+
+    expect(salePayloadItems(linhas)).toContainEqual({
+      menuItemId: 'item-chips',
+      qty: 1,
+      notes: 'SEM JALAPENO',
+    });
+  });
+
+  it('mudar a nota move a quantidade, e voltar à nota anterior soma', () => {
+    let cart: Cart = changeQty({}, resolveSellable(chips), 2);
+    cart = setLineNotes(cart, cartLines(cart)[0], 'SEM SAL');
+    expect(cartLines(cart)).toHaveLength(1);
+    expect(cartLines(cart)[0].qty).toBe(2);
+
+    // Uma segunda linha sem nota, depois marcada com a mesma nota: junta-se.
+    cart = changeQty(cart, resolveSellable(chips), 1);
+    const semNota = cartLines(cart).find((l) => l.notes === null)!;
+    cart = setLineNotes(cart, semNota, 'SEM SAL');
+    expect(cartLines(cart)).toHaveLength(1);
+    expect(cartLines(cart)[0].qty).toBe(3);
+  });
+
+  it('tirar a nota devolve a linha ao estado normal', () => {
+    let cart: Cart = changeQty({}, resolveSellable(chips), 1);
+    cart = setLineNotes(cart, cartLines(cart)[0], 'SEM SAL');
+    cart = setLineNotes(cart, cartLines(cart)[0], null);
+    expect(cartLines(cart)[0].notes).toBeNull();
+    expect(salePayloadItems(cartLines(cart))[0]).toEqual({
+      menuItemId: 'item-chips',
+      qty: 1,
+    });
   });
 });

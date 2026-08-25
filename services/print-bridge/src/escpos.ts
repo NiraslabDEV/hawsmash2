@@ -147,6 +147,50 @@ function channelLabel(channel: KitchenTicketPayload['channel']): string {
 }
 
 /**
+ * O carimbo grande do talao.
+ *
+ * Uma entrega vendida ao balcao chega aqui com channel='counter' e
+ * fulfillment_type='delivery'. Quem le o papel — cozinha e entregador — quer
+ * saber para onde aquilo vai, nao por que porta foi vendido. O channel fica
+ * como recurso para os pedidos antigos, que nao trazem fulfillment.
+ */
+function fulfillmentLabel(payload: {
+  channel: KitchenTicketPayload['channel'];
+  fulfillment_type?: KitchenTicketPayload['fulfillment_type'];
+}): string {
+  const alvo = payload.fulfillment_type ?? payload.channel;
+  if (alvo === 'counter' && payload.channel !== 'counter') return channelLabel(payload.channel);
+  return channelLabel(alvo);
+}
+
+/**
+ * Para onde vai a entrega: nome, telefone, zona e morada.
+ *
+ * Sai na comanda e no talao, porque o papel que segue com o entregador tanto
+ * pode ser um como o outro. Sem morada nao ha entrega — e por isso a ausencia
+ * dela e impressa, em vez de deixar um espaco em branco que ninguem nota.
+ */
+function deliveryBlock(payload: {
+  fulfillment_type?: KitchenTicketPayload['fulfillment_type'];
+  customer_name?: string | null;
+  customer_phone?: string | null;
+  delivery_zone?: string | null;
+  address?: string | null;
+}): Buffer[] {
+  if (payload.fulfillment_type !== 'delivery') return [];
+  const chunks: Buffer[] = [line(rule('-')), BOLD_ON, line('ENTREGA'), BOLD_OFF];
+  if (payload.customer_name) chunks.push(line(`Cliente: ${payload.customer_name}`));
+  if (payload.customer_phone) chunks.push(line(`Tel: ${payload.customer_phone}`));
+  if (payload.delivery_zone) chunks.push(line(`Zona: ${payload.delivery_zone}`));
+  if (payload.address) {
+    for (const moradaLinha of wrap(`Morada: ${payload.address}`)) chunks.push(line(moradaLinha));
+  } else {
+    chunks.push(BOLD_ON, line('MORADA: A CONFIRMAR POR TELEFONE'), BOLD_OFF);
+  }
+  return chunks;
+}
+
+/**
  * O cabecalho da casa: logo em raster e o nome da loja por baixo.
  *
  * O raster vem do bridge do 1.0, onde correu meses em producao — e e por isso
@@ -184,9 +228,10 @@ function scheduleBlock(scheduledFor?: string | null): Buffer[] {
 export function createKitchenTicket(payload: KitchenTicketPayload): Buffer {
   const chunks: Buffer[] = brandHeader(payload.store_short_name);
   chunks.push(SIZE_DOUBLE, BOLD_ON, line(`Nº ${payload.daily_number}`), BOLD_OFF, SIZE_NORMAL);
-  chunks.push(BOLD_ON, line(channelLabel(payload.channel)), BOLD_OFF);
+  chunks.push(BOLD_ON, line(fulfillmentLabel(payload)), BOLD_OFF);
   chunks.push(line(maputoTime(payload.created_at)), ALIGN_LEFT, line(rule('=')));
   chunks.push(...scheduleBlock(payload.scheduled_for));
+  chunks.push(...deliveryBlock(payload));
 
   for (const item of payload.items) {
     chunks.push(BOLD_ON, line(`${item.quantity}x ${item.name}`), BOLD_OFF);
@@ -213,6 +258,7 @@ export function createCustomerReceipt(payload: CustomerReceiptPayload): Buffer {
   chunks.push(ALIGN_LEFT, line(rule('=')));
   chunks.push(line(twoColumns(`PEDIDO ${payload.order_number}`, maputoTime(payload.created_at))));
   chunks.push(...scheduleBlock(payload.scheduled_for));
+  chunks.push(...deliveryBlock(payload));
   chunks.push(line(rule('-')));
 
   for (const item of payload.items) {

@@ -93,6 +93,8 @@ export type OfflineSaleDraft = {
     qty: number;
     unitPriceCents: number;
     station: 'kitchen' | 'bar';
+    /** "SEM JALAPENO". Vai na comanda impressa na LAN e sobe na sincronização. */
+    notes?: string;
   }>;
   payments: Array<{ method: z.infer<typeof paymentMethodSchema>; amountCents: number }>;
   cashReceivedCents?: number;
@@ -122,6 +124,7 @@ const offlineSaleDraftSchema: z.ZodType<OfflineSaleDraft> = z.object({
     qty: z.number().int().positive(),
     unitPriceCents: z.number().int().nonnegative(),
     station: z.enum(['kitchen', 'bar']),
+    notes: z.string().min(1).max(120).optional(),
   })).min(1),
   payments: z.array(z.object({
     method: paymentMethodSchema,

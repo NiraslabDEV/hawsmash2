@@ -23,7 +23,12 @@ import type { PosMenuItem } from './offline-store';
 export type PosVariant = NonNullable<PosMenuItem['variants']>[number];
 
 export type CartLine = {
-  /** Identidade no carrinho. É o item quando não há variante, `item:variante` quando há. */
+  /**
+   * Identidade no carrinho: item, variante e nota. A nota entra na chave de
+   * propósito — um Classic "sem jalapeño" e um Classic normal são dois pratos
+   * diferentes para a cozinha, e juntá-los em `2x Classic` mandava para a
+   * chapa um pedido que ninguém fez.
+   */
   id: string;
   menuItemId: string;
   variantId: string | null;
@@ -32,14 +37,22 @@ export type CartLine = {
   price_cents: number;
   station: 'kitchen' | 'bar';
   photo_url: string | null;
+  /** "SEM JALAPENO", "bem passado". Sai na comanda e no talão. */
+  notes: string | null;
   qty: number;
 };
 
 export type Sellable = Omit<CartLine, 'qty'>;
 export type Cart = Record<string, CartLine>;
 
-export function cartKey(menuItemId: string, variantId?: string | null): string {
-  return variantId ? `${menuItemId}:${variantId}` : menuItemId;
+export function cartKey(
+  menuItemId: string,
+  variantId?: string | null,
+  notes?: string | null,
+): string {
+  const base = variantId ? `${menuItemId}:${variantId}` : menuItemId;
+  const nota = notes?.trim();
+  return nota ? `${base}#${nota.toLowerCase()}` : base;
 }
 
 /**
@@ -67,12 +80,18 @@ function resolveName(item: PosMenuItem, variant: PosVariant | null): string {
   return `${item.name} ${nome}`;
 }
 
-export function resolveSellable(item: PosMenuItem, variant?: PosVariant | null): Sellable {
+export function resolveSellable(
+  item: PosMenuItem,
+  variant?: PosVariant | null,
+  notes?: string | null,
+): Sellable {
   const escolhida = variant ?? null;
+  const nota = notes?.trim() || null;
   return {
-    id: cartKey(item.id, escolhida?.id),
+    id: cartKey(item.id, escolhida?.id, nota),
     menuItemId: item.id,
     variantId: escolhida?.id ?? null,
+    notes: nota,
     name: resolveName(item, escolhida),
     // O preço da variante SUBSTITUI o do item base (migration 1018).
     price_cents: escolhida ? escolhida.price_cents : item.price_cents,
@@ -139,10 +158,35 @@ export function removeOneOfItem(cart: Cart, menuItemId: string): Cart {
  */
 export function salePayloadItems(
   lines: CartLine[],
-): Array<{ menuItemId: string; qty: number; variantId?: string }> {
+): Array<{ menuItemId: string; qty: number; variantId?: string; notes?: string }> {
   return lines.map((linha) => ({
     menuItemId: linha.menuItemId,
     qty: linha.qty,
     ...(linha.variantId ? { variantId: linha.variantId } : {}),
+    ...(linha.notes ? { notes: linha.notes } : {}),
   }));
+}
+
+/**
+ * Trocar a nota de uma linha que já está no carrinho.
+ *
+ * A nota faz parte da identidade da linha, por isso mudá-la é mudar de linha:
+ * tira-se a quantidade da antiga e põe-se na nova. Se já existir uma linha
+ * igual com essa nota — dois "sem cebola" pedidos em momentos diferentes —
+ * as quantidades somam-se, que é o que o operador espera ver.
+ */
+export function setLineNotes(cart: Cart, line: CartLine, notes: string | null): Cart {
+  const nota = notes?.trim() || null;
+  if (nota === line.notes) return cart;
+  const seguinte = { ...cart };
+  delete seguinte[line.id];
+  const id = cartKey(line.menuItemId, line.variantId, nota);
+  const existente = seguinte[id];
+  seguinte[id] = {
+    ...line,
+    id,
+    notes: nota,
+    qty: (existente?.qty ?? 0) + line.qty,
+  };
+  return seguinte;
 }

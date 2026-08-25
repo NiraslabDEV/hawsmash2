@@ -32,6 +32,7 @@ import { connectionStatus } from '@/lib/pos/connection-status';
 import { buildPosUpsellFunnel, type PosUpsellStep } from '@/lib/pos/pos-upsell';
 import { isPosPin, POS_IDLE_TIMEOUT_MS } from '@/lib/pos/session';
 import { OrdersBoard } from './orders-board';
+import { TouchKeyboard } from './touch-keyboard';
 import { buildPickupSlots } from '@/lib/pos/schedule';
 import {
   cartCount,
@@ -44,6 +45,7 @@ import {
   removeOneOfItem,
   resolveSellable,
   salePayloadItems,
+  setLineNotes,
   type Cart,
   type CartLine,
   type PosVariant,
@@ -175,6 +177,32 @@ function errorMessage(message?: string): string {
   }
   return message;
 }
+
+/**
+ * Os "sem" de todos os dias, a um toque.
+ *
+ * Escrever "sem jalapeño" letra a letra num ecrã táctil, com o cliente à
+ * frente, é tempo que o balcão não tem. Estes são os que se repetem; o resto
+ * escreve-se no teclado do POS.
+ */
+const NOTAS_RAPIDAS = [
+  'SEM JALAPENO',
+  'SEM CEBOLA',
+  'SEM MOLHO',
+  'SEM QUEIJO',
+  'SEM TOMATE',
+  'SEM PICANTE',
+  'BEM PASSADO',
+  'MAL PASSADO',
+  'PARA LEVAR',
+] as const;
+
+const KEYBOARD_LABELS = {
+  name: 'Nome do cliente',
+  phone: 'Telefone',
+  address: 'Morada da entrega',
+  orderNote: 'Nota do pedido',
+} as const;
 
 export function PosShell() {
   const router = useRouter();
@@ -464,6 +492,7 @@ export function PosShell() {
                 menuItemId: item.menuItemId,
                 qty: item.qty,
                 ...(item.variantId ? { variantId: item.variantId } : {}),
+                ...(item.notes ? { notes: item.notes } : {}),
               })),
               payments: sale.payments,
               offlineTotalCents: sale.totalCents,
@@ -666,6 +695,7 @@ export function PosShell() {
       setFulfillment('counter');
       setCustomerName('');
       setCustomerPhone('');
+      setCustomerAddress('');
       setZoneId('');
       setOrderNote('');
       setScheduledFor('');
@@ -682,7 +712,19 @@ export function PosShell() {
   const [fulfillment, setFulfillment] = useState<FulfillmentType>('counter');
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
+  /**
+   * Onde é a entrega. Nome, telefone e zona não são uma morada: o entregador
+   * saía do balcão com "Zona Maputo" e um número para telefonar do carro.
+   */
+  const [customerAddress, setCustomerAddress] = useState('');
   const [zoneId, setZoneId] = useState('');
+  /** Campo de texto aberto no teclado do ecrã. Null = teclado fechado. */
+  const [keyboardField, setKeyboardField] = useState<
+    'name' | 'phone' | 'address' | 'orderNote' | null
+  >(null);
+  /** Linha do carrinho a receber nota ("sem jalapeño"). */
+  const [noteLine, setNoteLine] = useState<CartLine | null>(null);
+  const [noteKeyboard, setNoteKeyboard] = useState(false);
 
   /**
    * A taxa da zona escolhida.
@@ -700,7 +742,6 @@ export function PosShell() {
   const [orderNote, setOrderNote] = useState('');
   /** Hora marcada, em ISO com fuso. Vazio = para agora. */
   const [scheduledFor, setScheduledFor] = useState('');
-  const [noteOpen, setNoteOpen] = useState(false);
   const [funnel, setFunnel] = useState<PosUpsellStep[]>([]);
   const [funnelIndex, setFunnelIndex] = useState(0);
   const funnelStep = funnel[funnelIndex] ?? null;
@@ -976,6 +1017,7 @@ export function PosShell() {
           qty: line.qty,
           unitPriceCents: line.price_cents,
           station: line.station,
+          ...(line.notes ? { notes: line.notes } : {}),
         })),
         payments: paymentPlan.payments,
         ...(cashPaymentCents > 0 ? { cashReceivedCents } : {}),
@@ -1028,6 +1070,9 @@ export function PosShell() {
         ...(fulfillment === 'delivery' && zoneId ? { deliveryZoneId: zoneId } : {}),
         ...(customerName.trim() ? { customerName: customerName.trim() } : {}),
         ...(customerPhone.trim() ? { customerPhone: customerPhone.trim() } : {}),
+        ...(fulfillment === 'delivery' && customerAddress.trim()
+          ? { address: customerAddress.trim() }
+          : {}),
         ...(orderNote.trim() ? { notes: orderNote.trim() } : {}),
         ...(scheduledFor ? { scheduledFor } : {}),
       },
@@ -1411,19 +1456,36 @@ export function PosShell() {
 
             {fulfillment !== 'counter' && (
               <div className="mt-2 space-y-2">
-                <input
-                  value={customerName}
-                  onChange={(event) => setCustomerName(event.target.value)}
-                  placeholder="Nome do cliente"
-                  className="min-h-14 w-full rounded-xl border border-white/10 bg-black/30 px-3 text-base text-white outline-none focus:border-[#e5a93c]"
-                />
-                <input
-                  value={customerPhone}
-                  onChange={(event) => setCustomerPhone(event.target.value)}
-                  inputMode="tel"
-                  placeholder="Telefone"
-                  className="min-h-14 w-full rounded-xl border border-white/10 bg-black/30 px-3 text-base text-white outline-none focus:border-[#e5a93c]"
-                />
+{/* Tocar abre o teclado do POS (`touch-keyboard`). O PC de balcão não tem
+                    teclado físico e o Windows não abre o dele sozinho — um campo
+                    que só aceita escrita não é um campo, é um beco. */}
+                <button
+                  type="button"
+                  onClick={() => setKeyboardField('name')}
+                  className="min-h-14 w-full rounded-xl border border-white/10 bg-black/30 px-3 text-left text-base font-bold text-white active:border-[#e5a93c]"
+                >
+                  {customerName.trim() || <span className="text-[#847e72]">Nome do cliente</span>}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setKeyboardField('phone')}
+                  className="min-h-14 w-full rounded-xl border border-white/10 bg-black/30 px-3 text-left text-base font-bold text-white active:border-[#e5a93c]"
+                >
+                  {customerPhone.trim() || <span className="text-[#847e72]">Telefone</span>}
+                </button>
+                {fulfillment === 'delivery' && (
+                  <button
+                    type="button"
+                    onClick={() => setKeyboardField('address')}
+                    className={`min-h-14 w-full rounded-xl border px-3 text-left text-base font-bold active:border-[#e5a93c] ${
+                      customerAddress.trim()
+                        ? 'border-white/10 bg-black/30 text-white'
+                        : 'border-amber-500/40 bg-amber-500/[0.07] text-amber-200'
+                    }`}
+                  >
+                    {customerAddress.trim() || 'Morada da entrega — sem isto o entregador liga'}
+                  </button>
+                )}
                 {/* Quem leva mais tarde escolhe a janela aqui. Janelas de 30
                     minutos ate ao fecho da loja: a hora vem do horario dela,
                     por isso nunca se promete uma hora a que ja nao ha ninguem. */}
@@ -1480,9 +1542,23 @@ export function PosShell() {
               lines.map((line) => (
                 <article key={line.id} className="rounded-2xl bg-white/[0.05] p-3">
                   <div className="flex items-start justify-between gap-2">
-                    <div>
+                    <div className="min-w-0">
                       <h3 className="font-bold">{line.name}</h3>
                       <p className="text-sm text-[#e5a93c]">{mt(line.price_cents * line.qty)}</p>
+                      {/* "SEM JALAPENO" é meio balcão. Sai na comanda da
+                          cozinha e no talão, e faz da linha uma linha própria:
+                          um sem jalapeño e um normal não são `2x Classic`. */}
+                      <button
+                        type="button"
+                        onClick={() => setNoteLine(line)}
+                        className={`mt-1 min-h-12 max-w-full truncate rounded-lg px-2 text-left text-xs font-black uppercase ${
+                          line.notes
+                            ? 'bg-[#e5a93c] text-black'
+                            : 'bg-white/[0.07] text-[#847e72]'
+                        }`}
+                      >
+                        {line.notes ?? '+ sem / nota'}
+                      </button>
                     </div>
                     <div className="flex items-center gap-1">
                       <button
@@ -1512,7 +1588,7 @@ export function PosShell() {
           <section className="shrink-0 border-t border-white/10 p-3">
             <button
               type="button"
-              onClick={() => setNoteOpen(true)}
+              onClick={() => setKeyboardField('orderNote')}
               className={`mb-2 min-h-14 w-full rounded-xl px-3 text-left text-sm font-bold active:scale-[0.98] ${
                 orderNote.trim() ? 'bg-white/[0.12] text-[#f6f1e6]' : 'bg-white/[0.05] text-[#847e72]'
               }`}
@@ -1992,40 +2068,106 @@ export function PosShell() {
           </footer>
         </div>
       )}
-      {noteOpen && (
-        <div className="fixed inset-0 z-[60] grid place-items-center bg-black/80 p-4">
-          <section className="w-full max-w-lg rounded-3xl border border-white/10 bg-[#1a1816] p-6">
-            <h2 className="text-2xl font-black">Nota do pedido</h2>
-            <p className="mt-2 text-sm text-[#c8bfb0]">
-              Sai na comanda da cozinha. Ex.: sem cebola, para levar, cliente aguarda.
-            </p>
-            <textarea
-              value={orderNote}
-              onChange={(event) => setOrderNote(event.target.value)}
-              placeholder="Escreve a nota"
-              className="mt-4 min-h-28 w-full rounded-2xl border border-white/10 bg-black/30 p-4 text-white outline-none focus:border-[#e5a93c]"
-            />
-            <div className="mt-4 grid grid-cols-2 gap-3">
+      {/* Teclado do POS. Um só componente serve nome, telefone, morada e nota:
+          o PC de balcão não tem teclado físico e o Windows 10 em modo desktop
+          não abre o de toque sozinho. */}
+      {keyboardField && (
+        <TouchKeyboard
+          label={KEYBOARD_LABELS[keyboardField]}
+          mode={keyboardField === 'phone' ? 'tel' : 'text'}
+          value={
+            keyboardField === 'name'
+              ? customerName
+              : keyboardField === 'phone'
+                ? customerPhone
+                : keyboardField === 'address'
+                  ? customerAddress
+                  : orderNote
+          }
+          suggestions={keyboardField === 'orderNote' ? [...NOTAS_RAPIDAS] : []}
+          onCancel={() => setKeyboardField(null)}
+          onConfirm={(valor) => {
+            if (keyboardField === 'name') setCustomerName(valor);
+            else if (keyboardField === 'phone') setCustomerPhone(valor);
+            else if (keyboardField === 'address') setCustomerAddress(valor);
+            else setOrderNote(valor);
+            setKeyboardField(null);
+          }}
+        />
+      )}
+
+      {/* "Sem jalapeño" — a nota do artigo, com os SEM de todos os dias a um
+          toque. Escrever à mão fica para o que é fora do comum. */}
+      {noteLine && (
+        <div className="fixed inset-0 z-[70] grid place-items-center bg-black/85 p-4">
+          <section className="w-full max-w-2xl rounded-3xl border border-white/10 bg-[#1a1816] p-6">
+            <p className="text-xs font-black tracking-[0.25em] text-[#847e72]">NOTA DO ARTIGO</p>
+            <h2 className="mt-1 text-3xl font-black">{noteLine.name}</h2>
+            {noteLine.notes && (
+              <p className="mt-2 rounded-xl bg-[#e5a93c]/15 px-4 py-3 text-lg font-black text-[#e5a93c]">
+                {noteLine.notes}
+              </p>
+            )}
+
+            <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3">
+              {NOTAS_RAPIDAS.map((nota) => (
+                <button
+                  key={nota}
+                  type="button"
+                  onClick={() => {
+                    setCart((actual) => setLineNotes(actual, noteLine, nota));
+                    setNoteLine(null);
+                  }}
+                  className="min-h-16 rounded-xl bg-white/[0.09] px-2 text-base font-black active:bg-white/25"
+                >
+                  {nota}
+                </button>
+              ))}
+            </div>
+
+            <div className="mt-4 grid grid-cols-3 gap-2">
               <button
                 type="button"
                 onClick={() => {
-                  setOrderNote('');
-                  setNoteOpen(false);
+                  setCart((actual) => setLineNotes(actual, noteLine, null));
+                  setNoteLine(null);
                 }}
                 className="min-h-16 rounded-2xl bg-white/10 font-black active:bg-white/20"
               >
-                Apagar
+                Sem nota
               </button>
               <button
                 type="button"
-                onClick={() => setNoteOpen(false)}
+                onClick={() => setNoteLine(null)}
+                className="min-h-16 rounded-2xl bg-white/10 font-black active:bg-white/20"
+              >
+                Fechar
+              </button>
+              <button
+                type="button"
+                onClick={() => setNoteKeyboard(true)}
                 className="min-h-16 rounded-2xl bg-[#e5a93c] font-black text-black active:scale-[0.98]"
               >
-                Guardar
+                Escrever
               </button>
             </div>
           </section>
         </div>
+      )}
+
+      {noteLine && noteKeyboard && (
+        <TouchKeyboard
+          label={`Nota · ${noteLine.name}`}
+          value={noteLine.notes ?? ''}
+          maxLength={120}
+          suggestions={[...NOTAS_RAPIDAS]}
+          onCancel={() => setNoteKeyboard(false)}
+          onConfirm={(valor) => {
+            setCart((actual) => setLineNotes(actual, noteLine, valor || null));
+            setNoteKeyboard(false);
+            setNoteLine(null);
+          }}
+        />
       )}
 
       {confirmation && (
