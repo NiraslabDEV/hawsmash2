@@ -212,6 +212,15 @@
   Settings → Source. Domínio: `web-staging-7805.up.railway.app`
 - Se a resposta for outra: minutos — reconectar o repositório e escolher o ramo `dev`.
 - **Tem de estar resolvido antes da abertura.**
+- **2026-08-26 — este bloqueio já custou um dia de diagnóstico.** O balcão não conseguia fechar
+  vendas de entrega: dava `payment_total_mismatch`. Procurou-se o erro na base de dados e no código
+  do POS, e os dois estavam certos — a RPC de staging aceita a venda de entrega com a taxa, provado
+  por reprodução directa contra o staging (300 + 150 = 450, gravada certa). **O que estava errado era
+  o site publicado:** o Railway servia o build de 2026-08-22, anterior ao commit `3ed411c` que pôs o
+  POS a cobrar a taxa. POS antigo a mandar 300, servidor novo à espera de 450. Confirmado pelo bundle
+  publicado: tinha `Zona de entrega` e não tinha `Taxa de entrega`.
+  Resolvido no momento com `railway up --detach`. **Enquanto a origem não for reconectada, isto volta
+  a acontecer — e volta a parecer um bug do código.**
 
 ### B-017 · [F6] Stock dos combos vendidos como produto único
 - Estado: **aberto — decisão consciente, não é bug**
