@@ -9,7 +9,9 @@
 > **Cliente:** Ridwan · HAWSMASH (Maputo + Matola, Moçambique)
 >
 > Este ficheiro é a **fonte de verdade**. O plano de execução está em **[`ROADMAP.md`](ROADMAP.md)**.
-> As regras de trabalho do agente estão em **[`AGENTS.md`](AGENTS.md)** — ler antes de escrever código.
+> O plano de **empacotamento** (instalar este motor noutro restaurante) está em
+> **[`ROADMAP-PRODUTO.md`](ROADMAP-PRODUTO.md)** — ver §18. As regras de trabalho do agente estão em
+> **[`AGENTS.md`](AGENTS.md)** — ler antes de escrever código.
 
 ---
 
@@ -69,7 +71,7 @@ NUNCA editar main directamente. NUNCA correr SQL à mão em produção — só m
 | Camada | Tecnologia |
 |---|---|
 | Frontend | Next.js 14 (App Router) + TypeScript |
-| UI | Tailwind + shadcn/ui; tema do HAWSMASH (escuro + dourado `--gold #e5a93c`) em `config/brand.ts` |
+| UI | Tailwind + shadcn/ui; tema escuro + dourado `--gold #e5a93c`. **A partir da P1 a marca vive na BD** (`brand_settings`); `config/brand.ts` é só o fallback de fábrica (§18.2) |
 | Estado | TanStack Query (retry/reconexão) · POS com cache local (IndexedDB) |
 | Backend | Supabase (Postgres + RLS + Realtime + Auth + Storage) |
 | Validação | Zod em toda a boundary |
@@ -95,7 +97,7 @@ instala-se no PC touch como aplicação, mas continua a ser web.
   /app/(pos)/pos/           POS de balcão (PWA, touch, offline-capable)
   /app/(tv)/tv/[store]/     ecrãs de TV: menu board · senhas · (F2) KDS
   /app/api/                 webhooks, emails, health, track, cron
-/config/brand.ts            identidade (fábrica) — o que é runtime vive em stores/settings
+/config/brand.ts            fallback de fábrica APENAS — a identidade real vive em brand_settings (§18.2)
 /packages/core              money, order-machine, schemas (Zod) — domínio puro, testado
 /packages/db                migrations SQL + seed + tipos + testes de RLS
 /packages/paysuite          provider Paysuite + mock
@@ -542,4 +544,76 @@ O 1.0 continua a vender **até ao dia do cutover**. Nada pára.
 - ❌ Abrir gaveta sem perfil e sem registo em `event_log`.
 - ❌ Apagar venda anulada — anula-se com motivo, nunca se apaga.
 - ❌ `tenant_id`, planos comerciais ou gating por plano. `store_id` é unidade física, não inquilino.
+- ❌ **Identidade de cliente em código** — nome, cor, logo ou texto de marca dentro de `config/brand.ts`
+  ou de um componente. A partir da P1 isso é dado, não ficheiro (§18.2).
+- ❌ **Nome de cliente em caminhos, tabelas ou variáveis do produto** (`_hawsmash/`, `assets/hawsmash/`).
+  O produto não sabe como se chama o cliente que o está a usar.
 - ❌ Avançar fase do ROADMAP com testes vermelhos.
+
+---
+
+## 18. PRODUTO — do HAWSMASH ao Restaurant OS instalável
+
+> O HAWSMASH 2.0 é a **primeira instância multi-unidade** deste motor. Esta secção fixa as regras que
+> permitem instalar o mesmo motor noutro restaurante **sem tocar em código**. O plano por fases está em
+> **[`ROADMAP-PRODUTO.md`](ROADMAP-PRODUTO.md)**.
+>
+> **Prioridade:** o contrato do HAWSMASH (§0) vem sempre primeiro. Nada nesta secção justifica atrasar
+> a operação do cliente que paga hoje.
+
+### 18.1 Modelo: uma instância por cliente
+
+Cada restaurante tem o **seu** projecto Supabase, o **seu** deploy e o **seu** domínio.
+**Um só código-fonte, N instalações.**
+
+`store_id` continua a ser a **unidade física** dentro de uma empresa (§5). Não há, e não vai haver,
+`tenant_id`: o isolamento entre clientes é **físico** (bases de dados diferentes), não por policy.
+Uma policy mal escrita mostraria as vendas de um restaurante ao concorrente — com instâncias
+separadas esse erro é impossível de cometer.
+
+Mudar isto exige **ADR** em `docs/decisions/`. Não se discute em código.
+
+### 18.2 A marca é dado, nunca código
+
+**Regra:** nenhuma identidade de cliente vive num ficheiro `.ts`. Nome, cores, logo, redes, contactos
+e textos de marca vivem em **`brand_settings`** (singleton, como `settings`) e editam-se na aba
+**Aparência** do painel, pelo `owner`.
+
+`config/brand.ts` fica reduzido a **fallback de fábrica**: o que a loja mostra quando a base de dados
+não responde. Nunca contém o nome nem as cores de um cliente real.
+
+**Porque é inegociável:** `config/brand.ts` é importado por 12 ficheiros através do alias `@brand` e
+os valores entram no bundle em **tempo de compilação**. Enquanto for assim:
+
+1. mudar a marca não muda nada sem novo deploy;
+2. o dono não consegue editar a sua própria marca;
+3. cada cliente é uma **cópia do repositório** — e as melhorias do produto colidem sempre no mesmo
+   ficheiro, porque é ali que a identidade do cliente e o código partilham a mesma linha.
+
+O ponto 3 é o que torna isto uma regra de arquitectura e não uma questão de gosto: **é o que impede
+o produto de escalar para além do segundo cliente.**
+
+### 18.3 O produto não sabe o nome do cliente
+
+Nenhum caminho, tabela, componente ou variável do produto contém o nome de um cliente.
+`_hawsmash/` e `assets/hawsmash/` são dívida a pagar na P2 — não são padrão a seguir.
+
+Personalização de montra é **dados** (secções, ordem, imagens, blocos ligados/desligados) ou é
+**trabalho vendido à parte**. Nunca um `if` com o nome de um cliente.
+
+### 18.4 Actualizar sem partir
+
+Toda a instalação tem **versão visível** no painel Sistema e um comando único que aplica as
+migrations pendentes e reporta a versão antes e depois. Migrations continuam **forward-only** e
+idempotentes (§11.7) — é isso que torna seguro correr a mesma actualização em N clientes.
+
+Manutenção **nunca** em horário de loja.
+
+### 18.5 A economia manda na arquitectura
+
+Uma instância por cliente tem custo fixo (~32–67 USD/mês). A margem existe enquanto o **suporte for
+barato de prestar** — a mesma leitura do §0, agora multiplicada por N.
+
+É por isso que o **painel de frota** e os alertas agregados não são melhoria: são a condição para
+crescer. Um cliente com a impressora em baixo tem de aparecer no ecrã de quem suporta **antes** da
+primeira chamada.

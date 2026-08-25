@@ -247,6 +247,27 @@
   `serialport`, de propósito — um binding nativo partiria o empacotamento `.exe` (SEA) do bridge que
   já corre nas lojas.
 
+### B-019 · [F0] Enquadramento fiscal: facturação certificada pela AT
+- Estado: aberto
+- Desbloqueia: cliente + contabilista de Maputo
+- Pergunta exacta: o HAWSMASH precisa de emitir **factura fiscal certificada** (regime da AT, com numeração
+  sequencial inalterável, autenticação e comunicação periódica à AT) para as vendas de balcão/delivery, ou o
+  talão actual (documento de venda, sem valor fiscal) chega para o negócio?
+- Porque importa: pesquisa confirma que Moçambique tem um regime real de **software de facturação certificado**
+  pela Autoridade Tributária (numeração sequencial inalterável, autenticação de utilizador, integridade dos
+  dados, comunicação de facturas à AT) e uma **lista oficial de programas certificados**. O HAWSMASH 2.0 **não
+  está nessa lista** — o `CLAUDE.md §0` já assume isto como fora de âmbito da proposta fechada.
+- Como avancei: nada mudou no código — o sistema continua a emitir **talão de venda**, não factura fiscal.
+  Fica registado aqui para não passar despercebido, porque muda a decisão comercial, não é um detalhe técnico.
+- Onde está: `CLAUDE.md §0` ("Fora de âmbito"), `CLAUDE.md §16` item 8 (rodapé do talão, "sem certificação fiscal")
+- Se a resposta for outra (o cliente/contabilista exigir factura certificada): **não é código, é integração**
+  — ou se liga a um dos softwares já certificados pela AT para emitir a factura fiscal a par do talão, ou
+  orçamenta-se a certificação do próprio HAWSMASH junto da AT. Fora do âmbito e do preço fechado em §0.
+- Fontes consultadas: [EY Moçambique](https://www.ey.com/pt_mz/technical/tax-alerts/procedimento-de-comunicacao-das-facturas-emitidas-a-autoridade-tributaria-de-mocambique) ·
+  [Zumbo Cloud ERP](https://zumbocloud.com/facturacao-certificada-at) ·
+  [Cegid Vendus](https://www.vendus.co.mz/blog/comunicar-faturas-autoridade-tributaria-mocambique/) ·
+  [Lista provisória AT](https://www.at.gov.mz/por/Media/Files/LISTA-PROVISORIA-DE-SOFTWARES-DE-FACTURACAO-AT-DGI-PMF)
+
 ---
 
 ## RESOLVIDOS

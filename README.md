@@ -8,6 +8,7 @@
 |---|---|
 | **[`CLAUDE.md`](CLAUDE.md)** | **Spec do produto** — arquitectura, schema, regras invioláveis. Fonte de verdade |
 | **[`ROADMAP.md`](ROADMAP.md)** | Plano por fases, com DoD e o **prompt único** da corrida contínua |
+| **[`ROADMAP-PRODUTO.md`](ROADMAP-PRODUTO.md)** | Plano para **empacotar** o motor e instalar noutro restaurante (ver `CLAUDE.md` §18) |
 | **[`AGENTS.md`](AGENTS.md)** | Como o agente de código trabalha aqui — **corrida contínua**, ler antes de codar |
 | **[`BLOQUEIOS.md`](BLOQUEIOS.md)** | Registo vivo do que ficou por fechar e porquê — atacado de uma vez só no fim |
 | [`docs/HARDWARE.md`](docs/HARDWARE.md) | Equipamento por loja, ligações, testes de aceitação |
