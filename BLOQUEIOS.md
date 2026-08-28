@@ -86,6 +86,35 @@
 - Como avancei: `stores.receipt_footer` com `PLACEHOLDER_RODAPE` = "Obrigado! Bom apetite!" (formato do 1.0).
 - Onde está: seed + `services/print-bridge/src/escpos.*` · edição na aba **Lojas** (F10)
 - Se a resposta for outra: minutos — é um campo de texto na aba Lojas, por loja.
+- **Nota 2026-08-28 — modelo confirmado com o cliente:** o HAWSMASH 2.0 corre **toda** a operação
+  (venda, cozinha, caixa, estoque, delivery); **facturação fiscal certificada e contabilidade ficam
+  à parte**, pagas pelo Ridwan directamente a um software/contabilista habilitado pela AT. Isto já
+  estava fechado em `CLAUDE.md §0` ("Facturação fiscal certificada (AT)" fora de âmbito) — a conversa
+  de hoje só confirmou que é assim mesmo, não uma mudança de plano.
+  - Pesquisa (2026-08-28): desde mai/2025 Moçambique exige comunicação mensal de facturas à AT via
+    software **certificado**; em 2026 factura manual só é permitida até 50 mil € de volume anual —
+    acima disso é obrigatório software certificado (Aviso 40/AT/DGI/2025). Isto reforça que faz
+    sentido **não** tentar certificar o HAWSMASH — é caminho caro e fora do contrato de 50.000 MT.
+  - **Implementado 2026-08-28:** caminho de exportação construído — aba **Análise** → cartão
+    "Exportar para o contabilista": CSV com uma linha por **pagamento confirmado/devolvido**
+    (data, loja, nº pedido, canal, cliente, subtotal, taxa de entrega, total do pedido, forma de
+    pagamento, valor do pagamento, referência), filtrável por loja e período. É ao nível do
+    pagamento e não do pedido porque uma venda pode ter dinheiro + M-Pesa no mesmo talão (§7.1) —
+    é o pagamento que bate certo com o extracto do banco/carteira móvel.
+    - RPC `public.export_sales_for_accounting(p_store_id, p_from, p_to)` — `owner`/`manager`,
+      `auth_can_store` por loja; `p_store_id` null (consolidado) só para `owner`.
+    - Rota `apps/web/app/api/reports/export-sales/route.ts` gera o CSV (UTF-8 com BOM, valores
+      em MT com 2 casas).
+    - Migration `supabase/migrations/20260828100000_1028_export_contabilidade.sql` — **por aplicar
+      em staging** (`supabase db push`), depois testar o download com uma conta `manager` e uma
+      `owner` antes de ir a `main`.
+  - Ponto a alinhar com o contabilista do Ridwan (não é decisão técnica): se o software fiscal
+    escolhido pedir outro layout de colunas, é ajuste no CSV, não reescrita — hoje o compromisso é
+    esta **exportação CSV a qualquer
+    momento** (`CLAUDE.md §11.6`); se o software fiscal escolhido pedir outro formato, é o
+    contabilista que diz qual.
+  - Se o contabilista vier a exigir formato/campo específico no rodapé do talão (NUIT, texto legal),
+    entra aqui como o mesmo B-005 — é o mesmo campo de texto, não obriga a reescrita.
 
 ### B-006 · [F3] Hardware físico para validação
 - Estado: aberto
@@ -237,6 +266,13 @@
 - Saídas quando chegar a altura: (a) receita por produto — o combo declara o que consome; ou
   (b) `menu_modifier_groups`, que já existem na base de dados e estão por preencher.
 - Onde está: `menu_items` (combos) · `store_items.track_stock` · `CLAUDE.md §10`
+- **2026-08-27 — saída (a) implementada.** As migrations 1024–1027 criaram a camada de
+  ingredientes (`ingredients`, `store_ingredients`, `recipe_items`) e a venda passa a descontar
+  matéria-prima pela ficha técnica, por (produto, variante). Os burgers do cardápio já têm ficha.
+  **O que continua aberto é só o preenchimento:** os combos foram criados no painel (não estão em
+  nenhuma migration) e ainda não declaram o que consomem. Enquanto não declararem, um combo vendido
+  não desconta carne nenhuma — que é melhor do que descontar a errada, mas ainda não é o certo.
+  Fecha-se no painel, sem código, assim que houver a lista do que cada combo leva.
 
 ### B-018 · [F3] Visor do cliente: porta, velocidade e protocolo
 - Estado: aberto
@@ -276,6 +312,28 @@
   [Zumbo Cloud ERP](https://zumbocloud.com/facturacao-certificada-at) ·
   [Cegid Vendus](https://www.vendus.co.mz/blog/comunicar-faturas-autoridade-tributaria-mocambique/) ·
   [Lista provisória AT](https://www.at.gov.mz/por/Media/Files/LISTA-PROVISORIA-DE-SOFTWARES-DE-FACTURACAO-AT-DGI-PMF)
+
+
+### B-020 · [F6] Custos e destino do bacon, e o preço da batata
+
+- Estado: **aberto — descoberto em 2026-08-27**
+- Desbloqueia: cliente (Ridwan)
+- Pergunta exacta: quanto custa cada fatia de queijo, cada fatia de bacon e cada porção de brisket —
+  e em que produto sai o bacon?
+- O que se passa: o Ridwan fechou os custos das duas carnes (**RAW 75 MT**, **WAGYU 100 MT**) e pediu
+  para controlar também **queijo em fatias**, **bacon em fatias** e **brisket à porção**. Os três
+  ficaram criados com **custo 0**, porque um custo inventado é pior do que nenhum: a margem passaria
+  a mentir com ar de certa, e é sobre ela que se decide preço.
+- O bacon não aparece em nenhum burger do cardápio actual (nem no 2.0, nem nas descrições do 1.0 que
+  estão no repositório). Existe no site do 1.0 em produção — falta saber se é **adicional pago** ou
+  se faz parte de algum produto. Por isso ficou **criado e contável, mas sem ficha técnica**.
+- Também por confirmar: a **Joe's Chips** passa a **tamanho único a 75 MT** (hoje está a 150 MT no
+  cardápio). É mudança de preço, muda-se no painel — não é código.
+- Como avancei: os três ingredientes existem, contam-se e aparecem no painel; entram no CMV a 0 até
+  alguém preencher. Quem abrir o ecrã vê "custo por preencher" em vez de um número inventado.
+- Onde está: `supabase/migrations/20260827130000_1027_ficha_tecnica_hawsmash.sql` · marcador
+  `BLOQUEIO: B-020`
+- Se a resposta for outra: minutos — é escrever três números e uma linha de ficha no painel.
 
 ---
 
