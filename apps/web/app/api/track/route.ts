@@ -2,6 +2,12 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { cookies } from 'next/headers';
 
+import {
+  FIRST_TOUCH_COOKIE,
+  LAST_TOUCH_COOKIE,
+  attributionPayload,
+  decodeTouch,
+} from '@/lib/attribution';
 import { parseStoreCookie, resolveStoreSlug } from '@/lib/store-context';
 
 interface TrackBody {
@@ -63,6 +69,14 @@ export async function POST(req: NextRequest) {
   const sessionId = cookieStore.get('dl_session')?.value ?? 'unknown';
   const customerPhone = cookieStore.get('dl_phone')?.value ?? null;
 
+  // A origem vem do cookie selado pelo middleware, não do que o browser envia
+  // no corpo: o corpo só sabe a URL do momento do evento e perde a campanha
+  // assim que o cliente navega. O `utm` do cliente entra apenas como reforço,
+  // nunca a substituir o que o servidor classificou.
+  const firstTouch = decodeTouch(cookieStore.get(FIRST_TOUCH_COOKIE)?.value);
+  const lastTouch = decodeTouch(cookieStore.get(LAST_TOUCH_COOKIE)?.value);
+  const attribution = attributionPayload(firstTouch, lastTouch);
+
   // Insere com service role — anon nunca faz INSERT direto (sem policy anon na tabela).
   const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -90,6 +104,11 @@ export async function POST(req: NextRequest) {
     utm: result.data.utm ?? {},
     payload: result.data.payload ?? {},
     store_id: storeId,
+    channel: attribution.channel,
+    source: attribution.source,
+    medium: attribution.medium,
+    campaign: attribution.campaign,
+    referrer_host: attribution.referrer_host,
   });
 
   if (error) {
