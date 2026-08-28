@@ -226,7 +226,7 @@
 
 
 ### B-016 · [F0] Deploy automático do Railway a partir de `dev`
-- Estado: **aberto — descoberto em 2026-08-23**
+- Estado: ✅ **RESOLVIDO (2026-08-28)** — reconectado pelo Gabriel no painel do Railway
 - Desbloqueia: Gabriel (painel do Railway)
 - Pergunta exacta: — (é reconectar a origem, não é pergunta)
 - O que se passa: o `git push origin dev` **não dispara build nenhum**. O último deploy automático
@@ -250,6 +250,17 @@
   publicado: tinha `Zona de entrega` e não tinha `Taxa de entrega`.
   Resolvido no momento com `railway up --detach`. **Enquanto a origem não for reconectada, isto volta
   a acontecer — e volta a parecer um bug do código.**
+- **2026-08-28 — fechado e verificado.** O serviço `web` de staging voltou a ter origem
+  (`source.repo = NiraslabDEV/hawsmash2`, ramo `dev`). Prova em duas partes: o primeiro build depois
+  da reconexão ficou `SUCCESS` às 00:18 UTC no commit `a2ae0ec`, e o push seguinte (`7e8a95c`)
+  disparou build **um segundo depois**, sem ninguém correr `railway up`. O `dev → staging` do
+  `CLAUDE.md §2` volta a andar sozinho.
+- **O domínio de staging mudou com a reconexão.** `web-staging-7805.up.railway.app` responde agora
+  **404 Application not found**; o endereço vivo é **`hawsmash2-staging.up.railway.app`**. Quem tiver
+  o antigo em favoritos, no `.env` do print-bridge ou no atalho do POS vai bater numa porta fechada
+  a pensar que o sistema caiu.
+- A reconexão destapou o **B-022**: o mesmo repositório também alimenta um ambiente `production`
+  que ninguém configurou.
 
 ### B-017 · [F6] Stock dos combos vendidos como produto único
 - Estado: **aberto — decisão consciente, não é bug**
@@ -334,6 +345,61 @@
 - Onde está: `supabase/migrations/20260827130000_1027_ficha_tecnica_hawsmash.sql` · marcador
   `BLOQUEIO: B-020`
 - Se a resposta for outra: minutos — é escrever três números e uma linha de ficha no painel.
+
+---
+
+### B-021 · [G9] Chat no site: quem responde, quando, e quais são as dúvidas
+
+- Estado: **aberto — ideia do Gabriel em 2026-08-28, agendada para a Fase 2**
+- Desbloqueia: cliente (Ridwan)
+- Pergunta exacta: **quem responde às conversas no balcão, em que horário, e quais são as 6–8 dúvidas
+  que devem aparecer em botão com resposta já escrita?**
+- O que se passa: fica decidido **como** se constrói (`CLAUDE.md §19`) mas não **o que diz**. As
+  respostas em botão são conteúdo da loja, não código — sem elas a camada guiada nasce vazia, e sem
+  saber quem responde no POS a camada humana nasce a mentir ao cliente.
+- Por decidir também: se a conversa fica ligada ao pedido (`chat_threads.order_id`) para o caixa ver
+  de quem está a falar, e ao fim de quantos minutos sem resposta entra o **deep link do WhatsApp**
+  (proposta: 3 min).
+- Como avancei: **nada escrito** — não há código nem migration. Não bloqueia nada da Fase 1, porque
+  não é nenhum dos cinco não-negociáveis da abertura (§0). Não entra no pacote da abertura.
+- Onde está: [`CLAUDE.md §19`](CLAUDE.md) · [`ROADMAP.md` G9](ROADMAP.md) — sem marcador no código,
+  porque ainda não há código
+- Se a resposta for outra: nada muda no que já está feito. Muda o conteúdo de `chat_topics` e quanto
+  do widget é guiado versus humano — decide-se antes de abrir a G9, não durante.
+
+### B-022 · [F0] O ambiente `production` do Railway está vazio e segue o ramo `dev`
+
+- Estado: **aberto — descoberto em 2026-08-28, ao verificar o B-016**
+- Desbloqueia: Gabriel (painel do Railway) + decisão sobre qual é a base de dados LIVE
+- Pergunta exacta: o ambiente `production` do projecto `hawsmash2` serve para quê — e de que ramo e
+  de que Supabase deve viver?
+- O que se passa: além do `staging`, o projecto tem um ambiente **`production`** com o serviço
+  `hawsmash2`. Três coisas ao mesmo tempo:
+  1. **Segue o ramo `dev`.** Cada push para `dev` passa a construir também produção. Isso contradiz
+     o `CLAUDE.md §2` (`dev → staging`, `main → live`) e, no dia da abertura, poria em produção
+     código que ainda não foi testado em lado nenhum.
+  2. **Não tem uma única variável da aplicação.** `railway variables list -e production` devolve só
+     as que o próprio Railway injecta — nem Supabase, nem Paysuite, nem Resend. Não é um ambiente
+     mal configurado: é um ambiente que nunca foi configurado.
+  3. **O build de hoje falhou** (`98142c55`, 00:14 UTC) e o que continua a servir é um build de
+     2026-08-25. Um ambiente que serve o passado sem ninguém dar por isso é o mesmo género de mentira
+     do B-016.
+- Como avancei: a causa da falha era código e está corrigida (`7e8a95c` — o cron das conversões
+  prerenderizava sem Supabase). A configuração do ambiente **não** lhe toquei — decidir para que
+  serve é do dono.
+- **Estado depois da correcção (2026-08-28, 08:55 UTC):** o push para `dev` construiu os dois
+  ambientes; staging ficou `SUCCESS` e produção **também subiu** — `hawsmash2-production.up.railway.app`
+  responde `{"status":"ok"}` no `/api/health` e serve o site. É esse o problema: **parece vivo**.
+  Sem Supabase configurado não tem lojas, cardápio, pedidos nem caixa; é a casca da aplicação num
+  endereço com a palavra "production" no nome. Se alguém der esse link ao cliente por engano, o que
+  ele vê é o sistema a fingir que existe.
+- Onde está: Railway → projecto `hawsmash2` → ambiente `production` → serviço `hawsmash2`
+  (`hawsmash2-production.up.railway.app`)
+- Relacionado: a base de dados LIVE também está por decidir — o projecto Supabase chamado
+  `hawsmash2` (`hmutptcbusxncnofinrw`) tem **zero tabelas e zero migrations**, e o que a aplicação
+  usa hoje (`pqjoanrsjkddkjsllqov`) vive noutra organização.
+- Se a resposta for outra: minutos — ou se aponta o ambiente ao ramo `main` e se preenchem as
+  variáveis, ou se apaga o ambiente até haver data de cutover (B-010).
 
 ---
 
