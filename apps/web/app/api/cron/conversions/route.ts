@@ -14,6 +14,8 @@ import { createClient } from '@supabase/supabase-js';
 
 import { drainConversionJobs } from '@/lib/server-analytics/conversions';
 
+export const dynamic = 'force-dynamic';
+
 export async function GET(request: Request) {
   const cronSecret = process.env.CRON_SECRET;
   if (cronSecret) {
@@ -24,11 +26,15 @@ export async function GET(request: Request) {
   }
 
   // Service role: a fila e os segredos de marketing nunca passam pelo browser.
-  const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    { auth: { persistSession: false } },
-  );
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !serviceKey) {
+    return NextResponse.json({ ok: false, error: 'supabase_not_configured' }, { status: 503 });
+  }
+
+  const supabase = createClient(url, serviceKey, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
 
   try {
     const result = await drainConversionJobs(supabase, 50);
