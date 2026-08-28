@@ -398,6 +398,35 @@ cash_movements (id, session_id, store_id, type, amount_cents, reason, created_by
 - `low_stock_qty` atingido → alerta (§11.5) e destaque no painel.
 - Reposição e contagem no painel (aba **Estoque**), sempre com motivo, sempre logadas.
 
+### 10.1 Matéria-prima e ficha técnica (o que a cozinha gasta de verdade)
+
+O estoque de **produto final** acima continua a valer para o que se compra pronto e se vende como está
+(bebidas, natas). Não serve para um hambúrguer: o que acaba não é o "Classic Smash" — é a **carne WAGYU**,
+que é a mesma do Double e do Signature. E como o desconto era por produto, um Classic HAW e um Classic
+WAGYU baixavam o mesmo saldo.
+
+```sql
+ingredients        (id, name, unit, cost_cents, active, sort)          -- catálogo da empresa
+store_ingredients  (store_id, ingredient_id, track, qty, low_qty)      -- a realidade de cada loja
+ingredient_movements (… delta, qty_after, reason, order_id, created_by) -- o livro, append-only
+recipe_items       (menu_item_id, variant_id null, ingredient_id, qty)  -- a ficha técnica
+```
+
+- **A ficha é por `(produto, variante)`.** Linha com `variant_id null` vale para todas as variantes
+  (o queijo é o mesmo em HAW e WAGYU); linha com variante vale só para ela (é o que separa a carne).
+  O consumo de uma venda é a soma das duas.
+- **Baixa na mesma transacção da venda**, nos mesmos três caminhos do produto final. Falta de
+  matéria-prima → `out_of_ingredient:<nome>` e a venda inteira reverte. Anulação repõe, uma só vez.
+- **`track = false` conta para o custo mas não trava a venda.** É o estado de partida: um ingrediente
+  com `qty 0` e controlo ligado fecharia os burgers todos ao primeiro pedido. Liga-se depois da 1.ª contagem.
+- **`order_items.cost_cents` guarda o custo no momento da venda.** Mudar o custo da carne amanhã **não**
+  reescreve a margem de ontem — é o que torna o relatório utilizável para decidir preço (`report_cmv`).
+- **Custo é do `owner`; contagem é do `manager`.** Editar um custo ou uma ficha muda a margem de todo o
+  histórico seguinte; contar, receber e lançar quebra é operação da loja.
+- Custo em **centavos inteiros**, como todo o dinheiro (§17). Ingrediente sem custo aparece no painel como
+  **"custo por preencher"** — nunca se inventa um número, porque uma margem errada com ar de certa é pior
+  do que uma margem em falta.
+
 ---
 
 ## 11. ROBUSTEZ — o programa completo

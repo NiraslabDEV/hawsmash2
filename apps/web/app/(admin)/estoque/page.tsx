@@ -5,6 +5,26 @@ import { formatMT, type Cents } from '@delivery/core';
 
 import { createClient } from '@/utils/supabase/client';
 
+import CmvSection from './cmv-section';
+import FichaTecnicaSection from './ficha-tecnica-section';
+import IngredientesSection from './ingredientes-section';
+
+/**
+ * O estoque tem duas naturezas e é preciso não as confundir:
+ *   · Produtos    — o que se compra pronto e se vende como está (bebidas, natas)
+ *   · Ingredientes — o que a cozinha gasta (carne, queijo, brisket)
+ * Um hambúrguer não "acaba": acaba a carne dele. Daí os separadores em vez de
+ * um ecrã só (CLAUDE §10 e §10.1).
+ */
+type Aba = 'produtos' | 'ingredientes' | 'ficha' | 'cmv';
+
+const ABAS: [Aba, string][] = [
+  ['produtos', 'Produtos'],
+  ['ingredientes', 'Ingredientes'],
+  ['ficha', 'Ficha técnica'],
+  ['cmv', 'Custos (CMV)'],
+];
+
 type StockLevel = 'ok' | 'low' | 'out';
 type AdjustReason = 'receive' | 'waste' | 'count' | 'manual';
 
@@ -108,6 +128,7 @@ export default function EstoquePage() {
   const [qtyInput, setQtyInput] = useState('');
   const [noteInput, setNoteInput] = useState('');
   const [lowInput, setLowInput] = useState('');
+  const [aba, setAba] = useState<Aba>('produtos');
 
   useEffect(() => {
     let active = true;
@@ -133,6 +154,10 @@ export default function EstoquePage() {
 
   const refresh = useCallback(async () => {
     if (!storeId) return;
+    if (aba !== 'produtos') {
+      setLoading(false);
+      return;
+    }
     const [stock, alertList, movementList] = await Promise.all([
       supabase.rpc('list_store_stock', {
         p_store_id: storeId,
@@ -161,7 +186,7 @@ export default function EstoquePage() {
       setMovementTotal(payload.total);
     }
     setLoading(false);
-  }, [movementItem, movementLimit, onlyTracked, storeId, supabase]);
+  }, [aba, movementItem, movementLimit, onlyTracked, storeId, supabase]);
 
   useEffect(() => {
     void refresh();
@@ -292,6 +317,29 @@ export default function EstoquePage() {
         </p>
       )}
 
+      <nav className="flex flex-wrap gap-2 border-b border-white/[0.06] pb-3">
+        {ABAS.map(([valor, label]) => (
+          <button
+            key={valor}
+            type="button"
+            onClick={() => setAba(valor)}
+            className={`rounded-xl px-4 py-2 text-sm font-bold transition ${
+              aba === valor
+                ? 'bg-[#e5a93c]/15 text-[#e5a93c]'
+                : 'text-[#8b8378] hover:bg-white/[0.04] hover:text-[#C9BCAC]'
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </nav>
+
+      {aba === 'ingredientes' && <IngredientesSection storeId={storeId} />}
+      {aba === 'ficha' && <FichaTecnicaSection />}
+      {aba === 'cmv' && <CmvSection storeId={storeId} />}
+
+      {aba === 'produtos' && (
+        <>
       {alerts.length > 0 && (
         <section className="rounded-2xl border border-[#e5a93c]/40 bg-[#e5a93c]/[0.07] p-4">
           <h2 className="text-sm font-black uppercase tracking-wide text-[#e5a93c]">
@@ -493,7 +541,10 @@ export default function EstoquePage() {
         )}
       </section>
 
-      {dialog && (
+        </>
+      )}
+
+      {aba === 'produtos' && dialog && (
         <div className="fixed inset-0 z-50 grid place-items-center bg-black/70 p-4">
           <div className="w-full max-w-md rounded-2xl border border-white/10 bg-[#151311] p-5">
             <h2 className="text-lg font-black text-white">

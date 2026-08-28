@@ -187,6 +187,27 @@ _Os dias são referência de calendário, não paragens: a corrida não pára en
 
 **PROMPT:** *"Executa a F6: estoque por loja conforme `CLAUDE.md §10`. Migration 1008, baixa atómica, movimentos auditáveis, aba Estoque e alerta de rotura. Testa a corrida do último item."*
 
+### F6.1 🟡 Matéria-prima, ficha técnica e CMV *(pedido do cliente em 2026-08-27)*
+
+O estoque de produto final não descreve a cozinha: o que acaba é a carne, não o "Classic Smash".
+
+- [x] Migration `1024`: `ingredients` · `store_ingredients` · `ingredient_movements` · `recipe_items`
+      (ficha por **(produto, variante)**) + `order_items.cost_cents`
+- [x] Migration `1025`: consumo na venda de balcão, no pedido online e reposição na anulação —
+      sempre na mesma transacção, com `out_of_ingredient:<nome>` a reverter a venda inteira
+- [x] Migration `1026`: RPCs do painel (ingredientes, custo, ficha técnica, contagem, histórico) +
+      `report_cmv` — custo é do `owner`, contagem é do `manager`
+- [x] Migration `1027`: ingredientes e fichas do HAWSMASH (carnes, queijo, bacon, brisket) —
+      custos por confirmar em **B-020**
+- [x] Testes: HAW não desconta WAGYU · Double leva duas carnes · falta de carne reverte a venda ·
+      anulação repõe uma só vez · custo congelado na linha · isolamento entre lojas
+- [x] Aba **Estoque** com separadores **Produtos · Ingredientes · Ficha técnica · Custos (CMV)** —
+      contagem, entrada, quebra e histórico de matéria-prima; custo e ficha só para o `owner`
+- [ ] Esgotado por **variante** no site e no POS (hoje a falta trava a venda, mas o WAGYU não fica
+      cinzento antes de o operador tentar)
+
+**PROMPT:** *"Executa a F6.1: ingredientes e ficha técnica conforme `CLAUDE.md §10.1`. Ecrã de gestão no painel, CMV por produto e esgotado por variante. Testa que o HAW não desconta a carne WAGYU."*
+
 ---
 
 ## F7 🔴 Site com escolha de loja + delivery por loja
