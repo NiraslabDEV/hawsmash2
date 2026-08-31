@@ -1,6 +1,7 @@
 /**
  * Conta do cliente da loja (migration 1034) — testes de integração.
- * Requer `supabase start` + `pnpm db:migrate`.
+ * Corre contra o projecto em SUPABASE_URL (local ou staging), já migrado.
+ * NUNCA contra produção: cria e apaga pedidos.
  *
  * O que estes testes existem para impedir:
  *
@@ -41,10 +42,15 @@ let aliceToken: string;
 /** Cria um pedido pago directamente — não é o caminho do cliente, é setup. */
 async function seedOrder(phone: string, name: string, address: string) {
   const { data: store } = await admin.from("stores").select("id").eq("slug", "maputo").single();
+  // order_number é único e obrigatório. Fora do create_order não há contador,
+  // por isso o teste traz o seu — com prefixo próprio, para se distinguir de
+  // um pedido a sério em qualquer inspecção à base de dados.
+  const orderNumber = `TST-${Date.now().toString(36)}${Math.floor(Math.random() * 1e4)}`;
   const { data: order, error } = await admin
     .from("orders")
     .insert({
       store_id: store!.id,
+      order_number: orderNumber,
       customer_name: name,
       customer_phone: phone,
       fulfillment_type: "delivery",
@@ -74,6 +80,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   await admin.from("orders").delete().in("customer_phone", [ALICE, BRUNO]);
+  await admin.from("orders").delete().like("order_number", "TST-%");
   await admin.from("customers").delete().in("phone", [ALICE, BRUNO]);
 });
 
@@ -126,11 +133,12 @@ describe("conta do cliente — prender o dispositivo", () => {
   });
 
   it("o token guardado é um hash, não o token", async () => {
-    const { data: devices } = await admin
+    const { data: devices, error } = await admin
       .from("customer_devices")
       .select("token_hash")
       .eq("customer_phone", ALICE);
 
+    expect(error).toBeNull();
     expect(devices!.length).toBeGreaterThan(0);
     // Se a base de dados vazar, o que lá está não abre sessão nenhuma.
     expect(devices![0].token_hash).not.toBe(aliceToken);
@@ -195,7 +203,9 @@ describe("conta do cliente — moradas", () => {
     const brunoToken = bind.token;
 
     const { data: alice } = await admin.rpc("account_me", { p_token: aliceToken });
-    const aliceAddressId = alice.addresses[0].id;
+    // Pela etiqueta, não pela posição: a ordem muda com a morada de defeito.
+    const aliceHome = alice.addresses.find((a: { label: string }) => a.label === "Casa");
+    const aliceAddressId = aliceHome.id;
 
     // O Bruno tenta reescrever a morada da Aisha, com o id dela na mão.
     const { error } = await admin.rpc("account_save_address", {
