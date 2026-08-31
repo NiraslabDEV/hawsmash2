@@ -77,8 +77,14 @@ describe('importação do HAWSMASH 1.0', () => {
   it('traduz os estados sem inventar nenhum', () => {
     expect(mapOrderStatus('pending')).toBe('awaiting_approval');
     expect(mapOrderStatus('paid')).toBe('delivered');
+    expect(mapOrderStatus('delivered')).toBe('delivered');
     expect(mapOrderStatus('cancelled')).toBe('cancelled');
     expect(() => mapOrderStatus('em_transito')).toThrow(ImportDataError);
+  });
+
+  it('trata entrega por Yango como delivery, não pickup', () => {
+    const mapped = mapOrder({ ...order, fulfillment: 'yango', delivery_fee_mt: 0, total_mt: 300 }, STORE);
+    expect(mapped.fulfillment_type).toBe('delivery');
   });
 
   it('preserva número e data do pedido e recalcula em centavos', () => {

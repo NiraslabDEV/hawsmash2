@@ -159,13 +159,21 @@
 - Se a resposta for outra: minutos — preencher env.
 
 ### B-009 · [F9] Acesso ao Supabase do HAWSMASH 1.0
-- Estado: aberto
+- Estado: ✅ resolvido (2026-08-31)
 - Desbloqueia: Gabriel
 - Pergunta exacta: service key (só leitura, se possível) do projecto `tsrgileifpiaiicwjfar` para a importação.
-- Como avancei: `scripts/import-hawsmash-1.ts` escrito com **dry-run** e testado contra fixtures do schema antigo.
-  Nunca correu contra dados reais.
-- Onde está: `scripts/import-hawsmash-1.ts`
-- Se a resposta for outra: 1 hora — correr dry-run, conferir totais, correr a sério.
+- Como avancei: a chave veio da própria CLI do Supabase (`supabase projects api-keys`, já autenticada na
+  conta que é dona dos dois projectos) — não foi preciso pedir nada a ninguém. Corri o dry-run contra dados
+  reais e apareceram dois bugs que os fixtures nunca tinham exercitado: `mapOrderStatus` não sabia o quê fazer
+  a `delivered` (682 dos 714 pedidos do 1.0 estão nesse estado, só 5 estão `paid`) e `fulfillment='yango'`
+  caía como `pickup` em vez de `delivery`. Corrigidos os dois em `scripts/lib/import-mapping.ts` + testes.
+  Também descobri que `menu_categories`/`menu_items` não têm unique constraint em `name`, por isso o
+  `upsert(onConflict:'name')` falhava sempre — trocado por select-then-insert-or-update.
+  Corrido `--apply --i-know-this-is-live` para `maputo` no projecto `hawsmash2` (`hmutptcbusxncnofinrw`):
+  **714 pedidos, 1494 linhas de item, 381 clientes, 4 categorias, 15 produtos** — confirmado por contagem
+  directa na BD depois. Matola ficou sem histórico (o 1.0 só teve a loja de Maputo).
+- Onde está: `scripts/import-hawsmash-1.ts` · `scripts/lib/import-mapping.ts`
+- Se a resposta for outra: já corrido — só relevante se aparecer um 2.º lote de pedidos do 1.0 para reimportar.
 
 ### B-010 · [F9] Data do cutover e DNS
 - Estado: aberto
@@ -261,6 +269,9 @@
   a pensar que o sistema caiu.
 - A reconexão destapou o **B-022**: o mesmo repositório também alimenta um ambiente `production`
   que ninguém configurou.
+- **2026-08-31 — a previsão confirmou-se.** O `.env` activo do print-bridge (Maputo e Matola, staging)
+  ainda tinha `LOCAL_ALLOWED_ORIGINS=web-staging-7805...`, o domínio morto. Corrigido para
+  `hawsmash2-staging.up.railway.app` nos dois ficheiros (`services/print-bridge/.env` e `.env.matola.bak`).
 
 ### B-017 · [F6] Stock dos combos vendidos como produto único
 - Estado: **aberto — decisão consciente, não é bug**
@@ -395,9 +406,13 @@
   ele vê é o sistema a fingir que existe.
 - Onde está: Railway → projecto `hawsmash2` → ambiente `production` → serviço `hawsmash2`
   (`hawsmash2-production.up.railway.app`)
-- Relacionado: a base de dados LIVE também está por decidir — o projecto Supabase chamado
-  `hawsmash2` (`hmutptcbusxncnofinrw`) tem **zero tabelas e zero migrations**, e o que a aplicação
-  usa hoje (`pqjoanrsjkddkjsllqov`) vive noutra organização.
+- **Actualização (2026-08-31):** a parte do Supabase já está decidida e feita — `hawsmash2`
+  (`hmutptcbusxncnofinrw`) é o LIVE definitivo, separado do `hawsmash2-staging`
+  (`pqjoanrsjkddkjsllqov`, que fica só para testar). As 103 migrations foram aplicadas, o seed de
+  configuração correu (lojas, horários, números de pagamento, cardápio) e o histórico do 1.0 foi
+  importado para Maputo (ver [B-009](#b-009--f9-acesso-ao-supabase-do-hawsmash-10) resolvido). Falta
+  só a parte do Railway: apontar o ambiente `production` ao ramo `main` (não `dev`) e preencher as
+  variáveis (`NEXT_PUBLIC_SUPABASE_URL`/`SUPABASE_SERVICE_ROLE_KEY` do `hawsmash2`, Paysuite, Resend).
 - Se a resposta for outra: minutos — ou se aponta o ambiente ao ramo `main` e se preenchem as
   variáveis, ou se apaga o ambiente até haver data de cutover (B-010).
 

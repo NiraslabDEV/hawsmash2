@@ -7,8 +7,8 @@
  * conferir com o 1.0. Só escreve com `--apply`, e nunca contra produção sem
  * `--i-know-this-is-live`.
  *
- * BLOQUEIO: B-009 — falta a chave de leitura do projecto antigo, por isso este
- * script nunca correu contra dados reais.
+ * B-009 resolvido em 2026-08-31: já correu contra dados reais para `maputo`
+ * (714 pedidos, 381 clientes). Matola fica sem histórico — o 1.0 só teve Maputo.
  *
  * Uso:
  *   LEGACY_SUPABASE_URL=… LEGACY_SERVICE_KEY=… \
@@ -120,34 +120,60 @@ async function main(): Promise<void> {
     .single();
   if (storeError || !store) throw new Error(`Loja de destino ${storeSlug} não encontrada.`);
 
+  // Nem menu_categories nem menu_items têm unique constraint em `name` — não há
+  // onConflict possível. Faz-se select-then-insert-or-update à mão.
   const categoryIdByLegacy = new Map<string, string>();
   for (const category of categories) {
     const mapped = mapCategory(category);
-    const { data, error } = await target
+    const { data: existing, error: findError } = await target
       .from('menu_categories')
-      .upsert({ name: mapped.name, sort: mapped.sort, active: mapped.active }, { onConflict: 'name' })
       .select('id')
-      .single();
-    if (error || !data) throw new Error(`Categoria ${mapped.name}: ${error?.message}`);
-    categoryIdByLegacy.set(category.id, data.id);
+      .eq('name', mapped.name)
+      .maybeSingle();
+    if (findError) throw new Error(`Categoria ${mapped.name}: ${findError.message}`);
+
+    let categoryId = existing?.id as string | undefined;
+    if (categoryId) {
+      const { error } = await target
+        .from('menu_categories')
+        .update({ sort: mapped.sort, active: mapped.active })
+        .eq('id', categoryId);
+      if (error) throw new Error(`Categoria ${mapped.name}: ${error.message}`);
+    } else {
+      const { data, error } = await target
+        .from('menu_categories')
+        .insert({ name: mapped.name, sort: mapped.sort, active: mapped.active })
+        .select('id')
+        .single();
+      if (error || !data) throw new Error(`Categoria ${mapped.name}: ${error?.message}`);
+      categoryId = data.id as string;
+    }
+    categoryIdByLegacy.set(category.id, categoryId);
   }
   log(`categorias importadas: ${categoryIdByLegacy.size}`);
 
   let importedProducts = 0;
   for (const product of products) {
     const mapped = mapProduct(product, categoryIdByLegacy);
-    const { error } = await target.from('menu_items').upsert(
-      {
-        category_id: mapped.category_id,
-        name: mapped.name,
-        description: mapped.description,
-        price_cents: mapped.price_cents,
-        photo_url: mapped.photo_url,
-        available: mapped.available,
-        sort: mapped.sort,
-      },
-      { onConflict: 'name' },
-    );
+    const { data: existingItem, error: findItemError } = await target
+      .from('menu_items')
+      .select('id')
+      .eq('name', mapped.name)
+      .maybeSingle();
+    if (findItemError) throw new Error(`Produto ${mapped.name}: ${findItemError.message}`);
+
+    const itemPayload = {
+      category_id: mapped.category_id,
+      name: mapped.name,
+      description: mapped.description,
+      price_cents: mapped.price_cents,
+      photo_url: mapped.photo_url,
+      available: mapped.available,
+      sort: mapped.sort,
+    };
+    const { error } = existingItem
+      ? await target.from('menu_items').update(itemPayload).eq('id', existingItem.id)
+      : await target.from('menu_items').insert(itemPayload);
     if (error) throw new Error(`Produto ${mapped.name}: ${error.message}`);
     importedProducts += 1;
   }

@@ -117,12 +117,14 @@ export function mapProduct(product: LegacyProduct, categoryIdByLegacy: Map<strin
 
 /**
  * Estados do 1.0 → máquina de estados do 2.0.
- * `paid` histórico entra como `delivered`: o pedido já foi entregue, e deixá-lo
- * em `paid` punha pedidos antigos a aparecer como activos no painel no dia 1.
+ * `paid` e `delivered` históricos entram ambos como `delivered`: o pedido já foi
+ * entregue, e deixá-lo em `paid`/`awaiting_approval` punha pedidos antigos a
+ * aparecer como activos no painel no dia 1.
  */
 export function mapOrderStatus(status: string | null): 'awaiting_approval' | 'delivered' | 'cancelled' {
   switch ((status ?? '').toLowerCase()) {
     case 'paid':
+    case 'delivered':
       return 'delivered';
     case 'cancelled':
       return 'cancelled';
@@ -133,8 +135,11 @@ export function mapOrderStatus(status: string | null): 'awaiting_approval' | 'de
   }
 }
 
+/** No 1.0 'yango' é entrega por estafeta do parceiro — conta como delivery. */
+const DELIVERY_FULFILLMENTS = new Set(['delivery', 'yango']);
+
 export function mapOrder(order: LegacyOrder, storeId: string) {
-  const fulfillment = (order.fulfillment ?? 'pickup').toLowerCase() === 'delivery'
+  const fulfillment = DELIVERY_FULFILLMENTS.has((order.fulfillment ?? 'pickup').toLowerCase())
     ? 'delivery'
     : 'pickup';
   const subtotal = mtToCents(order.subtotal_mt);

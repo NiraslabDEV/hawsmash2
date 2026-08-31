@@ -22,5 +22,8 @@ services/print-bridge/build/
 
 README-add.md
 
+# Credenciais de acesso (passwords em texto simples) — nunca vai para o git.
+CREDENCIAIS*
+
 # Artefactos de teste (screenshots, resultados do Playwright)
 output/
