@@ -76,7 +76,7 @@ NUNCA editar main directamente. NUNCA correr SQL à mão em produção — só m
 | Backend | Supabase (Postgres + RLS + Realtime + Auth + Storage) |
 | Validação | Zod em toda a boundary |
 | Pagamentos | **Paysuite** (M-Pesa/e-Mola automático, já validado em produção no motor) + **manual por comprovativo** (fallback) + **balcão** (dinheiro/cartão/móvel) |
-| Email | Resend (route handlers) |
+| Email | SMTP Hostinger (`nodemailer`, route handlers) — a caixa do próprio dono, herdado do 1.0 (ADR 0004) |
 | Impressão | `services/print-bridge` (Node, ESC/POS TCP 9100) — um por loja, 24/7, com **HTTP local na LAN** |
 | Monorepo | pnpm workspaces + Turborepo |
 | Testes | Vitest (domínio/RLS) + Playwright (e2e do POS e do checkout) |
@@ -569,7 +569,7 @@ O 1.0 continua a vender **até ao dia do cutover**. Nada pára.
 - ❌ SQL manual em produção; migration não versionada; editar `main` sem passar por staging.
 - ❌ `anon` com SELECT directo em tabela — acesso público só por RPC `SECURITY DEFINER`.
 - ❌ URL pública do bucket `payment-proofs` (é privado) — só `createSignedUrl`.
-- ❌ Segredo (service key, Paysuite, CAPI, Resend) em código do cliente.
+- ❌ Segredo (service key, Paysuite, CAPI, SMTP) em código do cliente.
 - ❌ Abrir gaveta sem perfil e sem registo em `event_log`.
 - ❌ Apagar venda anulada — anula-se com motivo, nunca se apaga.
 - ❌ `tenant_id`, planos comerciais ou gating por plano. `store_id` é unidade física, não inquilino.
@@ -577,6 +577,7 @@ O 1.0 continua a vender **até ao dia do cutover**. Nada pára.
   ou de um componente. A partir da P1 isso é dado, não ficheiro (§18.2).
 - ❌ **Nome de cliente em caminhos, tabelas ou variáveis do produto** (`_hawsmash/`, `assets/hawsmash/`).
   O produto não sabe como se chama o cliente que o está a usar.
+- ❌ **Perguntas e respostas do chat dentro do código** — são conteúdo de loja, vivem em `chat_topics` (§19).
 - ❌ Avançar fase do ROADMAP com testes vermelhos.
 
 ---
@@ -646,3 +647,49 @@ barato de prestar** — a mesma leitura do §0, agora multiplicada por N.
 É por isso que o **painel de frota** e os alertas agregados não são melhoria: são a condição para
 crescer. Um cliente com a impressora em baixo tem de aparecer no ecrã de quem suporta **antes** da
 primeira chamada.
+
+---
+
+## 19. ATENDIMENTO NO SITE — chat guiado + balcão *(Fase 2 · ideia fechada em 2026-08-28)*
+
+> **Não entra na Fase 1.** Não é nenhum dos cinco não-negociáveis da abertura (§0). Fica aqui escrito
+> para que quem o construir depois não tenha de reinventar as regras — nem as parta.
+
+**O que é:** uma bolha de conversa que abre no site do cliente, com **duas camadas**:
+
+1. **Guiada (a que responde sozinha).** O cliente clica numa dúvida de uma lista curta
+   ("Fazem entrega para a Matola?", "Quanto tempo demora?", "Aceitam cartão?") e a resposta sobe
+   com **atraso e indicador de escrita**, como uma conversa a sério. Não há ninguém do outro lado:
+   está tudo escrito de antemão. Cada resposta pode abrir **novas opções** (árvore) ou empurrar
+   para uma acção (`ver cardápio`, `escolher loja`, `falar com o balcão`).
+2. **Humana (a que empilha no POS).** Se nenhuma opção servir, a conversa passa para o **POS da
+   loja**, numa gaveta lateral onde as conversas se empilham por ordem de espera, com badge e som.
+   O caixa responde com o teclado de ecrã que já existe (`touch-keyboard.tsx`).
+
+### 19.1 Regras que não se negoceiam
+
+- **A conversa nunca trava a venda** (regra 1). É gaveta lateral no POS, nunca modal. Chat em baixo,
+  POS a vender na mesma. **Offline o chat pausa** — é online-only, e isso escreve-se no manual da equipa.
+- **`store_id` em `chat_threads` e `chat_messages`** (regra 3), RLS por `auth_can_store()`, com teste
+  de isolamento no gate de CI (§11.4). A Matola não lê uma conversa de Maputo.
+- **`anon` nunca faz SELECT** (§17). Só RPCs `SECURITY DEFINER`: abrir conversa, enviar, e ler desde
+  um `p_since`. O cliente é identificado por **token opaco** guardado no browser — mesmo padrão do
+  `get_table_by_token`. **Rate-limit** obrigatório, no espírito do `create_order` (6/hora por telefone):
+  sem isso o widget é um megafone para spam.
+- **O cliente faz polling** (≈4 s aberto, 15 s minimizado); **o POS usa realtime**, e só para disparar
+  `refetch` (§11.3). `anon` não pode subscrever a tabela — abrir SELECT para o realtime funcionar seria
+  trocar a regra por conveniência.
+- **`stores.chat_enabled`** — kill switch por loja, como o `accepting_orders` (§5.6).
+- **As perguntas e as respostas são dados, nunca código** (§18.2/§18.3). Vivem numa tabela
+  (`chat_topics`) e editam-se no painel pelo `owner`. Um restaurante seguinte muda as suas dúvidas
+  sem deploy — e sem que um `if` saiba o nome do cliente.
+- **A bolha só aparece com a loja aberta** (`store_hours`) **e com POS vivo** (`devices.last_seen_at`
+  dentro dos 5 min, §11.5). Uma conversa que ninguém vai ler é pior do que não haver conversa.
+- **Sem resposta humana em ~3 min → mensagem automática** com **deep link do WhatsApp da loja**.
+  O cliente sai dali com um caminho, nunca com um visto azul.
+- **O widget responde como HAWSMASH, não como uma pessoa inventada.** O atraso de escrita é ritmo de
+  interface; quando entra alguém a sério no balcão, o ecrã diz que entrou. Fingir um nome de atendente
+  é uma mentira que se descobre ao segundo cliente que ligar a perguntar por ela.
+
+### 19.2 O que ainda falta decidir
+Quem responde, em que horário, e quais são as dúvidas da lista — **[`BLOQUEIOS.md` B-021](BLOQUEIOS.md)**.

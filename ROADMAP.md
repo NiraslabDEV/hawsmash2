@@ -306,6 +306,7 @@ isolamento entre lojas."*
 | G6 🟢 | **Paysuite por loja** + CAPI server-side + tracking por unidade | depende da §16 P1 |
 | G7 🟢 | **PWA do painel + push** — campainha de pedido novo no telemóvel do dono | motor F9.2 |
 | G8 🟢 | **Criar loja copiando outra** — "copiar configuração de: Maputo · Matola" na aba Lojas. Nunca copia segredos do Paysuite | [ADR 0002](docs/decisions/0002-criar-loja-a-partir-de-outra.md) |
+| G9 🟢 | **Atendimento no site** — bolha de conversa com **dúvidas em botão e resposta escrita de antemão** (com indicador de escrita), e escalada para uma **gaveta de conversas no POS** que empilha por tempo de espera. Perguntas e respostas em `chat_topics`, editáveis no painel — nunca em código | [CLAUDE.md §19](CLAUDE.md) · [~] [B-021](BLOQUEIOS.md) |
 
 ---
 
