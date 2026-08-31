@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { createClient } from '@/utils/supabase/client';
 import {
   BarChart,
@@ -21,6 +21,8 @@ import {
 const COLORS = ['#F5A623', '#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'];
 
 type Period = 'day' | 'week' | 'month' | 'all';
+type Tab = 'vendas' | 'aquisicao';
+type Store = { id: string; short_name: string };
 
 interface FunnelStep {
   label: string;
@@ -94,10 +96,17 @@ interface FunnelMetrics {
   by_source: SourceRow[];
 }
 
+interface PreviousPeriod {
+  revenue_cents: number;
+  total_orders: number;
+}
+
 interface DashboardMetrics {
+  store_id: string | null;
   revenue_cents: number;
   avg_ticket_cents: number;
   total_orders: number;
+  previous: PreviousPeriod | null;
   pickup_vs_delivery: Array<{
     fulfillment_type: string;
     count: number;
@@ -139,6 +148,37 @@ const formatPhone = (phone: string) => {
     return `${cleaned.slice(0, 2)} ${cleaned.slice(2, 5)} ${cleaned.slice(5)}`;
   }
   return phone;
+};
+
+/** Percentagem de variação, ou null quando não há base para comparar. */
+function pctChange(curr: number, prev: number): number | null {
+  if (!prev || prev <= 0) return null;
+  return Math.round(((curr - prev) / prev) * 100);
+}
+
+function TrendTag({ pct }: { pct: number | null }) {
+  if (pct === null) return null;
+  const up = pct >= 0;
+  return (
+    <span className={`ml-2 text-sm font-bold ${up ? 'text-[#4ade80]' : 'text-[#ff8868]'}`}>
+      {up ? '↑' : '↓'}
+      {Math.abs(pct)}%
+    </span>
+  );
+}
+
+const PERIOD_PHRASE: Record<Period, string> = {
+  day: 'nas últimas 24 horas',
+  week: 'nos últimos 7 dias',
+  month: 'nos últimos 30 dias',
+  all: 'desde sempre',
+};
+
+const PREVIOUS_PHRASE: Record<Period, string> = {
+  day: 'que nas 24 horas anteriores',
+  week: 'que na semana anterior',
+  month: 'que no mês anterior',
+  all: '',
 };
 
 type ExportStore = { id: string; short_name: string };
@@ -268,22 +308,63 @@ function ExportContabilidadeCard() {
   );
 }
 
+const card = 'rounded-2xl border border-white/[0.08] bg-white/[0.04] backdrop-blur-[12px] shadow-[0_4px_24px_rgba(0,0,0,0.4)] p-6';
+
 export default function AnalisePage() {
   const [period, setPeriod] = useState<Period>('week');
+  const [tab, setTab] = useState<Tab>('vendas');
+
+  const [stores, setStores] = useState<Store[]>([]);
+  const [isOwner, setIsOwner] = useState(false);
+  const [myStoreIds, setMyStoreIds] = useState<string[]>([]);
+  // undefined = ainda não decidido (à espera de saber o papel do utilizador)
+  const [storeId, setStoreId] = useState<string | null | undefined>(undefined);
+
   const [metrics, setMetrics] = useState<DashboardMetrics | null>(null);
   const [funnel, setFunnel] = useState<FunnelMetrics | null>(null);
   const [attribution, setAttribution] = useState<AttributionReport | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Quem é o utilizador e a que lojas tem acesso — decide o valor de partida
+  // do selector (owner começa em "Todas"; gerente na primeira loja dele).
   useEffect(() => {
+    const supabase = createClient();
+    void (async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      const [{ data: profile }, { data: storeRows }, { data: myStores }] = await Promise.all([
+        user
+          ? supabase.from('staff_profiles').select('role').eq('user_id', user.id).maybeSingle()
+          : Promise.resolve({ data: null }),
+        supabase.from('stores').select('id,short_name').eq('active', true).order('sort'),
+        user
+          ? supabase.from('staff_stores').select('store_id').eq('user_id', user.id)
+          : Promise.resolve({ data: [] }),
+      ]);
+      const owner = profile?.role === 'owner';
+      const ids = ((myStores ?? []) as { store_id: string }[]).map((r) => r.store_id);
+      setIsOwner(owner);
+      setMyStoreIds(ids);
+      setStores((storeRows ?? []) as Store[]);
+      setStoreId(owner ? null : (ids[0] ?? null));
+    })();
+  }, []);
+
+  const storeOptions = useMemo(() => {
+    if (isOwner) return [{ id: null as string | null, label: 'Todas' }, ...stores.map((s) => ({ id: s.id, label: s.short_name }))];
+    return stores.filter((s) => myStoreIds.includes(s.id)).map((s) => ({ id: s.id as string | null, label: s.short_name }));
+  }, [isOwner, myStoreIds, stores]);
+
+  useEffect(() => {
+    if (storeId === undefined) return; // ainda a carregar o papel do utilizador
+
     async function fetchMetrics() {
       const supabase = createClient();
       setLoading(true);
       setError(null);
 
       const [{ data, error: err }, { data: fData, error: fErr }, attr] = await Promise.all([
-        supabase.rpc('get_dashboard_metrics', { p_period: period }),
+        supabase.rpc('get_dashboard_metrics', { p_period: period, p_store_id: storeId }),
         supabase.rpc('get_funnel_metrics'),
         supabase.rpc('get_attribution_report', { p_from: periodStartIso(period) }),
       ]);
@@ -302,15 +383,15 @@ export default function AnalisePage() {
       setLoading(false);
     }
 
-    fetchMetrics();
-  }, [period]);
+    void fetchMetrics();
+  }, [period, storeId]);
 
-  const fulfillmentLabels = {
+  const fulfillmentLabels: Record<string, string> = {
     pickup: 'Levantamento',
     delivery: 'Entrega',
   };
 
-  const methodLabels = {
+  const methodLabels: Record<string, string> = {
     mpesa: 'M-Pesa',
     emola: 'e-Mola',
     credit_card: 'Cartão',
@@ -319,7 +400,7 @@ export default function AnalisePage() {
 
   if (loading) {
     return (
-      <div className="rounded-2xl border border-white/[0.08] bg-white/[0.04] backdrop-blur-[12px] shadow-[0_4px_24px_rgba(0,0,0,0.4)] p-10 text-center">
+      <div className={`${card} text-center`}>
         <div className="text-[#F5A623]">A carregar métricas...</div>
       </div>
     );
@@ -327,7 +408,7 @@ export default function AnalisePage() {
 
   if (error) {
     return (
-      <div className="rounded-2xl border border-white/[0.08] bg-white/[0.04] backdrop-blur-[12px] shadow-[0_4px_24px_rgba(0,0,0,0.4)] p-10 text-center">
+      <div className={`${card} text-center`}>
         <div className="text-red-400">Erro: {error}</div>
       </div>
     );
@@ -337,15 +418,18 @@ export default function AnalisePage() {
     return null;
   }
 
-  // Preparar dados para gráficos
-  const pickupDeliveryData = metrics.pickup_vs_delivery.map((item) => ({
-    name: fulfillmentLabels[item.fulfillment_type as keyof typeof fulfillmentLabels] || item.fulfillment_type,
-    Pedidos: item.count,
-    Faturação: item.revenue_cents / 100,
-  }));
+  const revenueTrend = metrics.previous ? pctChange(metrics.revenue_cents, metrics.previous.revenue_cents) : null;
+  const ordersTrend = metrics.previous ? pctChange(metrics.total_orders, metrics.previous.total_orders) : null;
+
+  const topItem = metrics.top_items[0] ?? null;
+  const topCustomer = metrics.top_customers[0] ?? null;
+  const peakHour = metrics.hourly.reduce<{ hour: number; count: number } | null>(
+    (max, row) => (row.count > (max?.count ?? -1) ? row : max),
+    null,
+  );
 
   const methodData = metrics.by_method.map((item) => ({
-    name: methodLabels[item.method as keyof typeof methodLabels] || item.method,
+    name: methodLabels[item.method] || item.method,
     valor: item.cents / 100,
   }));
 
@@ -366,9 +450,9 @@ export default function AnalisePage() {
   return (
     <div className="space-y-6">
       {/* Header com filtros */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-bold text-white tracking-tight">Análise</h1>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           {(['day', 'week', 'month', 'all'] as Period[]).map((p) => (
             <button
               key={p}
@@ -388,353 +472,425 @@ export default function AnalisePage() {
         </div>
       </div>
 
-      <ExportContabilidadeCard />
-
-      {/* Cards de métricas principais */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="rounded-2xl border border-white/[0.08] bg-white/[0.04] backdrop-blur-[12px] shadow-[0_4px_24px_rgba(0,0,0,0.4)] p-6">
-          <div className="text-[#C9BCAC] text-sm mb-2">Faturação Total</div>
-          <div className="text-3xl font-bold text-[#F5A623]">{formatCents(metrics.revenue_cents)}</div>
-        </div>
-        <div className="rounded-2xl border border-white/[0.08] bg-white/[0.04] backdrop-blur-[12px] shadow-[0_4px_24px_rgba(0,0,0,0.4)] p-6">
-          <div className="text-[#C9BCAC] text-sm mb-2">Ticket Médio</div>
-          <div className="text-3xl font-bold text-[#F5A623]">{formatCents(metrics.avg_ticket_cents)}</div>
-        </div>
-        <div className="rounded-2xl border border-white/[0.08] bg-white/[0.04] backdrop-blur-[12px] shadow-[0_4px_24px_rgba(0,0,0,0.4)] p-6">
-          <div className="text-[#C9BCAC] text-sm mb-2">Total de Pedidos</div>
-          <div className="text-3xl font-bold text-[#F5A623]">{metrics.total_orders}</div>
-        </div>
-        <div className="rounded-2xl border border-white/[0.08] bg-white/[0.04] backdrop-blur-[12px] shadow-[0_4px_24px_rgba(0,0,0,0.4)] p-6">
-          <div className="text-[#C9BCAC] text-sm mb-2">Tempo Médio Entrega</div>
-          <div className="text-3xl font-bold text-[#F5A623]">
-            {metrics.avg_time_minutes ? `${metrics.avg_time_minutes.toFixed(1)} min` : '-'}
-          </div>
-        </div>
-      </div>
-
-      {/* Gráficos */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Faturação ao longo do tempo */}
-        <div className="rounded-2xl border border-white/[0.08] bg-white/[0.04] backdrop-blur-[12px] shadow-[0_4px_24px_rgba(0,0,0,0.4)] p-6">
-          <h2 className="text-lg font-bold text-[#F5A623] mb-4">Faturação ao Longo do Tempo</h2>
-          <ResponsiveContainer width="100%" height={300}>
-            <LineChart data={periodData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" />
-              <XAxis dataKey="data" stroke="#C9BCAC" fontSize={12} />
-              <YAxis stroke="#C9BCAC" fontSize={12} tickFormatter={(v) => `MT${v}`} />
-              <Tooltip
-                contentStyle={{
-                  backgroundColor: '#231610',
-                  border: '1px solid rgba(255,255,255,0.10)',
-                  borderRadius: '8px',
-                }}
-                labelStyle={{ color: '#F3E4CE' }}
-                formatter={(value) => [`MT ${Number(value).toFixed(0)}`, 'Faturação']}
-              />
-              <Legend />
-              <Line type="monotone" dataKey="faturação" stroke="#F5A623" strokeWidth={2} />
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
-
-        {/* Levantamento vs Entrega */}
-        <div className="rounded-2xl border border-white/[0.08] bg-white/[0.04] backdrop-blur-[12px] shadow-[0_4px_24px_rgba(0,0,0,0.4)] p-6">
-          <h2 className="text-lg font-bold text-[#F5A623] mb-4">Levantamento vs Entrega</h2>
-          <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={pickupDeliveryData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" />
-              <XAxis dataKey="name" stroke="#C9BCAC" fontSize={12} />
-              <YAxis stroke="#C9BCAC" fontSize={12} />
-              <Tooltip
-                contentStyle={{
-                  backgroundColor: '#231610',
-                  border: '1px solid rgba(255,255,255,0.10)',
-                  borderRadius: '8px',
-                }}
-                labelStyle={{ color: '#F3E4CE' }}
-                formatter={(value, name) => [
-                  name === 'Faturação' ? `MT ${Number(value).toFixed(0)}` : value,
-                  name,
-                ]}
-              />
-              <Legend />
-              <Bar dataKey="Pedidos" fill="#F5A623" />
-              <Bar dataKey="Faturação" fill="#3b82f6" />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-
-        {/* Heatmap de horários de pico */}
-        <div className="rounded-2xl border border-white/[0.08] bg-white/[0.04] backdrop-blur-[12px] shadow-[0_4px_24px_rgba(0,0,0,0.4)] p-6">
-          <h2 className="text-lg font-bold text-[#F5A623] mb-4">Horários de Pico</h2>
-          <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={hourlyData}>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" />
-              <XAxis dataKey="hour" stroke="#C9BCAC" fontSize={12} interval={2} />
-              <YAxis stroke="#C9BCAC" fontSize={12} />
-              <Tooltip
-                contentStyle={{
-                  backgroundColor: '#231610',
-                  border: '1px solid rgba(255,255,255,0.10)',
-                  borderRadius: '8px',
-                }}
-                labelStyle={{ color: '#F3E4CE' }}
-                formatter={(value) => [value, 'Pedidos']}
-              />
-              <Bar dataKey="pedidos" fill="#10b981" />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-
-        {/* Métodos de pagamento */}
-        <div className="rounded-2xl border border-white/[0.08] bg-white/[0.04] backdrop-blur-[12px] shadow-[0_4px_24px_rgba(0,0,0,0.4)] p-6">
-          <h2 className="text-lg font-bold text-[#F5A623] mb-4">Faturação por Método de Pagamento</h2>
-          <ResponsiveContainer width="100%" height={300}>
-            <PieChart>
-              <Pie
-                data={methodData}
-                cx="50%"
-                cy="50%"
-                labelLine={false}
-                label={(entry) => {
-                  const e = entry as { name?: string; valor?: number };
-                  return `${e.name} (MT${(e.valor || 0).toFixed(0)})`;
-                }}
-                outerRadius={80}
-                fill="#8884d8"
-                dataKey="valor"
-              >
-                {methodData.map((entry, index) => (
-                  <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                ))}
-              </Pie>
-              <Tooltip
-                contentStyle={{
-                  backgroundColor: '#231610',
-                  border: '1px solid rgba(255,255,255,0.10)',
-                  borderRadius: '8px',
-                }}
-                labelStyle={{ color: '#F3E4CE' }}
-                formatter={(value) => [`MT ${Number(value).toFixed(0)}`, 'Faturação']}
-              />
-            </PieChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
-
-      {/* Funil de conversão first-party */}
-      {funnel && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Funil por etapa */}
-          <div className="rounded-2xl border border-white/[0.08] bg-white/[0.04] backdrop-blur-[12px] shadow-[0_4px_24px_rgba(0,0,0,0.4)] p-6">
-            <h2 className="text-lg font-bold text-[#F5A623] mb-1">Funil de Conversão</h2>
-            <p className="text-[#C9BCAC] text-xs mb-4">
-              Sessões únicas · Taxa global: {funnel.funnel.pct_overall != null ? `${funnel.funnel.pct_overall}%` : '—'}
-            </p>
-            {(() => {
-              const f = funnel.funnel;
-              const steps: FunnelStep[] = [
-                { label: 'Viram o cardápio',    count: f.step_menu,     pct: null },
-                { label: 'Iniciaram checkout',  count: f.step_checkout, pct: f.pct_menu_to_checkout },
-                { label: 'Escolheram pagamento',count: f.step_payment,  pct: f.pct_checkout_to_payment },
-                { label: 'Compraram',           count: f.step_purchase, pct: f.pct_payment_to_purchase },
-              ];
-              const max = f.step_menu || 1;
-              return (
-                <div className="space-y-3">
-                  {steps.map((step, i) => (
-                    <div key={i}>
-                      <div className="flex justify-between text-sm mb-1">
-                        <span className="text-[#F3E4CE]">{step.label}</span>
-                        <span className="text-[#F5A623] font-bold">
-                          {step.count.toLocaleString()}
-                          {step.pct != null && (
-                            <span className="text-[#C9BCAC] font-normal ml-2">↑{step.pct}%</span>
-                          )}
-                        </span>
-                      </div>
-                      <div className="h-2 rounded bg-white/[0.08]">
-                        <div
-                          className="h-2 rounded bg-[#F5A623]"
-                          style={{ width: `${Math.round((step.count / max) * 100)}%` }}
-                        />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              );
-            })()}
-          </div>
-
-          {/* Origem das vendas — atribuição multi-fonte (migration 1029) */}
-          <div className="rounded-2xl border border-white/[0.08] bg-white/[0.04] backdrop-blur-[12px] shadow-[0_4px_24px_rgba(0,0,0,0.4)] p-6">
-            <h2 className="text-lg font-bold text-[#F5A623] mb-1">Origem das Vendas</h2>
-            <p className="text-[#C9BCAC] text-xs mb-4">
-              Último toque com origem · receita de pedidos reais, não do pixel
-            </p>
-            {!attribution || attribution.by_channel.length === 0 ? (
-              <p className="text-[#C9BCAC] text-sm">Sem dados de origem ainda.</p>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-white/[0.08]">
-                      <th className="text-left py-2 px-3 text-[#C9BCAC] font-medium">Canal</th>
-                      <th className="text-right py-2 px-3 text-[#C9BCAC] font-medium">Sessões</th>
-                      <th className="text-right py-2 px-3 text-[#C9BCAC] font-medium">Pedidos</th>
-                      <th className="text-right py-2 px-3 text-[#C9BCAC] font-medium">Conv.</th>
-                      <th className="text-right py-2 px-3 text-[#C9BCAC] font-medium">Faturado</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {attribution.by_channel.map((row) => (
-                      <tr key={row.channel} className="border-b border-white/[0.04]">
-                        <td className="py-2 px-3 text-[#F3E4CE]">{channelLabel(row.channel)}</td>
-                        <td className="py-2 px-3 text-right text-[#F3E4CE]">{row.sessions.toLocaleString()}</td>
-                        <td className="py-2 px-3 text-right text-[#F3E4CE]">{row.orders.toLocaleString()}</td>
-                        <td className="py-2 px-3 text-right text-[#C9BCAC]">
-                          {row.conversion_pct != null ? `${row.conversion_pct}%` : '—'}
-                        </td>
-                        <td className="py-2 px-3 text-right text-[#F5A623] font-bold">
-                          {formatCents(row.revenue_cents)}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
+      {storeOptions.length > 1 && (
+        <div className="flex flex-wrap gap-2">
+          {storeOptions.map((opt) => (
+            <button
+              key={opt.id ?? 'all'}
+              onClick={() => setStoreId(opt.id)}
+              className={`rounded-xl border px-4 py-2 text-sm font-bold transition ${
+                storeId === opt.id
+                  ? 'border-[#F5A623] bg-[#F5A623]/15 text-[#F5A623]'
+                  : 'border-white/10 text-[#C9BCAC] hover:bg-white/[0.04]'
+              }`}
+            >
+              {opt.label}
+            </button>
+          ))}
         </div>
       )}
 
-      {/* Campanhas e primeiro toque */}
-      {attribution && (attribution.by_campaign.length > 0 || attribution.discovery.length > 0) && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div className="rounded-2xl border border-white/[0.08] bg-white/[0.04] backdrop-blur-[12px] shadow-[0_4px_24px_rgba(0,0,0,0.4)] p-6">
-            <h2 className="text-lg font-bold text-[#F5A623] mb-1">Campanhas</h2>
-            <p className="text-[#C9BCAC] text-xs mb-4">Quanto é que cada campanha pôs no caixa</p>
-            {attribution.by_campaign.length === 0 ? (
-              <p className="text-[#C9BCAC] text-sm">Nenhum pedido veio de uma campanha marcada com utm_campaign.</p>
-            ) : (
+      {/* Abas: o essencial primeiro, aquisição/marketing à parte */}
+      <nav className="flex flex-wrap gap-2 border-b border-white/[0.06] pb-3">
+        {([['vendas', 'Vendas'], ['aquisicao', 'Aquisição']] as [Tab, string][]).map(([value, label]) => (
+          <button
+            key={value}
+            type="button"
+            onClick={() => setTab(value)}
+            className={`rounded-xl px-4 py-2 text-sm font-bold transition ${
+              tab === value
+                ? 'bg-[#F5A623]/15 text-[#F5A623]'
+                : 'text-[#8b8378] hover:bg-white/[0.04] hover:text-[#C9BCAC]'
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </nav>
+
+      {tab === 'vendas' && (
+        <>
+          {/* Resumo em português simples — o que o relatório semanal do 1.0 já fazia */}
+          {revenueTrend !== null && (
+            <p className="rounded-xl border border-[#F5A623]/30 bg-[#F5A623]/[0.08] px-4 py-3 text-sm text-[#F3E4CE]">
+              {revenueTrend >= 0 ? '📈' : '📉'} Faturaste <strong>{formatCents(metrics.revenue_cents)}</strong>{' '}
+              {PERIOD_PHRASE[period]} —{' '}
+              <strong className={revenueTrend >= 0 ? 'text-[#4ade80]' : 'text-[#ff8868]'}>
+                {revenueTrend >= 0 ? `${revenueTrend}% a mais` : `${Math.abs(revenueTrend)}% a menos`}
+              </strong>{' '}
+              {PREVIOUS_PHRASE[period]}.
+            </p>
+          )}
+
+          {/* Cards de métricas principais */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className={card}>
+              <div className="text-[#C9BCAC] text-sm mb-2">Faturação</div>
+              <div className="text-3xl font-bold text-[#F5A623]">
+                {formatCents(metrics.revenue_cents)}
+                <TrendTag pct={revenueTrend} />
+              </div>
+            </div>
+            <div className={card}>
+              <div className="text-[#C9BCAC] text-sm mb-2">Pedidos</div>
+              <div className="text-3xl font-bold text-[#F5A623]">
+                {metrics.total_orders}
+                <TrendTag pct={ordersTrend} />
+              </div>
+            </div>
+            <div className={card}>
+              <div className="text-[#C9BCAC] text-sm mb-2">Ticket Médio</div>
+              <div className="text-3xl font-bold text-[#F5A623]">{formatCents(metrics.avg_ticket_cents)}</div>
+            </div>
+            <div className={card}>
+              <div className="text-[#C9BCAC] text-sm mb-2">Tempo Médio Entrega</div>
+              <div className="text-3xl font-bold text-[#F5A623]">
+                {metrics.avg_time_minutes ? `${metrics.avg_time_minutes.toFixed(1)} min` : '-'}
+              </div>
+            </div>
+          </div>
+
+          {/* Destaques — as três coisas que o dono quer saber sem calcular nada */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className={card}>
+              <div className="text-[#C9BCAC] text-sm mb-2">🏆 Mais vendido</div>
+              <div className="text-xl font-bold text-white">{topItem ? topItem.name : '—'}</div>
+              {topItem && <div className="text-[#8b8378] text-sm">{topItem.qty} unidades</div>}
+            </div>
+            <div className={card}>
+              <div className="text-[#C9BCAC] text-sm mb-2">👑 Melhor cliente</div>
+              <div className="text-xl font-bold text-white">{topCustomer ? topCustomer.customer_name : '—'}</div>
+              {topCustomer && <div className="text-[#8b8378] text-sm">{formatCents(topCustomer.total_cents)}</div>}
+            </div>
+            <div className={card}>
+              <div className="text-[#C9BCAC] text-sm mb-2">🕐 Hora de pico</div>
+              <div className="text-xl font-bold text-white">{peakHour ? `${peakHour.hour}h00` : '—'}</div>
+              {peakHour && <div className="text-[#8b8378] text-sm">{peakHour.count} pedidos</div>}
+            </div>
+          </div>
+
+          {/* Levantamento vs Entrega — números lado a lado, sem misturar contagem com dinheiro no mesmo eixo */}
+          {metrics.pickup_vs_delivery.length > 0 && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {metrics.pickup_vs_delivery.map((row) => (
+                <div key={row.fulfillment_type} className={card}>
+                  <div className="text-[#C9BCAC] text-sm mb-2">
+                    {fulfillmentLabels[row.fulfillment_type] || row.fulfillment_type}
+                  </div>
+                  <div className="text-2xl font-bold text-white">{row.count} pedidos</div>
+                  <div className="text-[#F5A623] font-bold">{formatCents(row.revenue_cents)}</div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <ExportContabilidadeCard />
+
+          {/* Gráficos */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Faturação ao longo do tempo */}
+            <div className={card}>
+              <h2 className="text-lg font-bold text-[#F5A623] mb-4">Faturação ao Longo do Tempo</h2>
+              <ResponsiveContainer width="100%" height={300}>
+                <LineChart data={periodData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" />
+                  <XAxis dataKey="data" stroke="#C9BCAC" fontSize={12} />
+                  <YAxis stroke="#C9BCAC" fontSize={12} tickFormatter={(v) => `MT${v}`} />
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: '#231610',
+                      border: '1px solid rgba(255,255,255,0.10)',
+                      borderRadius: '8px',
+                    }}
+                    labelStyle={{ color: '#F3E4CE' }}
+                    formatter={(value) => [`MT ${Number(value).toFixed(0)}`, 'Faturação']}
+                  />
+                  <Legend />
+                  <Line type="monotone" dataKey="faturação" stroke="#F5A623" strokeWidth={2} dot={false} />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+
+            {/* Heatmap de horários de pico */}
+            <div className={card}>
+              <h2 className="text-lg font-bold text-[#F5A623] mb-4">Horários de Pico</h2>
+              <ResponsiveContainer width="100%" height={300}>
+                <BarChart data={hourlyData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.08)" />
+                  <XAxis dataKey="hour" stroke="#C9BCAC" fontSize={12} interval={2} />
+                  <YAxis stroke="#C9BCAC" fontSize={12} />
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: '#231610',
+                      border: '1px solid rgba(255,255,255,0.10)',
+                      borderRadius: '8px',
+                    }}
+                    labelStyle={{ color: '#F3E4CE' }}
+                    formatter={(value) => [value, 'Pedidos']}
+                  />
+                  <Bar dataKey="pedidos" fill="#10b981" />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+
+            {/* Métodos de pagamento */}
+            <div className={card}>
+              <h2 className="text-lg font-bold text-[#F5A623] mb-4">Faturação por Método de Pagamento</h2>
+              <ResponsiveContainer width="100%" height={300}>
+                <PieChart>
+                  <Pie
+                    data={methodData}
+                    cx="50%"
+                    cy="50%"
+                    labelLine={false}
+                    label={(entry) => {
+                      const e = entry as { name?: string; valor?: number };
+                      return `${e.name} (MT${(e.valor || 0).toFixed(0)})`;
+                    }}
+                    outerRadius={80}
+                    fill="#8884d8"
+                    dataKey="valor"
+                  >
+                    {methodData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                    ))}
+                  </Pie>
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: '#231610',
+                      border: '1px solid rgba(255,255,255,0.10)',
+                      borderRadius: '8px',
+                    }}
+                    labelStyle={{ color: '#F3E4CE' }}
+                    formatter={(value) => [`MT ${Number(value).toFixed(0)}`, 'Faturação']}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+          {/* Tabelas */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* Top itens */}
+            <div className={card}>
+              <h2 className="text-lg font-bold text-[#F5A623] mb-4">Top 10 Itens Mais Vendidos</h2>
               <div className="overflow-x-auto">
-                <table className="w-full text-sm">
+                <table className="w-full">
                   <thead>
                     <tr className="border-b border-white/[0.08]">
-                      <th className="text-left py-2 px-3 text-[#C9BCAC] font-medium">Campanha</th>
-                      <th className="text-left py-2 px-3 text-[#C9BCAC] font-medium">Fonte</th>
-                      <th className="text-right py-2 px-3 text-[#C9BCAC] font-medium">Pedidos</th>
-                      <th className="text-right py-2 px-3 text-[#C9BCAC] font-medium">Faturado</th>
+                      <th className="text-left py-2 px-4 text-[#C9BCAC] text-sm font-medium">Posição</th>
+                      <th className="text-left py-2 px-4 text-[#C9BCAC] text-sm font-medium">Item</th>
+                      <th className="text-right py-2 px-4 text-[#C9BCAC] text-sm font-medium">Qtd</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {attribution.by_campaign.slice(0, 10).map((row, i) => (
-                      <tr key={`${row.campaign}-${i}`} className="border-b border-white/[0.04]">
-                        <td className="py-2 px-3 text-[#F3E4CE]">{row.campaign}</td>
-                        <td className="py-2 px-3 text-[#C9BCAC]">{row.source}</td>
-                        <td className="py-2 px-3 text-right text-[#F3E4CE]">{row.orders.toLocaleString()}</td>
-                        <td className="py-2 px-3 text-right text-[#F5A623] font-bold">
-                          {formatCents(row.revenue_cents)}
+                    {metrics.top_items.map((item, index) => (
+                      <tr key={index} className="border-b border-white/[0.04]">
+                        <td className="py-3 px-4 text-[#F3E4CE]">{index + 1}º</td>
+                        <td className="py-3 px-4 text-[#F3E4CE]">{item.name}</td>
+                        <td className="py-3 px-4 text-right text-[#F5A623] font-bold">{item.qty}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* Top clientes */}
+            <div className={card}>
+              <h2 className="text-lg font-bold text-[#F5A623] mb-4">Top 10 Clientes</h2>
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="border-b border-white/[0.08]">
+                      <th className="text-left py-2 px-4 text-[#C9BCAC] text-sm font-medium">Cliente</th>
+                      <th className="text-left py-2 px-4 text-[#C9BCAC] text-sm font-medium">Telefone</th>
+                      <th className="text-right py-2 px-4 text-[#C9BCAC] text-sm font-medium">Pedidos</th>
+                      <th className="text-right py-2 px-4 text-[#C9BCAC] text-sm font-medium">Total</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {metrics.top_customers.map((customer, index) => (
+                      <tr key={index} className="border-b border-white/[0.04]">
+                        <td className="py-3 px-4 text-[#F3E4CE]">{customer.customer_name}</td>
+                        <td className="py-3 px-4 text-[#F3E4CE]">{formatPhone(customer.customer_phone)}</td>
+                        <td className="py-3 px-4 text-right text-[#F3E4CE]">{customer.order_count}</td>
+                        <td className="py-3 px-4 text-right text-[#F5A623] font-bold">
+                          {formatCents(customer.total_cents)}
                         </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
-            )}
+            </div>
           </div>
+        </>
+      )}
 
-          <div className="rounded-2xl border border-white/[0.08] bg-white/[0.04] backdrop-blur-[12px] shadow-[0_4px_24px_rgba(0,0,0,0.4)] p-6">
-            <h2 className="text-lg font-bold text-[#F5A623] mb-1">Quem Descobriu o Cliente</h2>
-            <p className="text-[#C9BCAC] text-xs mb-4">
-              Primeiro toque · o canal que apresentou a marca, mesmo que a venda tenha fechado noutro
-            </p>
-            {attribution.discovery.length === 0 ? (
-              <p className="text-[#C9BCAC] text-sm">Sem dados de primeiro toque ainda.</p>
-            ) : (
-              <div className="space-y-3">
+      {tab === 'aquisicao' && (
+        <>
+          <p className="text-sm text-[#8b8378]">
+            De onde vêm os clientes e quanto cada canal traz de vendas reais — não do pixel, dos pedidos.
+          </p>
+
+          {/* Funil de conversão first-party */}
+          {funnel && (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <div className={card}>
+                <h2 className="text-lg font-bold text-[#F5A623] mb-1">Funil de Conversão</h2>
+                <p className="text-[#C9BCAC] text-xs mb-4">
+                  Sessões únicas · Taxa global: {funnel.funnel.pct_overall != null ? `${funnel.funnel.pct_overall}%` : '—'}
+                </p>
                 {(() => {
-                  const max = Math.max(...attribution.discovery.map((d) => d.revenue_cents), 1);
-                  return attribution.discovery.slice(0, 8).map((d) => (
-                    <div key={d.channel}>
-                      <div className="flex justify-between text-sm mb-1">
-                        <span className="text-[#F3E4CE]">{channelLabel(d.channel)}</span>
-                        <span className="text-[#F5A623] font-bold">
-                          {formatCents(d.revenue_cents)}
-                          <span className="text-[#C9BCAC] font-normal ml-2">{d.orders} ped.</span>
-                        </span>
-                      </div>
-                      <div className="h-2 rounded bg-white/[0.08]">
-                        <div
-                          className="h-2 rounded bg-[#F5A623]"
-                          style={{ width: `${Math.round((d.revenue_cents / max) * 100)}%` }}
-                        />
-                      </div>
+                  const f = funnel.funnel;
+                  const steps: FunnelStep[] = [
+                    { label: 'Viram o cardápio',    count: f.step_menu,     pct: null },
+                    { label: 'Iniciaram checkout',  count: f.step_checkout, pct: f.pct_menu_to_checkout },
+                    { label: 'Escolheram pagamento',count: f.step_payment,  pct: f.pct_checkout_to_payment },
+                    { label: 'Compraram',           count: f.step_purchase, pct: f.pct_payment_to_purchase },
+                  ];
+                  const max = f.step_menu || 1;
+                  return (
+                    <div className="space-y-3">
+                      {steps.map((step, i) => (
+                        <div key={i}>
+                          <div className="flex justify-between text-sm mb-1">
+                            <span className="text-[#F3E4CE]">{step.label}</span>
+                            <span className="text-[#F5A623] font-bold">
+                              {step.count.toLocaleString()}
+                              {step.pct != null && (
+                                <span className="text-[#C9BCAC] font-normal ml-2">↑{step.pct}%</span>
+                              )}
+                            </span>
+                          </div>
+                          <div className="h-2 rounded bg-white/[0.08]">
+                            <div
+                              className="h-2 rounded bg-[#F5A623]"
+                              style={{ width: `${Math.round((step.count / max) * 100)}%` }}
+                            />
+                          </div>
+                        </div>
+                      ))}
                     </div>
-                  ));
+                  );
                 })()}
               </div>
-            )}
-          </div>
-        </div>
+
+              {/* Origem das vendas — atribuição multi-fonte (migration 1029) */}
+              <div className={card}>
+                <h2 className="text-lg font-bold text-[#F5A623] mb-1">Origem das Vendas</h2>
+                <p className="text-[#C9BCAC] text-xs mb-4">
+                  Último toque com origem · receita de pedidos reais, não do pixel
+                </p>
+                {!attribution || attribution.by_channel.length === 0 ? (
+                  <p className="text-[#C9BCAC] text-sm">Sem dados de origem ainda.</p>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-white/[0.08]">
+                          <th className="text-left py-2 px-3 text-[#C9BCAC] font-medium">Canal</th>
+                          <th className="text-right py-2 px-3 text-[#C9BCAC] font-medium">Sessões</th>
+                          <th className="text-right py-2 px-3 text-[#C9BCAC] font-medium">Pedidos</th>
+                          <th className="text-right py-2 px-3 text-[#C9BCAC] font-medium">Conv.</th>
+                          <th className="text-right py-2 px-3 text-[#C9BCAC] font-medium">Faturado</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {attribution.by_channel.map((row) => (
+                          <tr key={row.channel} className="border-b border-white/[0.04]">
+                            <td className="py-2 px-3 text-[#F3E4CE]">{channelLabel(row.channel)}</td>
+                            <td className="py-2 px-3 text-right text-[#F3E4CE]">{row.sessions.toLocaleString()}</td>
+                            <td className="py-2 px-3 text-right text-[#F3E4CE]">{row.orders.toLocaleString()}</td>
+                            <td className="py-2 px-3 text-right text-[#C9BCAC]">
+                              {row.conversion_pct != null ? `${row.conversion_pct}%` : '—'}
+                            </td>
+                            <td className="py-2 px-3 text-right text-[#F5A623] font-bold">
+                              {formatCents(row.revenue_cents)}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Campanhas e primeiro toque */}
+          {attribution && (attribution.by_campaign.length > 0 || attribution.discovery.length > 0) && (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <div className={card}>
+                <h2 className="text-lg font-bold text-[#F5A623] mb-1">Campanhas</h2>
+                <p className="text-[#C9BCAC] text-xs mb-4">Quanto é que cada campanha pôs no caixa</p>
+                {attribution.by_campaign.length === 0 ? (
+                  <p className="text-[#C9BCAC] text-sm">Nenhum pedido veio de uma campanha marcada com utm_campaign.</p>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-white/[0.08]">
+                          <th className="text-left py-2 px-3 text-[#C9BCAC] font-medium">Campanha</th>
+                          <th className="text-left py-2 px-3 text-[#C9BCAC] font-medium">Fonte</th>
+                          <th className="text-right py-2 px-3 text-[#C9BCAC] font-medium">Pedidos</th>
+                          <th className="text-right py-2 px-3 text-[#C9BCAC] font-medium">Faturado</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {attribution.by_campaign.slice(0, 10).map((row, i) => (
+                          <tr key={`${row.campaign}-${i}`} className="border-b border-white/[0.04]">
+                            <td className="py-2 px-3 text-[#F3E4CE]">{row.campaign}</td>
+                            <td className="py-2 px-3 text-[#C9BCAC]">{row.source}</td>
+                            <td className="py-2 px-3 text-right text-[#F3E4CE]">{row.orders.toLocaleString()}</td>
+                            <td className="py-2 px-3 text-right text-[#F5A623] font-bold">
+                              {formatCents(row.revenue_cents)}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+
+              <div className={card}>
+                <h2 className="text-lg font-bold text-[#F5A623] mb-1">Quem Descobriu o Cliente</h2>
+                <p className="text-[#C9BCAC] text-xs mb-4">
+                  Primeiro toque · o canal que apresentou a marca, mesmo que a venda tenha fechado noutro
+                </p>
+                {attribution.discovery.length === 0 ? (
+                  <p className="text-[#C9BCAC] text-sm">Sem dados de primeiro toque ainda.</p>
+                ) : (
+                  <div className="space-y-3">
+                    {(() => {
+                      const max = Math.max(...attribution.discovery.map((d) => d.revenue_cents), 1);
+                      return attribution.discovery.slice(0, 8).map((d) => (
+                        <div key={d.channel}>
+                          <div className="flex justify-between text-sm mb-1">
+                            <span className="text-[#F3E4CE]">{channelLabel(d.channel)}</span>
+                            <span className="text-[#F5A623] font-bold">
+                              {formatCents(d.revenue_cents)}
+                              <span className="text-[#C9BCAC] font-normal ml-2">{d.orders} ped.</span>
+                            </span>
+                          </div>
+                          <div className="h-2 rounded bg-white/[0.08]">
+                            <div
+                              className="h-2 rounded bg-[#F5A623]"
+                              style={{ width: `${Math.round((d.revenue_cents / max) * 100)}%` }}
+                            />
+                          </div>
+                        </div>
+                      ));
+                    })()}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </>
       )}
-
-      {/* Tabelas */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Top itens */}
-        <div className="rounded-2xl border border-white/[0.08] bg-white/[0.04] backdrop-blur-[12px] shadow-[0_4px_24px_rgba(0,0,0,0.4)] p-6">
-          <h2 className="text-lg font-bold text-[#F5A623] mb-4">Top 10 Itens Mais Vendidos</h2>
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-white/[0.08]">
-                  <th className="text-left py-2 px-4 text-[#C9BCAC] text-sm font-medium">Posição</th>
-                  <th className="text-left py-2 px-4 text-[#C9BCAC] text-sm font-medium">Item</th>
-                  <th className="text-right py-2 px-4 text-[#C9BCAC] text-sm font-medium">Qtd</th>
-                </tr>
-              </thead>
-              <tbody>
-                {metrics.top_items.map((item, index) => (
-                  <tr key={index} className="border-b border-white/[0.04]">
-                    <td className="py-3 px-4 text-[#F3E4CE]">{index + 1}º</td>
-                    <td className="py-3 px-4 text-[#F3E4CE]">{item.name}</td>
-                    <td className="py-3 px-4 text-right text-[#F5A623] font-bold">{item.qty}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        {/* Top clientes */}
-        <div className="rounded-2xl border border-white/[0.08] bg-white/[0.04] backdrop-blur-[12px] shadow-[0_4px_24px_rgba(0,0,0,0.4)] p-6">
-          <h2 className="text-lg font-bold text-[#F5A623] mb-4">Top 10 Clientes</h2>
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-white/[0.08]">
-                  <th className="text-left py-2 px-4 text-[#C9BCAC] text-sm font-medium">Cliente</th>
-                  <th className="text-left py-2 px-4 text-[#C9BCAC] text-sm font-medium">Telefone</th>
-                  <th className="text-right py-2 px-4 text-[#C9BCAC] text-sm font-medium">Pedidos</th>
-                  <th className="text-right py-2 px-4 text-[#C9BCAC] text-sm font-medium">Total</th>
-                </tr>
-              </thead>
-              <tbody>
-                {metrics.top_customers.map((customer, index) => (
-                  <tr key={index} className="border-b border-white/[0.04]">
-                    <td className="py-3 px-4 text-[#F3E4CE]">{customer.customer_name}</td>
-                    <td className="py-3 px-4 text-[#F3E4CE]">{formatPhone(customer.customer_phone)}</td>
-                    <td className="py-3 px-4 text-right text-[#F3E4CE]">{customer.order_count}</td>
-                    <td className="py-3 px-4 text-right text-[#F5A623] font-bold">
-                      {formatCents(customer.total_cents)}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
     </div>
   );
 }
