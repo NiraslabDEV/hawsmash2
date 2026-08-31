@@ -2,7 +2,15 @@
 
 import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { initTracking, grantConsent, hasConsent, type MarketingConfig } from './track';
+import {
+  consentDecided,
+  denyConsent,
+  grantConsent,
+  hasConsent,
+  initConsentMode,
+  initTracking,
+  type MarketingConfig,
+} from './track';
 
 /**
  * Carrega a config de marketing (do /api/menu → marketing) e, havendo
@@ -30,9 +38,13 @@ export function AnalyticsProvider() {
     Object.values(config).some((v) => typeof v === 'string' && v.length > 0);
 
   useEffect(() => {
-    const already = hasConsent();
-    setConsented(already);
-    setDecided(already || !hasAnyTag); // só "indeciso" se há tags e ainda não decidiu
+    // Consent Mode v2: o estado tem de ir para o dataLayer à entrada, antes
+    // de qualquer tag existir — mesmo para quem vai acabar por recusar.
+    initConsentMode();
+    setConsented(hasConsent());
+    // "Recusar" também é uma decisão: sem isto o banner voltava a aparecer
+    // a cada visita a quem já tinha dito que não.
+    setDecided(consentDecided() || !hasAnyTag);
   }, [hasAnyTag]);
 
   // Inicializa quando há consentimento + config.
@@ -47,7 +59,8 @@ export function AnalyticsProvider() {
   }
 
   function reject() {
-    // Sem cookie de consentimento → nenhum script de marketing carrega.
+    // Nenhum script de marketing carrega; fica só o registo da recusa.
+    denyConsent();
     setDecided(true);
   }
 

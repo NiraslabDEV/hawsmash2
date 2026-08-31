@@ -74,17 +74,29 @@ const dateTime = (iso: string | null) =>
 const minutesSince = (iso: string | null) =>
   iso ? Math.floor((Date.now() - new Date(iso).getTime()) / 60_000) : null;
 
+/** Saúde da fila de conversões de marketing (migration 1030). */
+interface ConversionHealth {
+  pending: number;
+  sent: number;
+  failed: number;
+  retrying: number;
+  oldest_pending_minutes: number;
+  last_error: { destination: string; error: string } | null;
+}
+
 export default function SistemaPage() {
   const supabase = useMemo(() => createClient(), []);
   const [status, setStatus] = useState<SystemStatus | null>(null);
   const [alerts, setAlerts] = useState<Alert[]>([]);
+  const [conversions, setConversions] = useState<ConversionHealth | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   const refresh = useCallback(async () => {
-    const [statusResult, alertsResult] = await Promise.all([
+    const [statusResult, alertsResult, conversionsResult] = await Promise.all([
       supabase.rpc('get_system_status'),
       supabase.rpc('list_system_alerts'),
+      supabase.rpc('get_conversion_health'),
     ]);
 
     if (statusResult.error) {
@@ -94,6 +106,9 @@ export default function SistemaPage() {
       setError(null);
     }
     if (!alertsResult.error && alertsResult.data) setAlerts(alertsResult.data as Alert[]);
+    // Marketing é observação: se a leitura falhar, esconde-se o cartão em vez
+    // de tapar o estado das lojas, que é o que interessa neste ecrã.
+    setConversions(conversionsResult.error ? null : (conversionsResult.data as ConversionHealth));
     setLoading(false);
   }, [supabase]);
 
@@ -211,6 +226,64 @@ export default function SistemaPage() {
           );
         })}
       </section>
+
+      {conversions && (conversions.pending > 0 || conversions.sent > 0 || conversions.failed > 0) && (
+        <section className="rounded-2xl border border-white/[0.08] p-5">
+          <header className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="font-black text-white">Conversões de marketing</h2>
+              <p className="text-xs text-[#8b8378]">
+                Últimos 7 dias · o que foi enviado à Meta e ao Google por cada venda online
+              </p>
+            </div>
+            <span
+              className={`rounded-full px-3 py-1 text-xs font-bold ${
+                conversions.failed > 0
+                  ? 'bg-[#7a2b2b] text-white'
+                  : conversions.retrying > 0
+                    ? 'bg-[#e5a93c]/20 text-[#e5a93c]'
+                    : 'bg-[#16281c] text-[#a8e0b6]'
+              }`}
+            >
+              {conversions.failed > 0
+                ? `${conversions.failed} por resolver`
+                : conversions.retrying > 0
+                  ? `${conversions.retrying} a repetir`
+                  : 'Em dia'}
+            </span>
+          </header>
+
+          <dl className="mt-4 grid grid-cols-2 gap-3 text-sm lg:grid-cols-4">
+            <div className="rounded-xl bg-white/[0.03] p-3">
+              <dt className="text-xs uppercase text-[#8b8378]">Enviadas</dt>
+              <dd className="mt-1 font-black text-white">{conversions.sent}</dd>
+            </div>
+            <div className="rounded-xl bg-white/[0.03] p-3">
+              <dt className="text-xs uppercase text-[#8b8378]">Na fila</dt>
+              <dd className="mt-1 font-black text-white">{conversions.pending}</dd>
+            </div>
+            <div className="rounded-xl bg-white/[0.03] p-3">
+              <dt className="text-xs uppercase text-[#8b8378]">Desistidas</dt>
+              <dd className={`mt-1 font-black ${conversions.failed > 0 ? 'text-[#ff9b9b]' : 'text-white'}`}>
+                {conversions.failed}
+              </dd>
+            </div>
+            <div className="rounded-xl bg-white/[0.03] p-3">
+              <dt className="text-xs uppercase text-[#8b8378]">Mais antiga na fila</dt>
+              <dd className="mt-1 font-black text-white">
+                {conversions.pending === 0 ? '—' : `${conversions.oldest_pending_minutes} min`}
+              </dd>
+            </div>
+          </dl>
+
+          {conversions.last_error && (
+            <p className="mt-3 rounded-xl border border-[#7a2b2b]/60 bg-[#2a1616]/60 px-3 py-2 text-xs text-[#ffb0b0]">
+              <span className="font-bold uppercase">{conversions.last_error.destination}</span>{' '}
+              {conversions.last_error.error}
+            </p>
+          )}
+        </section>
+      )}
 
       <section className="rounded-2xl border border-white/[0.08]">
         <header className="border-b border-white/[0.06] px-4 py-3">

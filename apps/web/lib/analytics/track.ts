@@ -90,10 +90,68 @@ export function hasConsent(): boolean {
   return document.cookie.split('; ').some((c) => c === 'dl_consent=granted');
 }
 
-export function grantConsent() {
+/** Já respondeu ao banner? "Recusar" é uma resposta e tem de ser lembrada. */
+export function consentDecided(): boolean {
+  if (typeof document === 'undefined') return false;
+  return document.cookie
+    .split('; ')
+    .some((c) => c === 'dl_consent=granted' || c === 'dl_consent=denied');
+}
+
+function setConsentCookie(value: 'granted' | 'denied') {
   if (typeof document === 'undefined') return;
   // 180 dias
-  document.cookie = `dl_consent=granted; path=/; max-age=${60 * 60 * 24 * 180}; samesite=lax`;
+  document.cookie = `dl_consent=${value}; path=/; max-age=${60 * 60 * 24 * 180}; samesite=lax`;
+}
+
+// ── Consent Mode v2 (Google) ────────────────────────────────────────────────
+// O Google deixou de aceitar um "sim/não" implícito: desde 2024 exige sinais
+// nomeados — `ad_user_data` e `ad_personalization` — declarados ANTES de
+// qualquer tag carregar. Sem eles, campanhas com público europeu deixam de
+// receber conversões.
+//
+// Aqui os sinais entram sempre negados e só sobem a "granted" quando o
+// cliente carrega em Aceitar. Isto não relaxa nada: os scripts continuam a
+// só carregar depois do consentimento (§16.7). O que muda é que o estado
+// fica declarado no dataLayer desde o primeiro instante, em vez de implícito.
+
+let consentDefaultsPushed = false;
+
+function pushConsentCommand(state: 'default' | 'update', granted: boolean) {
+  const signals = granted ? 'granted' : 'denied';
+  const payload: Record<string, unknown> = {
+    ad_storage: signals,
+    ad_user_data: signals,
+    ad_personalization: signals,
+    analytics_storage: signals,
+    functionality_storage: 'granted',
+    security_storage: 'granted',
+  };
+  // Meio segundo para o banner responder antes de a tag decidir sozinha.
+  if (state === 'default') payload.wait_for_update = 500;
+
+  // Formato `arguments` do gtag — é o que o GTM e o gtag.js lêem do dataLayer.
+  dl().push(['consent', state, payload] as unknown as Record<string, unknown>);
+}
+
+/** Declara o estado inicial. Idempotente, seguro antes de haver tags. */
+export function initConsentMode() {
+  if (typeof window === 'undefined' || consentDefaultsPushed) return;
+  consentDefaultsPushed = true;
+  pushConsentCommand('default', hasConsent());
+}
+
+export function grantConsent() {
+  setConsentCookie('granted');
+  initConsentMode();
+  pushConsentCommand('update', true);
+}
+
+/** "Recusar" fica registado — senão o banner voltava a aparecer a cada visita. */
+export function denyConsent() {
+  setConsentCookie('denied');
+  initConsentMode();
+  pushConsentCommand('update', false);
 }
 
 function loadGTM(containerId: string) {
@@ -154,7 +212,11 @@ function loadMetaPixel(pixelId: string) {
  * Só corre se houver consentimento; senão não carrega script nenhum.
  */
 export function initTracking(config: MarketingConfig) {
-  if (typeof window === 'undefined' || !hasConsent()) return;
+  if (typeof window === 'undefined') return;
+  // Os sinais de consentimento têm de estar declarados antes de a primeira
+  // tag carregar — depois disso já é tarde para o Google os ler.
+  initConsentMode();
+  if (!hasConsent()) return;
 
   if (config.gads_conversion_id && config.gads_conversion_label) {
     gadsSendTo = `${config.gads_conversion_id}/${config.gads_conversion_label}`;
