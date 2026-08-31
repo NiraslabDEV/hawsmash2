@@ -173,13 +173,18 @@ alter table public.store_ingredients enable row level security;
 alter table public.ingredient_movements enable row level security;
 alter table public.recipe_items enable row level security;
 
+-- `using (true)` aqui seria "qualquer sessao autenticada", nao "a equipa".
+-- Hoje sao a mesma coisa; no dia em que um cliente fizer login, deixavam de
+-- ser — e o custo de cada ingrediente e a ficha tecnica toda saiam numa
+-- chamada. O catalogo e da empresa, logo a chave e ter perfil activo
+-- (mesmo idioma do `catalog_staff_select` da 1004), nunca `true`.
 drop policy if exists ingredients_select on public.ingredients;
 create policy ingredients_select on public.ingredients
-  for select to authenticated using (true);
+  for select to authenticated using ((select private.auth_role()) is not null);
 
 drop policy if exists recipe_items_select on public.recipe_items;
 create policy recipe_items_select on public.recipe_items
-  for select to authenticated using (true);
+  for select to authenticated using ((select private.auth_role()) is not null);
 
 drop policy if exists store_ingredients_select on public.store_ingredients;
 create policy store_ingredients_select on public.store_ingredients

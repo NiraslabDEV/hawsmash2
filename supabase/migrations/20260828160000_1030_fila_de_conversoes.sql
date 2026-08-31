@@ -210,6 +210,9 @@ volatile
 security definer
 set search_path = ''
 as $$
+-- Os nomes das colunas devolvidas (id, order_id, attempts…) são iguais aos das
+-- variáveis de saída; sem isto o Postgres não sabe a qual nos referimos.
+#variable_conflict use_column
 begin
   return query
   with due as (
