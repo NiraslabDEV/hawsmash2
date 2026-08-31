@@ -155,6 +155,17 @@ export const brand = {
     funnel: {
       promos: [
         {
+          kicker: 'Da casa',
+          title: 'Passa a quem ainda não provou.',
+          body: 'Menos 10% na primeira encomenda. Cada telefone usa uma vez.',
+          cta: '',
+          href: '',
+          // Existe mesmo em referral_codes (migration 1033). Código que
+          // aparece no ecrã e é recusado no checkout não volta a acontecer.
+          code: 'PRIMEIRACOMPRA',
+          note: 'Válido no site e ao balcão, nas duas lojas.',
+        },
+        {
           kicker: 'Loja nova',
           title: 'Matola já abriu.',
           body: 'Mesma chapa, mesmo molho. Entrega em Matola a partir das 12h.',
@@ -182,7 +193,7 @@ export const brand = {
       cta: 'Falar no WhatsApp',
       // Vazio = o botão de WhatsApp não aparece e fica só o email. Nunca
       // publicar um número por preencher no ecrã de um cliente.
-      whatsapp: '',
+      whatsapp: 'https://wa.me/258853860621',
       email: 'niraslab.dev@gmail.com',
       // Paleta fria própria: lê-se como outra marca, não como mais um banner
       // do restaurante. Não sai da paleta do cliente porque não é dele.

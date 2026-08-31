@@ -353,10 +353,16 @@ function Promo({ promo }: { promo: (typeof PROMOS)[number] }) {
       </p>
       {promo.code && (
         <>
-          <div className="hf-coupon num" style={{ marginTop: 16 }}>
+          <button
+            type="button"
+            onClick={() => navigator.clipboard?.writeText(promo.code)}
+            className="hf-coupon num"
+            style={{ marginTop: 16 }}
+            aria-label={`Copiar codigo ${promo.code}`}
+          >
             {promo.code}
             <IcoCopy size={15} />
-          </div>
+          </button>
           {promo.note && <p className="num" style={{ margin: '10px 0 0', fontSize: 11, color: 'var(--hs-ink-faint)' }}>{promo.note}</p>}
         </>
       )}
