@@ -1,12 +1,40 @@
 'use client';
 
+/**
+ * Volta do gateway — o ecrã onde o cliente espera pela confirmação do M-Pesa.
+ *
+ * Duas coisas que este ecrã tinha de ganhar:
+ *
+ * 1. **Dizer o que o cliente tem de fazer.** "A processar… não feche a página"
+ *    é passivo, e o cliente ainda tem de marcar o PIN no telemóvel. Um ecrã
+ *    passivo num momento de acção é o que gera o telefonema.
+ * 2. **Ter saída.** Ao fim de 45 s aparece "está a demorar" com retry e
+ *    contacto da loja; no `failed` há sempre para onde ir. Sem isto, o cliente
+ *    fecha o separador e o pedido fica em `awaiting_payment` para sempre.
+ *
+ * A faixa comercial deste passo não tem link para fora de propósito: abrir
+ * outra app a meio da verificação mata o polling.
+ *
+ * A lógica de polling não mudou — mesma verificação activa, mesmo timeout.
+ */
+
 import { useEffect, useState, useRef } from 'react';
+import Image from 'next/image';
+import Link from 'next/link';
 import { useRouter, useParams } from 'next/navigation';
+import { brand } from '@brand';
+
+import '../../../_hawsmash/landing.css';
+import '../../../_hawsmash/funnel.css';
+import { FunnelRail, FunnelFoot, IcoCheck, IcoAlert, IcoRefresh, IcoWhats, IcoUpload } from '../../../_hawsmash/funnel';
 
 type PollStatus = 'polling' | 'paid' | 'failed' | 'timeout';
 
 const POLL_INTERVAL_MS = 2500;
 const TIMEOUT_MS       = 120_000; // 2 minutos — depois redireciona para order-status
+const SLOW_AFTER_MS    = 45_000;  // a partir daqui mostra-se a saída de emergência
+
+const L = brand.storefront.landing;
 
 export default function PaymentReturnPage() {
   const router   = useRouter();
@@ -14,7 +42,15 @@ export default function PaymentReturnPage() {
   const orderId  = params.orderId as string;
 
   const [pollStatus, setPollStatus] = useState<PollStatus>('polling');
+  const [slow, setSlow] = useState(false);
   const startedAt = useRef(Date.now());
+
+  // Passados 45 s sem resposta, o ecrã deixa de pedir paciência e passa a dar
+  // alternativas. Não interrompe o polling — só destapa a saída.
+  useEffect(() => {
+    const t = window.setTimeout(() => setSlow(true), SLOW_AFTER_MS);
+    return () => window.clearTimeout(t);
+  }, []);
 
   useEffect(() => {
     if (!orderId) return;
@@ -75,72 +111,138 @@ export default function PaymentReturnPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [orderId]);
 
-  const Wrap = ({ children }: { children: React.ReactNode }) => (
-    <div className="min-h-screen bg-[var(--st-bg)] flex items-center justify-center p-4">
-      <div className="text-center max-w-sm w-full">{children}</div>
+  const Frame = ({ children, failed = false }: { children: React.ReactNode; failed?: boolean }) => (
+    <div className="hs hf" style={{ minHeight: '100vh' }}>
+      <div className="hf-page" style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
+        <FunnelRail step={2} failed={failed} />
+        {children}
+        <FunnelFoot />
+      </div>
     </div>
   );
 
   if (pollStatus === 'paid') {
     return (
-      <Wrap>
-        <div className="w-20 h-20 rounded-full bg-green-500/20 flex items-center justify-center mx-auto mb-6">
-          <svg className="w-10 h-10 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-          </svg>
-        </div>
-        <h1 className="text-2xl font-bold text-[var(--st-text)] mb-2">Pagamento Confirmado!</h1>
-        <p className="text-[var(--st-muted)]">A redirecionar para o estado do seu pedido…</p>
-      </Wrap>
+      <Frame>
+        <section className="hf-hero hf-hero-glow-c" style={{ flexGrow: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', textAlign: 'center' }}>
+          <div
+            className="hf-ok"
+            style={{ width: 70, height: 70, margin: '0 auto', borderRadius: '50%', display: 'grid', placeItems: 'center', border: '1.5px solid color-mix(in srgb, var(--hs-ok) 50%, transparent)', background: 'color-mix(in srgb, var(--hs-ok) 9%, transparent)' }}
+          >
+            <IcoCheck size={30} />
+          </div>
+          <p className="hf-eyebrow is-centered" style={{ marginTop: 22, justifyContent: 'center' }}>Pagamento confirmado</p>
+          <h1 className="hf-display is-sm" style={{ marginTop: 14 }}>
+            Está<br /><span className="hf-flame">pago.</span>
+          </h1>
+          <p className="hf-lead is-centered">A abrir o teu pedido…</p>
+        </section>
+      </Frame>
     );
   }
 
   if (pollStatus === 'failed') {
     return (
-      <Wrap>
-        <div className="w-20 h-20 rounded-full bg-red-500/20 flex items-center justify-center mx-auto mb-6">
-          <svg className="w-10 h-10 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-          </svg>
-        </div>
-        <h1 className="text-2xl font-bold text-[var(--st-text)] mb-2">Pagamento Não Processado</h1>
-        <p className="text-[var(--st-muted)] mb-6">O pagamento não foi concluído. Pode tentar novamente.</p>
-        <button onClick={() => { localStorage.removeItem('pending_order_id'); router.push('/checkout'); }} className="w-full text-[var(--st-text)] font-bold py-4 px-4 rounded-2xl" style={{ background: 'var(--st-grad)' }}>
-          Tentar Novamente
-        </button>
-        <button onClick={() => router.push('/menu')} className="w-full mt-3 py-4 px-4 rounded-2xl font-semibold" style={{ border: '1px solid var(--st-line)', color: 'var(--st-muted-2)' }}>
-          Voltar ao cardápio
-        </button>
-      </Wrap>
+      <Frame failed>
+        <section className="hf-hero" style={{ flexGrow: 1, display: 'flex', flexDirection: 'column' }}>
+          <div style={{ textAlign: 'center' }}>
+            <div
+              className="hf-warn"
+              style={{ width: 70, height: 70, margin: '0 auto', borderRadius: '50%', display: 'grid', placeItems: 'center', border: '1.5px solid color-mix(in srgb, var(--hs-ember) 50%, transparent)', background: 'color-mix(in srgb, var(--hs-ember) 9%, transparent)' }}
+            >
+              <IcoAlert size={30} />
+            </div>
+            <p className="hf-eyebrow is-centered hf-warn" style={{ marginTop: 22, justifyContent: 'center', color: 'var(--hs-ember)' }}>
+              Pagamento não concluído
+            </p>
+            <h1 className="hf-display is-sm" style={{ marginTop: 14 }}>O pagamento<br />não passou.</h1>
+            <p className="hf-lead is-centered">
+              Não foi cobrado nada. O teu pedido fica guardado — é só escolher como queres pagar.
+            </p>
+          </div>
+
+          <div style={{ marginTop: 'auto', paddingTop: 24, display: 'flex', flexDirection: 'column', gap: 11 }}>
+            <button
+              type="button"
+              onClick={() => { localStorage.removeItem('pending_order_id'); router.push('/checkout'); }}
+              className="hf-btn hf-btn-gold"
+            >
+              <IcoRefresh />
+              Tentar outra vez
+            </button>
+            <Link href={`/order-status/${orderId}`} className="hf-btn hf-btn-ghost">
+              <IcoUpload size={18} />
+              Pagar por comprovativo
+            </Link>
+            <Link href="/menu" className="hf-btn hf-btn-quiet">Voltar ao cardápio</Link>
+          </div>
+        </section>
+      </Frame>
     );
   }
 
-  if (pollStatus === 'timeout') {
-    return (
-      <Wrap>
-        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-[var(--st-primary)] mx-auto mb-6"></div>
-        <h1 className="text-xl font-bold text-[var(--st-text)] mb-2">A verificar pagamento…</h1>
-        <p className="text-[var(--st-muted)]">A redirecionar para o estado do pedido.</p>
-      </Wrap>
-    );
-  }
-
-  // polling (default)
+  // polling e timeout partilham o mesmo ecrã — o que muda é a linha de baixo.
   return (
-    <Wrap>
-      <div className="relative w-20 h-20 mx-auto mb-6">
-        <div className="absolute inset-0 rounded-full border-4 border-[var(--st-line)]"></div>
-        <div className="absolute inset-0 rounded-full border-4 border-transparent border-t-[var(--st-primary)] animate-spin"></div>
-        <div className="absolute inset-0 flex items-center justify-center">
-          <svg className="w-8 h-8 text-[var(--st-primary)]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5}
-              d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" />
+    <Frame>
+      <section className="hf-hero hf-hero-glow-c" style={{ flexGrow: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', textAlign: 'center' }}>
+        <div style={{ position: 'relative', width: 140, height: 140, margin: '0 auto', display: 'grid', placeItems: 'center' }}>
+          <svg className="hf-spin" viewBox="0 0 140 140" width={140} height={140} style={{ position: 'absolute', inset: 0 }} aria-hidden>
+            <circle cx="70" cy="70" r="67" fill="none" stroke="var(--hs-line)" strokeWidth="2" />
+            <circle cx="70" cy="70" r="67" fill="none" stroke="var(--hs-gold)" strokeWidth="2.5" strokeLinecap="round" strokeDasharray="72 349" />
           </svg>
+          <Image
+            src={L.logoCircle}
+            alt={brand.storefront.logoText}
+            width={110}
+            height={110}
+            style={{ width: 110, height: 110, borderRadius: '50%', objectFit: 'cover' }}
+            priority
+          />
         </div>
-      </div>
-      <h1 className="text-2xl font-bold text-[var(--st-text)] mb-2">A processar pagamento</h1>
-      <p className="text-[var(--st-muted)] mb-2">Por favor aguarde…</p>
-      <p className="text-[var(--st-muted)] text-sm">Não feche esta página</p>
-    </Wrap>
+
+        <p className="hf-eyebrow is-centered" style={{ marginTop: 24, justifyContent: 'center' }}>A ouvir o pagamento</p>
+        <h1 className="hf-display is-sm" style={{ marginTop: 14 }}>
+          Confirma no<br />telemóvel.
+        </h1>
+        <p className="hf-lead is-centered">
+          {pollStatus === 'timeout'
+            ? 'Vamos abrir o teu pedido — o estado aparece lá assim que confirmarmos.'
+            : 'Vai aparecer um pedido de pagamento. Marca o teu PIN e volta aqui — a página trata do resto.'}
+        </p>
+
+        {slow && pollStatus === 'polling' && (
+          <div style={{ marginTop: 28, paddingTop: 20, borderTop: '1px solid rgba(255,255,255,.07)' }}>
+            <p style={{ margin: '0 0 12px', fontSize: 11, color: 'var(--hs-ink-faint)' }}>Não apareceu nada no telemóvel?</p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 11 }}>
+              <button type="button" onClick={() => router.push('/checkout')} className="hf-btn hf-btn-ghost">
+                <IcoRefresh />
+                Tentar outra vez
+              </button>
+              {brand.storefront.contact.phone && (
+                <a
+                  className="hf-btn hf-btn-quiet"
+                  href={`https://wa.me/${brand.storefront.contact.phone.replace(/\D/g, '')}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  <IcoWhats size={16} />
+                  Falar com a loja
+                </a>
+              )}
+            </div>
+          </div>
+        )}
+      </section>
+
+      {/* Espaço B — sem link para fora: sair daqui mata a verificação. */}
+      {brand.storefront.funnel.waiting && (
+        <aside className="hf-ad">
+          <div className="hf-ad-kick">Enquanto esperas</div>
+          <p style={{ margin: '8px 0 0', fontSize: 14, lineHeight: 1.4, color: 'var(--hs-ink-dim)' }}>
+            {brand.storefront.funnel.waiting}
+          </p>
+        </aside>
+      )}
+    </Frame>
   );
 }

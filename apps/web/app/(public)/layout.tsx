@@ -78,6 +78,11 @@ const cssVars = {
   '--hs-gold-deep': t.goldDeep,
   '--hs-gold-glow': 'rgba(229,169,60,.35)',
   '--hs-ember': t.ember,
+  '--hs-ok': t.ok,
+  // Tons intermedios que o funil (checkout -> pagamento -> pedido recebido) usa
+  // para hierarquia de texto. Sem eles os componentes teriam de hardcodar hex.
+  '--hs-ink-soft': s.muted3,
+  '--hs-ink-faint': s.faint,
   '--hs-line': 'rgba(255,255,255,.08)',
   '--hs-line-strong': 'rgba(255,255,255,.16)',
   '--hs-radius-lg': t.radiusLg,

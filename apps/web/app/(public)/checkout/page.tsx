@@ -1,15 +1,55 @@
 'use client';
 
+/**
+ * Checkout — o ecrã onde a venda se ganha ou se perde.
+ *
+ * O que mudou face à versão anterior (e porquê):
+ *
+ * - **Três secções, não cinco.** "Quando" foi para dentro de "Como", e o cupão
+ *   deixou de ser um passo numerado — um campo de código vazio e sempre
+ *   visível diz a toda a gente que existe um desconto que ela não tem, e
+ *   manda-a para fora do site à procura dele.
+ * - **O canal vem primeiro.** É ele que decide se há zona e morada; escolhê-lo
+ *   depois de preencher os dados fazia o formulário refluir por baixo do
+ *   teclado do telemóvel.
+ * - **O total e o botão deixaram de estar só no fim.** Há uma recapitulação no
+ *   topo e a barra final diz quanto é que se está a pagar.
+ * - **Sem sopa de caixas:** secções separadas por filete, numeradas.
+ *
+ * A lógica não mudou nada: mesmo `create_order`, mesmo payload, mesmo
+ * tracking, mesmo upload de comprovativo. O preço continua a ser do servidor
+ * (raiz §1, regra 2) — o que se mostra aqui é pré-visualização.
+ */
+
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { formatMT, type Cents } from '@delivery/core';
 
 import '../_hawsmash/landing.css';
+import '../_hawsmash/funnel.css';
 import { createClient } from '@/utils/supabase/client';
 import { useStoreSlug } from '@/utils/useStore';
 import { buildScheduleSlots, type StoreHour } from '@/lib/store-hours';
 import { trackBeginCheckout, trackAddPaymentInfo, type TrackItem } from '@/lib/analytics/track';
+import {
+  FunnelRail,
+  FunnelFoot,
+  SectionHead,
+  IcoStore,
+  IcoScooter,
+  IcoClock,
+  IcoPin,
+  IcoUser,
+  IcoPhone,
+  IcoMail,
+  IcoTicket,
+  IcoShield,
+  IcoUpload,
+  IcoCheck,
+  IcoArrow,
+  IcoCopy,
+} from '../_hawsmash/funnel';
 
 type PaymentFlow   = 'manual' | 'auto';
 type ManualMethod  = 'mpesa' | 'emola';
@@ -48,22 +88,32 @@ function lineUnitPrice(
   return base + addons + mods;
 }
 
-// ── classes reutilizáveis (tokens da marca via CSS vars; ver (public)/CLAUDE.md) ──
-const CARD = 'rounded-2xl p-4 bg-[var(--st-card)] border border-[var(--st-line)]';
-const INPUT = 'w-full bg-[var(--st-bg)] border border-[var(--st-line)] rounded-xl px-4 py-3 text-[var(--st-text)] placeholder:text-[var(--st-muted)] focus:border-[var(--st-primary)] focus:outline-none';
-// Opção selecionável glass 3D (F9). O ✓ é a rede de segurança para browsers sem color-mix.
-function Opt({ selected, onClick, children, className = '', disabled = false }: { selected: boolean; onClick: () => void; children: React.ReactNode; className?: string; disabled?: boolean }) {
+/** Cartão de escolha do funil. Substitui o glass 3D: com o dourado reservado
+ *  para selecção, total e botão, uma borda dourada chega para dizer "é este". */
+function Tile({
+  selected, onClick, disabled = false, icon, title, sub, tight = false,
+}: {
+  selected: boolean;
+  onClick: () => void;
+  disabled?: boolean;
+  icon?: React.ReactNode;
+  title: string;
+  sub?: string;
+  tight?: boolean;
+}) {
   return (
     <button
       type="button"
       onClick={onClick}
       disabled={disabled}
       aria-pressed={selected}
-      className={`glass-opt${selected ? ' is-selected' : ''} ${disabled ? ' opacity-50' : ''} ${className}`}
+      className={`hf-tile${selected ? ' is-on' : ''}${tight ? ' is-tight' : ''}`}
     >
-      {children}
+      {icon && <span className="hf-tile-c" style={{ display: 'inline-flex' }}>{icon}</span>}
+      <span className="hf-tile-t" style={{ display: 'block' }}>{title}</span>
+      {sub && <span className="hf-tile-s" style={{ display: 'block' }}>{sub}</span>}
       {selected && (
-        <span className="absolute top-1.5 right-1.5 w-5 h-5 rounded-full grid place-items-center text-[var(--st-text)] text-[11px] font-bold shadow" style={{ background: 'var(--st-grad)' }}>✓</span>
+        <span className="hf-check" aria-hidden><IcoCheck size={12} /></span>
       )}
     </button>
   );
@@ -77,6 +127,7 @@ export default function CheckoutPage() {
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
   const [customerEmail, setCustomerEmail] = useState('');
+  const [showEmail, setShowEmail]         = useState(false);
   const [fulfillmentType, setFulfillmentType] = useState<'pickup' | 'delivery'>('pickup');
   const [deliveryZoneId, setDeliveryZoneId]   = useState<string>('');
   const [address, setAddress]                 = useState('');
@@ -101,6 +152,9 @@ export default function CheckoutPage() {
   const [couponInput, setCouponInput]   = useState('');
   const [couponResult, setCouponResult] = useState<CouponResult | null>(null);
   const [couponLoading, setCouponLoading] = useState(false);
+  // Fechado por omissão: quem tem código sabe que tem e abre; quem não tem não
+  // fica a saber que existe um desconto que lhe falta.
+  const [showCoupon, setShowCoupon]     = useState(false);
 
   async function applyCoupon() {
     const code = couponInput.trim().toUpperCase();
@@ -324,6 +378,7 @@ export default function CheckoutPage() {
     if (savedCode) {
       setReferralCode(savedCode);
       setCouponInput(savedCode);
+      setShowCoupon(true);
       // marca como válido (foi validado na loja); detalhe é revalidado no servidor
       setCouponResult({ valid: true });
     }
@@ -334,15 +389,17 @@ export default function CheckoutPage() {
   }, [cart]);
 
   const fmt = (cents: number) => formatMT(cents as Cents);
+  const dueCents = Math.max(0, total - discountPreview());
+  const storeName: string | undefined = menuData?.store?.short_name;
 
   // ─── Loading ───────────────────────────────────────────────────────────────
 
   if (isLoadingMenu) {
     return (
-      <div className="hs hs-checkout min-h-screen flex items-center justify-center p-4 bg-[var(--st-bg)]">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[var(--st-primary)] mx-auto mb-4"></div>
-          <p className="text-[var(--st-muted)]">A carregar…</p>
+      <div className="hs hf" style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', padding: 16 }}>
+        <div style={{ textAlign: 'center' }}>
+          <div className="hf-spin" style={{ width: 32, height: 32, margin: '0 auto 16px', borderRadius: '50%', border: '2px solid var(--hs-line)', borderTopColor: 'var(--hs-gold)' }} />
+          <p style={{ color: 'var(--hs-ink-mute)', fontSize: 14 }}>A carregar…</p>
         </div>
       </div>
     );
@@ -351,87 +408,162 @@ export default function CheckoutPage() {
   // ─── Ecrã de pagamento manual ──────────────────────────────────────────────
 
   if (showPaymentScreen) {
-    const mpesaNumber = menuData?.mpesa_number;
-    const mpesaName   = menuData?.mpesa_name;
-    const emolaNumber = menuData?.emola_number;
-    const emolaName   = menuData?.emola_name;
+    const isMpesa = manualMethod === 'mpesa';
+    const number  = isMpesa ? menuData?.mpesa_number : menuData?.emola_number;
+    const holder  = isMpesa ? menuData?.mpesa_name   : menuData?.emola_name;
 
     return (
-      <div className="hs hs-checkout min-h-screen bg-[var(--st-bg)] p-4">
-        <div className="max-w-[480px] mx-auto">
-          <div className={CARD + ' p-6'}>
-            <h2 className="text-2xl font-bold text-[var(--st-text)] mb-2 text-center">Pagamento Manual</h2>
-            <p className="text-[var(--st-muted)] text-center mb-6">Transfira o valor e envie o comprovativo</p>
+      <div className="hs hf" style={{ minHeight: '100vh' }}>
+        <div className="hf-page">
+          <FunnelRail step={2} storeName={storeName} />
 
-            <div className="bg-[var(--st-bg)] rounded-xl p-4 mb-6 border border-[var(--st-line)]">
-              <div className="flex items-center justify-between mb-3">
-                <span className="text-[var(--st-muted)]">{referralCode ? 'Total estimado:' : 'Total a pagar:'}</span>
-                <span className="font-extrabold text-xl" style={{ color: discountPreview() > 0 ? '#22c55e' : 'white' }}>
-                  {fmt(Math.max(0, total - discountPreview()))}
-                </span>
-              </div>
-              <div className="border-t border-[var(--st-line)] pt-3 space-y-1">
-                <div className="flex justify-between text-sm">
-                  <span className="text-[var(--st-muted)]">Subtotal:</span>
-                  <span className="text-[var(--st-muted-2)]">{fmt(subtotal)}</span>
-                </div>
-                {deliveryFee > 0 && (
-                  <div className="flex justify-between text-sm">
-                    <span className="text-[var(--st-muted)]">Taxa entrega:</span>
-                    <span className="text-[var(--st-muted-2)]">+ {fmt(deliveryFee)}</span>
-                  </div>
-                )}
-                {discountPreview() > 0 && (
-                  <div className="flex justify-between text-sm font-bold" style={{ color: '#22c55e' }}>
-                    <span>Desconto ({referralCode}):</span>
-                    <span>- {fmt(discountPreview())}</span>
-                  </div>
-                )}
-              </div>
-              {referralCode && <p className="text-[11px] mt-2" style={{ color: 'var(--st-muted)' }}>* Desconto final confirmado pelo servidor.</p>}
+          {/* O valor é a capa: é por ele que a loja reconhece o pagamento. */}
+          <section className="hf-hero hf-hero-glow-c" style={{ textAlign: 'center' }}>
+            <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '.28em', textTransform: 'uppercase', color: 'var(--hs-ink-mute)' }}>
+              Total a pagar
             </div>
-
-            <div className="space-y-4 mb-6">
-              {manualMethod === 'mpesa' && mpesaNumber && (
-                <div className="bg-[var(--st-bg)] rounded-xl p-4 border border-[var(--st-line)]">
-                  <p className="text-[var(--st-muted)] text-sm mb-1">M-Pesa</p>
-                  <p className="text-[var(--st-primary)] font-bold text-lg">{mpesaNumber}</p>
-                  {mpesaName && <p className="text-[var(--st-muted)] text-sm mt-1">{mpesaName}</p>}
-                </div>
-              )}
-              {manualMethod === 'emola' && emolaNumber && (
-                <div className="bg-[var(--st-bg)] rounded-xl p-4 border border-[var(--st-line)]">
-                  <p className="text-[var(--st-muted)] text-sm mb-1">e-Mola</p>
-                  <p className="text-[var(--st-primary)] font-bold text-lg">{emolaNumber}</p>
-                  {emolaName && <p className="text-[var(--st-muted)] text-sm mt-1">{emolaName}</p>}
-                </div>
-              )}
-            </div>
-
-            <p className="text-[var(--st-muted-2)] text-sm border-t border-[var(--st-line)] pt-4 mb-6">
-              Após transferir, envie o comprovativo abaixo para confirmar o pagamento.
-            </p>
-
-            <label className="block w-full bg-[var(--st-card)] border border-[var(--st-line)] hover:border-[var(--st-primary)] text-[var(--st-text)] py-3 px-4 rounded-xl text-center cursor-pointer transition-colors mb-3">
-              <span>{paymentProof ? paymentProof.name : 'Selecionar Comprovativo'}</span>
-              <input
-                type="file"
-                accept="image/*,.pdf"
-                onChange={(e) => setPaymentProof(e.target.files?.[0] || null)}
-                disabled={uploading}
-                className="hidden"
-              />
-            </label>
-
-            <button
-              onClick={handleUploadProof}
-              disabled={uploading || !paymentProof}
-              className="w-full text-[var(--st-text)] font-bold py-4 px-4 rounded-2xl transition-all active:scale-[0.99] disabled:opacity-50"
-              style={{ background: 'var(--st-grad)' }}
+            <div
+              className="num"
+              style={{ fontFamily: 'var(--font-display)', fontSize: 68, lineHeight: .94, letterSpacing: '-.01em', color: 'var(--hs-gold)', marginTop: 12 }}
             >
-              {uploading ? 'A carregar…' : 'Enviar Comprovativo'}
+              {fmt(dueCents)}
+            </div>
+            <button
+              type="button"
+              onClick={() => navigator.clipboard?.writeText(String(dueCents / 100))}
+              className="hf-btn hf-btn-ghost hf-btn-sm"
+              style={{ margin: '14px auto 0' }}
+            >
+              <IcoCopy size={14} />
+              Copiar valor
             </button>
+            <p className="hf-lead is-centered" style={{ fontSize: 11, color: 'var(--hs-ink-faint)', maxWidth: 280 }}>
+              Transfere este valor exacto. É assim que sabemos que o pagamento é teu.
+            </p>
+          </section>
+
+          {/* Método + número */}
+          <section className="hf-sec">
+            <div className="hf-seg">
+              <button type="button" onClick={() => setManualMethod('mpesa')} className={`hf-seg-opt${isMpesa ? ' is-on' : ''}`}>M-Pesa</button>
+              <button type="button" onClick={() => setManualMethod('emola')} className={`hf-seg-opt${!isMpesa ? ' is-on' : ''}`}>e-Mola</button>
+            </div>
+
+            {number ? (
+              <div className="hf-panel is-gold" style={{ marginTop: 18, padding: 20 }}>
+                <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '.24em', textTransform: 'uppercase', color: 'var(--hs-ink-mute)' }}>Enviar para</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 12 }}>
+                  <span className="num" style={{ fontFamily: 'var(--font-condensed)', fontSize: 30, lineHeight: 1, letterSpacing: '.08em', color: 'var(--hs-ink)' }}>
+                    {number}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => navigator.clipboard?.writeText(String(number))}
+                    className="hf-btn hf-btn-ghost hf-btn-sm"
+                    style={{ marginLeft: 'auto' }}
+                  >
+                    <IcoCopy size={14} />
+                    Copiar
+                  </button>
+                </div>
+                {holder && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 14, paddingTop: 14, borderTop: '1px solid var(--hs-line)' }}>
+                    <span style={{ color: 'var(--hs-ink-mute)', display: 'flex' }}><IcoUser size={16} /></span>
+                    <span style={{ fontSize: 14, color: 'var(--hs-ink-dim)' }}>{holder}</span>
+                    <span style={{ marginLeft: 'auto', fontSize: 9, fontWeight: 700, letterSpacing: '.18em', textTransform: 'uppercase', color: 'var(--hs-ink-faint)' }}>
+                      Conta oficial
+                    </span>
+                  </div>
+                )}
+                {/* Anti-burla: o nome que aparece no telemóvel é a única
+                    verificação que o cliente tem antes de largar o dinheiro. */}
+                <p className="hf-note" style={{ marginTop: 12 }}>
+                  <span className="hf-warn" style={{ display: 'flex' }}><IcoShield size={15} /></span>
+                  Se o nome que aparece no teu telemóvel for outro, não envies — fala connosco.
+                </p>
+              </div>
+            ) : (
+              <p className="hf-note" style={{ marginTop: 18 }}>
+                Esta loja ainda não tem número de {isMpesa ? 'M-Pesa' : 'e-Mola'} configurado. Escolhe o outro método ou fala com a loja.
+              </p>
+            )}
+          </section>
+
+          {/* Três passos */}
+          <section className="hf-sec">
+            <SectionHead>Três passos</SectionHead>
+            <ol style={{ margin: 0, padding: 0, listStyle: 'none' }}>
+              {[
+                <>Envia <strong className="num" style={{ color: 'var(--hs-ink)' }}>{fmt(dueCents)}</strong> para o número acima.</>,
+                <>Guarda o SMS de confirmação ou tira print.</>,
+                <>Anexa aqui em baixo. Confirmamos em poucos minutos e a chapa arranca.</>,
+              ].map((text, i) => (
+                <li key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 14, padding: '13px 0', borderBottom: i < 2 ? '1px solid rgba(255,255,255,.07)' : undefined }}>
+                  <span className="hf-num" style={{ minWidth: 22, lineHeight: 1.3 }}>{`0${i + 1}`}</span>
+                  <span style={{ fontSize: 14, lineHeight: 1.45, color: 'var(--hs-ink-dim)' }}>{text}</span>
+                </li>
+              ))}
+            </ol>
+          </section>
+
+          {/* Anexo */}
+          <section className="hf-sec">
+            {paymentProof ? (
+              <div className="hf-panel is-ok" style={{ display: 'flex', alignItems: 'center', gap: 14, padding: 16 }}>
+                <span className="hf-ok" style={{ display: 'flex' }}><IcoCheck size={20} /></span>
+                <div style={{ flex: '1 1 auto', minWidth: 0 }}>
+                  <div style={{ fontSize: 14, color: 'var(--hs-ink)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{paymentProof.name}</div>
+                  <div className="num" style={{ fontSize: 11, color: 'var(--hs-ink-mute)', marginTop: 4 }}>
+                    {(paymentProof.size / 1024 / 1024).toFixed(1)} MB · anexado
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setPaymentProof(null)}
+                  aria-label="Remover comprovativo"
+                  style={{ width: 44, height: 44, display: 'grid', placeItems: 'center', color: 'var(--hs-ink-mute)', flexShrink: 0 }}
+                >
+                  ✕
+                </button>
+              </div>
+            ) : (
+              <label
+                style={{
+                  display: 'block', textAlign: 'center', cursor: 'pointer',
+                  border: '1.5px dashed color-mix(in srgb, var(--hs-gold) 45%, transparent)',
+                  borderRadius: 12, padding: '30px 20px',
+                  background: 'color-mix(in srgb, var(--hs-gold) 4%, transparent)',
+                }}
+              >
+                <span style={{ width: 52, height: 52, borderRadius: '50%', margin: '0 auto', display: 'grid', placeItems: 'center', color: 'var(--hs-gold)', border: '1px solid color-mix(in srgb, var(--hs-gold) 40%, transparent)', background: 'color-mix(in srgb, var(--hs-gold) 8%, transparent)' }}>
+                  <IcoUpload size={22} />
+                </span>
+                <span style={{ display: 'block', fontFamily: 'var(--font-condensed)', fontSize: 20, letterSpacing: '.12em', textTransform: 'uppercase', color: 'var(--hs-ink)', marginTop: 14 }}>
+                  Anexar comprovativo
+                </span>
+                <span style={{ display: 'block', fontSize: 11, color: 'var(--hs-ink-mute)', marginTop: 6 }}>Print, foto ou PDF</span>
+                <input
+                  type="file"
+                  accept="image/*,.pdf"
+                  onChange={(e) => setPaymentProof(e.target.files?.[0] || null)}
+                  disabled={uploading}
+                  className="sr-only"
+                  style={{ position: 'absolute', width: 1, height: 1, opacity: 0, pointerEvents: 'none' }}
+                />
+              </label>
+            )}
+          </section>
+
+          <div className="hf-bar">
+            <button onClick={handleUploadProof} disabled={uploading || !paymentProof} className="hf-btn hf-btn-gold">
+              {uploading ? 'A enviar…' : 'Enviar comprovativo'}
+              {!uploading && <IcoArrow />}
+            </button>
+            <p className="hf-note" style={{ justifyContent: 'center', marginTop: 14, color: 'var(--hs-ink-faint)' }}>
+              O teu comprovativo só é visto pela equipa da loja.
+            </p>
           </div>
+          <FunnelFoot />
         </div>
       </div>
     );
@@ -440,306 +572,323 @@ export default function CheckoutPage() {
   // ─── Formulário principal ──────────────────────────────────────────────────
 
   const isSubmitting = createOrderMutation.isPending || autoSubmitting;
+  const ctaLabel = isSubmitting
+    ? (paymentFlow === 'auto' ? 'A redirecionar…' : 'A criar pedido…')
+    : `Pagar ${fmt(dueCents)}`;
 
   return (
-    <div className="hs hs-checkout min-h-screen bg-[var(--st-bg)]">
-      <div className="max-w-[480px] mx-auto pb-8">
-        {/* Header */}
-        <header className="sticky top-0 z-10 bg-[var(--st-bg)]/95 backdrop-blur border-b border-[var(--st-line)]">
-          <div className="px-4 py-4 flex items-center gap-3">
-            <button
-              onClick={() => router.push(`/l/${storeSlug}`)}
-              className="text-2xl text-[var(--st-text)] leading-none"
-              aria-label="Voltar"
-            >
-              ←
-            </button>
-            <h1 className="text-xl font-extrabold text-[var(--st-text)]">Finalizar pedido</h1>
-            {menuData?.store?.short_name && (
-              <span className="hs-drawer-store ml-auto">{menuData.store.short_name}</span>
-            )}
-          </div>
-        </header>
+    <div className="hs hf hs-checkout" style={{ minHeight: '100vh' }}>
+      <div className="hf-page">
+        <FunnelRail step={1} storeName={storeName} onBack={() => router.push(`/l/${storeSlug}`)} />
 
-        <div className="space-y-4 mt-4 px-4">
-          {/* Dados do cliente */}
-          <div className={CARD}>
-            <h2 className="text-[var(--st-text)] font-bold mb-4">Seus Dados</h2>
-            <div className="space-y-4">
-              <div>
-                <label className="block text-[var(--st-muted)] text-sm mb-2">Nome *</label>
-                <input type="text" value={customerName} onChange={(e) => setCustomerName(e.target.value)} className={INPUT} placeholder="Seu nome" />
-              </div>
-              <div>
-                <label className="block text-[var(--st-muted)] text-sm mb-2">Telefone *</label>
-                <input type="tel" value={customerPhone} onChange={(e) => setCustomerPhone(e.target.value)} className={INPUT} placeholder="+258 XX XXX XXX" />
-              </div>
-              <div>
-                <label className="block text-[var(--st-muted)] text-sm mb-2">
-                  Email <span className="text-[var(--st-muted)]">(opcional — para receber a confirmação)</span>
-                </label>
-                <input type="email" value={customerEmail} onChange={(e) => setCustomerEmail(e.target.value)} className={INPUT} placeholder="email@exemplo.com" />
-              </div>
-            </div>
-          </div>
+        <section className="hf-hero hf-hero-glow">
+          <p className="hf-eyebrow">Finalizar pedido</p>
+          <h1 className="hf-display">
+            Quase<br />na <span className="hf-flame">chapa.</span>
+          </h1>
+        </section>
 
-          {/* Tipo de entrega */}
-          <div className={CARD}>
-            <h2 className="text-[var(--st-text)] font-bold mb-4">Tipo de Entrega</h2>
-            <div className="grid grid-cols-2 gap-3" style={{ perspective: '1000px' }}>
-              <Opt selected={fulfillmentType === 'pickup'} onClick={() => { setFulfillmentType('pickup'); setDeliveryZoneId(''); setAddress(''); }} className="p-4 text-left">
-                <p className="glass-label">🏃 Levantamento</p>
-                <p className="text-[var(--st-muted)] text-sm">Retirar na loja</p>
-              </Opt>
-              <Opt selected={fulfillmentType === 'delivery'} onClick={() => setFulfillmentType('delivery')} className="p-4 text-left">
-                <p className="glass-label">🛵 Entrega</p>
-                <p className="text-[var(--st-muted)] text-sm">A sua morada</p>
-              </Opt>
-            </div>
+        {/* Recapitulação: o cliente sabe o que compra e quanto custa antes de
+            preencher o que quer que seja. */}
+        <div className="hf-recap">
+          <span style={{ fontSize: 14, color: 'var(--hs-ink-mute)' }}>
+            {cart.length} {cart.length === 1 ? 'artigo' : 'artigos'}
+          </span>
+          <span style={{ width: 3, height: 3, borderRadius: '50%', background: 'var(--hs-ink-faint)' }} />
+          <span className="hf-recap-total num">{fmt(total)}</span>
+          <button type="button" onClick={() => router.push(`/l/${storeSlug}`)} className="hf-act">
+            Editar
+          </button>
+        </div>
+
+        {/* ── 01 Como e quando ─────────────────────────────────────────── */}
+        <section className="hf-sec">
+          <SectionHead n={1}>Como e quando</SectionHead>
+          <div className="hf-tiles is-2">
+            <Tile
+              selected={fulfillmentType === 'pickup'}
+              onClick={() => { setFulfillmentType('pickup'); setDeliveryZoneId(''); setAddress(''); }}
+              icon={<IcoStore />}
+              title="Levantar"
+              sub="No balcão"
+            />
+            <Tile
+              selected={fulfillmentType === 'delivery'}
+              onClick={() => setFulfillmentType('delivery')}
+              icon={<IcoScooter />}
+              title="Entrega"
+              sub="Na tua morada"
+            />
           </div>
 
-          {/* Detalhes de entrega */}
           {fulfillmentType === 'delivery' && (
-            <div className={CARD}>
-              <h2 className="text-[var(--st-text)] font-bold mb-4">Detalhes de Entrega</h2>
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-[var(--st-muted)] text-sm mb-2">Zona *</label>
-                  <select value={deliveryZoneId} onChange={(e) => setDeliveryZoneId(e.target.value)} className={INPUT}>
-                    <option value="">Selecione uma zona</option>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14, marginTop: 14 }}>
+              <label style={{ display: 'block' }}>
+                <span className="hf-lbl">Zona de entrega *</span>
+                <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                  <span style={{ position: 'absolute', left: 16, color: 'var(--hs-ink-mute)', display: 'flex', pointerEvents: 'none' }}><IcoPin /></span>
+                  <select
+                    value={deliveryZoneId}
+                    onChange={(e) => setDeliveryZoneId(e.target.value)}
+                    className="hf-fld"
+                    style={{ paddingLeft: 46 }}
+                  >
+                    <option value="">Selecciona uma zona</option>
                     {zones?.map((zone: any) => (
                       <option key={zone.id} value={zone.id}>{zone.name} (+{fmt(zone.fee_cents)})</option>
                     ))}
                   </select>
                 </div>
-                <div>
-                  <label className="block text-[var(--st-muted)] text-sm mb-2">Morada *</label>
-                  <input type="text" value={address} onChange={(e) => setAddress(e.target.value)} className={INPUT} placeholder="Rua, número, bairro…" />
-                </div>
-              </div>
+              </label>
+              <label style={{ display: 'block' }}>
+                <span className="hf-lbl">Morada *</span>
+                <input
+                  type="text"
+                  value={address}
+                  onChange={(e) => setAddress(e.target.value)}
+                  className="hf-fld"
+                  placeholder="Rua, número, bairro, ponto de referência…"
+                />
+              </label>
             </div>
           )}
 
-          {/* Agendamento */}
-          <div className={CARD}>
-            <h2 className="text-[var(--st-text)] font-bold mb-4">Agendamento</h2>
-            <div className="grid grid-cols-2 gap-3" style={{ perspective: '1000px' }}>
-              <Opt selected={scheduledFor === null} onClick={() => setScheduledFor(null)} className="p-4 text-left">
-                <p className="glass-label">Agora</p>
-                <p className="text-[var(--st-muted)] text-sm">Preparar imediatamente</p>
-              </Opt>
-              <Opt
-                selected={scheduledFor !== null}
-                onClick={() => setScheduledFor(scheduleSlots[0]?.iso ?? null)}
-                disabled={scheduleSlots.length === 0}
-                className="p-4 text-left"
-              >
-                <p className="glass-label">Horário</p>
-                <p className="text-[var(--st-muted)] text-sm">
+          <div style={{ marginTop: 14 }}>
+            {scheduledFor === null ? (
+              <div className="hf-fld">
+                <span style={{ color: 'var(--hs-ink-mute)', display: 'flex' }}><IcoClock /></span>
+                <span style={{ flex: '1 1 auto' }}>Agora</span>
+                <button
+                  type="button"
+                  onClick={() => setScheduledFor(scheduleSlots[0]?.iso ?? null)}
+                  disabled={scheduleSlots.length === 0}
+                  className="hf-act"
+                  style={{ opacity: scheduleSlots.length === 0 ? .4 : 1 }}
+                >
                   {scheduleSlots.length === 0 ? 'Sem horários' : 'Agendar'}
-                </p>
-              </Opt>
-            </div>
-            {scheduledFor && scheduleSlots.length > 0 && (
-              <div className="mt-4">
+                </button>
+              </div>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
                 {/* Só horários em que esta loja abre — o servidor volta a validar. */}
                 <select
                   value={scheduledFor}
                   onChange={(e) => setScheduledFor(e.target.value)}
                   aria-label="Horário de entrega"
-                  className={INPUT}
+                  className="hf-fld"
                 >
                   {scheduleSlots.map((slot) => (
                     <option key={slot.iso} value={slot.iso}>{slot.label}</option>
                   ))}
                 </select>
-              </div>
-            )}
-          </div>
-
-          {/* Método de pagamento */}
-          <div className={CARD}>
-            <h2 className="text-[var(--st-text)] font-bold mb-4">Pagamento</h2>
-
-            {/* Toggle manual/auto — só aparece se Paysuite estiver configurado */}
-            {hasAutoPayment && (
-              <div className="flex bg-[var(--st-bg)] rounded-lg p-1 mb-4 border border-[var(--st-line)]">
-                <button onClick={() => setPaymentFlow('manual')} className={`flex-1 py-2 rounded-md text-sm font-semibold transition-all ${paymentFlow === 'manual' ? 'text-[var(--st-text)]' : 'text-[var(--st-muted)]'}`} style={paymentFlow === 'manual' ? { background: 'var(--st-grad)' } : undefined}>
-                  Comprovativo
-                </button>
-                <button onClick={() => setPaymentFlow('auto')} className={`flex-1 py-2 rounded-md text-sm font-semibold transition-all ${paymentFlow === 'auto' ? 'text-[var(--st-text)]' : 'text-[var(--st-muted)]'}`} style={paymentFlow === 'auto' ? { background: 'var(--st-grad)' } : undefined}>
-                  Pagar Agora
+                <button type="button" onClick={() => setScheduledFor(null)} className="hf-act" style={{ marginLeft: 0 }}>
+                  Quero agora
                 </button>
               </div>
             )}
-
-            {/* Métodos manuais */}
-            {paymentFlow === 'manual' && (
-              <div className="grid grid-cols-2 gap-3" style={{ perspective: '1000px' }}>
-                <Opt selected={manualMethod === 'mpesa'} onClick={() => setManualMethod('mpesa')} className="p-4 text-left">
-                  <p className="glass-label">M-Pesa</p>
-                  <p className="text-[var(--st-muted)] text-sm">Comprovativo</p>
-                </Opt>
-                <Opt selected={manualMethod === 'emola'} onClick={() => setManualMethod('emola')} className="p-4 text-left">
-                  <p className="glass-label">e-Mola</p>
-                  <p className="text-[var(--st-muted)] text-sm">Comprovativo</p>
-                </Opt>
-              </div>
-            )}
-
-            {/* Métodos automáticos (Paysuite) */}
-            {paymentFlow === 'auto' && (
-              <>
-                <div className="grid grid-cols-3 gap-2 mb-3" style={{ perspective: '1000px' }}>
-                  {(['mpesa', 'emola', 'credit_card'] as AutoMethod[]).map((m) => (
-                    <Opt key={m} selected={autoMethod === m} onClick={() => setAutoMethod(m)} className="p-3 text-center">
-                      <p className="glass-label text-sm">
-                        {m === 'mpesa' ? 'M-Pesa' : m === 'emola' ? 'e-Mola' : 'Cartão'}
-                      </p>
-                    </Opt>
-                  ))}
-                </div>
-                <p className="text-[var(--st-muted)] text-xs">Será redireccionado para a página de pagamento seguro.</p>
-              </>
-            )}
           </div>
+        </section>
 
-          {/* Cupom de desconto */}
-          <div className={CARD}>
-            <h2 className="text-[var(--st-text)] font-bold mb-3">Cupom de desconto</h2>
-
-            {referralCode && couponResult?.valid ? (
-              /* Código aplicado */
-              <div className="rounded-xl px-4 py-3 flex items-start gap-3" style={{ background: '#0f2a1a', border: '1px solid #22c55e55' }}>
-                <span className="text-[#22c55e] text-lg mt-0.5">✓</span>
-                <div className="flex-1 min-w-0">
-                  <span className="font-mono font-extrabold text-sm text-[var(--st-text)]">{referralCode}</span>
-                  {couponResult.reward_type === 'discount_cents' && couponResult.reward_value && (
-                    <p className="text-[12px] mt-0.5" style={{ color: '#22c55e' }}>
-                      Desconto: -{fmt(couponResult.reward_value)}
-                    </p>
-                  )}
-                  {couponResult.reward_type === 'discount_pct' && couponResult.reward_value && (
-                    <p className="text-[12px] mt-0.5" style={{ color: '#22c55e' }}>
-                      Desconto: -{couponResult.reward_value}% ({fmt(discountPreview())})
-                    </p>
-                  )}
-                  {couponResult.reward_type === 'free_item' && (
-                    <p className="text-[12px] mt-0.5" style={{ color: '#22c55e' }}>
-                      🎁 {couponResult.gift_item_name ?? 'Item grátis'} incluído
-                    </p>
-                  )}
-                  {!couponResult.reward_type && (
-                    <p className="text-[12px] mt-0.5" style={{ color: 'var(--st-muted)' }}>
-                      Desconto aplicado pelo servidor no checkout
-                    </p>
-                  )}
-                </div>
-                <button onClick={removeCoupon} className="text-sm shrink-0" style={{ color: 'var(--st-muted)' }} aria-label="Remover cupom">✕</button>
+        {/* ── 02 Quem recebe ───────────────────────────────────────────── */}
+        <section className="hf-sec">
+          <SectionHead n={2}>Quem recebe</SectionHead>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <label style={{ display: 'block' }}>
+              <span className="hf-lbl">Nome *</span>
+              <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                <span style={{ position: 'absolute', left: 16, color: 'var(--hs-ink-mute)', display: 'flex', pointerEvents: 'none' }}><IcoUser /></span>
+                <input type="text" value={customerName} onChange={(e) => setCustomerName(e.target.value)} className="hf-fld" style={{ paddingLeft: 46 }} placeholder="O teu nome" />
               </div>
+            </label>
+            <label style={{ display: 'block' }}>
+              <span className="hf-lbl">Telefone *</span>
+              <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                <span style={{ position: 'absolute', left: 16, color: 'var(--hs-ink-mute)', display: 'flex', pointerEvents: 'none' }}><IcoPhone /></span>
+                <input type="tel" value={customerPhone} onChange={(e) => setCustomerPhone(e.target.value)} className="hf-fld num" style={{ paddingLeft: 46 }} placeholder="+258 XX XXX XXXX" />
+              </div>
+            </label>
+            {showEmail ? (
+              <label style={{ display: 'block' }}>
+                <span className="hf-lbl">Email <span style={{ color: 'var(--hs-ink-faint)' }}>— opcional</span></span>
+                <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                  <span style={{ position: 'absolute', left: 16, color: 'var(--hs-ink-mute)', display: 'flex', pointerEvents: 'none' }}><IcoMail /></span>
+                  <input type="email" value={customerEmail} onChange={(e) => setCustomerEmail(e.target.value)} className="hf-fld" style={{ paddingLeft: 46 }} placeholder="email@exemplo.com" />
+                </div>
+              </label>
             ) : (
-              /* Input para digitar código */
-              <>
-                <div className="flex gap-2">
+              <button type="button" onClick={() => setShowEmail(true)} style={{ display: 'flex', alignItems: 'center', gap: 11, minHeight: 44, color: 'var(--hs-ink-mute)' }}>
+                <IcoMail />
+                <span style={{ fontSize: 14 }}>Quero o talão por email</span>
+                <span className="hf-act">Juntar</span>
+              </button>
+            )}
+          </div>
+        </section>
+
+        {/* ── 03 Pagamento ─────────────────────────────────────────────── */}
+        <section className="hf-sec">
+          <SectionHead n={3}>Pagamento</SectionHead>
+
+          {/* Toggle manual/auto — só aparece se o gateway estiver configurado */}
+          {hasAutoPayment && (
+            <div className="hf-seg" style={{ marginBottom: 16 }}>
+              <button type="button" onClick={() => setPaymentFlow('auto')} className={`hf-seg-opt${paymentFlow === 'auto' ? ' is-on' : ''}`}>
+                Pagar agora
+                <small>pagas aqui</small>
+              </button>
+              <button type="button" onClick={() => setPaymentFlow('manual')} className={`hf-seg-opt${paymentFlow === 'manual' ? ' is-on' : ''}`}>
+                Comprovativo
+                <small>já paguei</small>
+              </button>
+            </div>
+          )}
+
+          {paymentFlow === 'manual' ? (
+            <div className="hf-tiles is-2">
+              <Tile tight selected={manualMethod === 'mpesa'} onClick={() => setManualMethod('mpesa')} title="M-Pesa" sub="Comprovativo" />
+              <Tile tight selected={manualMethod === 'emola'} onClick={() => setManualMethod('emola')} title="e-Mola" sub="Comprovativo" />
+            </div>
+          ) : (
+            <>
+              <div className="hf-tiles is-3">
+                {(['mpesa', 'emola', 'credit_card'] as AutoMethod[]).map((m) => (
+                  <Tile
+                    key={m}
+                    tight
+                    selected={autoMethod === m}
+                    onClick={() => setAutoMethod(m)}
+                    title={m === 'mpesa' ? 'M-Pesa' : m === 'emola' ? 'e-Mola' : 'Cartão'}
+                    sub={m === 'credit_card' ? 'Visa · MC' : 'Na hora'}
+                  />
+                ))}
+              </div>
+              <p className="hf-note" style={{ marginTop: 14 }}>
+                Vais confirmar o pagamento no teu telemóvel e voltas aqui.
+              </p>
+            </>
+          )}
+
+          <p className="hf-note" style={{ marginTop: 14 }}>
+            <span className="hf-ok" style={{ display: 'flex' }}><IcoShield /></span>
+            O valor é fechado por nós. Ninguém to muda a meio do caminho.
+          </p>
+        </section>
+
+        {/* ── Resumo ───────────────────────────────────────────────────── */}
+        <section className="hf-sec is-raised">
+          <SectionHead action={<button type="button" onClick={() => router.push(`/l/${storeSlug}`)} className="hf-act">Editar</button>}>
+            O teu pedido
+          </SectionHead>
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            {cart.map((item, idx) => {
+              const menuItem = menuData?.categories
+                .flatMap((c: any) => c.items)
+                .find((i: any) => i.id === item.menuItemId);
+              const variant = item.variantId ? menuItem?.variants?.find((v: MenuVariant) => v.id === item.variantId) : undefined;
+              const addons = (menuItem?.addons ?? []).filter((a: MenuAddon) => (item.addonIds ?? []).includes(a.id));
+              const detail = [variant?.name, ...addons.map((a: MenuAddon) => a.name)].filter(Boolean).join(' · ');
+              return (
+                <div key={idx} className="hf-line">
+                  <span className="hf-line-q num">{item.qty}x</span>
+                  <span className="hf-line-n">
+                    {menuItem?.name}
+                    {detail && <small>{detail}</small>}
+                  </span>
+                  <span className="hf-line-p num">
+                    {fmt(lineUnitPrice(menuItem, item.variantId, item.addonIds, item.modifiers) * item.qty)}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+
+          <hr className="hf-div" />
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <dl className="hf-sum"><dt>Subtotal</dt><dd className="num">{fmt(subtotal)}</dd></dl>
+            {deliveryFee > 0 && (
+              <dl className="hf-sum"><dt>Entrega</dt><dd className="num">+ {fmt(deliveryFee)}</dd></dl>
+            )}
+            {discountPreview() > 0 && (
+              <dl className="hf-sum is-off"><dt>Desconto ({referralCode})</dt><dd className="num">− {fmt(discountPreview())}</dd></dl>
+            )}
+            {couponResult?.valid && couponResult.reward_type === 'free_item' && (
+              <dl className="hf-sum is-off"><dt>{couponResult.gift_item_name ?? 'Item grátis'}</dt><dd>Grátis</dd></dl>
+            )}
+
+            {/* Cupão: link discreto, não uma secção com número próprio. */}
+            {referralCode && couponResult?.valid ? (
+              <div className="hf-panel is-ok" style={{ display: 'flex', alignItems: 'center', gap: 12, padding: 14 }}>
+                <span className="hf-ok" style={{ display: 'flex' }}><IcoCheck size={16} /></span>
+                <span className="num" style={{ flex: '1 1 auto', fontFamily: 'var(--font-condensed)', fontSize: 20, letterSpacing: '.18em', color: 'var(--hs-ink)' }}>
+                  {referralCode}
+                </span>
+                <button type="button" onClick={removeCoupon} aria-label="Remover código" style={{ width: 44, height: 44, display: 'grid', placeItems: 'center', color: 'var(--hs-ink-mute)' }}>✕</button>
+              </div>
+            ) : showCoupon ? (
+              <div>
+                <div className="hf-fld-row">
                   <input
                     type="text"
                     value={couponInput}
                     onChange={(e) => setCouponInput(e.target.value.toUpperCase())}
                     onKeyDown={(e) => e.key === 'Enter' && applyCoupon()}
-                    placeholder="SEUCÓDIGO"
+                    placeholder="O TEU CÓDIGO"
                     maxLength={50}
-                    className={INPUT + ' font-mono tracking-wider'}
+                    className="hf-fld num"
+                    style={{ letterSpacing: '.16em' }}
                     aria-label="Código de desconto"
                   />
                   <button
                     type="button"
                     onClick={applyCoupon}
                     disabled={couponLoading || !couponInput.trim()}
-                    className="px-5 rounded-xl font-bold text-[var(--st-text)] text-sm shrink-0 disabled:opacity-50"
-                    style={{ background: 'var(--st-grad)' }}
+                    className="hf-btn hf-btn-ghost hf-btn-sm"
                   >
                     {couponLoading ? '…' : 'Aplicar'}
                   </button>
                 </div>
                 {couponResult && !couponResult.valid && (
-                  <p className="mt-2 text-xs px-1" style={{ color: 'var(--st-primary)' }}>
+                  <p style={{ margin: '10px 0 0', fontSize: 13, color: 'var(--hs-ember)' }}>
                     {couponResult.reason === 'auto_redemption'          ? 'Não podes usar o teu próprio código.' :
                      couponResult.reason === 'already_redeemed'        ? 'Já usaste este código antes.' :
                      couponResult.reason === 'max_redemptions_reached' ? 'Este código atingiu o limite de utilizações.' :
                      'Código inválido ou expirado.'}
                   </p>
                 )}
-              </>
+              </div>
+            ) : (
+              <button type="button" onClick={() => setShowCoupon(true)} style={{ display: 'flex', alignItems: 'center', gap: 11, minHeight: 44, color: 'var(--hs-ink-dim)' }}>
+                <IcoTicket />
+                <span style={{ fontSize: 14 }}>Tenho um código de desconto</span>
+              </button>
+            )}
+
+            {referralCode && (
+              <p style={{ margin: 0, fontSize: 11, color: 'var(--hs-ink-faint)' }}>
+                O desconto final é confirmado pelo servidor.
+              </p>
             )}
           </div>
+        </section>
 
-          {/* Resumo */}
-          <div className={CARD}>
-            <h2 className="text-[var(--st-text)] font-bold mb-4">Resumo</h2>
-            <div className="space-y-2 mb-4">
-              {cart.map((item, idx) => {
-                const menuItem = menuData?.categories
-                  .flatMap((c: any) => c.items)
-                  .find((i: any) => i.id === item.menuItemId);
-                const variant = item.variantId ? menuItem?.variants?.find((v: MenuVariant) => v.id === item.variantId) : undefined;
-                const addons = (menuItem?.addons ?? []).filter((a: MenuAddon) => (item.addonIds ?? []).includes(a.id));
-                const detail = [variant?.name, ...addons.map((a: MenuAddon) => a.name)].filter(Boolean).join(' · ');
-                return (
-                  <div key={idx} className="flex justify-between text-sm gap-2">
-                    <span className="text-[var(--st-muted-2)] min-w-0">
-                      {menuItem?.name} x{item.qty}
-                      {detail && <span className="block text-[11px] truncate" style={{ color: 'var(--st-muted)' }}>{detail}</span>}
-                    </span>
-                    <span className="text-[var(--st-text)] shrink-0">{fmt(lineUnitPrice(menuItem, item.variantId, item.addonIds, item.modifiers) * item.qty)}</span>
-                  </div>
-                );
-              })}
-            </div>
-            <div className="border-t border-[var(--st-line)] pt-3 space-y-2">
-              <div className="flex justify-between">
-                <span className="text-[var(--st-muted)]">Subtotal:</span>
-                <span className="text-[var(--st-text)]">{fmt(subtotal)}</span>
-              </div>
-              {deliveryFee > 0 && (
-                <div className="flex justify-between">
-                  <span className="text-[var(--st-muted)]">Taxa entrega:</span>
-                  <span className="text-[var(--st-text)]">+ {fmt(deliveryFee)}</span>
-                </div>
-              )}
-              {discountPreview() > 0 && (
-                <div className="flex justify-between" style={{ color: '#22c55e' }}>
-                  <span>Desconto ({referralCode}):</span>
-                  <span className="font-bold">- {fmt(discountPreview())}</span>
-                </div>
-              )}
-              {couponResult?.valid && couponResult.reward_type === 'free_item' && (
-                <div className="flex justify-between text-sm" style={{ color: '#22c55e' }}>
-                  <span>🎁 {couponResult.gift_item_name ?? 'Item grátis'}:</span>
-                  <span className="font-bold">GRÁTIS</span>
-                </div>
-              )}
-              <div className="flex justify-between text-lg font-extrabold pt-2 border-t border-[var(--st-line)]">
-                <span className="text-[var(--st-text)]">{referralCode ? 'Total estimado:' : 'Total:'}</span>
-                <span style={{ color: discountPreview() > 0 ? '#22c55e' : 'white' }}>
-                  {fmt(Math.max(0, total - discountPreview()))}
-                </span>
-              </div>
-              {referralCode && <p className="text-xs" style={{ color: 'var(--st-muted)' }}>* O desconto final é confirmado pelo servidor.</p>}
-            </div>
-          </div>
-
-          {/* Botão de submissão */}
+        {/* ── Barra de acção ───────────────────────────────────────────── */}
+        <div className="hf-bar">
+          <dl className="hf-bar-total">
+            <dt>{referralCode ? 'Total estimado' : 'Total'}</dt>
+            <dd className="num">{fmt(dueCents)}</dd>
+          </dl>
           <button
             onClick={paymentFlow === 'auto' ? handleCreateAutoOrder : handleCreateManualOrder}
             disabled={cart.length === 0 || isSubmitting}
-            className="w-full text-[var(--st-text)] font-extrabold py-4 px-4 rounded-2xl transition-all active:scale-[0.99] disabled:opacity-50"
-            style={{ background: 'var(--st-grad)' }}
+            className="hf-btn hf-btn-gold"
           >
-            {isSubmitting
-              ? (paymentFlow === 'auto' ? 'A redirecionar…' : 'A criar pedido…')
-              : (paymentFlow === 'auto' ? 'Ir para Pagamento' : 'Criar Pedido')}
+            <span className="num">{ctaLabel}</span>
+            {!isSubmitting && <IcoArrow />}
           </button>
         </div>
+        <FunnelFoot />
       </div>
     </div>
   );

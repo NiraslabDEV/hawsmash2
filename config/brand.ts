@@ -29,6 +29,10 @@ export const brand = {
     gold: '#e5a93c',
     goldDeep: '#c48a1e',
     ember: '#e85a2a',
+    // Estado, não identidade: o verde de "está bem" do funil (loja aberta,
+    // campo válido, comprovativo aceite). Vive aqui para nenhum componente
+    // hardcodar um hex — mesma regra do resto da paleta.
+    ok: '#3fbf6a',
     bg0: '#0a0807',
     bg1: '#111110',
     bg2: '#1a1816',
@@ -135,6 +139,59 @@ export const brand = {
         rights: '© 2026 HAWSMASH · Todos os direitos reservados',
         madeIn: 'Made in Maputo',
       },
+    },
+
+    // ── Espaços comerciais do funil (A–D) ─────────────────────────
+    // São DADOS, não código (§18.2): título, texto e link saem daqui, para o
+    // dono trocar a campanha sem deploy. Lista vazia = nenhum bloco aparece,
+    // e a página fecha-se sem buracos.
+    //
+    // Regra do inventario: no máximo DOIS blocos no pós-compra. O terceiro faz
+    // a página virar jornal e empurra a avaliação para fora do ecrã.
+    //
+    // Um cupão entra aqui com `code` — mas só depois de o código existir mesmo
+    // em `referral_codes`. Código inventado no ecrã e recusado no checkout
+    // é pior do que não ter promoção nenhuma.
+    funnel: {
+      promos: [
+        {
+          kicker: 'Loja nova',
+          title: 'Matola já abriu.',
+          body: 'Mesma chapa, mesmo molho. Entrega em Matola a partir das 12h.',
+          cta: 'Ver a loja Matola',
+          href: '/l/matola',
+          code: '',
+          note: '',
+        },
+      ],
+      // Faixa do ecrã de espera. Sem link para fora de propósito: abrir outra
+      // app a meio da confirmação do M-Pesa mata a verificação.
+      waiting: '',
+    },
+    // ── Assinatura de quem fez o sistema (espaco E do funil) ──────────────
+    // Aparece no fim do ecrã de pedido recebido, depois de o cliente já ter
+    // tudo o que precisa. É identidade — logo vive aqui, nunca num componente
+    // (CLAUDE.md §18.2). Outra instalação troca isto ou põe enabled: false.
+    poweredBy: {
+      enabled: true,
+      name: 'NIRASLAB',
+      kicker: 'Software para restaurantes',
+      title: 'Este ecrã é o nosso trabalho.',
+      body: 'Construímos o sistema que acabou de receber o seu pedido. Está a correr nas duas lojas da HAWSMASH neste momento.',
+      proof: ['Duas lojas, um painel', 'M-Pesa confirmado sozinho', 'Do site à cozinha em segundos'],
+      cta: 'Falar no WhatsApp',
+      // Vazio = o botão de WhatsApp não aparece e fica só o email. Nunca
+      // publicar um número por preencher no ecrã de um cliente.
+      whatsapp: '',
+      email: 'niraslab.dev@gmail.com',
+      // Paleta fria própria: lê-se como outra marca, não como mais um banner
+      // do restaurante. Não sai da paleta do cliente porque não é dele.
+      accent: '#7ea8ff',
+      bg: '#101319',
+      bg2: '#090b0f',
+      ink: '#e8ecf2',
+      inkDim: '#7a8494',
+      inkMute: '#5c6675',
     },
 
     // Contactos confirmados no HAWSMASH 1.0.
