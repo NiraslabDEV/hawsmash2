@@ -22,6 +22,7 @@ import { formatMT, type Cents } from '@delivery/core';
 import { brand } from '@brand';
 import { trackPurchase, type TrackItem } from '@/lib/analytics/track';
 import { shouldFirePurchase, markPurchaseFired } from '@/lib/analytics/purchase-guard';
+import { useAccount } from '@/utils/useAccount';
 
 import '../../_hawsmash/landing.css';
 import '../../_hawsmash/funnel.css';
@@ -76,6 +77,7 @@ function heroCopy(status: string, fulfillment: string): { kicker: string; lead: 
 export default function OrderStatusPage({ params }: { params: { orderId: string } }) {
   const router = useRouter();
   const [polling, setPolling] = useState(true);
+  const { profile, hydrated: accountReady, bind } = useAccount();
 
   const { data: orderStatus, isLoading, error } = useQuery({
     queryKey: ['order-status', params.orderId],
@@ -113,6 +115,23 @@ export default function OrderStatusPage({ params }: { params: { orderId: string 
 
     trackPurchase({ orderId: params.orderId, totalCents: orderStatus.total_cents, items });
   }, [orderStatus, params.orderId]);
+
+  // É AQUI que o cliente fica com conta, sem nunca ter feito login: acabou de
+  // pagar, e quem tem o UUID deste pedido é quem o fez. O servidor prende o
+  // dispositivo e guarda a morada da entrega. Da próxima, o checkout já o
+  // conhece e ele não escreve nome nem morada nenhuma.
+  //
+  // Uma vez por dispositivo, e só depois de o pedido estar pago ou aprovado —
+  // um pedido que ainda não passou não prova nada.
+  const boundRef = useRef(false);
+  useEffect(() => {
+    if (boundRef.current || !accountReady || profile || !orderStatus) return;
+    const settled = ['paid', 'approved', 'in_preparation', 'ready', 'delivered'].includes(orderStatus.status);
+    if (!settled) return;
+    boundRef.current = true;
+    // Best-effort: se falhar, o cliente vê o pedido na mesma. Só não fica logado.
+    void bind(params.orderId);
+  }, [accountReady, profile, orderStatus, bind, params.orderId]);
 
   // repõe o carrinho a partir dos itens do pedido e volta ao cardápio
   const reorder = () => {

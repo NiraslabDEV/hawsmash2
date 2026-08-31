@@ -32,6 +32,7 @@ import { createClient } from '@/utils/supabase/client';
 import { useStoreSlug } from '@/utils/useStore';
 import { buildScheduleSlots, type StoreHour } from '@/lib/store-hours';
 import { trackBeginCheckout, trackAddPaymentInfo, type TrackItem } from '@/lib/analytics/track';
+import { useAccount } from '@/utils/useAccount';
 import {
   FunnelRail,
   FunnelFoot,
@@ -49,6 +50,7 @@ import {
   IcoCheck,
   IcoArrow,
   IcoCopy,
+  IcoPlus,
 } from '../_hawsmash/funnel';
 
 type PaymentFlow   = 'manual' | 'auto';
@@ -116,6 +118,140 @@ function Tile({
         <span className="hf-check" aria-hidden><IcoCheck size={12} /></span>
       )}
     </button>
+  );
+}
+
+/**
+ * Entrar num telemóvel novo.
+ *
+ * Só aparece para quem NÃO está reconhecido, e é discreto de propósito: a
+ * esmagadora maioria das pessoas chega aqui já com sessão, e para quem chega
+ * de novo o caminho normal — preencher e comprar — continua a ser o caminho
+ * mais curto. Isto é a porta lateral, não a porta principal.
+ *
+ * Quem não tem email no histórico não fica preso: o ecrã diz-lhe que o
+ * telemóvel fica ligado no fim deste pedido.
+ */
+function LoginInline({
+  requestCode,
+  verifyCode,
+  defaultPhone,
+}: {
+  requestCode: (phone: string) => Promise<{ channel: 'email' | 'none'; hint?: string }>;
+  verifyCode: (phone: string, code: string) => Promise<unknown>;
+  defaultPhone: string;
+}) {
+  const [step, setStep] = useState<'idle' | 'phone' | 'code' | 'none'>('idle');
+  const [phone, setPhone] = useState(defaultPhone);
+  const [code, setCode] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [hint, setHint] = useState('');
+  const [error, setError] = useState('');
+
+  async function ask() {
+    if (!phone.trim()) return;
+    setBusy(true);
+    setError('');
+    try {
+      const res = await requestCode(phone);
+      if (res.channel === 'email') {
+        setHint(res.hint ?? '');
+        setStep('code');
+      } else {
+        setStep('none');
+      }
+    } catch {
+      setStep('none');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function confirm() {
+    if (!code.trim()) return;
+    setBusy(true);
+    setError('');
+    try {
+      await verifyCode(phone, code);
+      // O hook actualiza o perfil e a secção inteira passa a mostrar o
+      // cliente reconhecido — este componente desaparece com ela.
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Código errado.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (step === 'idle') {
+    return (
+      <button
+        type="button"
+        onClick={() => setStep('phone')}
+        style={{ display: 'flex', alignItems: 'center', gap: 11, minHeight: 44, color: 'var(--hs-ink-mute)' }}
+      >
+        <IcoUser />
+        <span style={{ fontSize: 14 }}>Já pediste aqui?</span>
+        <span className="hf-act">Entrar</span>
+      </button>
+    );
+  }
+
+  if (step === 'none') {
+    return (
+      <p className="hf-note" style={{ marginTop: 4 }}>
+        <IcoUser size={15} />
+        Não temos por onde te enviar um código. Faz o pedido normalmente — este
+        telemóvel fica ligado à tua conta no fim, e da próxima já não escreves nada.
+      </p>
+    );
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      {step === 'phone' ? (
+        <>
+          <span className="hf-lbl">O telefone dos teus pedidos</span>
+          <div className="hf-fld-row">
+            <input
+              type="tel"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && ask()}
+              className="hf-fld num"
+              placeholder="+258 XX XXX XXXX"
+              aria-label="Telefone da conta"
+            />
+            <button type="button" onClick={ask} disabled={busy || !phone.trim()} className="hf-btn hf-btn-ghost hf-btn-sm">
+              {busy ? '…' : 'Enviar'}
+            </button>
+          </div>
+        </>
+      ) : (
+        <>
+          <span className="hf-lbl">Código enviado para {hint}</span>
+          <div className="hf-fld-row">
+            <input
+              type="text"
+              inputMode="numeric"
+              value={code}
+              onChange={(e) => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+              onKeyDown={(e) => e.key === 'Enter' && confirm()}
+              className="hf-fld num"
+              style={{ letterSpacing: '.3em' }}
+              placeholder="000000"
+              aria-label="Código de entrada"
+            />
+            <button type="button" onClick={confirm} disabled={busy || code.length < 6} className="hf-btn hf-btn-ghost hf-btn-sm">
+              {busy ? '…' : 'Entrar'}
+            </button>
+          </div>
+        </>
+      )}
+      {error && <p style={{ margin: 0, fontSize: 13, color: 'var(--hs-ember)' }}>{error}</p>}
+      <button type="button" onClick={() => setStep('idle')} className="hf-act" style={{ marginLeft: 0 }}>
+        Deixa estar
+      </button>
+    </div>
   );
 }
 
@@ -196,6 +332,14 @@ export default function CheckoutPage() {
   const [autoSubmitting, setAutoSubmitting]       = useState(false);
 
   const storeSlug = useStoreSlug();
+
+  // Conta do cliente. Se este telemóvel já fez um pedido, o sistema conhece-o
+  // e ele não volta a escrever nome nem morada. Nunca bloqueia nada: sem
+  // conta, o checkout é exactamente o formulário de sempre.
+  const { profile, hydrated: accountReady, saveAddress, logout, requestCode, verifyCode } = useAccount();
+  // Morada guardada em uso. '' = morada nova, escrita à mão.
+  const [addressId, setAddressId] = useState<string>('');
+  const [addressLabel, setAddressLabel] = useState('Casa');
 
   const { data: menuData, isLoading: isLoadingMenu } = useQuery({
     queryKey: ['menu', storeSlug],
@@ -305,6 +449,7 @@ export default function CheckoutPage() {
   // Submissão manual: cria pedido e mostra ecrã de comprovativo
   const handleCreateManualOrder = () => {
     if (!validate()) return;
+    rememberAddress();
     trackAddPaymentInfo(cartTrackItems(), manualMethod);
     createOrderMutation.mutate(buildOrderPayload(manualMethod));
   };
@@ -312,6 +457,7 @@ export default function CheckoutPage() {
   // Submissão automática: cria pedido digital e redireciona para Paysuite
   const handleCreateAutoOrder = async () => {
     if (!validate()) return;
+    rememberAddress();
     trackAddPaymentInfo(cartTrackItems(), autoMethod);
     setAutoSubmitting(true);
     try {
@@ -387,6 +533,40 @@ export default function CheckoutPage() {
   useEffect(() => {
     localStorage.setItem('cart', JSON.stringify(cart));
   }, [cart]);
+
+  // Preenche o que o cliente já nos deu. Só toca em campos vazios — se ele
+  // escreveu outra coisa nesta sessão, é a dele que vale.
+  useEffect(() => {
+    if (!profile) return;
+    setCustomerName((n) => n || profile.name || '');
+    setCustomerPhone((p) => p || profile.phone || '');
+    const favourite = profile.addresses.find((a) => a.is_default) ?? profile.addresses[0];
+    if (favourite) setAddressId((cur) => cur || favourite.id);
+  }, [profile]);
+
+  // A zona pertence à loja: uma morada guardada com zona de Maputo não
+  // pré-selecciona nada quando o carrinho é da Matola. A morada continua a
+  // servir; a taxa é que tem de ser escolhida outra vez.
+  useEffect(() => {
+    if (!addressId || !profile) return;
+    const saved = profile.addresses.find((a) => a.id === addressId);
+    if (!saved) return;
+    setAddress(saved.address);
+    setAddressLabel(saved.label);
+    const zoneBelongsHere = zones?.some((z: any) => z.id === saved.delivery_zone_id);
+    setDeliveryZoneId(zoneBelongsHere ? String(saved.delivery_zone_id) : '');
+  }, [addressId, profile, zones]);
+
+  // Morada nova de quem já tem conta: fica guardada para a próxima. Fire and
+  // forget — a venda nunca espera nem pára por causa disto (§1, regra 1).
+  function rememberAddress() {
+    if (!profile || fulfillmentType !== 'delivery' || addressId || !address.trim()) return;
+    saveAddress({
+      label: addressLabel || 'Morada',
+      address,
+      zoneId: deliveryZoneId || null,
+    }).catch(() => {});
+  }
 
   const fmt = (cents: number) => formatMT(cents as Cents);
   const dueCents = Math.max(0, total - discountPreview());
@@ -623,6 +803,37 @@ export default function CheckoutPage() {
 
           {fulfillmentType === 'delivery' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14, marginTop: 14 }}>
+              {/* Moradas guardadas. Só aparecem com sessão NESTE dispositivo —
+                  nunca a partir de um número de telefone escrito por alguém. */}
+              {profile && profile.addresses.length > 0 && (
+                <div>
+                  <span className="hf-lbl">Onde entregamos</span>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
+                    {profile.addresses.map((saved) => (
+                      <button
+                        key={saved.id}
+                        type="button"
+                        onClick={() => setAddressId(saved.id)}
+                        aria-pressed={addressId === saved.id}
+                        className={`hf-chip${addressId === saved.id ? ' is-on' : ''}`}
+                      >
+                        <IcoPin size={15} />
+                        {saved.label}
+                      </button>
+                    ))}
+                    <button
+                      type="button"
+                      onClick={() => { setAddressId(''); setAddress(''); setDeliveryZoneId(''); setAddressLabel('Outra'); }}
+                      aria-pressed={addressId === ''}
+                      className={`hf-chip${addressId === '' ? ' is-on' : ''}`}
+                    >
+                      <IcoPlus size={14} />
+                      Nova morada
+                    </button>
+                  </div>
+                </div>
+              )}
+
               <label style={{ display: 'block' }}>
                 <span className="hf-lbl">Zona de entrega *</span>
                 <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
@@ -650,6 +861,25 @@ export default function CheckoutPage() {
                   placeholder="Rua, número, bairro, ponto de referência…"
                 />
               </label>
+
+              {profile && !addressId && address.trim() !== '' && (
+                <div>
+                  <span className="hf-lbl">Guardar esta morada como</span>
+                  <div style={{ display: 'flex', gap: 10 }}>
+                    {['Casa', 'Trabalho', 'Outra'].map((option) => (
+                      <button
+                        key={option}
+                        type="button"
+                        onClick={() => setAddressLabel(option)}
+                        aria-pressed={addressLabel === option}
+                        className={`hf-chip${addressLabel === option ? ' is-on' : ''}`}
+                      >
+                        {option}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
@@ -692,6 +922,21 @@ export default function CheckoutPage() {
         {/* ── 02 Quem recebe ───────────────────────────────────────────── */}
         <section className="hf-sec">
           <SectionHead n={2}>Quem recebe</SectionHead>
+
+          {profile ? (
+            /* Já nos conhecemos. Nome e telefone ficam à vista em vez de dois
+               campos a pedir para serem reescritos. */
+            <div className="hf-fld" style={{ gap: 14 }}>
+              <span style={{ color: 'var(--hs-gold)', display: 'flex' }}><IcoUser /></span>
+              <span style={{ flex: '1 1 auto', minWidth: 0 }}>
+                {profile.name || 'Cliente'}
+                <small className="num" style={{ display: 'block', fontSize: 11, color: 'var(--hs-ink-mute)', marginTop: 2 }}>
+                  {profile.phone}
+                </small>
+              </span>
+              <button type="button" onClick={logout} className="hf-act">Não sou eu</button>
+            </div>
+          ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
             <label style={{ display: 'block' }}>
               <span className="hf-lbl">Nome *</span>
@@ -722,7 +967,13 @@ export default function CheckoutPage() {
                 <span className="hf-act">Juntar</span>
               </button>
             )}
+
+            {/* Telemóvel novo: entrar em vez de escrever tudo de novo. */}
+            {accountReady && (
+              <LoginInline requestCode={requestCode} verifyCode={verifyCode} defaultPhone={customerPhone} />
+            )}
           </div>
+          )}
         </section>
 
         {/* ── 03 Pagamento ─────────────────────────────────────────────── */}

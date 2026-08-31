@@ -375,3 +375,21 @@ textarea.hf-fld { min-height: 84px; align-items: flex-start; line-height: 1.5; r
   font-size: 14px; font-weight: 700; letter-spacing: 0.04em;
 }
 .hf-sup-mail { font-size: 12px; color: var(--pb-ink-mute); }
+
+/* ---------- CHIP DE ESCOLHA (moradas guardadas, etiquetas) ----------
+   Aqui a pílula é legítima: é um chip de estado, não um botão de acção —
+   e é a forma que diz "escolhe um destes" sem parecer o botão de pagar. */
+.hf-chip {
+  display: inline-flex; align-items: center; gap: 8px;
+  min-height: 44px; padding: 0 16px;
+  border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 999px;
+  background: var(--st-bg); color: var(--hs-ink-soft);
+  font-size: 14px; line-height: 1;
+  transition: border-color 0.2s, color 0.2s, background 0.2s;
+}
+.hf-chip:hover { border-color: var(--hs-line-strong); color: var(--hs-ink); }
+.hf-chip.is-on {
+  border-color: var(--hs-gold);
+  background: color-mix(in srgb, var(--hs-gold) 10%, transparent);
+  color: var(--hs-ink);
+}
