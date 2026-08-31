@@ -1,16 +1,14 @@
 import { NextResponse } from 'next/server';
-import { Resend } from 'resend';
+import { isEmailConfigured, sendMail } from '@/lib/email/transport';
 
 export async function POST(request: Request) {
   try {
-    const apiKey = process.env.RESEND_API_KEY;
-    if (!apiKey) {
+    if (!isEmailConfigured()) {
       return NextResponse.json(
-        { error: 'RESEND_API_KEY not configured' },
+        { error: 'SMTP not configured' },
         { status: 503 }
       );
     }
-    const resend = new Resend(apiKey);
 
     const body = await request.json();
     const { to, customerName, orderNumber, reason, paymentMethod } = body;
@@ -37,26 +35,21 @@ export async function POST(request: Request) {
       </div>
     `;
 
-    const { data, error } = await resend.emails.send({
-      from: process.env.RESEND_FROM_EMAIL || 'noreply@delivery-os.com',
+    const result = await sendMail({
       to,
       subject: `Pagamento Não Confirmado - Pedido ${orderNumber}`,
       html,
-      tags: [
-        { name: 'Order ID', value: orderNumber },
-        { name: 'Type', value: 'order_rejection' },
-      ],
     });
 
-    if (error) {
-      console.error('Error sending rejection email:', error);
+    if (!result.ok) {
+      console.error('Error sending rejection email:', result.error);
       return NextResponse.json(
-        { error: error.message },
+        { error: result.error },
         { status: 500 }
       );
     }
 
-    return NextResponse.json({ success: true, data });
+    return NextResponse.json({ success: true });
   } catch (err) {
     console.error('Error in send-rejection-email:', err);
     return NextResponse.json(

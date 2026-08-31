@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { Resend } from 'resend';
+import { isEmailConfigured, sendMail } from '@/lib/email/transport';
 import { brand } from '@brand';
 import { createClient } from '@/utils/supabase/server';
 import { setAccountCookie } from '@/lib/account/session';
@@ -62,31 +62,26 @@ export async function POST(request: Request) {
     return NextResponse.json({ channel: 'none' });
   }
 
-  const apiKey = process.env.RESEND_API_KEY;
-  if (!apiKey) return NextResponse.json({ channel: 'none' });
+  if (!isEmailConfigured()) return NextResponse.json({ channel: 'none' });
 
-  try {
-    const resend = new Resend(apiKey);
-    await resend.emails.send({
-      from: process.env.RESEND_FROM_EMAIL || 'noreply@delivery-os.com',
-      to: data.email,
-      subject: `${data.code} — o teu código ${brand.name}`,
-      html: `
-        <div style="font-family:system-ui,sans-serif;max-width:420px;margin:0 auto;padding:32px 24px">
-          <p style="font-size:12px;letter-spacing:.2em;text-transform:uppercase;color:#847e72;margin:0">${brand.name}</p>
-          <h1 style="font-size:22px;margin:16px 0 8px;color:#1a1208">O teu código de entrada</h1>
-          <p style="font-size:15px;line-height:1.5;color:#5f5a52;margin:0 0 24px">
-            Escreve este código no telemóvel onde estás a entrar. Vale 10 minutos.
-          </p>
-          <p style="font-size:38px;letter-spacing:.28em;font-weight:700;color:#1a1208;margin:0">${data.code}</p>
-          <p style="font-size:13px;line-height:1.5;color:#847e72;margin:28px 0 0">
-            Não pediste isto? Ignora este email — sem o código ninguém entra na tua conta.
-          </p>
-        </div>
-      `,
-      tags: [{ name: 'Type', value: 'account_login_code' }],
-    });
-  } catch {
+  const result = await sendMail({
+    to: data.email,
+    subject: `${data.code} — o teu código ${brand.name}`,
+    html: `
+      <div style="font-family:system-ui,sans-serif;max-width:420px;margin:0 auto;padding:32px 24px">
+        <p style="font-size:12px;letter-spacing:.2em;text-transform:uppercase;color:#847e72;margin:0">${brand.name}</p>
+        <h1 style="font-size:22px;margin:16px 0 8px;color:#1a1208">O teu código de entrada</h1>
+        <p style="font-size:15px;line-height:1.5;color:#5f5a52;margin:0 0 24px">
+          Escreve este código no telemóvel onde estás a entrar. Vale 10 minutos.
+        </p>
+        <p style="font-size:38px;letter-spacing:.28em;font-weight:700;color:#1a1208;margin:0">${data.code}</p>
+        <p style="font-size:13px;line-height:1.5;color:#847e72;margin:28px 0 0">
+          Não pediste isto? Ignora este email — sem o código ninguém entra na tua conta.
+        </p>
+      </div>
+    `,
+  });
+  if (!result.ok) {
     // Email em baixo não pode virar erro no ecrã: o cliente ainda tem o
     // caminho de fazer um pedido normal para o dispositivo ficar ligado.
     return NextResponse.json({ channel: 'none' });

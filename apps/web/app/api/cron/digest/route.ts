@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
-import { Resend } from 'resend';
+import { isEmailConfigured, sendMail } from '@/lib/email/transport';
 import { formatMT, type Cents } from '@delivery/core';
 
 export const dynamic = 'force-dynamic';
@@ -101,23 +101,18 @@ export async function GET(request: Request) {
     ),
   );
 
-  const apiKey = process.env.RESEND_API_KEY;
   let delivery: 'sent' | 'skipped_no_key' | 'skipped_no_recipient' | 'failed' = 'sent';
 
-  if (!apiKey) delivery = 'skipped_no_key';
+  if (!isEmailConfigured()) delivery = 'skipped_no_key';
   else if (recipients.length === 0) delivery = 'skipped_no_recipient';
   else {
-    try {
-      const resend = new Resend(apiKey);
-      const { error: sendError } = await resend.emails.send({
-        from: process.env.RESEND_FROM_EMAIL || 'noreply@hawsmash.com',
-        to: recipients,
-        subject: `HAWSMASH · resumo de ${payload.day}`,
-        html: digestHtml(payload.day, payload.stores),
-      });
-      if (sendError) delivery = 'failed';
-    } catch (sendError) {
-      console.error('[cron/digest] envio falhou:', sendError);
+    const result = await sendMail({
+      to: recipients,
+      subject: `HAWSMASH · resumo de ${payload.day}`,
+      html: digestHtml(payload.day, payload.stores),
+    });
+    if (!result.ok) {
+      console.error('[cron/digest] envio falhou:', result.error);
       delivery = 'failed';
     }
   }

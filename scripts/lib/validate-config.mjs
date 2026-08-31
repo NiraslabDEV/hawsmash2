@@ -100,9 +100,9 @@ export function validateEnv(env = {}) {
     }
   }
 
-  if (!env.RESEND_API_KEY || isPlaceholder(env.RESEND_API_KEY)) {
+  if (!env.SMTP_USER || isPlaceholder(env.SMTP_USER) || !env.SMTP_PASS || isPlaceholder(env.SMTP_PASS)) {
     warnings.push(
-      'RESEND_API_KEY em falta — os emails transacionais (novo pedido / aprovação / recusa) não serão enviados'
+      'SMTP_USER/SMTP_PASS em falta — os emails transacionais (novo pedido / aprovação / recusa) não serão enviados'
     );
   }
   if (!env.CRON_SECRET || isPlaceholder(env.CRON_SECRET)) {

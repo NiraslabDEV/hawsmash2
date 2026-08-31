@@ -1,6 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
-import { Resend } from 'resend';
+import { isEmailConfigured, sendMail } from '@/lib/email/transport';
 
 import {
   alertEmailHtml,
@@ -86,22 +86,17 @@ export async function GET(request: Request) {
   );
 
   let delivery: 'sent' | 'skipped_no_key' | 'skipped_no_recipient' | 'failed' = 'sent';
-  const apiKey = process.env.RESEND_API_KEY;
 
-  if (!apiKey) delivery = 'skipped_no_key';
+  if (!isEmailConfigured()) delivery = 'skipped_no_key';
   else if (recipients.length === 0) delivery = 'skipped_no_recipient';
   else {
-    try {
-      const resend = new Resend(apiKey);
-      const { error } = await resend.emails.send({
-        from: process.env.RESEND_FROM_EMAIL || 'noreply@hawsmash.com',
-        to: recipients,
-        subject: alertSubject(pending),
-        html: alertEmailHtml(pending, stores),
-      });
-      if (error) delivery = 'failed';
-    } catch (error) {
-      console.error('[cron/alerts] envio falhou:', error);
+    const result = await sendMail({
+      to: recipients,
+      subject: alertSubject(pending),
+      html: alertEmailHtml(pending, stores),
+    });
+    if (!result.ok) {
+      console.error('[cron/alerts] envio falhou:', result.error);
       delivery = 'failed';
     }
   }

@@ -1,12 +1,11 @@
 import { NextResponse } from 'next/server';
-import { Resend } from 'resend';
+import { isEmailConfigured, sendMail } from '@/lib/email/transport';
 
 import { cashCloseEmailHtml, cashCloseReportFromSession } from '@/lib/cash/report';
 import { createCashServerClient } from '@/lib/cash/server-client';
 
 export async function POST(request: Request) {
-  const apiKey = process.env.RESEND_API_KEY;
-  if (!apiKey) {
+  if (!isEmailConfigured()) {
     return NextResponse.json({ error: 'Serviço de email não configurado.' }, { status: 503 });
   }
 
@@ -50,18 +49,13 @@ export async function POST(request: Request) {
     store?.short_name ?? 'Loja',
     closer?.full_name,
   );
-  try {
-    const resend = new Resend(apiKey);
-    const { error: sendError } = await resend.emails.send({
-      from: process.env.RESEND_FROM_EMAIL || 'noreply@delivery-os.com',
-      to: settings.owner_email,
-      subject: `Fecho de Caixa — HAWSMASH ${report.store_short_name}`,
-      html: cashCloseEmailHtml(report),
-    });
-    if (sendError) throw new Error(sendError.message);
-  } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : 'Falha desconhecida';
-    console.error('[cash-close-email]', message);
+  const result = await sendMail({
+    to: settings.owner_email,
+    subject: `Fecho de Caixa — HAWSMASH ${report.store_short_name}`,
+    html: cashCloseEmailHtml(report),
+  });
+  if (!result.ok) {
+    console.error('[cash-close-email]', result.error);
     return NextResponse.json({ error: 'Não foi possível enviar o email.' }, { status: 502 });
   }
 

@@ -9,7 +9,8 @@ const validEnv = {
   OWNER_EMAIL: 'dono@restaurante.co.mz',
   APP_BASE_URL: 'https://restaurante.co.mz',
   PAYMENT_PROVIDER: 'manual',
-  RESEND_API_KEY: 're_123',
+  SMTP_USER: 'dono@restaurante.co.mz',
+  SMTP_PASS: 'senha-smtp-123',
   CRON_SECRET: 'secret-abc',
 };
 
@@ -53,10 +54,10 @@ describe('validateEnv', () => {
     expect(errors.some((e: string) => e.includes('OWNER_EMAIL'))).toBe(true);
   });
 
-  it('avisa (warning) sem RESEND_API_KEY, mas não bloqueia', () => {
-    const { errors, warnings } = validateEnv({ ...validEnv, RESEND_API_KEY: '' });
+  it('avisa (warning) sem SMTP_USER/SMTP_PASS, mas não bloqueia', () => {
+    const { errors, warnings } = validateEnv({ ...validEnv, SMTP_USER: '', SMTP_PASS: '' });
     expect(errors).toEqual([]);
-    expect(warnings.some((w: string) => w.includes('RESEND_API_KEY'))).toBe(true);
+    expect(warnings.some((w: string) => w.includes('SMTP_USER'))).toBe(true);
   });
 });
 
