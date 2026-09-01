@@ -695,6 +695,7 @@ export function PosShell() {
       setFulfillment('counter');
       setCustomerName('');
       setCustomerPhone('');
+      setCustomerLookup(null);
       setCustomerAddress('');
       setZoneId('');
       setOrderNote('');
@@ -712,6 +713,43 @@ export function PosShell() {
   const [fulfillment, setFulfillment] = useState<FulfillmentType>('counter');
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
+  /**
+   * Quem é esta pessoa, assim que o telefone chega a 9 dígitos — no balcão
+   * também, não só na entrega. `identify_customer` já existe para a loja
+   * online; chamá-lo aqui é o que passa a contar a compra presencial na
+   * mesma ficha do cliente, em vez de ficar presa a "Balcão" sem nome.
+   */
+  const [customerLookup, setCustomerLookup] = useState<{
+    name: string | null;
+    orders_count: number;
+    total_spent_cents: number;
+  } | null>(null);
+
+  // Dispara só quando o telefone confirmado no teclado chega a 9 dígitos —
+  // o teclado só actualiza customerPhone ao fechar, por isso isto não corre
+  // a cada tecla. Offline não identifica (§7.5: o balcão offline só vende).
+  useEffect(() => {
+    const digits = customerPhone.replace(/\D/g, '');
+    if (digits.length < 9 || !navigator.onLine) {
+      setCustomerLookup(null);
+      return;
+    }
+    let active = true;
+    void supabase
+      .rpc('identify_customer', { p_phone: customerPhone, p_name: customerName.trim() || null })
+      .then(({ data, error }) => {
+        if (!active || error || !data) return;
+        const resumo = data as { name: string | null; orders_count: number; total_spent_cents: number };
+        setCustomerLookup(resumo);
+        // Cliente já conhecido e a atendente ainda não escreveu nome: sugere
+        // o que já sabemos em vez de obrigar a reescrevê-lo.
+        if (resumo.name && !customerName.trim()) setCustomerName(resumo.name);
+      });
+    return () => {
+      active = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [customerPhone]);
   /**
    * Onde é a entrega. Nome, telefone e zona não são uma morada: o entregador
    * saía do balcão com "Zona Maputo" e um número para telefonar do carro.
@@ -1454,25 +1492,40 @@ export function PosShell() {
               })}
             </div>
 
-            {fulfillment !== 'counter' && (
-              <div className="mt-2 space-y-2">
+            <div className="mt-2 space-y-2">
 {/* Tocar abre o teclado do POS (`touch-keyboard`). O PC de balcão não tem
                     teclado físico e o Windows não abre o dele sozinho — um campo
-                    que só aceita escrita não é um campo, é um beco. */}
-                <button
-                  type="button"
-                  onClick={() => setKeyboardField('name')}
-                  className="min-h-14 w-full rounded-xl border border-white/10 bg-black/30 px-3 text-left text-base font-bold text-white active:border-[#e5a93c]"
-                >
-                  {customerName.trim() || <span className="text-[#847e72]">Nome do cliente</span>}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setKeyboardField('phone')}
-                  className="min-h-14 w-full rounded-xl border border-white/10 bg-black/30 px-3 text-left text-base font-bold text-white active:border-[#e5a93c]"
-                >
-                  {customerPhone.trim() || <span className="text-[#847e72]">Telefone</span>}
-                </button>
+                    que só aceita escrita não é um campo, é um beco.
+                    Nome e telefone aparecem em qualquer venda, não só entrega:
+                    é o que deixa reconhecer quem compra ao balcão também. */}
+              <button
+                type="button"
+                onClick={() => setKeyboardField('name')}
+                className="min-h-14 w-full rounded-xl border border-white/10 bg-black/30 px-3 text-left text-base font-bold text-white active:border-[#e5a93c]"
+              >
+                {customerName.trim() || <span className="text-[#847e72]">Nome do cliente</span>}
+              </button>
+              <button
+                type="button"
+                onClick={() => setKeyboardField('phone')}
+                className="min-h-14 w-full rounded-xl border border-white/10 bg-black/30 px-3 text-left text-base font-bold text-white active:border-[#e5a93c]"
+              >
+                {customerPhone.trim() || (
+                  <span className="text-[#847e72]">
+                    {fulfillment === 'counter' ? 'Telefone (opcional)' : 'Telefone'}
+                  </span>
+                )}
+              </button>
+              {customerLookup && (
+                <p className="rounded-xl bg-[#e5a93c]/10 px-3 py-2 text-sm font-bold text-[#e5a93c]">
+                  {customerLookup.orders_count > 0
+                    ? `👋 ${customerLookup.name ?? 'Cliente'} · ${customerLookup.orders_count} pedidos · ${mt(customerLookup.total_spent_cents)}`
+                    : '🆕 Cliente novo'}
+                </p>
+              )}
+
+              {fulfillment !== 'counter' && (
+              <>
                 {fulfillment === 'delivery' && (
                   <button
                     type="button"
@@ -1529,8 +1582,9 @@ export function PosShell() {
                     ))}
                   </select>
                 )}
-              </div>
-            )}
+              </>
+              )}
+            </div>
           </div>
 
           <div className="min-h-0 flex-1 space-y-2 overflow-y-auto p-3">
