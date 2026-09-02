@@ -16,6 +16,7 @@
     "db:seed": "supabase db reset",
     "setup:client": "node scripts/setup-client.mjs",
     "setup:check": "node scripts/setup-client.mjs --check",
+    "client:limpar-demo": "node scripts/limpar-demonstracao.mjs",
     "menu:import": "tsx scripts/import-menu.ts",
     "bridge:dev": "cd services/print-bridge && USE_SIMULATOR=true SIMULATOR_PORT=9100 SIMULATOR_VERBOSE=true pnpm dev",
     "clean": "turbo run clean && rm -rf node_modules"

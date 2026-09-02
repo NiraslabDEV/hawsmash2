@@ -118,26 +118,43 @@ export function validateEnv(env = {}) {
  * Valida o config/brand.ts a partir do seu texto-fonte (sem precisar de compilar TS).
  * Devolve { errors, warnings }.
  */
+/**
+ * Valida o **fallback de fábrica** (`config/brand.ts`).
+ *
+ * Atenção ao sentido: aqui a marca do cliente NÃO se edita. Desde a migration
+ * 1040 a identidade vive em `brand_settings` e edita-se na aba Aparência do
+ * painel (CLAUDE.md §18.2). Este ficheiro é só o que a loja mostra quando a
+ * base de dados não responde — e um nome de cliente cá dentro é o defeito,
+ * não a configuração feita.
+ */
 export function validateBrandSource(source) {
   const errors = [];
   const warnings = [];
   const src = String(source || '');
 
   if (!/export\s+const\s+brand\b/.test(src)) {
-    errors.push('config/brand.ts não exporta `brand` — copia o config/brand.example.ts');
+    errors.push('config/brand.ts não exporta `brand` — o fallback de fábrica está partido');
     return { errors, warnings };
   }
 
   const nameMatch = src.match(/name:\s*['"`]([^'"`]*)['"`]/);
   const name = nameMatch ? nameMatch[1] : '';
   if (!name.trim()) {
-    errors.push('brand.name está vazio em config/brand.ts');
-  } else if (/restaurante demo/i.test(name)) {
-    warnings.push('brand.name ainda é "Restaurante Demo" — troca pelo nome real do cliente');
+    errors.push('brand.name está vazio: sem fallback, a loja fica sem título se a BD falhar');
   }
 
   if (!/gold:\s*['"`]#?[0-9a-fA-F]{3,8}['"`]/.test(src)) {
     warnings.push('theme.gold não parece uma cor hex válida em config/brand.ts');
+  }
+
+  // O erro que esta função existe para apanhar.
+  const clientes = ['hawsmash', 'babalaza', 'bom pasteleiro'];
+  const encontrado = clientes.filter((cliente) => src.toLowerCase().includes(cliente));
+  if (encontrado.length) {
+    errors.push(
+      `config/brand.ts tem identidade de cliente (${encontrado.join(', ')}). ` +
+        'A marca do cliente vive em brand_settings, editada na aba Aparência — nunca aqui.'
+    );
   }
 
   return { errors, warnings };

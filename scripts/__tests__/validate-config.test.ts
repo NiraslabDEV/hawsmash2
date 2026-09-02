@@ -75,17 +75,27 @@ describe('validateBrandSource', () => {
     expect(errors.length).toBeGreaterThan(0);
   });
 
-  it('avisa quando brand.name ainda é "Restaurante Demo"', () => {
-    const { warnings } = validateBrandSource(
-      "export const brand = { name: 'Restaurante Demo', theme: { gold: '#e5a93c' } } as const;"
+  it('recusa identidade de cliente no fallback de fabrica', () => {
+    // O sentido inverteu-se com a 1040: a marca do cliente vive na base de
+    // dados. Um nome de cliente aqui e o defeito que faz cada instalacao
+    // virar um ramo do repositorio (CLAUDE.md §18.2).
+    const { errors } = validateBrandSource(
+      "export const brand = { name: 'HAWSMASH', theme: { gold: '#e5a93c' } } as const;"
     );
-    expect(warnings.some((w: string) => /demo/i.test(w))).toBe(true);
+    expect(errors.some((e: string) => /Aparência/.test(e))).toBe(true);
   });
 
-  it('passa sem erros com uma marca real', () => {
+  it('passa sem erros com o fallback generico', () => {
     const { errors } = validateBrandSource(
-      "export const brand = { name: 'Cantinho da Maria', theme: { gold: '#ff8800' } } as const;"
+      "export const brand = { name: 'Restaurante', theme: { gold: '#c8a24a' } } as const;"
     );
     expect(errors).toEqual([]);
+  });
+
+  it('recusa um fallback sem nome — a loja ficaria sem titulo se a BD falhasse', () => {
+    const { errors } = validateBrandSource(
+      "export const brand = { name: '', theme: { gold: '#c8a24a' } } as const;"
+    );
+    expect(errors.length).toBeGreaterThan(0);
   });
 });

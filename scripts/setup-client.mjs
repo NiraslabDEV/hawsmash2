@@ -39,10 +39,10 @@ if (!existsSync(envPath)) {
 }
 const env = parseEnvFile(readFileSync(envPath, 'utf8'));
 
-// 2. config/brand.ts existe?
+// 2. config/brand.ts existe? (é o fallback de fábrica, não a marca do cliente)
 const brandPath = join(ROOT, 'config', 'brand.ts');
 if (!existsSync(brandPath)) {
-  fail('Não existe config/brand.ts.\n  Copia o exemplo:  cp config/brand.example.ts config/brand.ts');
+  fail('Não existe config/brand.ts — o fallback de fábrica desapareceu do repositório.');
 }
 const brandSrc = readFileSync(brandPath, 'utf8');
 
@@ -92,6 +92,11 @@ if (reset.status !== 0) {
 }
 
 console.log(
-  c.green('\n✔ Setup completo.') +
-    '\n  Próximo passo: configurar settings/menu/zonas no admin e fazer deploy.\n'
+  c.green('\n✔ Migrations aplicadas.') +
+    '\n\n  Falta o que só se faz no painel — e sem isto a loja não deve abrir:' +
+    '\n    1. criar o dono (Equipa) e entrar' +
+    '\n    2. Lojas: criar a loja, horário, zonas e números de pagamento' +
+    '\n    3. Aparência: nome, cores, logo e textos da marca' +
+    '\n    4. Cardápio: importar ou criar os produtos' +
+    '\n\n  A marca NÃO se edita em config/brand.ts — esse é só o fallback de fábrica.\n'
 );
