@@ -41,7 +41,10 @@ export type SendMailResult = { ok: true } | { ok: false; error: string };
 export async function sendMail({ to, subject, html }: SendMailInput): Promise<SendMailResult> {
   if (!isEmailConfigured()) return { ok: false, error: 'smtp_not_configured' };
 
-  const from = process.env.EMAIL_FROM || `"HAWSMASH" <${process.env.SMTP_USER}>`;
+  // Sem EMAIL_FROM sai o endereço nu, sem nome de exibição. O nome que estava
+  // aqui era o de um cliente: outra instalação mandava emails assinados com a
+  // marca errada (CLAUDE.md §18.3). Quem quer nome bonito preenche EMAIL_FROM.
+  const from = process.env.EMAIL_FROM || process.env.SMTP_USER;
   try {
     await getTransporter().sendMail({ from, to, subject, html });
     return { ok: true };

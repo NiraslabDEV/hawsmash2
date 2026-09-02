@@ -4,7 +4,7 @@ export async function GET(): Promise<Response> {
   return Response.json(
     {
       status: 'ok',
-      service: 'hawsmash2-web',
+      service: 'delivery-os-web',
       timestamp: new Date().toISOString(),
     },
     {

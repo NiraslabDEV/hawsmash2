@@ -55,8 +55,12 @@ describe('alertas automáticos', () => {
   });
 
   it('resume no assunto quantos alertas críticos há e em que lojas', () => {
-    expect(alertSubject(alerts)).toBe('HAWSMASH · 1 alerta(s) crítico(s) em Maputo e Matola');
-    expect(alertSubject([alerts[1]])).toBe('HAWSMASH · 1 aviso(s) em Matola');
+    // A marca entra por parametro: o assunto segue a instalacao, nunca um
+    // nome escrito no codigo (CLAUDE.md §18.2).
+    expect(alertSubject(alerts, 'Casa Teste')).toBe(
+      'Casa Teste · 1 alerta(s) crítico(s) em Maputo e Matola',
+    );
+    expect(alertSubject([alerts[1]], 'Casa Teste')).toBe('Casa Teste · 1 aviso(s) em Matola');
   });
 
   it('agrupa o email por loja, com botão de WhatsApp e sem HTML injectado', () => {
@@ -75,8 +79,10 @@ describe('alertas automáticos', () => {
         { store_id: 'store-maputo', store_name: 'Maputo', phone: '860760009' },
         { store_id: 'store-matola', store_name: 'Matola', phone: null },
       ],
+      'Casa Teste',
     );
 
+    expect(html).toContain('Casa Teste');
     expect(html).toContain('Maputo');
     expect(html).toContain('Matola');
     expect(html).toContain('https://wa.me/258860760009');

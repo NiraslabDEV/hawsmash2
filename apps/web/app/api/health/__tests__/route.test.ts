@@ -11,7 +11,7 @@ describe('GET /api/health', () => {
     expect(response.headers.get('cache-control')).toBe('no-store');
     expect(body).toMatchObject({
       status: 'ok',
-      service: 'hawsmash2-web',
+      service: 'delivery-os-web',
     });
     expect(Number.isNaN(Date.parse(body.timestamp))).toBe(false);
   });

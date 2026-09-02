@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { isEmailConfigured, sendMail } from '@/lib/email/transport';
 
 import { cashCloseEmailHtml, cashCloseReportFromSession } from '@/lib/cash/report';
+import { getBrand } from '@/lib/brand/server';
 import { createCashServerClient } from '@/lib/cash/server-client';
 
 export async function POST(request: Request) {
@@ -49,10 +50,11 @@ export async function POST(request: Request) {
     store?.short_name ?? 'Loja',
     closer?.full_name,
   );
+  const brandName = (await getBrand()).name;
   const result = await sendMail({
     to: settings.owner_email,
-    subject: `Fecho de Caixa — HAWSMASH ${report.store_short_name}`,
-    html: cashCloseEmailHtml(report),
+    subject: `Fecho de Caixa — ${brandName} ${report.store_short_name}`,
+    html: cashCloseEmailHtml(report, brandName),
   });
   if (!result.ok) {
     console.error('[cash-close-email]', result.error);

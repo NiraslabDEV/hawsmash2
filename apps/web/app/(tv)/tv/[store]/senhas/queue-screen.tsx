@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
+import { useBrand } from '@/lib/brand/context';
 import { createClient } from '@/utils/supabase/client';
 
 type QueueEntry = { daily_number: number; order_number: string };
@@ -20,6 +21,7 @@ const REFRESH_MS = 10_000;
  * último estado conhecido em vez de ficar em branco (CLAUDE §14).
  */
 export function QueueScreen({ storeSlug, storeName }: { storeSlug: string; storeName: string }) {
+  const brand = useBrand();
   const supabase = useMemo(() => createClient(), []);
   const [queue, setQueue] = useState<Queue | null>(null);
   const [stale, setStale] = useState(false);
@@ -47,7 +49,7 @@ export function QueueScreen({ storeSlug, storeName }: { storeSlug: string; store
     <main className="flex min-h-screen flex-col p-8">
       <header className="flex items-baseline justify-between">
         <h1 className="text-4xl font-black uppercase tracking-widest" style={{ color: 'var(--tv-primary)' }}>
-          HAWSMASH {storeName}
+          {brand.name} {storeName}
         </h1>
         <span className="text-2xl font-bold" style={{ color: stale ? '#ff9b9b' : 'var(--tv-muted-2)' }}>
           {stale ? 'A reconectar…' : 'Pronto a levantar'}

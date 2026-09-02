@@ -60,16 +60,27 @@ const escapeHtml = (value: string) =>
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;');
 
-export function alertSubject(alerts: SystemAlert[]): string {
+/**
+ * A marca entra por parametro em vez de sair de um import.
+ *
+ * Isto e dominio puro e testavel; a marca vem da base de dados e so quem faz
+ * I/O a sabe. Escrita aqui dentro, cada instalacao mandava emails com o nome
+ * do cliente anterior (CLAUDE.md §18.2).
+ */
+export function alertSubject(alerts: SystemAlert[], brandName: string): string {
   const critical = alerts.filter((alert) => alert.severity === 'critical').length;
   const stores = Array.from(new Set(alerts.map((alert) => alert.store_name))).join(' e ');
   return critical > 0
-    ? `HAWSMASH · ${critical} alerta(s) crítico(s) em ${stores}`
-    : `HAWSMASH · ${alerts.length} aviso(s) em ${stores}`;
+    ? `${brandName} · ${critical} alerta(s) crítico(s) em ${stores}`
+    : `${brandName} · ${alerts.length} aviso(s) em ${stores}`;
 }
 
 /** Email curto: o que falhou, em que loja, e um botão para falar com a loja. */
-export function alertEmailHtml(alerts: SystemAlert[], stores: AlertRecipientStore[]): string {
+export function alertEmailHtml(
+  alerts: SystemAlert[],
+  stores: AlertRecipientStore[],
+  brandName: string,
+): string {
   const byStore = new Map<string, SystemAlert[]>();
   for (const alert of alerts) {
     byStore.set(alert.store_id, [...(byStore.get(alert.store_id) ?? []), alert]);
@@ -86,7 +97,7 @@ export function alertEmailHtml(alerts: SystemAlert[], stores: AlertRecipientStor
       .join('');
     const link = whatsappLink(
       store?.phone ?? null,
-      `HAWSMASH ${store?.store_name ?? name}: ${storeAlerts[0].message}`,
+      `${brandName} ${store?.store_name ?? name}: ${storeAlerts[0].message}`,
     );
     const button = link
       ? `<p><a href="${link}" style="display:inline-block;background:#e5a93c;color:#0a0807;padding:10px 16px;border-radius:8px;text-decoration:none;font-weight:bold">Falar com a loja no WhatsApp</a></p>`
@@ -95,7 +106,7 @@ export function alertEmailHtml(alerts: SystemAlert[], stores: AlertRecipientStor
   });
 
   return `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto">
-      <h1 style="color:#e5a93c;font-size:20px">Alerta do sistema HAWSMASH</h1>
+      <h1 style="color:#e5a93c;font-size:20px">Alerta do sistema ${escapeHtml(brandName)}</h1>
       <p>O sistema detectou o seguinte e avisou sozinho:</p>
       ${blocks.join('')}
       <p style="color:#847e72;font-size:12px">Este email é automático. O painel Sistema mostra o estado ao vivo.</p>

@@ -2,6 +2,7 @@ import { createClient } from '@supabase/supabase-js';
 import { NextResponse } from 'next/server';
 import { isEmailConfigured, sendMail } from '@/lib/email/transport';
 import { formatMT, type Cents } from '@delivery/core';
+import { getBrand } from '@/lib/brand/server';
 
 export const dynamic = 'force-dynamic';
 
@@ -32,7 +33,7 @@ const METHOD_LABELS: Record<string, string> = {
   credit_card: 'Cartão',
 };
 
-function digestHtml(day: string, stores: DigestStore[]): string {
+function digestHtml(day: string, stores: DigestStore[], brandName: string): string {
   const blocks = stores.map((store) => {
     const payments = Object.entries(store.payments)
       .map(([method, total]) => `<li>${METHOD_LABELS[method] ?? method}: ${mt(total)}</li>`)
@@ -57,7 +58,7 @@ function digestHtml(day: string, stores: DigestStore[]): string {
   });
 
   return `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto">
-      <h1 style="color:#e5a93c;font-size:20px">HAWSMASH · resumo de ${day}</h1>
+      <h1 style="color:#e5a93c;font-size:20px">${brandName} · resumo de ${day}</h1>
       ${blocks.join('')}
       <p style="color:#847e72;font-size:12px">Email automático do sistema.</p>
     </div>`;
@@ -103,13 +104,14 @@ export async function GET(request: Request) {
 
   let delivery: 'sent' | 'skipped_no_key' | 'skipped_no_recipient' | 'failed' = 'sent';
 
+  const brandName = (await getBrand()).name;
   if (!isEmailConfigured()) delivery = 'skipped_no_key';
   else if (recipients.length === 0) delivery = 'skipped_no_recipient';
   else {
     const result = await sendMail({
       to: recipients,
-      subject: `HAWSMASH · resumo de ${payload.day}`,
-      html: digestHtml(payload.day, payload.stores),
+      subject: `${brandName} · resumo de ${payload.day}`,
+      html: digestHtml(payload.day, payload.stores, brandName),
     });
     if (!result.ok) {
       console.error('[cron/digest] envio falhou:', result.error);

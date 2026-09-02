@@ -9,6 +9,7 @@ import {
   type AlertRecipientStore,
   type SystemAlert,
 } from '@/lib/alerts/digest';
+import { getBrand } from '@/lib/brand/server';
 
 export const dynamic = 'force-dynamic';
 
@@ -85,6 +86,7 @@ export async function GET(request: Request) {
     ),
   );
 
+  const brandName = (await getBrand()).name;
   let delivery: 'sent' | 'skipped_no_key' | 'skipped_no_recipient' | 'failed' = 'sent';
 
   if (!isEmailConfigured()) delivery = 'skipped_no_key';
@@ -92,8 +94,8 @@ export async function GET(request: Request) {
   else {
     const result = await sendMail({
       to: recipients,
-      subject: alertSubject(pending),
-      html: alertEmailHtml(pending, stores),
+      subject: alertSubject(pending, brandName),
+      html: alertEmailHtml(pending, stores, brandName),
     });
     if (!result.ok) {
       console.error('[cron/alerts] envio falhou:', result.error);

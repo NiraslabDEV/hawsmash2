@@ -588,7 +588,7 @@ export default function IngredientesSection({ storeId }: { storeId: string | nul
           <div className="w-full max-w-md rounded-2xl border border-white/10 bg-[#151311] p-5">
             <h2 className="text-lg font-black text-white">Custo · {costDialog.name}</h2>
             <p className="mt-1 text-sm text-[#8b8378]">
-              Quanto custa <strong>uma</strong> unidade, ao HAWSMASH. Vale para as duas lojas e só
+              Quanto custa <strong>uma</strong> unidade, à casa. Vale para todas as lojas e só
               conta para as vendas de agora em diante — a margem do que já foi vendido não muda.
             </p>
             <label className="mt-4 block text-xs font-bold uppercase tracking-wide text-[#8b8378]">

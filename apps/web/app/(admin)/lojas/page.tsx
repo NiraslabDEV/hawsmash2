@@ -663,7 +663,7 @@ export default function LojasPage() {
               <input
                 value={newStore.name}
                 onChange={(event) => setNewStore({ ...newStore, name: event.target.value })}
-                placeholder="HAWSMASH Beira"
+                placeholder="Nome da loja, ex.: Casa Beira"
                 className="mt-1 w-full rounded-xl border border-white/10 bg-[#0f0e0c] px-4 py-3 text-sm text-white placeholder:text-[#6f6a62]"
               />
             </label>

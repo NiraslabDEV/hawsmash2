@@ -27,7 +27,7 @@ const report: CashCloseReport = {
 
 describe('relatório de fecho de caixa', () => {
   it('gera um PDF real e válido com uma página', async () => {
-    const bytes = await buildCashClosePdf(report);
+    const bytes = await buildCashClosePdf(report, 'Casa Teste');
     expect(Buffer.from(bytes).subarray(0, 5).toString()).toBe('%PDF-');
     const pdf = await PDFDocument.load(bytes);
     expect(pdf.getPageCount()).toBe(1);
@@ -35,8 +35,8 @@ describe('relatório de fecho de caixa', () => {
   });
 
   it('gera email com loja, valores da gaveta, digitais e motivo', () => {
-    const html = cashCloseEmailHtml(report);
-    expect(html).toContain('HAWSMASH Maputo');
+    const html = cashCloseEmailHtml(report, 'Casa Teste');
+    expect(html).toContain('Casa Teste Maputo');
     expect(html).toContain('Esperado na gaveta');
     expect(html).toContain('M-Pesa');
     expect(html).toContain('Falta confirmada na contagem');

@@ -1,4 +1,4 @@
-import { readdirSync, statSync } from 'node:fs';
+import { readFileSync, readdirSync, statSync } from 'node:fs';
 import path from 'node:path';
 
 import { describe, expect, it } from 'vitest';
@@ -53,6 +53,18 @@ function walk(dir: string, found: string[] = []): string[] {
   return found;
 }
 
+/**
+ * Tira comentários antes de procurar.
+ *
+ * Um comentário que diga "isto foi lição do HAWSMASH 1.0" é história e fica —
+ * o que não pode ficar é o nome a chegar ao ecrã ou ao email de alguém.
+ */
+function stripComments(source: string): string {
+  return source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:])\/\/.*$/gm, '$1');
+}
+
+const CODE_EXTENSIONS = ['.ts', '.tsx', '.css'];
+
 describe('nomes de cliente no produto', () => {
   it('não aparecem em caminhos de ficheiros ou pastas', () => {
     const offenders = SCANNED.flatMap((dir) => walk(path.join(ROOT, dir))).filter((file) => {
@@ -61,5 +73,24 @@ describe('nomes de cliente no produto', () => {
     });
 
     expect(offenders, `nome de cliente no caminho: ${offenders.join(', ')}`).toEqual([]);
+  });
+
+  it('não aparecem em código que chega ao ecrã, ao papel ou ao email', () => {
+    const files = SCANNED.flatMap((dir) => walk(path.join(ROOT, dir))).filter(
+      (file) =>
+        CODE_EXTENSIONS.some((extension) => file.endsWith(extension)) &&
+        // Fixtures de teste ficam de fora: um domínio de cliente num teste
+        // nunca chega a um ecrã, e este próprio ficheiro tem de os nomear.
+        !/(^|\/)(__tests__|tests)\//.test(file),
+    );
+
+    const offenders: string[] = [];
+    for (const file of files) {
+      const source = stripComments(readFileSync(path.join(ROOT, file), 'utf8')).toLowerCase();
+      const hit = CLIENT_NAMES.find((name) => source.includes(name));
+      if (hit) offenders.push(`${file} (${hit})`);
+    }
+
+    expect(offenders, `nome de cliente no código:\n  ${offenders.join('\n  ')}`).toEqual([]);
   });
 });

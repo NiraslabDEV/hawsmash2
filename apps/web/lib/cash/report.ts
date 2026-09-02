@@ -86,11 +86,14 @@ export function cashCloseReportFromSession(
   };
 }
 
-export async function buildCashClosePdf(report: CashCloseReport): Promise<Uint8Array> {
+export async function buildCashClosePdf(
+  report: CashCloseReport,
+  brandName: string,
+): Promise<Uint8Array> {
   const pdf = await PDFDocument.create();
-  pdf.setTitle(`Fecho de Caixa — HAWSMASH ${report.store_short_name}`);
+  pdf.setTitle(`Fecho de Caixa — ${brandName} ${report.store_short_name}`);
   pdf.setSubject(report.shift_label);
-  pdf.setCreator('HAWSMASH 2.0');
+  pdf.setCreator(brandName);
   const regular = await pdf.embedFont(StandardFonts.Helvetica);
   const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
   const page = pdf.addPage([595.28, 841.89]);
@@ -115,7 +118,11 @@ export async function buildCashClosePdf(report: CashCloseReport): Promise<Uint8A
     y -= 22;
   };
 
-  write(`HAWSMASH ${report.store_short_name.toUpperCase()}`, { size: 12, strong: true, color: gold });
+  write(`${brandName.toUpperCase()} ${report.store_short_name.toUpperCase()}`, {
+    size: 12,
+    strong: true,
+    color: gold,
+  });
   write('Fecho de Caixa', { size: 24, strong: true });
   write(report.shift_label, { size: 11 });
   write(`${dateTime(report.opened_at)} a ${dateTime(report.closed_at)}`, { size: 10 });
@@ -156,7 +163,7 @@ const escapeHtml = (value: string) =>
     '"': '&quot;',
   })[character]!);
 
-export function cashCloseEmailHtml(report: CashCloseReport): string {
+export function cashCloseEmailHtml(report: CashCloseReport, brandName: string): string {
   const rows = [
     ['Fundo inicial', mt(report.opening_float_cents)],
     ['Vendas em dinheiro', mt(report.cash_sales_cents)],
@@ -170,5 +177,5 @@ export function cashCloseEmailHtml(report: CashCloseReport): string {
     ['e-Mola', mt(report.payments.emola)],
     ['Cartão', mt(report.payments.credit_card)],
   ];
-  return `<!doctype html><html lang="pt"><body style="font-family:Arial,sans-serif;background:#0a0807;color:#f6f1e6;padding:24px"><main style="max-width:560px;margin:auto;background:#151310;padding:24px;border-radius:16px"><h1 style="color:#e5a93c">HAWSMASH ${escapeHtml(report.store_short_name)} — Fecho de Caixa</h1><p>${escapeHtml(report.shift_label)} · ${dateTime(report.opened_at)} a ${dateTime(report.closed_at)}</p><table style="width:100%;border-collapse:collapse">${rows.map(([label, value]) => `<tr><td style="padding:8px;border-bottom:1px solid #332a22">${label}</td><td style="padding:8px;text-align:right;border-bottom:1px solid #332a22"><strong>${value}</strong></td></tr>`).join('')}</table>${report.difference_reason ? `<p><strong>Motivo da diferença:</strong> ${escapeHtml(report.difference_reason)}</p>` : ''}${report.closed_by_name ? `<p>Fechado por: ${escapeHtml(report.closed_by_name)}</p>` : ''}</main></body></html>`;
+  return `<!doctype html><html lang="pt"><body style="font-family:Arial,sans-serif;background:#0a0807;color:#f6f1e6;padding:24px"><main style="max-width:560px;margin:auto;background:#151310;padding:24px;border-radius:16px"><h1 style="color:#e5a93c">${escapeHtml(brandName)} ${escapeHtml(report.store_short_name)} — Fecho de Caixa</h1><p>${escapeHtml(report.shift_label)} · ${dateTime(report.opened_at)} a ${dateTime(report.closed_at)}</p><table style="width:100%;border-collapse:collapse">${rows.map(([label, value]) => `<tr><td style="padding:8px;border-bottom:1px solid #332a22">${label}</td><td style="padding:8px;text-align:right;border-bottom:1px solid #332a22"><strong>${value}</strong></td></tr>`).join('')}</table>${report.difference_reason ? `<p><strong>Motivo da diferença:</strong> ${escapeHtml(report.difference_reason)}</p>` : ''}${report.closed_by_name ? `<p>Fechado por: ${escapeHtml(report.closed_by_name)}</p>` : ''}</main></body></html>`;
 }

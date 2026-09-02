@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { formatMT, type Cents } from '@delivery/core';
 
+import { useBrand } from '@/lib/brand/context';
 import { createClient } from '@/utils/supabase/client';
 
 type BoardItem = {
@@ -24,6 +25,7 @@ const mt = (value: number) => formatMT(value as Cents);
  * mostrar o último cardápio conhecido — nunca um ecrã em branco (CLAUDE §14).
  */
 export function MenuBoard({ storeSlug, storeName }: { storeSlug: string; storeName: string }) {
+  const brand = useBrand();
   const supabase = useMemo(() => createClient(), []);
   const [categories, setCategories] = useState<BoardCategory[]>([]);
   const [stale, setStale] = useState(false);
@@ -50,7 +52,7 @@ export function MenuBoard({ storeSlug, storeName }: { storeSlug: string; storeNa
     <main className="min-h-screen p-8">
       <header className="flex items-baseline justify-between">
         <h1 className="text-4xl font-black uppercase tracking-widest" style={{ color: 'var(--tv-primary)' }}>
-          HAWSMASH {storeName}
+          {brand.name} {storeName}
         </h1>
         {stale && (
           <span className="text-xl font-bold" style={{ color: '#ff9b9b' }}>

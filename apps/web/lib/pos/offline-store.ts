@@ -1,6 +1,12 @@
 import { z } from 'zod';
 
-const DATABASE_NAME = 'hawsmash-pos';
+// Nome da base local do POS. Neutro de propósito: o produto não sabe o nome
+// do cliente (§18.3).
+//
+// ATENÇÃO ao mudar isto outra vez: um dispositivo com vendas por sincronizar
+// deixa de as encontrar. Antes de alterar, confirmar que a fila está vazia em
+// todos os balcões.
+const DATABASE_NAME = 'pos-offline';
 const DATABASE_VERSION = 2;
 const MENU_STORE = 'menu';
 const SALES_STORE = 'sales';

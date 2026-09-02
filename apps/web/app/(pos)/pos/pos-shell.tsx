@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { formatMT, type Cents } from '@delivery/core';
 import { createClient } from '@/utils/supabase/client';
+import { useBrand } from '@/lib/brand/context';
 import {
   buildPaymentPlan,
   calculateChange,
@@ -206,6 +207,7 @@ const KEYBOARD_LABELS = {
 } as const;
 
 export function PosShell() {
+  const brand = useBrand();
   const router = useRouter();
   const supabase = useMemo(() => createClient(), []);
   const [context, setContext] = useState<PosContext | null>(null);
@@ -1315,7 +1317,7 @@ export function PosShell() {
     <main className="min-h-screen bg-[#0a0807] text-[#f6f1e6] lg:h-screen lg:overflow-hidden">
       <header className="flex min-h-16 items-center gap-4 border-b border-white/10 bg-[#111110] px-4">
         <div className="flex-1">
-          <p className="text-lg font-black tracking-wide text-[#e5a93c]">HAWSMASH POS</p>
+          <p className="text-lg font-black tracking-wide text-[#e5a93c]">{brand.name} POS</p>
           <p className="text-xs text-[#847e72]">{context.storeName} · {context.deviceLabel}</p>
         </div>
         {/* O caixa gere as entregas sem sair do terminal. E daqui que se ve

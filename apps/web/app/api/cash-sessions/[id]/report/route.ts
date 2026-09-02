@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 
 import { buildCashClosePdf, cashCloseReportFromSession } from '@/lib/cash/report';
+import { getBrand } from '@/lib/brand/server';
 import { createCashServerClient } from '@/lib/cash/server-client';
 
 export async function GET(
@@ -34,7 +35,7 @@ export async function GET(
     store?.short_name ?? 'Loja',
     closer?.full_name,
   );
-  const pdf = await buildCashClosePdf(report);
+  const pdf = await buildCashClosePdf(report, (await getBrand()).name);
   const safeStore = (store?.short_name ?? 'loja').toLowerCase().replace(/[^a-z0-9]+/g, '-');
 
   return new NextResponse(Buffer.from(pdf), {
