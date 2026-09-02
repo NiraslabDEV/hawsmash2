@@ -1,12 +1,14 @@
 import type { MetadataRoute } from 'next';
 
-import { brand } from '@brand';
+import { getBrand } from '@/lib/brand/server';
 
-export default function manifest(): MetadataRoute.Manifest {
+export default async function manifest(): Promise<MetadataRoute.Manifest> {
+  const brand = await getBrand();
+
   return {
     name: `${brand.name} POS`,
     short_name: `${brand.name} POS`,
-    description: 'Ponto de venda HAWSMASH para Maputo e Matola',
+    description: `Ponto de venda ${brand.name}`,
     start_url: '/pos',
     scope: '/pos',
     display: 'fullscreen',

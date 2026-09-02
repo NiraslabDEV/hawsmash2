@@ -5,7 +5,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Image from 'next/image';
 import type { User } from '@supabase/supabase-js';
-import { brand } from '@brand';
+import { useBrand } from '@/lib/brand/context';
 import { createClient } from '@/utils/supabase/client';
 
 // ─── Ícones (SVG inline, leves) ───────────────────────────────────────────────
@@ -75,6 +75,7 @@ const NAV: NavItem[] = [
 ];
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
+  const brand = useBrand();
   const router = useRouter();
   const pathname = usePathname();
   const [loading, setLoading] = useState(true);

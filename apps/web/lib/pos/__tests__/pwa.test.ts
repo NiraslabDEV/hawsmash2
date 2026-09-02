@@ -3,19 +3,22 @@ import { resolve } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
+import { brand as factory } from '@brand';
 import manifest from '../../../app/manifest';
 
 const webRoot = resolve(process.cwd(), 'apps/web');
 
 describe('PWA do POS', () => {
-  it('é instalável e fica limitada ao POS', () => {
-    const metadata = manifest();
+  it('é instalável e fica limitada ao POS', async () => {
+    const metadata = await manifest();
 
-    expect(metadata.name).toBe('HAWSMASH POS');
+    // O nome segue a marca da instalação, não o de um cliente escrito no
+    // código: sem base de dados, é o fallback de fábrica que manda (§18.2).
+    expect(metadata.name).toBe(`${factory.name} POS`);
     expect(metadata.start_url).toBe('/pos');
     expect(metadata.scope).toBe('/pos');
     expect(metadata.display).toBe('fullscreen');
-    expect(metadata.theme_color).toBe('#0a0807');
+    expect(metadata.theme_color).toBe(factory.theme.bg0);
     expect(metadata.icons).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ src: '/pos-icon-192.png', sizes: '192x192' }),

@@ -6,7 +6,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { formatMT, type Cents } from '@delivery/core';
-import { brand } from '@brand';
+import { useBrand } from '@/lib/brand/context';
 
 import { useCart } from '@/utils/useCart';
 import { useStoreSlug } from '@/utils/useStore';
@@ -17,7 +17,6 @@ import '../_hawsmash/landing.css';
 import { ArrowIcon, CartIcon } from '../_hawsmash/icons';
 import type { MenuItem, MenuPayload, MenuVariant } from '../_hawsmash/types';
 
-const L = brand.storefront.landing;
 const mt = (value: number) => formatMT(value as Cents);
 
 /** Sabor por omissão de um item (o marcado, senão o primeiro). */
@@ -36,6 +35,7 @@ function defaultVariant(item: MenuItem): MenuVariant | null {
  * A decisão está em `lib/upsell.ts`, testada à parte.
  */
 export default function UpsellPage() {
+  const L = useBrand().storefront.landing;
   const router = useRouter();
   const storeSlug = useStoreSlug();
   const { cart, hydrated, add, setQtyByIndex, setLineVariantByIndex, count } = useCart();

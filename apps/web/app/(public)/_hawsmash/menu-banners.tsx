@@ -3,12 +3,10 @@
 import { useState } from 'react';
 import Image from 'next/image';
 import { formatMT, type Cents } from '@delivery/core';
-import { brand } from '@brand';
+import { useBrand } from '@/lib/brand/context';
 
 import { CartIcon } from './icons';
 import type { MenuCategory, MenuItem, MenuVariant } from './types';
-
-const L = brand.storefront.landing;
 
 /** "400 MT" → ["400", "MT"], para o preço grande com a unidade pequena ao lado. */
 function splitMT(cents: number): [string, string] {
@@ -188,6 +186,7 @@ export function MenuBanners({
   onDec: (item: MenuItem, variant: MenuVariant | null) => void;
   onInc: (item: MenuItem, variant: MenuVariant | null) => void;
 }) {
+  const L = useBrand().storefront.landing;
   const [tab, setTab] = useState<string | null>(null);
   const active = categories.find((c) => c.id === tab) ?? categories[0];
 

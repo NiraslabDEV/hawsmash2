@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
-import { brand } from '@brand';
+import { useBrand } from '@/lib/brand/context';
 
 import { useCart } from '@/utils/useCart';
 import { CART_STORE_KEY, shouldClearCart } from '@/lib/cart-store';
@@ -18,8 +18,6 @@ import { CartIcon, MenuIcon, StoreIcon } from './icons';
 import { MenuBanners } from './menu-banners';
 import { Footer, Hero, Marquee, Story } from './sections';
 import type { CartView, MenuItem, MenuPayload, MenuVariant } from './types';
-
-const L = brand.storefront.landing;
 
 /**
  * Loja pública do HAWSMASH — a pele do 1.0 sobre o motor do 2.0.
@@ -36,6 +34,8 @@ export function Storefront({
   store: PublicStoreOption;
   stores: PublicStoreOption[];
 }) {
+  const brand = useBrand();
+  const L = brand.storefront.landing;
   const router = useRouter();
   const { cart, hydrated, add, setQtyByIndex, clear, count } = useCart();
 

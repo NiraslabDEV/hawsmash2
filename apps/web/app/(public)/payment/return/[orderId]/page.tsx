@@ -22,7 +22,7 @@ import { useEffect, useState, useRef } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter, useParams } from 'next/navigation';
-import { brand } from '@brand';
+import { useBrand } from '@/lib/brand/context';
 
 import '../../../_hawsmash/landing.css';
 import '../../../_hawsmash/funnel.css';
@@ -34,9 +34,10 @@ const POLL_INTERVAL_MS = 2500;
 const TIMEOUT_MS       = 120_000; // 2 minutos — depois redireciona para order-status
 const SLOW_AFTER_MS    = 45_000;  // a partir daqui mostra-se a saída de emergência
 
-const L = brand.storefront.landing;
 
 export default function PaymentReturnPage() {
+  const brand    = useBrand();
+  const L        = brand.storefront.landing;
   const router   = useRouter();
   const params   = useParams();
   const orderId  = params.orderId as string;

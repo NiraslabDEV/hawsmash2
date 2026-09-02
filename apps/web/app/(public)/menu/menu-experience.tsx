@@ -9,12 +9,11 @@ import { formatMT, type Cents } from '@delivery/core';
 import { useCart } from '@/utils/useCart';
 import { createClient } from '@/utils/supabase/client';
 import { trackViewMenu, trackViewItem, trackAddToCart, trackLead, trackCouponApplied, type TrackItem } from '@/lib/analytics/track';
-import { brand } from '@brand';
+import { useBrand } from '@/lib/brand/context';
 import { serializeStoreCookie } from '@/lib/store-context';
 import type { PublicStoreOption } from '@/lib/public-stores';
 
 const mt = (cents: number) => formatMT(cents as Cents);
-const ST = brand.storefront;
 
 type Variant = { id: string; name: string; price_cents: number; is_default?: boolean };
 type Addon = { id: string; name: string; price_cents: number };
@@ -89,9 +88,11 @@ type RecentOrder = { id: string; order_number: string; status: string; total_cen
 type CustomerSummary = { phone: string; name: string | null; orders_count: number; total_spent_cents: number; favorites: FavItem[]; recent_orders: RecentOrder[] };
 type CustomerOrder = { id: string; order_number: string; status: string; fulfillment_type: string; total_cents: number; created_at: string; scheduled_for: string | null; items: { menu_item_id: string; name: string; qty: number }[] };
 
-// foto do item ou fallback determinístico dos assets da marca (whitelabel)
-const imgFor = (item: MenuItem, idx: number) =>
-  item.photo_url || ST.fallbackImages[idx % ST.fallbackImages.length];
+// foto do item ou fallback determinístico dos assets da marca (whitelabel).
+// A lista de fallbacks vem da marca em runtime, por isso entra por parâmetro:
+// no topo do módulo não há hook nenhum que a possa ler.
+const imgFor = (item: MenuItem, idx: number, fallbacks: readonly string[]) =>
+  item.photo_url || fallbacks[idx % fallbacks.length];
 
 const DL_PHONE_KEY = 'dl_phone';
 
@@ -110,6 +111,8 @@ const ORDER_STATUS: Record<string, { label: string; color: string }> = {
 const isActiveOrder = (s: string) => ['awaiting_approval', 'awaiting_payment', 'paid', 'approved', 'in_preparation', 'ready'].includes(s);
 
 export function MenuExperience({ storeSlug, storeName }: { storeSlug: string; storeName: string }) {
+  const brand = useBrand();
+  const ST = brand.storefront;
   const router = useRouter();
   const [cartOpen, setCartOpen] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
@@ -386,7 +389,7 @@ export function MenuExperience({ storeSlug, storeName }: { storeSlug: string; st
           className="relative overflow-hidden"
           style={{ width: 92, height: 92, borderRadius: 12, background: ST.photoBg, flex: 'none' }}
         >
-          <Image src={imgFor(item, globalIndex(item.id))} alt={item.name} fill sizes="92px" className="object-cover" />
+          <Image src={imgFor(item, globalIndex(item.id), ST.fallbackImages)} alt={item.name} fill sizes="92px" className="object-cover" />
           {out && (
             <div
               className="absolute inset-0 flex items-center justify-center"
@@ -884,7 +887,7 @@ export function MenuExperience({ storeSlug, storeName }: { storeSlug: string; st
                       className="relative overflow-hidden"
                       style={{ width: 54, height: 54, borderRadius: 10, background: ST.photoBg, flex: 'none' }}
                     >
-                      <Image src={imgFor(it!, globalIndex(it!.id))} alt={it!.name} fill sizes="54px" className="object-cover" />
+                      <Image src={imgFor(it!, globalIndex(it!.id), ST.fallbackImages)} alt={it!.name} fill sizes="54px" className="object-cover" />
                     </div>
                     <div className="min-w-0 flex-1">
                       <div
@@ -1041,7 +1044,7 @@ export function MenuExperience({ storeSlug, storeName }: { storeSlug: string; st
           >
             {/* foto + nome */}
             <div className="relative" style={{ height: 180, flex: 'none', background: ST.photoBg }}>
-              <Image src={imgFor(product, globalIndex(product.id))} alt={product.name} fill sizes="430px" className="object-cover" />
+              <Image src={imgFor(product, globalIndex(product.id), ST.fallbackImages)} alt={product.name} fill sizes="430px" className="object-cover" />
               <div
                 className="absolute inset-0"
                 style={{
@@ -1479,6 +1482,7 @@ function StoreSwitchDialog({
   onClose: () => void;
   onConfirm: (slug: string) => void;
 }) {
+  const ST = useBrand().storefront;
   const [stores, setStores] = useState<PublicStoreOption[]>([]);
 
   useEffect(() => {
@@ -1696,6 +1700,7 @@ function ProfileOverlay({ customer, onClose, onLogout, onOrders, onReorder }: { 
 
 // Loja fechada — lista de espera (reskin The Box)
 function WaitlistForm() {
+  const ST = useBrand().storefront;
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [notes, setNotes] = useState('');

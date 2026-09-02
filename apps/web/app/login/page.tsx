@@ -4,9 +4,10 @@ import { useState } from 'react';
 import Image from 'next/image';
 import { createClient } from '@/utils/supabase/client';
 import { safeInternalRedirect } from '@/lib/auth/redirect';
-import { brand } from '@brand';
+import { useBrand } from '@/lib/brand/context';
 
 export default function LoginPage() {
+  const brand = useBrand();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);

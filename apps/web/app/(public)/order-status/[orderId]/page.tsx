@@ -19,7 +19,8 @@ import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { formatMT, type Cents } from '@delivery/core';
-import { brand } from '@brand';
+import { useBrand } from '@/lib/brand/context';
+import type { ResolvedBrand } from '@/lib/brand/resolve';
 import { trackPurchase, type TrackItem } from '@/lib/analytics/track';
 import { shouldFirePurchase, markPurchaseFired } from '@/lib/analytics/purchase-guard';
 import { useAccount } from '@/utils/useAccount';
@@ -40,8 +41,8 @@ import {
   IcoCopy,
 } from '../../_hawsmash/funnel';
 
-const L = brand.storefront.landing;
-const PROMOS = brand.storefront.funnel.promos;
+/** Um bloco comercial do funil, tal como a marca o traz. */
+type Promo = ResolvedBrand['storefront']['funnel']['promos'][number];
 
 /** Estados terminais e a leitura de cada um em voz de marca. */
 const LABEL: Record<string, string> = {
@@ -75,6 +76,9 @@ function heroCopy(status: string, fulfillment: string): { kicker: string; lead: 
 }
 
 export default function OrderStatusPage({ params }: { params: { orderId: string } }) {
+  const brand = useBrand();
+  const L = brand.storefront.landing;
+  const PROMOS = brand.storefront.funnel.promos;
   const router = useRouter();
   const [polling, setPolling] = useState(true);
   const { profile, hydrated: accountReady, bind } = useAccount();
@@ -362,7 +366,7 @@ export default function OrderStatusPage({ params }: { params: { orderId: string 
 
 /* ── Bloco comercial (espaços C e D) ──────────────────────────────────── */
 
-function Promo({ promo }: { promo: (typeof PROMOS)[number] }) {
+function Promo({ promo }: { promo: Promo }) {
   const body = (
     <>
       <div className="hf-ad-kick">{promo.kicker}</div>

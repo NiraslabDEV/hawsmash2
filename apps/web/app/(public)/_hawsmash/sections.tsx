@@ -1,13 +1,11 @@
 'use client';
 
 import Image from 'next/image';
-import { brand } from '@brand';
 
+import { useBrand } from '@/lib/brand/context';
 import { maputoDow, todaysHours, type PublicStoreOption } from '@/lib/public-stores';
 
 import { ArrowIcon, CartIcon } from './icons';
-
-const L = brand.storefront.landing;
 
 /* ─────────────────────────── HERO ─────────────────────────── */
 
@@ -20,6 +18,8 @@ export function Hero({
   onCartOpen: () => void;
   cartCount: number;
 }) {
+  const brand = useBrand();
+  const L = brand.storefront.landing;
   const open = store.accepting_orders && store.open_now;
   const hours = todaysHours(store, maputoDow());
 
@@ -90,6 +90,7 @@ export function Hero({
 /* ────────────────────────── MARQUEE ───────────────────────── */
 
 export function Marquee() {
+  const L = useBrand().storefront.landing;
   // Duplicado de propósito: a animação anda -50% e o segundo bloco entra
   // exactamente onde o primeiro saiu, sem salto.
   const items = [...L.marquee, ...L.marquee];
@@ -110,6 +111,14 @@ export function Marquee() {
 /* ─────────────────────────── HISTÓRIA ─────────────────────── */
 
 export function Story() {
+  const brand = useBrand();
+  const L = brand.storefront.landing;
+
+  // Sem história escrita não há secção. Uma instalação nova (ou um dono que
+  // ainda não preencheu a Aparência) fecha a página sem buracos em vez de
+  // mostrar títulos a apontar para o vazio.
+  if (L.story.paragraphs.length === 0 && L.story.stats.length === 0) return null;
+
   return (
     <section className="hs-section" id="historia">
       <div className="hs-container hs-story-grid">
@@ -156,6 +165,8 @@ export function Footer({
   onCartOpen: () => void;
   cartCount: number;
 }) {
+  const brand = useBrand();
+  const L = brand.storefront.landing;
   const contact = brand.storefront.contact;
 
   return (
@@ -223,13 +234,18 @@ export function Footer({
           </div>
         </div>
 
-        <div className="hs-footer-bottom">
-          <span>{L.footer.rights}</span>
-          <span>
-            {L.footer.madeIn.replace('Maputo', '')}
-            <span className="hs-gold">Maputo</span>
-          </span>
-        </div>
+        {/* O nome da cidade era um `replace('Maputo', …)` dentro do componente:
+            o produto não sabe onde fica o cliente (§18.3). Agora a parte
+            destacada é um campo próprio da marca, e vazia não aparece. */}
+        {(L.footer.rights || L.footer.madeIn || L.footer.madeInAccent) && (
+          <div className="hs-footer-bottom">
+            <span>{L.footer.rights}</span>
+            <span>
+              {L.footer.madeIn}
+              {L.footer.madeInAccent && <span className="hs-gold">{L.footer.madeInAccent}</span>}
+            </span>
+          </div>
+        )}
       </div>
     </footer>
   );

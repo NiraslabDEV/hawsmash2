@@ -1,6 +1,7 @@
 import Image from 'next/image';
 import Link from 'next/link';
-import { brand } from '@brand';
+
+import { getBrand } from '@/lib/brand/server';
 
 import { createClient } from '@/utils/supabase/server';
 import {
@@ -17,8 +18,6 @@ import './_hawsmash/landing.css';
 // disponibilidade passam todos a ser dessa unidade (CLAUDE §5.5 e §13).
 export const dynamic = 'force-dynamic';
 
-const L = brand.storefront.landing;
-
 async function loadStores(): Promise<PublicStoreOption[]> {
   try {
     const supabase = await createClient();
@@ -31,6 +30,8 @@ async function loadStores(): Promise<PublicStoreOption[]> {
 }
 
 export default async function StoreChooserPage() {
+  const brand = await getBrand();
+  const L = brand.storefront.landing;
   const stores = await loadStores();
   const dow = maputoDow();
 
@@ -89,9 +90,13 @@ export default async function StoreChooserPage() {
           })}
         </div>
 
-        <p style={{ marginTop: 40, fontSize: 12, color: 'var(--hs-ink-mute)', textAlign: 'center' }}>
-          {brand.storefront.contact.phone} · {brand.storefront.contact.instagram}
-        </p>
+        {(brand.storefront.contact.phone || brand.storefront.contact.instagram) && (
+          <p style={{ marginTop: 40, fontSize: 12, color: 'var(--hs-ink-mute)', textAlign: 'center' }}>
+            {[brand.storefront.contact.phone, brand.storefront.contact.instagram]
+              .filter(Boolean)
+              .join(' · ')}
+          </p>
+        )}
       </div>
     </div>
   );

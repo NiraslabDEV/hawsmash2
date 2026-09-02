@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { isEmailConfigured, sendMail } from '@/lib/email/transport';
-import { brand } from '@brand';
+import { getBrand } from '@/lib/brand/server';
 import { createClient } from '@/utils/supabase/server';
 import { setAccountCookie } from '@/lib/account/session';
 
@@ -64,6 +64,7 @@ export async function POST(request: Request) {
 
   if (!isEmailConfigured()) return NextResponse.json({ channel: 'none' });
 
+  const brand = await getBrand();
   const result = await sendMail({
     to: data.email,
     subject: `${data.code} — o teu código ${brand.name}`,

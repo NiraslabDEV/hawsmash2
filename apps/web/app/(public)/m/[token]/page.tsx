@@ -5,11 +5,9 @@ import { useParams } from 'next/navigation';
 import Image from 'next/image';
 import { formatMT, type Cents } from '@delivery/core';
 import { createClient } from '@/utils/supabase/client';
-import { brand } from '@brand';
+import { useBrand } from '@/lib/brand/context';
 
 const mt = (cents: number) => formatMT(cents as Cents);
-const ST = brand.storefront;
-const FALLBACK_IMAGE = ST.fallbackImages[0];
 
 type ModifierOption = { id: string; name: string; price_cents: number };
 type ModifierGroup = {
@@ -58,6 +56,8 @@ function lineExtraPreview(group: ModifierGroup, optionIds: string[]): number {
 const isGuided = (item: MenuItem) => item.modifier_groups.length >= 3;
 
 export default function TableMenuPage() {
+  const brand = useBrand();
+  const ST = brand.storefront;
   const params = useParams();
   const token = String(params.token ?? '');
   const supabase = useMemo(() => createClient(), []);
@@ -631,7 +631,7 @@ export default function TableMenuPage() {
                     style={{ width: 64, height: 64, borderRadius: 11, background: ST.photoBg, flex: 'none' }}
                   >
                     <Image
-                      src={item.photo_url || FALLBACK_IMAGE}
+                      src={item.photo_url || ST.fallbackImages[0]}
                       alt={item.name}
                       fill
                       className="object-cover"
@@ -1039,6 +1039,7 @@ function ItemSheet({
   onClose: () => void;
   onCommit: () => void;
 }) {
+  const ST = useBrand().storefront;
   const groups = item.modifier_groups;
   const guided = isGuided(item);
   const shown = guided ? [groups[step]].filter(Boolean) : groups;
@@ -1094,7 +1095,7 @@ function ItemSheet({
         {/* Foto + nome */}
         <div className="relative" style={{ height: 180, flex: 'none', background: ST.photoBg }}>
           <Image
-            src={item.photo_url || FALLBACK_IMAGE}
+            src={item.photo_url || ST.fallbackImages[0]}
             alt={item.name}
             fill
             className="object-cover"
@@ -1429,6 +1430,7 @@ function ItemSheet({
 }
 
 function Centered({ children }: { children: React.ReactNode }) {
+  const ST = useBrand().storefront;
   return (
     <div
       style={{ background: ST.bg, color: ST.text, minHeight: '100vh' }}

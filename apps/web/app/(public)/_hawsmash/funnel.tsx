@@ -10,11 +10,11 @@
  * e "Pago" no outro. Um componente, uma verdade.
  *
  * Regra de (public)/CLAUDE.md §4: nenhum hex nem texto de marca aqui. Tudo sai
- * de config/brand.ts — as cores por var(--hs-*), o texto por `brand`.
+ * da marca em runtime — as cores por var(--hs-*), o texto por `useBrand()`.
  */
 
 import type { CSSProperties, ReactNode } from 'react';
-import { brand } from '@brand';
+import { useBrand } from '@/lib/brand/context';
 
 /* ── Ícones ──────────────────────────────────────────────────────────────
    Grelha 24, altura óptica ~16, traço 1.7 acima de 14px e 2.6 abaixo. São
@@ -147,6 +147,8 @@ export function FunnelRail({
   /** pagamento por concluir: o passo 2 volta a ser o passo actual */
   failed?: boolean;
 }) {
+  const brand = useBrand();
+
   return (
     <header className="hf-rail">
       <div className="hf-rail-top">
@@ -158,7 +160,9 @@ export function FunnelRail({
         <BrandMark />
         <div style={{ minWidth: 0 }}>
           <div className="hf-brand-name">{brand.storefront.logoText}</div>
-          <div className="hf-brand-tag">{brand.storefront.landing.story.tagValue}</div>
+          {brand.storefront.landing.story.tagValue && (
+            <div className="hf-brand-tag">{brand.storefront.landing.story.tagValue}</div>
+          )}
         </div>
         {storeName && (
           <span className={`hf-store${storeOpen ? '' : ' is-closed'}`}>
@@ -203,13 +207,16 @@ export function SectionHead({ n, children, action }: { n?: number; children: Rea
 /* ── Rodapé ──────────────────────────────────────────────────────────── */
 
 export function FunnelFoot({ rights = false }: { rights?: boolean }) {
+  const brand = useBrand();
+  const address = brand.storefront.contact.addressLine1;
+
   return (
     <footer className="hf-foot">
       <BrandMark size={15} muted />
       <span className="num">
         {rights
           ? brand.storefront.landing.footer.rights
-          : `${brand.storefront.logoText} · ${brand.storefront.contact.addressLine1}`}
+          : [brand.storefront.logoText, address].filter(Boolean).join(' · ')}
       </span>
     </footer>
   );
@@ -218,7 +225,7 @@ export function FunnelFoot({ rights = false }: { rights?: boolean }) {
 /* ── Assinatura de quem fez o sistema (espaço E) ─────────────────────── */
 
 export function PoweredBy() {
-  const pb = brand.storefront.poweredBy;
+  const pb = useBrand().storefront.poweredBy;
   if (!pb?.enabled) return null;
 
   const vars = {
