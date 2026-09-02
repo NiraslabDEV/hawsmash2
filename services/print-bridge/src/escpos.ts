@@ -33,6 +33,23 @@ const SIZE_DOUBLE = Buffer.from([GS, 0x21, 0x11]);
 const SIZE_TRIPLE = Buffer.from([GS, 0x21, 0x22]);
 export const CUT_FULL = Buffer.from([GS, 0x56, 0x00]);
 const WIDTH = 48;
+// A dobrar a largura, cabe metade: 48 -> 24. Quem escreve uma linha em
+// SIZE_DOUBLE tem de partir o texto por aqui, senao a impressora parte-o
+// sozinha a meio de uma palavra.
+const WIDTH_DOUBLE = 24;
+
+/**
+ * Papel a avancar antes do corte.
+ *
+ * A lamina fica ~15 mm ACIMA da cabeca de impressao. Com pouco avanco, a
+ * ultima linha impressa acaba na propria aresta do corte — o talao sai com o
+ * texto na pontinha e nao se le. Seis linhas dao margem para ler o fim e para
+ * segurar o papel sem tapar o texto.
+ *
+ * Vale para os cinco formatos: quem acrescentar um talao novo usa esta
+ * constante, para nao voltar a haver um corte rente num deles so.
+ */
+const FEED_BEFORE_CUT = 6;
 
 // Caracteres CP1252 0x80-0x9F que NAO coincidem com latin1.
 // Usamos unicode escapes (\uXXXX) para evitar problemas com editores/parsers.
@@ -225,27 +242,49 @@ function scheduleBlock(scheduledFor?: string | null): Buffer[] {
   ];
 }
 
+/**
+ * A comanda da cozinha.
+ *
+ * Esta comanda vai PENDURADA no varao e e lida a um ou dois metros, de lado,
+ * por quem tem as maos ocupadas. Por isso o que interessa — o numero e os
+ * artigos — sai em corpo grande, mesmo custando papel: uma comanda curta que
+ * ninguem consegue ler ao longe nao poupa nada, obriga a ir la buscar.
+ *
+ * Numero do dia a triplo (e o que identifica a comanda no varao), artigos e
+ * notas a dobrar. A dobrar so cabem 24 colunas, dai o wrap por WIDTH_DOUBLE.
+ */
 export function createKitchenTicket(payload: KitchenTicketPayload): Buffer {
   const chunks: Buffer[] = brandHeader(payload.store_short_name);
-  chunks.push(SIZE_DOUBLE, BOLD_ON, line(`Nº ${payload.daily_number}`), BOLD_OFF, SIZE_NORMAL);
-  chunks.push(BOLD_ON, line(fulfillmentLabel(payload)), BOLD_OFF);
+  chunks.push(SIZE_TRIPLE, BOLD_ON, line(`Nº ${payload.daily_number}`), BOLD_OFF, SIZE_NORMAL);
+  chunks.push(SIZE_DOUBLE, BOLD_ON, line(fulfillmentLabel(payload)), BOLD_OFF, SIZE_NORMAL);
   chunks.push(line(maputoTime(payload.created_at)), ALIGN_LEFT, line(rule('=')));
   chunks.push(...scheduleBlock(payload.scheduled_for));
   chunks.push(...deliveryBlock(payload));
 
   for (const item of payload.items) {
-    chunks.push(BOLD_ON, line(`${item.quantity}x ${item.name}`), BOLD_OFF);
-    if (item.notes) {
-      for (const noteLine of wrap(`NOTA: ${item.notes}`)) chunks.push(line(noteLine));
+    chunks.push(SIZE_DOUBLE, BOLD_ON);
+    for (const itemLine of wrap(`${item.quantity}x ${item.name}`, WIDTH_DOUBLE)) {
+      chunks.push(line(itemLine));
     }
+    chunks.push(BOLD_OFF, SIZE_NORMAL);
+    // "SEM JALAPENO" e a linha que estraga o prato se passar ao lado. Sai do
+    // mesmo tamanho do artigo a que pertence.
+    if (item.notes) {
+      chunks.push(SIZE_DOUBLE, BOLD_ON);
+      for (const noteLine of wrap(`NOTA: ${item.notes}`, WIDTH_DOUBLE)) chunks.push(line(noteLine));
+      chunks.push(BOLD_OFF, SIZE_NORMAL);
+    }
+    chunks.push(feed(1));
   }
   if (payload.notes) {
-    chunks.push(line(rule('-')), BOLD_ON);
-    for (const noteLine of wrap(`NOTA DO PEDIDO: ${payload.notes}`)) chunks.push(line(noteLine));
-    chunks.push(BOLD_OFF);
+    chunks.push(line(rule('-')), SIZE_DOUBLE, BOLD_ON);
+    for (const noteLine of wrap(`NOTA DO PEDIDO: ${payload.notes}`, WIDTH_DOUBLE)) {
+      chunks.push(line(noteLine));
+    }
+    chunks.push(BOLD_OFF, SIZE_NORMAL);
   }
 
-  chunks.push(line(rule('=')), feed(3), CUT_FULL);
+  chunks.push(line(rule('=')), feed(FEED_BEFORE_CUT), CUT_FULL);
   return Buffer.concat(chunks);
 }
 
@@ -255,6 +294,15 @@ export function createCustomerReceipt(payload: CustomerReceiptPayload): Buffer {
     for (const addressLine of wrap(payload.store_address)) chunks.push(line(addressLine));
   }
   if (payload.store_phone) chunks.push(line(`Tel: ${payload.store_phone}`));
+
+  // A SENHA — o numero que se chama ao balcao e que aparece na TV. E o unico
+  // numero que o cliente precisa de guardar, por isso sai grande e no topo:
+  // MPT-0740 serve o historico, a senha serve a pessoa que esta a espera
+  // (CLAUDE §5.4).
+  chunks.push(line(rule('-')));
+  chunks.push(line('SENHA'));
+  chunks.push(SIZE_TRIPLE, BOLD_ON, line(`${payload.daily_number}`), BOLD_OFF, SIZE_NORMAL);
+
   chunks.push(ALIGN_LEFT, line(rule('=')));
   chunks.push(line(twoColumns(`PEDIDO ${payload.order_number}`, maputoTime(payload.created_at))));
   chunks.push(...scheduleBlock(payload.scheduled_for));
@@ -297,7 +345,7 @@ export function createCustomerReceipt(payload: CustomerReceiptPayload): Buffer {
     chunks.push(feed(1), ALIGN_CENTER);
     for (const footerLine of wrap(payload.receipt_footer)) chunks.push(line(footerLine));
   }
-  chunks.push(ALIGN_LEFT, feed(3), CUT_FULL);
+  chunks.push(ALIGN_LEFT, feed(FEED_BEFORE_CUT), CUT_FULL);
   return Buffer.concat(chunks);
 }
 
@@ -330,7 +378,7 @@ export function createCashCloseReceipt(payload: CashClosePayload): Buffer {
     for (const reasonLine of wrap(payload.difference_reason)) chunks.push(line(reasonLine));
   }
   if (payload.closed_by_name) chunks.push(feed(1), line(`Fechado por: ${payload.closed_by_name}`));
-  chunks.push(feed(3), CUT_FULL);
+  chunks.push(feed(FEED_BEFORE_CUT), CUT_FULL);
   return Buffer.concat(chunks);
 }
 
@@ -468,7 +516,7 @@ export function createReceipt(payload: PrintPayload): Buffer {
   }
 
   chunks.push(feed(1), line(`Hora: ${new Date(job.created_at).toLocaleTimeString("pt-MZ")}`));
-  chunks.push(feed(3), CUT_FULL);
+  chunks.push(feed(FEED_BEFORE_CUT), CUT_FULL);
 
   return Buffer.concat(chunks);
 }
@@ -480,7 +528,7 @@ function createTestReceipt(payload: TestPrintPayload): Buffer {
   chunks.push(SIZE_DOUBLE, BOLD_ON, line("TESTE"), BOLD_OFF, SIZE_NORMAL, feed(1));
   chunks.push(ALIGN_LEFT, line(payload.message ?? "Teste de impressao -- Delivery OS"));
   chunks.push(line(`Hora: ${new Date().toLocaleTimeString("pt-MZ")}`));
-  chunks.push(feed(3), CUT_FULL);
+  chunks.push(feed(FEED_BEFORE_CUT), CUT_FULL);
   return Buffer.concat(chunks);
 }
 

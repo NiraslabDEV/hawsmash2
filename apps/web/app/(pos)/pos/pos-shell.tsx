@@ -23,6 +23,7 @@ import {
 } from '@/lib/pos/offline-store';
 import {
   DEFAULT_LOCAL_BRIDGE_URL,
+  clearLocalBridgeConfig,
   printOfflineSale,
   readLocalBridgeConfig,
   saveLocalBridgeConfig,
@@ -321,7 +322,14 @@ export function PosShell() {
         setError('Não foi possível listar as lojas disponíveis para vinculação.');
       } else {
         setAvailableStores(stores);
-        setSelectedStoreId((current) => current || stores[0].id);
+        // NAO pre-seleccionar loja nenhuma. As lojas vem por ordem alfabetica
+        // e "Maputo" vem antes de "Matola" — pre-seleccionar a primeira fazia
+        // com que quem nao mexesse no selector vinculasse o PC a Maputo sem
+        // dar por isso. Aconteceu varias vezes na Matola, e o sintoma so
+        // aparece la a frente: as vendas caem na loja errada e nao imprimem,
+        // porque o bridge dessa loja nunca ve os trabalhos. Escolher a loja
+        // passa a ser um acto deliberado.
+        setSelectedStoreId((current) => current);
       }
       setLoading(false);
       return;
@@ -595,6 +603,23 @@ export function PosShell() {
     await loadPos();
   }
 
+  /**
+   * Desvincula este PC do terminal.
+   *
+   * Limpa so o que e DESTE computador: o id do dispositivo e a configuracao
+   * local do bridge. Nao desactiva o dispositivo no servidor nem toca em
+   * vendas — quem manda um PC embora nao esta a apagar historico.
+   */
+  function unbindDevice() {
+    window.localStorage.removeItem(DEVICE_STORAGE_KEY);
+    try {
+      clearLocalBridgeConfig(window.localStorage);
+    } catch {
+      // Configuracao local ja ausente — seguir na mesma.
+    }
+    window.location.reload();
+  }
+
   async function configurePin() {
     if (!context || !isPosPin(pin) || pin !== pinConfirmation) {
       setPinError('Usa 4 a 6 algarismos e confirma o mesmo PIN.');
@@ -760,6 +785,8 @@ export function PosShell() {
   const [keyboardField, setKeyboardField] = useState<
     'name' | 'phone' | 'address' | 'orderNote' | null
   >(null);
+  /** Confirmação de "desvincular este PC", no ecrã bloqueado. */
+  const [unbindConfirm, setUnbindConfirm] = useState(false);
   /** Linha do carrinho a receber nota ("sem jalapeño"). */
   const [noteLine, setNoteLine] = useState<CartLine | null>(null);
   const [noteKeyboard, setNoteKeyboard] = useState(false);
@@ -1186,16 +1213,38 @@ export function PosShell() {
             <label className="mt-6 block text-sm font-bold text-[#c8bfb0]" htmlFor="pos-store">
               Loja
             </label>
-            <select
-              id="pos-store"
-              value={selectedStoreId}
-              onChange={(event) => setSelectedStoreId(event.target.value)}
-              className="mt-2 min-h-16 w-full rounded-2xl border border-white/10 bg-black/30 px-4 font-bold"
-            >
-              {availableStores.map((store) => (
-                <option key={store.id} value={store.id}>{store.short_name}</option>
-              ))}
-            </select>
+            {/* Cards em vez de um dropdown: e um ecra tactil, e escolher a
+                loja e a decisao que estraga tudo se sair errada. Um alvo
+                grande e um estado seleccionado bem visivel valem mais aqui
+                do que a poupanca de espaco de uma lista (§7.6). */}
+            <div className="mt-2 grid grid-cols-2 gap-3">
+              {availableStores.map((store) => {
+                const escolhida = selectedStoreId === store.id;
+                return (
+                  <button
+                    key={store.id}
+                    type="button"
+                    onClick={() => setSelectedStoreId(store.id)}
+                    aria-pressed={escolhida}
+                    className={`min-h-24 rounded-2xl border-2 px-4 text-xl font-black transition active:scale-[0.98] ${
+                      escolhida
+                        ? 'border-[#e5a93c] bg-[#e5a93c] text-black'
+                        : 'border-white/15 bg-black/30 text-white'
+                    }`}
+                  >
+                    {store.short_name}
+                    {escolhida && <span className="mt-1 block text-xs font-bold">seleccionada</span>}
+                  </button>
+                );
+              })}
+            </div>
+            {!selectedStoreId && (
+              <p className="mt-3 rounded-xl border border-amber-500/40 bg-amber-500/[0.08] p-3 text-sm text-amber-200">
+                Escolhe a loja onde <strong>este computador</strong> está.
+                Se escolheres a errada, as vendas caem na outra loja e não sai
+                papel nenhum aqui.
+              </p>
+            )}
             <label className="mt-4 block text-sm font-bold text-[#c8bfb0]" htmlFor="pos-label">
               Nome do terminal
             </label>
@@ -1229,7 +1278,12 @@ export function PosShell() {
             {error && <p role="alert" className="mt-4 rounded-xl bg-red-950/60 p-3 text-red-200">{error}</p>}
             <button
               type="button"
-              disabled={binding || deviceLabel.trim().length < 3 || bridgeToken.trim().length < 32}
+              disabled={
+                binding
+                || !selectedStoreId
+                || deviceLabel.trim().length < 3
+                || bridgeToken.trim().length < 32
+              }
               onClick={() => void bindDevice()}
               className="mt-6 min-h-16 w-full rounded-2xl bg-[#e5a93c] px-6 font-black text-black disabled:opacity-40"
             >
@@ -2330,6 +2384,48 @@ export function PosShell() {
             >
               {submitting ? 'A confirmar…' : pinConfigured ? 'Desbloquear' : 'Guardar PIN'}
             </button>
+
+            {/* Desvincular vive AQUI, no ecra bloqueado, e nao no cabecalho:
+                no cabecalho seria um botao ao lado do "Pedidos" que desliga o
+                terminal a meio de um servico. Aqui e preciso bloquear primeiro
+                — um gesto deliberado — e ainda confirmar. */}
+            <div className="mt-8 border-t border-white/10 pt-5">
+              {!unbindConfirm ? (
+                <button
+                  type="button"
+                  onClick={() => setUnbindConfirm(true)}
+                  className="min-h-14 w-full rounded-2xl border border-white/15 px-4 text-sm font-bold text-[#847e72] active:bg-white/[0.05]"
+                >
+                  Sair · desvincular este PC
+                </button>
+              ) : (
+                <div className="rounded-2xl border border-red-500/40 bg-red-950/30 p-4">
+                  <p className="text-sm font-bold text-red-200">
+                    Desvincular este PC de <strong>{context.storeName}</strong>?
+                  </p>
+                  <p className="mt-1 text-xs text-[#a89f92]">
+                    O terminal volta ao ecrã de registo e será preciso escolher a loja
+                    e o token do bridge outra vez. As vendas já feitas não se perdem.
+                  </p>
+                  <div className="mt-4 flex gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setUnbindConfirm(false)}
+                      className="min-h-14 flex-1 rounded-xl bg-white/[0.08] px-4 font-bold active:bg-white/15"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      type="button"
+                      onClick={unbindDevice}
+                      className="min-h-14 flex-1 rounded-xl bg-red-600 px-4 font-black text-white active:bg-red-700"
+                    >
+                      Desvincular
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
           </section>
         </div>
       )}

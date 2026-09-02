@@ -11,8 +11,31 @@ import { CustomerDisplay } from './customer-display';
 import { describeTarget } from './printer-target';
 import { initObservability, observabilityEnabled, reportError } from './observability';
 import dotenv from 'dotenv';
+import path from 'node:path';
+import fs from 'node:fs';
 
-dotenv.config();
+/**
+ * O `.env` vive AO LADO do executavel, nao na pasta de onde ele foi lancado.
+ *
+ * `dotenv.config()` sozinho procura em `process.cwd()`. Ao duplo-clique no
+ * Explorador isso costuma dar na pasta do .exe, mas nao da sempre: um atalho,
+ * o Agendador de Tarefas ou um "Executar como administrador" mudam o cwd e o
+ * .env deixa de ser encontrado — o bridge rebenta a dizer que falta a
+ * SUPABASE_URL, com o ficheiro mesmo ali ao lado.
+ *
+ * `process.execPath` e o proprio .exe, por isso a pasta dele e o unico sitio
+ * que nao depende de como foi lancado. Em dev (tsx) cai no cwd, como antes.
+ */
+function carregarEnv(): void {
+  const aoLadoDoExe = path.join(path.dirname(process.execPath), '.env');
+  if (fs.existsSync(aoLadoDoExe)) {
+    dotenv.config({ path: aoLadoDoExe });
+    return;
+  }
+  dotenv.config();
+}
+
+carregarEnv();
 
 const USE_SIMULATOR = process.env.USE_SIMULATOR === 'true';
 const SIMULATOR_PORT = parseInt(process.env.SIMULATOR_PORT ?? '9100', 10);
@@ -125,8 +148,38 @@ process.on('uncaughtException', (error) => {
   process.exit(1);
 });
 
+/**
+ * Deixar o erro no ecra quando alguem abriu o .exe por duplo-clique.
+ *
+ * Sem isto a janela fecha-se no instante em que o processo morre e quem esta
+ * a instalar ve so "um terminal preto que abre e fecha" — sem saber que a
+ * mensagem la estava. Nao ha diagnostico possivel assim.
+ *
+ * So espera quando ha consola interactiva (stdin de terminal). Debaixo do
+ * Agendador de Tarefas nao ha TTY: nesse caso sai logo, e o watchdog reinicia
+ * como sempre — um pause aqui deixaria o servico pendurado para sempre.
+ */
+function pararParaLerOErro(): void {
+  if (!process.stdin.isTTY || !process.stdout.isTTY) {
+    process.exit(1);
+  }
+  console.error('\n' + '='.repeat(60));
+  console.error('O BRIDGE NAO ARRANCOU. A causa esta na mensagem acima.');
+  console.error('Normalmente e uma linha do .env: falta, esta vazia, ou o');
+  console.error('.env nao esta na mesma pasta que este .exe.');
+  console.error('='.repeat(60));
+  console.error('\nCarrega ENTER para fechar.');
+  try {
+    // Leitura sincrona: o processo fica aqui ate haver ENTER.
+    fs.readSync(0, Buffer.alloc(1024), 0, 1024, null);
+  } catch {
+    // stdin fechado — nao ha nada a esperar.
+  }
+  process.exit(1);
+}
+
 main().catch((error) => {
   console.error('[Fatal] Service startup failed:', error);
   reportError(error, { phase: 'startup' });
-  process.exit(1);
+  pararParaLerOErro();
 });

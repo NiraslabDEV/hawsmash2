@@ -32,6 +32,18 @@ export function saveLocalBridgeConfig(storage: Storage, config: LocalBridgeConfi
 }
 
 /**
+ * Esquece o bridge deste computador.
+ *
+ * Usado ao desvincular o POS: o token que fica é o do bridge daquela loja e
+ * não serve à seguinte. Deixá-lo para trás faria o PC seguinte herdar um
+ * token errado — e o offline falharia só no dia em que a rede caísse.
+ */
+export function clearLocalBridgeConfig(storage: Storage): void {
+  storage.removeItem(BRIDGE_URL_KEY);
+  storage.removeItem(BRIDGE_TOKEN_KEY);
+}
+
+/**
  * O único sítio que sabe falar com o print-bridge da LAN. Devolve sempre um
  * booleano — nunca lança. Papel, gaveta e visor são best-effort (CLAUDE §1):
  * um bridge em baixo não pode produzir uma excepção no caminho da venda.
