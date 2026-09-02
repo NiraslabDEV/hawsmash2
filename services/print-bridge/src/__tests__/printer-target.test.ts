@@ -112,4 +112,20 @@ describe('entrega na fila do Windows', () => {
       /rede/,
     );
   });
+
+  // Um `copy` para uma fila do Windows pode ficar pendurado para sempre
+  // (impressora desligada, spooler encravado). Sem tecto de tempo o poll
+  // ficava preso nesse job e o bridge deixava de imprimir tudo, em silencio.
+  // O comando REAL tem de correr com timeout — se alguem o tirar, isto falha.
+  it('o comando real corre com tecto de tempo', async () => {
+    const ficheiro = await readFile(
+      new URL('../printer-target.ts', import.meta.url),
+      'utf8',
+    );
+    const chamada = ficheiro.slice(
+      ficheiro.indexOf('const runCommand'),
+      ficheiro.indexOf('const runCommand') + 400,
+    );
+    expect(chamada).toMatch(/execFile\([^)]*\{\s*timeout:/s);
+  });
 });

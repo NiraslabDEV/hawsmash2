@@ -137,6 +137,15 @@
     Os dois contactos em falta, os de fora, são os que alimentam o solenóide. Encaixa na `CD`, parece bom,
     e nunca abre. **Todos** os pulsos que enviámos chegaram à porta e não tinham fio por onde seguir.
     Resolve-se com um cabo de gaveta **6P6C (6 pinos)**. Nada de código a mudar.
+- **2026-09-02 — A GAVETA ABRIU.** Com o RJ11 na porta `CD` **da própria impressora** (não na do
+  terminal), o pulso `1B 70 00 19 FA` entregue por `copy /b` para a fila `POS80` abriu a gaveta à
+  primeira. Confirma as duas conclusões acima: quem alimenta o solenóide é a **impressora** (24 V), não
+  o terminal (12 V) — e era por isso que nenhum caminho pelas `COM` podia funcionar.
+  - **Regra que fica:** a gaveta liga **sempre** à impressora configurada como `COUNTER`. É a essa que
+    o bridge manda o pulso (`index.ts`, `sendDrawerPulse(config.printers.counter, …)`).
+  - **A impressora acoplada por USB já era suportada** — `windows://POS80` existe desde a
+    `printer-target.ts` e é o que os `.env` das lojas devem usar. Não é preciso mudar código para USB;
+    o `PRINTER_IP_*`/TCP do `docs/HARDWARE.md` é só o caminho alternativo, para impressora de rede.
 - Onde está: `services/print-bridge/src/` · testes em `__tests__`
 - Se a resposta for outra: os 10 testes de aceitação de `docs/HARDWARE.md §4` são o que valida — 1 a 2 horas
   com o equipamento na mão.
@@ -274,7 +283,7 @@
   `hawsmash2-staging.up.railway.app` nos dois ficheiros (`services/print-bridge/.env` e `.env.matola.bak`).
 
 ### B-017 · [F6] Stock dos combos vendidos como produto único
-- Estado: **aberto — decisão consciente, não é bug**
+- Estado: **aberto — decisão consciente, não é bug** vou querer que quando saia um combo, desconte da batata e da cocacola. pode fazer oque precisar mas robusto para nunca quebrar nada.
 - Desbloqueia: ninguém por agora (não morde enquanto o stock estiver desligado)
 - O que se passa: os combos (`lanche + batata e bebida`, base + 190 MT) entram no cardápio como
   **produtos próprios**, por decisão do dono — o que evita variantes, modificadores e uma migration
@@ -300,7 +309,7 @@
 - Estado: aberto
 - Desbloqueia: hardware (5 minutos em cada loja, com o PC ligado)
 - Pergunta exacta: em que **porta COM** está o mostrador de cada PC touch, a que **velocidade**, e
-  fala **CD5220** ou **Epson DM-D (ESC/POS)**?
+  fala **CD5220** ou **Epson DM-D (ESC/POS)**? ecom2 em maputo... matola nao sabemos ainda.. vou ligar o claude naquela maquina e ele vai mexer nela.
 - Como avancei: o visor está inteiro e testado — o POS manda a trama a cada passo da venda e o bridge
   escreve nas duas linhas, com o nome da casa a andar quando não há venda. Os dois protocolos estão
   implementados e escolhem-se por `CUSTOMER_DISPLAY_PROTOCOL`. Com `CUSTOMER_DISPLAY_PORT` vazio o
@@ -339,7 +348,7 @@
 ### B-020 · [F6] Custos e destino do bacon, e o preço da batata
 
 - Estado: **aberto — descoberto em 2026-08-27**
-- Desbloqueia: cliente (Ridwan)
+- Desbloqueia: cliente (Ridwan) nao vamos ter bacon pq e muslim esse role/.. 
 - Pergunta exacta: quanto custa cada fatia de queijo, cada fatia de bacon e cada porção de brisket —
   e em que produto sai o bacon?
 - O que se passa: o Ridwan fechou os custos das duas carnes (**RAW 75 MT**, **WAGYU 100 MT**) e pediu

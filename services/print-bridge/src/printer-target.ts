@@ -81,11 +81,31 @@ export function parsePrinterTarget(value: string, defaultPort: number): PrinterT
 
 export type Executor = (file: string, args: string[]) => Promise<void>;
 
+/**
+ * Tecto de tempo para o `copy /b`.
+ *
+ * O caminho TCP sempre teve timeout (5 s); este nao tinha nenhum. Um `copy`
+ * para uma fila do Windows PODE ficar pendurado para sempre — impressora
+ * desligada a meio do trabalho, spooler encravado, partilha que deixou de
+ * responder. Sem tecto, a promessa nunca resolvia, o poll ficava preso nesse
+ * job e o bridge deixava de imprimir TUDO, em silencio e sem nunca chegar ao
+ * retry. Numa loja em que a impressora do balcao e a acoplada por USB, era o
+ * caminho principal a poder parar o servico inteiro.
+ *
+ * 15 s chega folgadamente para um talao de 80 mm; o que passar disso e avaria,
+ * e avaria trata-se com o retry/backoff que ja existe.
+ */
+const COMMAND_TIMEOUT_MS = 15_000;
+
 const runCommand: Executor = (file, args) =>
   new Promise((resolve, reject) => {
-    execFile(file, args, (error, _stdout, stderr) => {
+    execFile(file, args, { timeout: COMMAND_TIMEOUT_MS }, (error, _stdout, stderr) => {
       if (error) {
-        reject(new Error(`${error.message}${stderr ? ` — ${stderr}` : ''}`));
+        const porTimeout = (error as NodeJS.ErrnoException & { killed?: boolean }).killed;
+        const detalhe = porTimeout
+          ? `sem resposta em ${COMMAND_TIMEOUT_MS / 1000}s`
+          : error.message;
+        reject(new Error(`${detalhe}${stderr ? ` — ${stderr}` : ''}`));
         return;
       }
       resolve();
