@@ -39,6 +39,22 @@ interface Item {
   sort: number;
 }
 
+/**
+ * Em que lojas cada produto aparece.
+ *
+ * O catálogo (`menu_items`) é da empresa e é um só; quem decide se o produto
+ * existe NAQUELA loja é `store_items.available` (CLAUDE §5.3). Sem este ecrã,
+ * essa coluna só se mexia por SQL — e o cardápio era forçosamente igual nas
+ * duas lojas.
+ */
+interface Store {
+  id: string;
+  short_name: string;
+}
+
+/** Chave `${store_id}:${menu_item_id}` → aparece nesta loja. */
+type StoreAvailability = Record<string, boolean>;
+
 interface Zone {
   id: string;
   name: string;
@@ -119,6 +135,9 @@ export function MenuSection() {
     });
   }, []);
 
+  const [stores, setStores] = useState<Store[]>([]);
+  const [storeAvailability, setStoreAvailability] = useState<StoreAvailability>({});
+
   // Zones state
   const [zones, setZones] = useState<Zone[]>([]);
   const [editingZone, setEditingZone] = useState<Zone | 'new' | null>(null);
@@ -127,14 +146,23 @@ export function MenuSection() {
 
   // Refetch functions
   const refetchMenu = useCallback(async () => {
-    const [{ data: cats }, { data: its }] = await Promise.all([
+    const [{ data: cats }, { data: its }, { data: lojas }, { data: si }] = await Promise.all([
       supabase.from('menu_categories').select('id, name, station, sort, active, photo_url, parent_id').order('sort'),
       supabase.from('menu_items')
         .select('id, category_id, name, description, price_cents, photo_url, available, available_delivery, available_dine_in, track_stock, stock_qty, is_upsell, sort')
         .order('sort'),
+      supabase.from('stores').select('id, short_name').eq('active', true).order('sort'),
+      supabase.from('store_items').select('store_id, menu_item_id, available'),
     ]);
     setCategories((cats ?? []) as Category[]);
     setItems((its ?? []) as Item[]);
+    setStores((lojas ?? []) as Store[]);
+
+    const mapa: StoreAvailability = {};
+    for (const linha of (si ?? []) as { store_id: string; menu_item_id: string; available: boolean }[]) {
+      mapa[`${linha.store_id}:${linha.menu_item_id}`] = linha.available;
+    }
+    setStoreAvailability(mapa);
   }, [supabase]);
 
   const refetchZones = useCallback(async () => {
@@ -188,6 +216,43 @@ export function MenuSection() {
       .eq('id', item.id);
     if (err) { setError(`Erro: ${err.message}`); return; }
     refetchMenu();
+  }
+
+  /**
+   * Liga/desliga um produto numa loja concreta.
+   *
+   * Escreve em `store_items.available` — a mesma coluna que o `get_menu` do
+   * site e o `create_counter_sale` do POS já consultam. Desligar aqui tira o
+   * produto do cardápio DAQUELA loja e impede que o balcão o venda, sem tocar
+   * no catálogo da outra.
+   *
+   * Actualiza o ecrã primeiro e reverte se o servidor recusar: no touch, um
+   * botão que só reage depois da ida à rede parece avariado e leva segundo
+   * toque — que desfazia o primeiro.
+   */
+  async function toggleStoreAvailability(storeId: string, item: Item) {
+    const chave = `${storeId}:${item.id}`;
+    const anterior = storeAvailability[chave] ?? true;
+    setStoreAvailability((atual) => ({ ...atual, [chave]: !anterior }));
+
+    // `.select()` devolve as linhas afectadas. Sem isto, um update recusado
+    // pela RLS (um gerente a mexer numa loja que não é dele) voltava como
+    // sucesso com zero linhas — e o botão ficava verde a mentir.
+    const { data, error: err } = await supabase
+      .from('store_items')
+      .update({ available: !anterior })
+      .eq('store_id', storeId)
+      .eq('menu_item_id', item.id)
+      .select('store_id');
+
+    if (err || !data?.length) {
+      setStoreAvailability((atual) => ({ ...atual, [chave]: anterior }));
+      setError(
+        err
+          ? `Não foi possível mudar a disponibilidade: ${err.message}`
+          : 'Não tens acesso a essa loja, ou o produto ainda não lá existe.',
+      );
+    }
   }
 
   async function deleteItem(id: string) {
@@ -283,6 +348,9 @@ export function MenuSection() {
               onEditItem={(item, catId) => { setEditingItem(item); setEditingItemCategory(catId); }}
               onToggleAvailable={toggleAvailable}
               onDeleteItem={deleteItem}
+              stores={stores}
+              storeAvailability={storeAvailability}
+              onToggleStoreAvailability={toggleStoreAvailability}
             />
           ))}
         </div>
@@ -371,6 +439,7 @@ function CategoryBranch({
   node, depth, items, addingChildTo, collapsed, onToggleCollapsed,
   onSetAddingChildTo, onAddChild, onAddItem, onEditCategory, onDeleteCategory,
   onEditItem, onToggleAvailable, onDeleteItem,
+  stores, storeAvailability, onToggleStoreAvailability,
 }: {
   node: CategoryTreeNode<Category>;
   depth: number;
@@ -386,6 +455,9 @@ function CategoryBranch({
   onEditItem: (item: Item, categoryId: string) => void;
   onToggleAvailable: (item: Item) => void;
   onDeleteItem: (id: string) => void;
+  stores: Store[];
+  storeAvailability: StoreAvailability;
+  onToggleStoreAvailability: (storeId: string, item: Item) => void;
 }) {
   const cat = node;
   const ownItems = items.filter((i) => i.category_id === cat.id);
@@ -481,6 +553,37 @@ function CategoryBranch({
                       Estoque: {item.stock_qty} {item.stock_qty <= 5 && '⚠️'}
                     </p>
                   )}
+
+                  {/* Em que lojas este produto aparece. Um botão por loja: com
+                      duas lojas, uma lista seria mais cliques para a mesma
+                      decisão. Desligado = fora do cardápio e do POS dessa loja. */}
+                  {stores.length > 1 && (
+                    <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                      {stores.map((store) => {
+                        const naLoja = storeAvailability[`${store.id}:${item.id}`] ?? true;
+                        return (
+                          <button
+                            key={store.id}
+                            type="button"
+                            onClick={() => onToggleStoreAvailability(store.id, item)}
+                            aria-pressed={naLoja}
+                            title={
+                              naLoja
+                                ? `Aparece em ${store.short_name} — clica para esconder`
+                                : `Escondido em ${store.short_name} — clica para mostrar`
+                            }
+                            className={`rounded-full border px-2.5 py-1 text-[11px] font-bold transition ${
+                              naLoja
+                                ? 'border-green-700 bg-green-900/30 text-green-300'
+                                : 'border-white/10 bg-white/[0.04] text-[#6f6a62] line-through'
+                            }`}
+                          >
+                            {store.short_name}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
                 <button
                   onClick={() => onToggleAvailable(item)}
@@ -524,6 +627,9 @@ function CategoryBranch({
               onEditItem={onEditItem}
               onToggleAvailable={onToggleAvailable}
               onDeleteItem={onDeleteItem}
+              stores={stores}
+              storeAvailability={storeAvailability}
+              onToggleStoreAvailability={onToggleStoreAvailability}
             />
           ))}
         </div>
