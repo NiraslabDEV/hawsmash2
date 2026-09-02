@@ -84,7 +84,7 @@ begin
   ) values (
     v_burgers, 'Classic Smash',
     'Pão Brioche · Carne Smash Suculenta · Queijo Cheddar · Cebola Caramelizada · Jalapeños · Pickles · Molho Hawsmash',
-    '/assets/hawsmash/classic-smash.webp', 30000, 1, true
+    '/assets/storefront/classic-smash.webp', 30000, 1, true
   ) returning id into v_classic;
 
   insert into public.menu_items (
@@ -92,7 +92,7 @@ begin
   ) values (
     v_burgers, 'Double Smash',
     'Pão Brioche · 2 Carnes Smash Suculentas · Queijo Cheddar · Cebola Caramelizada · Jalapeños · Pickles · Molho Hawsmash',
-    '/assets/hawsmash/double-smash.webp', 40000, 2, true
+    '/assets/storefront/double-smash.webp', 40000, 2, true
   ) returning id into v_double;
 
   insert into public.menu_items (
@@ -100,7 +100,7 @@ begin
   ) values (
     v_burgers, 'Smoked Brisket',
     'Pão Brioche · Carne Smash Suculenta · Smoked Brisket · Cebola Caramelizada · Jalapeños · Pickles · Molho Hawsmash',
-    '/assets/hawsmash/smoked-brisket.webp', 45000, 3, true
+    '/assets/storefront/smoked-brisket.webp', 45000, 3, true
   ) returning id into v_brisket;
 
   insert into public.menu_items (
@@ -108,13 +108,13 @@ begin
   ) values
     (v_burgers, 'Hawsmash Signature',
      'Pão Brioche · Carne Hawsmash Suculenta · Carne Wagyu · Smoked Brisket · Queijo Cheddar · Cebola Caramelizada · Jalapeños · Pickles · Molho Hawsmash',
-     '/assets/hawsmash/hawsmash-signature.webp', 60000, 4, true),
+     '/assets/storefront/hawsmash-signature.webp', 60000, 4, true),
     (v_sobremesas, 'Pastéis de Nata',
      'Massa folhada estaladiça · Creme de ovos · Canela',
-     '/assets/hawsmash/pasteis-de-nata.webp', 9000, 1, true),
+     '/assets/storefront/pasteis-de-nata.webp', 9000, 1, true),
     (v_extras, 'Joe''s Chips',
      'Batata frita estaladiça · Sal marinho',
-     '/assets/hawsmash/joes-chips.webp', 15000, 1, true);
+     '/assets/storefront/joes-chips.webp', 15000, 1, true);
 
   insert into public.menu_item_variants (
     menu_item_id, name, price_cents, sort, is_default, active
@@ -141,13 +141,13 @@ begin
   for v_drink in
     select *
     from (values
-      ('Coca-Cola',        10000, 1, '/assets/hawsmash/bebidas/coca-normal.webp'),
-      ('Sprite',           10000, 2, '/assets/hawsmash/bebidas/sprite.webp'),
-      ('Fanta',            10000, 3, '/assets/hawsmash/bebidas/fanta-laranja.webp'),
-      ('Schweppes',        10000, 4, '/assets/hawsmash/bebidas/schweppes-pomegranate.webp'),
-      ('Sparletta',        10000, 5, '/assets/hawsmash/bebidas/sparletta-morango.webp'),
-      ('Red Bull',         15000, 6, '/assets/hawsmash/bebidas/redbull-normal.webp'),
-      ('Red Bull Edition', 15000, 7, '/assets/hawsmash/bebidas/redbull-peach.webp')
+      ('Coca-Cola',        10000, 1, '/assets/storefront/bebidas/coca-normal.webp'),
+      ('Sprite',           10000, 2, '/assets/storefront/bebidas/sprite.webp'),
+      ('Fanta',            10000, 3, '/assets/storefront/bebidas/fanta-laranja.webp'),
+      ('Schweppes',        10000, 4, '/assets/storefront/bebidas/schweppes-pomegranate.webp'),
+      ('Sparletta',        10000, 5, '/assets/storefront/bebidas/sparletta-morango.webp'),
+      ('Red Bull',         15000, 6, '/assets/storefront/bebidas/redbull-normal.webp'),
+      ('Red Bull Edition', 15000, 7, '/assets/storefront/bebidas/redbull-peach.webp')
     ) as d(name, price_cents, sort, photo_url)
   loop
     insert into public.menu_items (
@@ -163,23 +163,23 @@ begin
     )
     select v_drink_id, f.name, v_drink.price_cents, f.sort, f.sort = 1, true, f.photo_url
     from (values
-      ('Coca-Cola',        'Normal',      1, '/assets/hawsmash/bebidas/coca-normal.webp'),
-      ('Coca-Cola',        'Zero',        2, '/assets/hawsmash/bebidas/coca-zero.webp'),
-      ('Fanta',            'Laranja',     1, '/assets/hawsmash/bebidas/fanta-laranja.webp'),
-      ('Fanta',            'Uva',         2, '/assets/hawsmash/bebidas/fanta-uva.webp'),
-      ('Fanta',            'Ananás',      3, '/assets/hawsmash/bebidas/fanta-ananas.webp'),
-      ('Schweppes',        'Pomegranate', 1, '/assets/hawsmash/bebidas/schweppes-pomegranate.webp'),
-      ('Schweppes',        'Pineapple',   2, '/assets/hawsmash/bebidas/schweppes-pineapple.webp'),
-      ('Schweppes',        'Tangerine',   3, '/assets/hawsmash/bebidas/schweppes-tangerine.webp'),
-      ('Schweppes',        'Ginger Ale',  4, '/assets/hawsmash/bebidas/schweppes-ginger.webp'),
-      ('Sparletta',        'Morango',     1, '/assets/hawsmash/bebidas/sparletta-morango.webp'),
-      ('Sparletta',        'Creme Soda',  2, '/assets/hawsmash/bebidas/sparletta-creme-soda.webp'),
-      ('Red Bull',         'Normal',      1, '/assets/hawsmash/bebidas/redbull-normal.webp'),
-      ('Red Bull',         'Zero',        2, '/assets/hawsmash/bebidas/redbull-zero.webp'),
-      ('Red Bull Edition', 'Peach',       1, '/assets/hawsmash/bebidas/redbull-peach.webp'),
-      ('Red Bull Edition', 'Tangerine',   2, '/assets/hawsmash/bebidas/redbull-tangerine.webp'),
-      ('Red Bull Edition', 'Watermelon',  3, '/assets/hawsmash/bebidas/redbull-watermelon.webp'),
-      ('Red Bull Edition', 'Yellow',      4, '/assets/hawsmash/bebidas/redbull-yellow.webp')
+      ('Coca-Cola',        'Normal',      1, '/assets/storefront/bebidas/coca-normal.webp'),
+      ('Coca-Cola',        'Zero',        2, '/assets/storefront/bebidas/coca-zero.webp'),
+      ('Fanta',            'Laranja',     1, '/assets/storefront/bebidas/fanta-laranja.webp'),
+      ('Fanta',            'Uva',         2, '/assets/storefront/bebidas/fanta-uva.webp'),
+      ('Fanta',            'Ananás',      3, '/assets/storefront/bebidas/fanta-ananas.webp'),
+      ('Schweppes',        'Pomegranate', 1, '/assets/storefront/bebidas/schweppes-pomegranate.webp'),
+      ('Schweppes',        'Pineapple',   2, '/assets/storefront/bebidas/schweppes-pineapple.webp'),
+      ('Schweppes',        'Tangerine',   3, '/assets/storefront/bebidas/schweppes-tangerine.webp'),
+      ('Schweppes',        'Ginger Ale',  4, '/assets/storefront/bebidas/schweppes-ginger.webp'),
+      ('Sparletta',        'Morango',     1, '/assets/storefront/bebidas/sparletta-morango.webp'),
+      ('Sparletta',        'Creme Soda',  2, '/assets/storefront/bebidas/sparletta-creme-soda.webp'),
+      ('Red Bull',         'Normal',      1, '/assets/storefront/bebidas/redbull-normal.webp'),
+      ('Red Bull',         'Zero',        2, '/assets/storefront/bebidas/redbull-zero.webp'),
+      ('Red Bull Edition', 'Peach',       1, '/assets/storefront/bebidas/redbull-peach.webp'),
+      ('Red Bull Edition', 'Tangerine',   2, '/assets/storefront/bebidas/redbull-tangerine.webp'),
+      ('Red Bull Edition', 'Watermelon',  3, '/assets/storefront/bebidas/redbull-watermelon.webp'),
+      ('Red Bull Edition', 'Yellow',      4, '/assets/storefront/bebidas/redbull-yellow.webp')
     ) as f(item_name, name, sort, photo_url)
     where f.item_name = v_drink.name;
   end loop;

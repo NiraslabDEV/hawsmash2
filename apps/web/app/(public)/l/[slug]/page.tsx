@@ -1,6 +1,6 @@
 import { notFound } from 'next/navigation';
 
-import { Storefront } from '../../_hawsmash/storefront';
+import { Storefront } from '../../_storefront/storefront';
 import { RememberStore } from './remember-store';
 import { createClient } from '@/utils/supabase/server';
 import { InvalidStoreSlugError, resolveStoreSlug } from '@/lib/store-context';

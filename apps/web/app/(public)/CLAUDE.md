@@ -18,9 +18,9 @@
 
 | | |
 |---|---|
-| **Onde vive** | `apps/web/app/(public)/_hawsmash/` (`landing.css`, `storefront.tsx`, `sections.tsx`, `menu-banners.tsx`, `cart-drawer.tsx`, `icons.tsx`) |
+| **Onde vive** | `apps/web/app/(public)/_storefront/` (`landing.css`, `storefront.tsx`, `sections.tsx`, `menu-banners.tsx`, `cart-drawer.tsx`, `icons.tsx`) |
 | **Quem a usa** | `/` (escolha de loja) · `/l/[slug]` (loja) · `/upsell` (oferta antes do pagamento) · `/checkout` (só a voz: títulos, foco, cantos) |
-| **De onde veio** | `Desktop/0001. Clientes/HawSmash` — `styles.css` + `src/app.jsx` do 1.0; fotos em `public/assets/hawsmash/` |
+| **De onde veio** | `Desktop/0001. Clientes/HawSmash` — `styles.css` + `src/app.jsx` do 1.0; fotos em `public/assets/storefront/` |
 | **O que continua igual** | `useCart` e a forma de `localStorage['cart']`, `GET /api/menu`, `create_order`, tracking, `formatMT` — **nada da lógica mudou** |
 
 **Regras próprias desta pele:**

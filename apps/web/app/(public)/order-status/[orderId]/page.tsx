@@ -25,8 +25,8 @@ import { trackPurchase, type TrackItem } from '@/lib/analytics/track';
 import { shouldFirePurchase, markPurchaseFired } from '@/lib/analytics/purchase-guard';
 import { useAccount } from '@/utils/useAccount';
 
-import '../../_hawsmash/landing.css';
-import '../../_hawsmash/funnel.css';
+import '../../_storefront/landing.css';
+import '../../_storefront/funnel.css';
 import {
   FunnelRail,
   FunnelFoot,
@@ -39,7 +39,7 @@ import {
   IcoArrow,
   IcoStar,
   IcoCopy,
-} from '../../_hawsmash/funnel';
+} from '../../_storefront/funnel';
 
 /** Um bloco comercial do funil, tal como a marca o traz. */
 type Promo = ResolvedBrand['storefront']['funnel']['promos'][number];

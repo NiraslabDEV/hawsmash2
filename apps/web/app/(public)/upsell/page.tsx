@@ -13,9 +13,9 @@ import { useStoreSlug } from '@/utils/useStore';
 import { trackAddToCart } from '@/lib/analytics/track';
 import { alreadyServed, companionOffers, upgradeOffers, upsellDecision } from '@/lib/upsell';
 
-import '../_hawsmash/landing.css';
-import { ArrowIcon, CartIcon } from '../_hawsmash/icons';
-import type { MenuItem, MenuPayload, MenuVariant } from '../_hawsmash/types';
+import '../_storefront/landing.css';
+import { ArrowIcon, CartIcon } from '../_storefront/icons';
+import type { MenuItem, MenuPayload, MenuVariant } from '../_storefront/types';
 
 const mt = (value: number) => formatMT(value as Cents);
 

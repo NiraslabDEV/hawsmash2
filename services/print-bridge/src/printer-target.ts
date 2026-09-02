@@ -126,7 +126,7 @@ export async function sendToWindowsQueue(
   exec: Executor = runCommand,
 ): Promise<void> {
   if (!SHARE_PATTERN.test(share)) throw new Error(`nome de partilha invalido: ${share}`);
-  const ficheiro = join(tmpdir(), `hawsmash-print-${randomUUID()}.bin`);
+  const ficheiro = join(tmpdir(), `pos-print-${randomUUID()}.bin`);
   await writeFile(ficheiro, bytes);
   try {
     await exec('cmd', ['/c', 'copy', '/b', ficheiro, `\\\\localhost\\${share}`]);

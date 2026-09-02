@@ -46,6 +46,9 @@ describe('PWA do POS', () => {
     expect(installer).toContain('New-ScheduledTaskTrigger -AtLogOn');
     expect(installer).toContain('--kiosk');
     expect(installer).toContain('--edge-kiosk-type=fullscreen');
-    expect(installer).toContain('https://staging.hawsmash.com/pos');
+    // O endereco e da instalacao: obrigatorio, e nunca o dominio de um cliente
+    // escrito no produto (CLAUDE.md 18.3).
+    expect(installer).toContain('[Parameter(Mandatory = $true)]');
+    expect(installer).not.toContain('hawsmash.com');
   });
 });

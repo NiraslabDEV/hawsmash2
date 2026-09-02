@@ -1,7 +1,13 @@
+# Instala o POS em modo quiosque no PC de balcao.
+#
+# -PosUrl e obrigatorio de proposito: o endereco e da instalacao, nao do
+# produto. Um valor por omissao aqui e um PC que arranca a apontar para a loja
+# de outro cliente sem ninguem reparar (CLAUDE.md 18.3).
 param(
+  [Parameter(Mandatory = $true)]
   [ValidatePattern('^https://')]
-  [string]$PosUrl = 'https://staging.hawsmash.com/pos',
-  [string]$TaskName = 'HAWSMASH POS Kiosk'
+  [string]$PosUrl,
+  [string]$TaskName = 'POS Kiosk'
 )
 
 $edgeCandidates = @(

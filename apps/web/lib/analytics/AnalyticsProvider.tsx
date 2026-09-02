@@ -68,7 +68,7 @@ export function AnalyticsProvider() {
 
   return (
     // O atributo é o gancho para cada pele o levantar do fundo quando tem
-    // barra flutuante (ver (public)/_hawsmash/landing.css).
+    // barra flutuante (ver (public)/_storefront/landing.css).
     <div data-consent-banner className="fixed bottom-0 inset-x-0 z-50 p-4">
       <div className="max-w-2xl mx-auto bg-[#1a1612] border border-[#e5a93c]/30 rounded-xl p-4 shadow-2xl flex flex-col sm:flex-row items-start sm:items-center gap-3">
         <p className="text-sm text-gray-300 flex-1">

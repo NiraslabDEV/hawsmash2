@@ -90,35 +90,37 @@ restaurante; o dono muda o que é dele, sozinho, sem deploy.
 
 ### Schema
 
-- [ ] Migration `1101_brand.sql` — tabela `brand_settings` (singleton, como `settings`):
-      `name`, `tagline`, `legal_name`, `nuit`, `primary_color`, `bg_color`, `text_color`,
-      `logo_path`, `favicon_path`, `og_image_path`, `social` (jsonb), `contact` (jsonb),
-      `receipt_footer_default`, `updated_at`, `updated_by`
-- [ ] Bucket **público** `brand-assets` para logo, favicon e imagens da loja
+- [x] Migration `1040_marca_em_runtime.sql` — tabela `brand_settings` (singleton, como `settings`):
+      `name`, `tagline`, `legal_name`, `nuit`, `logo_path`, `favicon_path`, `og_image_path`,
+      `receipt_footer_default`, `social`/`contact`/`theme`/`storefront` (jsonb), `updated_at`,
+      `updated_by`
+- [x] Bucket **público** `brand-assets` para logo, favicon e imagens da loja
       (público de propósito — é o logo que aparece na montra; segredos continuam fora daqui)
-- [ ] RLS: leitura por `anon` **só** via RPC `get_brand()`; escrita só `owner`
-- [ ] `event_log`: `brand.updated` com autor e o que mudou
+- [x] RLS: leitura por `anon` **só** via RPC `get_brand()`; escrita só `owner`, e só por RPC
+- [x] `event_log`: `brand.updated` com autor e o que mudou
 
 ### Aplicação
 
-- [ ] `get_brand()` — RPC pública, cacheada no servidor (revalidação curta), **com fallback**:
-      se a BD não responder, serve o `config/brand.ts` de fábrica. **A loja nunca abre sem marca.**
-- [ ] Os 12 sítios que importam `@brand` passam a ler o resultado de `get_brand()`
-- [ ] Cores aplicadas por **variáveis CSS** injectadas no layout, não por classes compiladas
-- [ ] `config/brand.ts` fica reduzido ao **fallback de fábrica** — deixa de conter o HAWSMASH
-- [ ] Marca do HAWSMASH migrada para a BD por migration de dados (não à mão)
+- [x] `get_brand()` — RPC pública, cacheada no servidor (60 s), **com fallback**: se a BD não
+      responder, serve o `config/brand.ts` de fábrica. **A loja nunca abre sem marca.**
+- [x] Os 16 sítios que importavam `@brand` passam a ler `getBrand()` (servidor) / `useBrand()` (cliente)
+- [x] Cores aplicadas por **variáveis CSS** injectadas no layout raiz, não por classes compiladas
+- [x] `config/brand.ts` fica reduzido ao **fallback de fábrica** — deixa de conter o HAWSMASH
+- [x] Marca do HAWSMASH migrada para a BD por migration de dados (`1041`), guardada por
+      "só se a instalação já tiver lojas" — um restaurante novo não nasce a chamar-se HAWSMASH
 
 ### Painel
 
-- [ ] Aba **Aparência** (`(admin)/aparencia`): nome, cores com pré-visualização ao vivo, logo,
-      favicon, redes, contactos, rodapé do talão
-- [ ] Perfil: só `owner`. Alteração logada.
+- [x] Aba **Aparência** (`(admin)/aparencia`): nome, cores com pré-visualização ao vivo, logo,
+      favicon, redes, contactos, rodapé do talão, textos da montra
+- [x] Perfil: só `owner`. Alteração logada.
 
 ### Testes
 
-- [ ] `packages/db/tests/brand.test.ts`: `anon` não lê a tabela directamente; `manager` não escreve; `owner` escreve
-- [ ] Teste de fallback: sem BD, a loja renderiza com a marca de fábrica
-- [ ] E2E: mudar a cor no painel muda a loja **sem novo deploy**
+- [x] `packages/db/tests/brand.test.ts`: `anon` não lê a tabela directamente; `manager` não escreve; `owner` escreve
+- [x] Teste de fallback: sem BD, a loja renderiza com a marca de fábrica
+- [x] Guarda: `config/brand.ts` não pode voltar a conter identidade de cliente
+- [ ] E2E: mudar a cor no painel muda a loja **sem novo deploy** *(falta correr contra staging)*
 
 **DoD:** clonar o repo, apontar para um Supabase vazio, e obter uma loja com marca própria **sem
 editar um único ficheiro**.
@@ -136,10 +138,15 @@ configuração, ou assume-se como personalização paga — mas não pode ficar 
 cliente no caminho de um ficheiro que todos os outros vão usar.
 
 - [ ] Decidir e registar em ADR: **tema configurável** ou **montra à medida vendida à parte**
-- [ ] Renomear `_hawsmash/` → `_storefront/` (o nome de um cliente não é o nome de um módulo)
-- [ ] Secções da página inicial passam a ser dados: ordem, títulos, imagens, blocos ligados/desligados
-- [ ] Imagens em `brand-assets`, não em `public/assets/<cliente>/`
-- [ ] `public/assets/` fica só com o que é do produto (as marcas dos clientes saem do repositório)
+- [x] Renomear `_hawsmash/` → `_storefront/` (o nome de um cliente não é o nome de um módulo)
+- [x] Logo do talão sai do código do print-bridge para ficheiro de instalação (`brand-logo.b64`)
+- [x] Instalador do quiosque deixa de trazer o domínio de um cliente por omissão
+- [x] Textos da montra (hero, cardápio, rodapé, promos) passam a ser dados editáveis na Aparência
+- [ ] Secções da página inicial passam a ser dados também na **ordem** e no **ligado/desligado**
+- [x] `public/assets/hawsmash/` → `public/assets/storefront/`, com migration a acertar os `photo_url`
+- [ ] Imagens de montra em `brand-assets`, não no repositório
+- [ ] Tirar `public/assets/{babalaza,casa-do-bom-pasteleiro,thebox}/` — presos a migrations já
+      aplicadas do motor herdado; saem quando essas referências saírem
 
 **DoD:** duas instalações com montras visivelmente diferentes, a partir do mesmo build.
 

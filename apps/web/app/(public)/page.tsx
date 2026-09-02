@@ -12,7 +12,7 @@ import {
   type PublicStoreOption,
 } from '@/lib/public-stores';
 
-import './_hawsmash/landing.css';
+import './_storefront/landing.css';
 
 // A escolha da loja é a primeira decisão do cliente: zonas, horários, preços e
 // disponibilidade passam todos a ser dessa unidade (CLAUDE §5.5 e §13).

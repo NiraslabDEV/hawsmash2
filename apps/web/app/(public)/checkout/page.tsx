@@ -26,8 +26,8 @@ import { useQuery, useMutation } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { formatMT, type Cents } from '@delivery/core';
 
-import '../_hawsmash/landing.css';
-import '../_hawsmash/funnel.css';
+import '../_storefront/landing.css';
+import '../_storefront/funnel.css';
 import { createClient } from '@/utils/supabase/client';
 import { useStoreSlug } from '@/utils/useStore';
 import { buildScheduleSlots, type StoreHour } from '@/lib/store-hours';
@@ -51,7 +51,7 @@ import {
   IcoArrow,
   IcoCopy,
   IcoPlus,
-} from '../_hawsmash/funnel';
+} from '../_storefront/funnel';
 
 type PaymentFlow   = 'manual' | 'auto';
 type ManualMethod  = 'mpesa' | 'emola';

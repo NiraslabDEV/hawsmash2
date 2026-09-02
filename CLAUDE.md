@@ -574,9 +574,10 @@ O 1.0 continua a vender **até ao dia do cutover**. Nada pára.
 - ❌ Apagar venda anulada — anula-se com motivo, nunca se apaga.
 - ❌ `tenant_id`, planos comerciais ou gating por plano. `store_id` é unidade física, não inquilino.
 - ❌ **Identidade de cliente em código** — nome, cor, logo ou texto de marca dentro de `config/brand.ts`
-  ou de um componente. A partir da P1 isso é dado, não ficheiro (§18.2).
-- ❌ **Nome de cliente em caminhos, tabelas ou variáveis do produto** (`_hawsmash/`, `assets/hawsmash/`).
-  O produto não sabe como se chama o cliente que o está a usar.
+  ou de um componente. Isso é dado, não ficheiro (§18.2). Travado por
+  `config/__tests__/brand-factory.test.ts`.
+- ❌ **Nome de cliente em caminhos, tabelas ou variáveis do produto.** O produto não sabe como se
+  chama o cliente que o está a usar. Travado por `config/__tests__/nomes-de-cliente.test.ts`.
 - ❌ **Perguntas e respostas do chat dentro do código** — são conteúdo de loja, vivem em `chat_topics` (§19).
 - ❌ Avançar fase do ROADMAP com testes vermelhos.
 
@@ -612,21 +613,34 @@ e textos de marca vivem em **`brand_settings`** (singleton, como `settings`) e e
 `config/brand.ts` fica reduzido a **fallback de fábrica**: o que a loja mostra quando a base de dados
 não responde. Nunca contém o nome nem as cores de um cliente real.
 
-**Porque é inegociável:** `config/brand.ts` é importado por 12 ficheiros através do alias `@brand` e
-os valores entram no bundle em **tempo de compilação**. Enquanto for assim:
+**Feito (migrations 1040–1042).** `brand_settings` guarda a identidade; `get_brand()` serve-a ao
+público; `update_brand()` deixa só o dono escrever e regista em `event_log`. A aplicação resolve
+**fábrica + base de dados** com merge profundo (`apps/web/lib/brand/resolve.ts`) e serve o resultado
+por `getBrand()` no servidor e `useBrand()` no cliente. As cores entram por variáveis CSS no layout
+raiz — mudar a cor no painel muda a loja **sem deploy**.
 
-1. mudar a marca não muda nada sem novo deploy;
-2. o dono não consegue editar a sua própria marca;
-3. cada cliente é uma **cópia do repositório** — e as melhorias do produto colidem sempre no mesmo
-   ficheiro, porque é ali que a identidade do cliente e o código partilham a mesma linha.
+**Porque era inegociável:** `config/brand.ts` era importado por 16 ficheiros através do alias
+`@brand` e os valores entravam no bundle em **tempo de compilação**. Enquanto assim foi:
 
-O ponto 3 é o que torna isto uma regra de arquitectura e não uma questão de gosto: **é o que impede
+1. mudar a marca não mudava nada sem novo deploy;
+2. o dono não conseguia editar a sua própria marca;
+3. cada cliente era uma **cópia do repositório** — e as melhorias do produto colidiam sempre no mesmo
+   ficheiro, porque era ali que a identidade do cliente e o código partilhavam a mesma linha.
+
+O ponto 3 é o que torna isto uma regra de arquitectura e não uma questão de gosto: **é o que impedia
 o produto de escalar para além do segundo cliente.**
 
 ### 18.3 O produto não sabe o nome do cliente
 
 Nenhum caminho, tabela, componente ou variável do produto contém o nome de um cliente.
-`_hawsmash/` e `assets/hawsmash/` são dívida a pagar na P2 — não são padrão a seguir.
+`_hawsmash/` passou a `_storefront/`, `public/assets/hawsmash/` passou a `public/assets/storefront/`
+(migration 1042 acerta os `photo_url` já gravados), o logo do talão saiu do código do print-bridge
+para um ficheiro de instalação (`brand-logo.b64`), e o instalador do quiosque deixou de trazer o
+domínio de um cliente por omissão. Um teste trava o regresso disto.
+
+**Dívida que fica:** `public/assets/{babalaza,casa-do-bom-pasteleiro,thebox}/` — imagens de outros
+clientes referidas por migrations já aplicadas do motor herdado. Saem quando essas referências
+saírem, não antes.
 
 Personalização de montra é **dados** (secções, ordem, imagens, blocos ligados/desligados) ou é
 **trabalho vendido à parte**. Nunca um `if` com o nome de um cliente.

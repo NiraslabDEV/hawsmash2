@@ -129,7 +129,9 @@ export function loadCustomerDisplayConfig(env: Environment): CustomerDisplayConf
     baud: positiveInteger(env.CUSTOMER_DISPLAY_BAUD, 9600, 'CUSTOMER_DISPLAY_BAUD', 921_600),
     columns: positiveInteger(env.CUSTOMER_DISPLAY_COLUMNS, 20, 'CUSTOMER_DISPLAY_COLUMNS', 40),
     protocol,
-    idleText: env.CUSTOMER_DISPLAY_IDLE_TEXT?.trim() || 'HAWSMASH',
+    // Sem texto configurado usa-se o nome da marca desta instalacao; nunca o
+    // de um cliente escrito no produto (CLAUDE.md 18.3).
+    idleText: env.CUSTOMER_DISPLAY_IDLE_TEXT?.trim() || env.BRAND_NAME?.trim() || '',
     idleSubtext: env.CUSTOMER_DISPLAY_IDLE_SUBTEXT?.trim() || 'BEM-VINDO',
     idleStepMs: positiveInteger(env.CUSTOMER_DISPLAY_IDLE_STEP_MS, 300, 'CUSTOMER_DISPLAY_IDLE_STEP_MS', 5_000),
     idleAfterMs: positiveInteger(env.CUSTOMER_DISPLAY_IDLE_AFTER_MS, 90_000, 'CUSTOMER_DISPLAY_IDLE_AFTER_MS'),

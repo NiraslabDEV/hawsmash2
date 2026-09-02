@@ -24,9 +24,9 @@ import Link from 'next/link';
 import { useRouter, useParams } from 'next/navigation';
 import { useBrand } from '@/lib/brand/context';
 
-import '../../../_hawsmash/landing.css';
-import '../../../_hawsmash/funnel.css';
-import { FunnelRail, FunnelFoot, IcoCheck, IcoAlert, IcoRefresh, IcoWhats, IcoUpload } from '../../../_hawsmash/funnel';
+import '../../../_storefront/landing.css';
+import '../../../_storefront/funnel.css';
+import { FunnelRail, FunnelFoot, IcoCheck, IcoAlert, IcoRefresh, IcoWhats, IcoUpload } from '../../../_storefront/funnel';
 
 type PollStatus = 'polling' | 'paid' | 'failed' | 'timeout';
 

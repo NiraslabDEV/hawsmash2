@@ -210,18 +210,21 @@ function deliveryBlock(payload: {
 /**
  * O cabecalho da casa: logo em raster e o nome da loja por baixo.
  *
- * O raster vem do bridge do 1.0, onde correu meses em producao — e e por isso
- * que o talao do HAWSMASH se reconhece de longe. Se por alguma razao o logo
- * nao estiver disponivel, cai para o nome em corpo triplo em vez de sair um
- * talao anonimo.
+ * O logo e dado da instalacao (ver logo.ts) — um talao que se reconhece de
+ * longe vale muito, mas nao ao ponto de imprimir a marca de outro cliente.
+ * Sem logo, cai para o nome da marca (BRAND_NAME) em corpo triplo; sem nome
+ * definido, fica so a loja, que sai sempre.
  */
 function brandHeader(storeShortName: string): Buffer[] {
   const chunks: Buffer[] = [INIT, CANCEL_KANJI, CODEPAGE_CP1252, ALIGN_CENTER];
+  const brandName = process.env.BRAND_NAME?.trim();
+
   if (LOGO_RASTER.length > 0) {
     chunks.push(LOGO_RASTER, feed(1));
-  } else {
-    chunks.push(BOLD_ON, SIZE_TRIPLE, line('HAWSMASH'), SIZE_NORMAL, BOLD_OFF);
+  } else if (brandName) {
+    chunks.push(BOLD_ON, SIZE_TRIPLE, line(brandName.toUpperCase()), SIZE_NORMAL, BOLD_OFF);
   }
+
   chunks.push(BOLD_ON, line(storeShortName.toUpperCase()), BOLD_OFF);
   return chunks;
 }
