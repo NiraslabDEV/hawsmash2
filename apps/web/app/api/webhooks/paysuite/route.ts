@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/utils/supabase/server';
 import { createClient as createServiceClient } from '@supabase/supabase-js';
+import { isRedirectProvider } from '@delivery/payments';
+
 import { getPaymentConfig, buildProvider } from '@/lib/payments/config';
 import { referenceToOrderId } from '@/lib/payments/reference';
 import { fireConversions } from '@/lib/server-analytics/conversions';
@@ -13,6 +15,12 @@ export async function POST(request: Request) {
   // Config (provider + webhook secret) de settings → fallback .env (CLAUDE.md 6.2/16.2)
   const cfg = await getPaymentConfig();
   const provider = buildProvider(cfg);
+
+  // O M-Pesa directo não tem webhook: quem lá chegar está enganado ou a bater
+  // à porta errada. Responder 404 diz a verdade sem revelar o que corre aqui.
+  if (!isRedirectProvider(provider)) {
+    return new Response('not_found', { status: 404 });
+  }
 
   // 2. Verificar assinatura HMAC-SHA256 (CLAUDE.md 12: webhook sem assinatura = rejeitado)
   if (!provider.verifyWebhookSignature(raw, sig)) {

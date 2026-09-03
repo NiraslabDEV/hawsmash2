@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server';
+import { InvalidMsisdnError, MSISDN_ERROR_PT, isRedirectProvider, normalizeMsisdn } from '@delivery/payments';
+
 import { createClient } from '@/utils/supabase/server';
-import { getPaymentConfig, buildProvider } from '@/lib/payments/config';
+import { getPaymentConfig, buildProvider, isDirectFlow } from '@/lib/payments/config';
+import { runDirectCharge, serviceClient } from '@/lib/payments/direct';
 import { orderToReference } from '@/lib/payments/reference';
 import { InvalidStoreSlugError, resolveStoreSlug } from '@/lib/store-context';
 
@@ -22,8 +25,16 @@ function resolvePublicBase(request: Request): string {
 }
 
 export async function POST(request: Request) {
-  // Config (provider + chaves) vem de settings → fallback .env (CLAUDE.md 6.2/16.2)
-  const cfg = await getPaymentConfig();
+  const payloadInicial = await request.json().catch(() => null);
+  if (!payloadInicial) {
+    return NextResponse.json({ error: 'invalid_json' }, { status: 400 });
+  }
+
+  // Config da LOJA (cai em settings, e depois no .env) — cada unidade pode ter
+  // a sua conta (CLAUDE.md §5.6).
+  const cfg = await getPaymentConfig(
+    typeof payloadInicial.storeSlug === 'string' ? payloadInicial.storeSlug : null,
+  );
 
   if (cfg.provider === 'manual') {
     return NextResponse.json(
@@ -32,9 +43,22 @@ export async function POST(request: Request) {
     );
   }
 
-  const payload = await request.json().catch(() => null);
-  if (!payload) {
-    return NextResponse.json({ error: 'invalid_json' }, { status: 400 });
+  const payload = payloadInicial;
+
+  // Fluxo directo: o número tem de ser válido ANTES de existir pedido nenhum.
+  // Criar o pedido e só depois recusar o número deixava encomendas mortas na
+  // base de dados a cada erro de digitação.
+  let msisdn: string | null = null;
+  if (isDirectFlow(cfg.provider)) {
+    try {
+      msisdn = normalizeMsisdn(String(payload.msisdn ?? ''));
+    } catch (error) {
+      const reason = error instanceof InvalidMsisdnError ? error.reason : 'empty';
+      return NextResponse.json(
+        { error: 'invalid_msisdn', message: MSISDN_ERROR_PT[reason] },
+        { status: 400 },
+      );
+    }
   }
 
   const supabase = await createClient();
@@ -66,7 +90,7 @@ export async function POST(request: Request) {
   // 2. Ler total calculado pelo servidor (NUNCA confiar no client)
   const { data: order } = await supabase
     .from('orders')
-    .select('total_cents, order_number, payment_method')
+    .select('total_cents, order_number, payment_method, customer_email, customer_name')
     .eq('id', orderId)
     .single();
 
@@ -76,10 +100,60 @@ export async function POST(request: Request) {
 
   // URL público (com esquema) para return_url/callback_url — Paysuite valida-os.
   const appBase = resolvePublicBase(request);
+
+  // ── Fluxo DIRECTO (M-Pesa): cobra-se já, sem o cliente sair do site ──────
+  //
+  // O cliente fica neste ecrã a olhar para o telemóvel. A resposta pode
+  // demorar (é o tempo de ele digitar o PIN) e pode não chegar — e é por isso
+  // que `pending` é uma resposta legítima aqui, não um erro.
+  if (isDirectFlow(cfg.provider) && msisdn) {
+    let provider;
+    try {
+      provider = buildProvider(cfg);
+    } catch {
+      // Loja marcada como M-Pesa mas sem credenciais: não se finge que dá.
+      // O pedido fica a aguardar pagamento e segue pelo caminho manual.
+      return NextResponse.json(
+        {
+          orderId,
+          orderNumber: order.order_number,
+          status: 'unavailable',
+          message: 'O pagamento automático está indisponível. A loja vai confirmar contigo.',
+        },
+        { status: 200 },
+      );
+    }
+
+    const outcome = await runDirectCharge({
+      svc: serviceClient(),
+      provider,
+      providerName: cfg.provider,
+      order: {
+        id: orderId,
+        total_cents: order.total_cents,
+        order_number: order.order_number,
+        customer_email: order.customer_email,
+        customer_name: order.customer_name,
+      },
+      msisdn,
+      origin: appBase,
+    });
+
+    return NextResponse.json({
+      orderId,
+      orderNumber: order.order_number,
+      status: outcome.status,
+      message: outcome.message,
+    });
+  }
+
   // Paysuite exige reference alfanumérico → orderToReference (CLAUDE.md 6.4)
   const idempotencyKey = orderToReference(orderId);
   // autoWebhookMs: no mock dispara webhook 2s depois (simula Paysuite); ignorado no real
   const provider = buildProvider(cfg, { autoWebhookMs: 2000 });
+  if (!isRedirectProvider(provider)) {
+    return NextResponse.json({ error: 'provider_flow_mismatch' }, { status: 500 });
+  }
 
   // 3. Criar checkout Paysuite
   let checkoutUrl: string;

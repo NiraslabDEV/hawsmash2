@@ -11,7 +11,7 @@
   },
   "dependencies": {
     "@delivery/core": "workspace:^",
-    "@delivery/paysuite": "workspace:^",
+    "@delivery/payments": "workspace:^",
     "@sentry/nextjs": "^10.70.0",
     "@supabase/ssr": "^0.12.0",
     "@supabase/supabase-js": "^2.108.1",

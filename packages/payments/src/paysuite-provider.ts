@@ -1,6 +1,6 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import type {
-  PaymentProvider,
+  RedirectPaymentProvider,
   CreateCheckoutRequest,
   CreateCheckoutResponse,
   ParsedWebhook,
@@ -35,7 +35,9 @@ interface PaysuiteWebhookBody {
   request_id: string;
 }
 
-export class PaysuiteProvider implements PaymentProvider {
+export class PaysuiteProvider implements RedirectPaymentProvider {
+  readonly flow = 'redirect' as const;
+
   constructor(
     private apiKey: string,
     private webhookSecret: string,

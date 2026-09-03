@@ -1,6 +1,6 @@
 import { createHmac, randomUUID } from 'node:crypto';
 import type {
-  PaymentProvider,
+  RedirectPaymentProvider,
   CreateCheckoutRequest,
   CreateCheckoutResponse,
   ParsedWebhook,
@@ -10,7 +10,9 @@ import type {
 
 const MOCK_SECRET = 'mock-webhook-secret-for-testing';
 
-export class MockProvider implements PaymentProvider {
+export class MockProvider implements RedirectPaymentProvider {
+  readonly flow = 'redirect' as const;
+
   // DECISÃO: autoWebhookMs=0 desativa o disparo automático (útil em testes unitários)
   constructor(private options: { autoWebhookMs?: number } = {}) {}
 
