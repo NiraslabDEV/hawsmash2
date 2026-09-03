@@ -330,6 +330,11 @@ export default function CheckoutPage() {
   const [paymentProof, setPaymentProof]           = useState<File | null>(null);
   const [uploading, setUploading]                 = useState(false);
   const [autoSubmitting, setAutoSubmitting]       = useState(false);
+  // Número onde o pedido de PIN vai cair. Começa igual ao do pedido, mas
+  // separa-se de propósito: muita gente encomenda de um número e paga do
+  // M-Pesa de outra pessoa da casa.
+  const [mpesaPhone, setMpesaPhone]               = useState('');
+  const [mpesaError, setMpesaError]               = useState<string | null>(null);
 
   const storeSlug = useStoreSlug();
 
@@ -356,7 +361,9 @@ export default function CheckoutPage() {
     [menuData?.hours],
   );
   const paymentProvider: string = menuData?.payment_provider ?? 'manual';
-  const hasAutoPayment = paymentProvider === 'mock' || paymentProvider === 'paysuite';
+  const isDirectPayment = paymentProvider === 'mpesa' || paymentProvider === 'mpesa_sim';
+  const hasAutoPayment =
+    paymentProvider === 'mock' || paymentProvider === 'paysuite' || isDirectPayment;
 
   const subtotal = cart.reduce((sum, item) => {
     const menuItem = menuData?.categories
@@ -459,22 +466,50 @@ export default function CheckoutPage() {
     if (!validate()) return;
     rememberAddress();
     trackAddPaymentInfo(cartTrackItems(), autoMethod);
+    setMpesaError(null);
     setAutoSubmitting(true);
     try {
       const res = await fetch('/api/payments', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify(buildOrderPayload(autoMethod)),
+        body:    JSON.stringify({
+          ...buildOrderPayload(autoMethod),
+          ...(isDirectPayment ? { msisdn: mpesaPhone || customerPhone } : {}),
+        }),
       });
       if (!res.ok) {
         const err = await res.json();
+        // O servidor manda a razão em português quando é o número que está mal.
+        if (err.error === 'invalid_msisdn') {
+          setMpesaError(err.message ?? 'Número inválido.');
+          return;
+        }
         throw new Error(err.error || 'Falha ao iniciar pagamento');
       }
-      const { checkoutUrl, orderId: newOrderId } = await res.json();
+      const dados = await res.json();
+      const newOrderId = dados.orderId as string | undefined;
       // Não apagar o carrinho aqui — só depois de o pagamento ser confirmado
       // em /payment/return. Se o utilizador voltar atrás, o carrinho mantém-se.
       localStorage.setItem('pending_order_id', newOrderId ?? '');
-      router.push(checkoutUrl);
+
+      // Fluxo directo (M-Pesa): não há para onde redireccionar — a cobrança já
+      // aconteceu. `pending` também segue para o ecrã de espera, que pergunta o
+      // estado: o cliente pode ter pago e a resposta não ter chegado a tempo.
+      if (isDirectPayment) {
+        if (dados.status === 'failed') {
+          setMpesaError(dados.message ?? 'O pagamento não foi concluído.');
+          return;
+        }
+        if (dados.status === 'unavailable') {
+          setMpesaError(dados.message ?? 'Pagamento automático indisponível.');
+          setPaymentFlow('manual');
+          return;
+        }
+        router.push(`/payment/return/${newOrderId}`);
+        return;
+      }
+
+      router.push(dados.checkoutUrl);
     } catch (err) {
       alert(err instanceof Error ? err.message : 'Erro desconhecido');
     } finally {
@@ -1001,21 +1036,60 @@ export default function CheckoutPage() {
             </div>
           ) : (
             <>
-              <div className="hf-tiles is-3">
-                {(['mpesa', 'emola', 'credit_card'] as AutoMethod[]).map((m) => (
-                  <Tile
-                    key={m}
-                    tight
-                    selected={autoMethod === m}
-                    onClick={() => setAutoMethod(m)}
-                    title={m === 'mpesa' ? 'M-Pesa' : m === 'emola' ? 'e-Mola' : 'Cartão'}
-                    sub={m === 'credit_card' ? 'Visa · MC' : 'Na hora'}
-                  />
-                ))}
-              </div>
-              <p className="hf-note" style={{ marginTop: 14 }}>
-                Vais confirmar o pagamento no teu telemóvel e voltas aqui.
-              </p>
+              {/* No M-Pesa directo não há escolha de método: é M-Pesa. Mostrar
+                  e-Mola e cartão seria oferecer o que a loja não aceita. */}
+              {isDirectPayment ? (
+                <>
+                  <label style={{ display: 'block' }}>
+                    <span className="hf-lbl">Número M-Pesa *</span>
+                    <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                      <span style={{ position: 'absolute', left: 16, color: 'var(--hs-ink-mute)', display: 'flex', pointerEvents: 'none' }}><IcoPhone /></span>
+                      <input
+                        type="tel"
+                        inputMode="numeric"
+                        autoComplete="tel"
+                        className="hf-fld num"
+                        style={{ paddingLeft: 46 }}
+                        placeholder="84 123 4567"
+                        value={mpesaPhone || customerPhone}
+                        onChange={(e) => {
+                          setMpesaPhone(e.target.value);
+                          setMpesaError(null);
+                        }}
+                      />
+                    </div>
+                  </label>
+
+                  {mpesaError && (
+                    <p className="hf-note" style={{ marginTop: 10, color: 'var(--hs-ember)' }}>
+                      {mpesaError}
+                    </p>
+                  )}
+
+                  <p className="hf-note" style={{ marginTop: 14 }}>
+                    Vais receber um pedido de PIN neste número. Confirma no telemóvel e
+                    <strong> não feches esta página</strong> — ela avisa-te quando estiver pago.
+                  </p>
+                </>
+              ) : (
+                <>
+                  <div className="hf-tiles is-3">
+                    {(['mpesa', 'emola', 'credit_card'] as AutoMethod[]).map((m) => (
+                      <Tile
+                        key={m}
+                        tight
+                        selected={autoMethod === m}
+                        onClick={() => setAutoMethod(m)}
+                        title={m === 'mpesa' ? 'M-Pesa' : m === 'emola' ? 'e-Mola' : 'Cartão'}
+                        sub={m === 'credit_card' ? 'Visa · MC' : 'Na hora'}
+                      />
+                    ))}
+                  </div>
+                  <p className="hf-note" style={{ marginTop: 14 }}>
+                    Vais confirmar o pagamento no teu telemóvel e voltas aqui.
+                  </p>
+                </>
+              )}
             </>
           )}
 

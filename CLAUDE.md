@@ -75,7 +75,7 @@ NUNCA editar main directamente. NUNCA correr SQL à mão em produção — só m
 | Estado | TanStack Query (retry/reconexão) · POS com cache local (IndexedDB) |
 | Backend | Supabase (Postgres + RLS + Realtime + Auth + Storage) |
 | Validação | Zod em toda a boundary |
-| Pagamentos | **Paysuite** (M-Pesa/e-Mola automático, já validado em produção no motor) + **manual por comprovativo** (fallback) + **balcão** (dinheiro/cartão/móvel) |
+| Pagamentos | **Paysuite** (M-Pesa/e-Mola automático, validado em produção) · **M-Pesa directo** da Vodacom, sem gateway pelo meio · **manual por comprovativo** (fallback) · **balcão** (dinheiro/cartão/móvel). Escolhe-se por loja em `stores.payment_provider` |
 | Email | SMTP Hostinger (`nodemailer`, route handlers) — a caixa do próprio dono, herdado do 1.0 (ADR 0004) |
 | Impressão | `services/print-bridge` (Node, ESC/POS TCP 9100) — um por loja, 24/7, com **HTTP local na LAN** |
 | Monorepo | pnpm workspaces + Turborepo |
@@ -480,9 +480,18 @@ Tudo gravado em **UTC**; apresentado em **Africa/Maputo**. Horários de loja e r
 loja. (O 1.0 teve um bug real de caixa por causa disto — não repetir.)
 
 ### 11.9 Degradação de pagamento
-Se o Paysuite falhar (API em baixo, chave inválida), o checkout **não morre**: cai automaticamente no fluxo
-**manual por comprovativo** (herdado do 1.0) e avisa o painel. Uma loja nunca deixa de receber encomendas por
-causa do gateway.
+Se o gateway falhar (API em baixo, chave inválida, credenciais por preencher), o checkout **não morre**: cai
+automaticamente no fluxo **manual por comprovativo** (herdado do 1.0) e avisa o painel. Uma loja nunca deixa
+de receber encomendas por causa do gateway.
+
+**No M-Pesa directo há uma regra a mais, e é a que mais custa errar:** *"não sei" nunca vira "não pagou"*.
+Tempo esgotado, erro do M-Pesa, rede em baixo ou código desconhecido deixam o pedido **pendente** — nunca
+falhado. O cliente pode ter digitado o PIN e o dinheiro ter saído; quem decide é o M-Pesa, quando lhe
+perguntarmos (verificação activa no ecrã de espera, e cron de reconciliação).
+
+E a que impede cobrar duas vezes: a referência enviada ao M-Pesa (`ensure_payment_reference`) é **sempre a
+mesma** enquanto não se mandar rodar, e **só roda depois de uma falha definitiva**. Um duplo clique ou um
+retry repetem a mesma tentativa — que o M-Pesa recusa como duplicada — em vez de criarem uma cobrança nova.
 
 ---
 
