@@ -427,6 +427,56 @@
 
 ---
 
+### B-100 · [F6] M-Pesa directo: credenciais e endereços da Vodacom
+
+- Estado: **aberto — descoberto em 2026-09-03, ao construir o M-Pesa directo**
+- Desbloqueia: cliente (conta M-Pesa de empresa) + Vodacom (onboarding da API)
+- Pergunta exacta: qual é a **chave da API**, a **chave pública**, o **código do comerciante**, e
+  quais são os **endereços com porta** de sessão, cobrança e consulta de estado?
+- O que se passa: o motor já cobra por M-Pesa directo — provider, sessão cifrada, cobrança,
+  consulta de estado, reconciliação e ecrã de espera, tudo testado contra simulador. O que falta é
+  aquilo que só a Vodacom dá.
+- **As portas são o detalhe traiçoeiro:** o M-Pesa usa endereço e porta diferentes por operação e
+  por ambiente. Um número inventado aqui seria plausível o suficiente para chegar a produção sem
+  ninguém reparar — por isso ficam como `PLACEHOLDER_MPESA_*` no `.env.example` e a loja marcada
+  como `mpesa` sem credenciais cai no comprovativo manual em vez de fingir que cobra.
+- Contornado com: `payment_provider = 'mpesa_sim'` (simulador) para ensaiar o fluxo inteiro,
+  incluindo o cancelamento, o saldo insuficiente e o tempo esgotado.
+- Também por confirmar: a conta M-Pesa de **empresa** e o onboarding na API não são imediatos.
+  Vale a pena começar isso antes de haver data de abertura.
+
+### B-101 · [F0] Cinco suites de integração nunca correram — e estão desactualizadas
+
+- Estado: **aberto — descoberto em 2026-09-03**
+- Desbloqueia: nós
+- O que se passa: `cash`, `payments`, `referral`, `stock` e `tracking` apontavam para
+  `localhost:54531`. A porta deste projecto é a **54731**. Falhavam no arranque, portanto
+  **nunca correram contra base de dados nenhuma** — e ninguém deu por isso, porque não estão na
+  lista do `test:db` (o gate).
+- A porta foi corrigida. Ao voltarem a correr, mostraram-se desactualizadas face ao schema **e a
+  deixar a base de dados suja para as suites seguintes** — chegaram a partir o `pos.test.ts` e o
+  `rls-permissive.test.ts`, que passam com a base de dados limpa.
+- Contornado com: `describe.skip` com este ID no cabeçalho de cada ficheiro. Ficam suspensas e não
+  apagadas: **um teste que não corre é pior do que um teste que não existe**, porque parece
+  cobertura.
+- Para fechar: actualizar cada suite ao schema de hoje, garantir que limpa o que suja, e metê-la na
+  lista do `test:db`.
+
+### B-102 · [F6] `account` e `recipes` falham contra a base de dados local
+
+- Estado: **aberto — descoberto em 2026-09-03**
+- Desbloqueia: nós
+- O que se passa: com a base de dados acabada de repor, duas suites fora do gate falham por razões
+  diferentes, nenhuma relacionada com pagamentos:
+  - `account.test.ts` espera o telefone como `+258840000901` e recebe `840000901` — a migration
+    1038 mudou a normalização e o teste ficou para trás.
+  - `recipes.test.ts` espera consumo de matéria-prima e não há nenhum: `recipe_items` fica **vazia**
+    depois de um `db reset` local, apesar de a 1027 existir para a preencher.
+- O segundo é o que interessa mesmo: se a ficha técnica não é semeada, o consumo por variante não
+  está a ser exercitado por teste nenhum — e é ele que desconta a carne certa.
+
+---
+
 ## RESOLVIDOS
 
 *(mover para aqui, com data, sem apagar o histórico)*

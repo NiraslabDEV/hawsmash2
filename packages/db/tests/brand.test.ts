@@ -29,6 +29,9 @@ let brandBefore: Record<string, unknown> | null = null;
 const createdUserIds: string[] = [];
 const suffix = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
 const PASSWORD = "Marca-1040-Teste-2026!";
+// Nome único por corrida: o `changed` do event_log só lista o que MUDOU, e um
+// nome fixo deixava o teste a depender de a corrida anterior não o ter posto lá.
+const NOME_TESTE = `Marca de Teste ${suffix.slice(0, 12)}`;
 
 async function createUser(
   label: string,
@@ -125,17 +128,17 @@ describe("1040 — marca em runtime", () => {
   it("deixa o dono gravar, devolve o resultado e regista quem mudou o quê", async () => {
     const saved = await owner.rpc("update_brand", {
       p_patch: {
-        name: "Marca de Teste 1040",
+        name: NOME_TESTE,
         tagline: "Tagline de teste",
         theme: { gold: "#123456" },
         social: { instagram: "https://instagram.com/teste" },
       },
     });
     expect(saved.error).toBeNull();
-    expect(saved.data).toMatchObject({ name: "Marca de Teste 1040", tagline: "Tagline de teste" });
+    expect(saved.data).toMatchObject({ name: NOME_TESTE, tagline: "Tagline de teste" });
 
     const publicRead = await anon.rpc("get_brand");
-    expect(publicRead.data).toMatchObject({ name: "Marca de Teste 1040" });
+    expect(publicRead.data).toMatchObject({ name: NOME_TESTE });
     // Segredo nenhum sai por aqui, e nem sequer quem gravou.
     expect(Object.keys(publicRead.data as object)).not.toContain("updated_by");
 
@@ -151,13 +154,13 @@ describe("1040 — marca em runtime", () => {
 
   it("patch parcial não apaga o que não veio", async () => {
     await owner.rpc("update_brand", {
-      p_patch: { name: "Marca de Teste 1040", tagline: "Fica", theme: { gold: "#abcdef" } },
+      p_patch: { name: NOME_TESTE, tagline: "Fica", theme: { gold: "#abcdef" } },
     });
     const partial = await owner.rpc("update_brand", { p_patch: { tagline: "Mudou" } });
 
     expect(partial.error).toBeNull();
     expect(partial.data).toMatchObject({
-      name: "Marca de Teste 1040",
+      name: NOME_TESTE,
       tagline: "Mudou",
       theme: { gold: "#abcdef" },
     });

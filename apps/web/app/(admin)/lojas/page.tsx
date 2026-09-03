@@ -6,6 +6,8 @@ import { formatMT, type Cents } from '@delivery/core';
 import { parseMTInput } from '@/lib/cash/input';
 import { createClient } from '@/utils/supabase/client';
 
+import { PaymentSection } from './payment-section';
+
 type StoreConfig = {
   id: string;
   slug: string;
@@ -513,6 +515,8 @@ export default function LojasPage() {
               Guardar dados da loja
             </button>
           </div>
+
+          <PaymentSection storeId={config.store.id} storeName={config.store.short_name} />
 
           <section className="rounded-2xl border border-white/[0.08] p-5">
             <h2 className="font-black text-white">Horário da semana</h2>
