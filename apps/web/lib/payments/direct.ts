@@ -47,11 +47,14 @@ export interface RunDirectChargeInput {
   origin?: string;
 }
 
-export function serviceClient(): SupabaseClient {
+export function serviceClient(options?: { signal?: AbortSignal }): SupabaseClient {
   return createServiceClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    { auth: { persistSession: false } },
+    {
+      auth: { persistSession: false },
+      ...(options?.signal ? { global: { fetch: (input, init) => fetch(input, { ...init, signal: init?.signal ? AbortSignal.any([init.signal, options.signal!]) : options.signal }) } } : {}),
+    },
   );
 }
 

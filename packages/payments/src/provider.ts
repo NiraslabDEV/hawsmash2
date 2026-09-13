@@ -34,7 +34,7 @@ export interface RedirectPaymentProvider {
   createCheckout(request: CreateCheckoutRequest): Promise<CreateCheckoutResponse>;
   verifyWebhookSignature(rawBody: string, signatureHeader: string): boolean;
   parseWebhook(payload: unknown): ParsedWebhook;
-  getPaymentStatus?(providerRef: string): Promise<ProviderPaymentStatus>;
+  getPaymentStatus?(providerRef: string, options?: { signal?: AbortSignal }): Promise<ProviderPaymentStatus>;
 }
 
 /* ────────────────────────── fluxo DIRECTO ────────────────────────────── */
@@ -79,7 +79,7 @@ export interface DirectPaymentProvider {
   readonly flow: 'direct';
   charge(request: DirectChargeRequest): Promise<DirectChargeResult>;
   /** Pergunta o estado pela referência da tentativa. É isto que fecha o ciclo. */
-  getPaymentStatus(reference: string): Promise<ProviderPaymentStatus>;
+  getPaymentStatus(reference: string, options?: { signal?: AbortSignal }): Promise<ProviderPaymentStatus>;
 }
 
 export type PaymentProvider = RedirectPaymentProvider | DirectPaymentProvider;

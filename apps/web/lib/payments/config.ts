@@ -69,7 +69,8 @@ function completeMpesa(partial: Partial<MpesaCredentials>): MpesaCredentials | n
   return partial as MpesaCredentials;
 }
 
-export async function getPaymentConfig(storeSlug?: string | null): Promise<PaymentConfig> {
+export async function getPaymentConfig(storeSlug?: string | null, options?: { signal?: AbortSignal; requireStore?: boolean }): Promise<PaymentConfig> {
+  options?.signal?.throwIfAborted();
   let provider = (process.env.PAYMENT_PROVIDER ?? 'manual') as PaymentProviderName;
   let apiKey = process.env.PAYSUITE_API_KEY ?? null;
   let webhookSecret = process.env.PAYSUITE_WEBHOOK_SECRET ?? null;
@@ -80,7 +81,10 @@ export async function getPaymentConfig(storeSlug?: string | null): Promise<Payme
 
   if (url && serviceKey) {
     try {
-      const svc = createClient(url, serviceKey, { auth: { persistSession: false } });
+      const svc = createClient(url, serviceKey, {
+        auth: { persistSession: false },
+        ...(options?.signal ? { global: { fetch: (input, init) => fetch(input, { ...init, signal: init?.signal ? AbortSignal.any([init.signal, options.signal!]) : options.signal }) } } : {}),
+      });
 
       const { data: settings } = await svc
         .from('settings')
@@ -94,11 +98,13 @@ export async function getPaymentConfig(storeSlug?: string | null): Promise<Payme
       }
 
       if (storeSlug) {
-        const { data } = await svc
+        const { data, error } = await svc
           .from('stores')
           .select(STORE_COLUMNS)
           .eq('slug', storeSlug)
           .maybeSingle<StoreRow>();
+
+        if (options?.requireStore && (error || !data)) throw new Error('store_payment_config_unavailable');
 
         if (data) {
           if (data.payment_provider) provider = data.payment_provider as PaymentProviderName;
@@ -115,10 +121,14 @@ export async function getPaymentConfig(storeSlug?: string | null): Promise<Payme
         }
       }
     } catch {
+      options?.signal?.throwIfAborted();
+      if (options?.requireStore) throw new Error('store_payment_config_unavailable');
       /* sem BD acessível → usa só o .env */
     }
   }
 
+  if (options?.requireStore && (!storeSlug || !url || !serviceKey)) throw new Error('store_payment_config_unavailable');
+  options?.signal?.throwIfAborted();
   return { provider, apiKey, webhookSecret, mpesa: completeMpesa(mpesa) };
 }
 

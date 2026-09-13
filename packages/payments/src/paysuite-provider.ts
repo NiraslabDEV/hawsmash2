@@ -112,10 +112,14 @@ export class PaysuiteProvider implements RedirectPaymentProvider {
 
   // DECISÃO: erro de rede/API → 'pending' (nunca marcar failed sem certeza;
   // a próxima volta do cron tenta de novo).
-  async getPaymentStatus(providerRef: string): Promise<ProviderPaymentStatus> {
+  async getPaymentStatus(providerRef: string, options?: { signal?: AbortSignal }): Promise<ProviderPaymentStatus> {
     try {
+      const timeout = AbortSignal.timeout(20_000);
+      const signal = options?.signal ? AbortSignal.any([timeout, options.signal]) : timeout;
+      signal.throwIfAborted();
       const res = await fetch(`${this.apiBase}/payments/${providerRef}`, {
         method: 'GET',
+        signal,
         headers: {
           Authorization: `Bearer ${this.apiKey}`,
           Accept: 'application/json',

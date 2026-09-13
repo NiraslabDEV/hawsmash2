@@ -332,7 +332,7 @@ nem publicação no ChatGPT. Ver [`docs/MCP.md`](docs/MCP.md) e
 ## V1 — Preparação do delivery para volume *(produto · 2026-09-14)*
 
 - [x] Conferência de extractos normalizados por loja, em centavos, sem alterar pagamentos.
-- [ ] Reconciliação de estados por loja, paginada, cancelável e autenticada.
+- [x] Reconciliação de estados por loja, paginada, cancelável e autenticada.
 - [ ] Paginação real de pedidos na BD/painel, com fallback de actualização e testes de mais de 100 pedidos.
 - [~] B-105 Aplicar e validar a migration 1045 na BD de staging antes do deploy do painel.
 - [~] B-106 Configurar scheduler, segredo e contas; validar reconciliação por loja no ambiente de ensaio.

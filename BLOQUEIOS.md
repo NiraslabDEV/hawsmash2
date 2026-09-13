@@ -542,6 +542,8 @@
   Transição auditada para falha definitiva, alerta persistente e controlo distribuído são trabalho V3.
 - Para fechar: scheduler com continuidade verificada, contas correctas e relatório de respostas
   conhecidas/desconhecidas. Ver [`docs/PREPARACAO-VOLUME.md`](docs/PREPARACAO-VOLUME.md).
+- Código local concluído: 16 testes novos cobrem contas por loja, paginação, autenticação,
+  limites e cancelamento; nenhum destes testes consultou o gateway real.
 
 ### B-107 · [V1] Formato do extracto e ligação às referências internas
 

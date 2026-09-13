@@ -150,7 +150,7 @@ export class MpesaProvider implements DirectPaymentProvider {
    * esgotado, por duplicado, por rede em baixo — resolve-se aqui, seja no
    * regresso do cliente ao ecrã, seja no cron de reconciliação.
    */
-  async getPaymentStatus(reference: string): Promise<ProviderPaymentStatus> {
+  async getPaymentStatus(reference: string, options?: { signal?: AbortSignal }): Promise<ProviderPaymentStatus> {
     const url = new URL(
       `${trimBase(this.config.queryBaseUrl)}/ipg/v2/vodacomMOZ/queryTransactionStatus/`,
     );
@@ -160,7 +160,10 @@ export class MpesaProvider implements DirectPaymentProvider {
 
     let body: MpesaResponseBody;
     try {
-      body = await this.get(url.toString(), this.config.shortTimeoutMs ?? DEFAULT_SHORT_TIMEOUT_MS);
+      const timeout = AbortSignal.timeout(this.config.shortTimeoutMs ?? DEFAULT_SHORT_TIMEOUT_MS);
+      const signal = options?.signal ? AbortSignal.any([timeout, options.signal]) : timeout;
+      signal.throwIfAborted();
+      body = await this.get(url.toString(), this.config.shortTimeoutMs ?? DEFAULT_SHORT_TIMEOUT_MS, signal);
     } catch {
       // Não conseguir perguntar não é resposta: continua pendente e volta-se
       // a perguntar. O cron existe para isto.
@@ -180,7 +183,8 @@ export class MpesaProvider implements DirectPaymentProvider {
    * A sessão é guardada em memória porque pedir uma nova a cada cobrança
    * duplica a latência de um fluxo em que o cliente já está à espera.
    */
-  private async getSessionToken(force = false): Promise<string> {
+  private async getSessionToken(force = false, signal?: AbortSignal): Promise<string> {
+    signal?.throwIfAborted();
     const agora = Date.now();
     if (!force && this.session && this.session.expiresAt > agora) return this.session.token;
 
@@ -192,7 +196,7 @@ export class MpesaProvider implements DirectPaymentProvider {
         Origin: this.config.origin ?? DEFAULT_ORIGIN,
         'Content-Type': 'application/json',
       },
-      signal: AbortSignal.timeout(this.config.shortTimeoutMs ?? DEFAULT_SHORT_TIMEOUT_MS),
+      signal: combineTimeout(this.config.shortTimeoutMs ?? DEFAULT_SHORT_TIMEOUT_MS, signal),
     });
 
     const body = (await res.json().catch(() => ({}))) as MpesaResponseBody;
@@ -232,13 +236,14 @@ export class MpesaProvider implements DirectPaymentProvider {
     );
   }
 
-  private async get(url: string, timeoutMs: number): Promise<MpesaResponseBody> {
+  private async get(url: string, timeoutMs: number, signal?: AbortSignal): Promise<MpesaResponseBody> {
     return this.comSessao((token) =>
       fetch(url, {
         method: 'GET',
         headers: this.headers(token),
-        signal: AbortSignal.timeout(timeoutMs),
+        signal: combineTimeout(timeoutMs, signal),
       }),
+      signal,
     );
   }
 
@@ -260,12 +265,14 @@ export class MpesaProvider implements DirectPaymentProvider {
    */
   private async comSessao(
     pedido: (token: string) => Promise<Response>,
+    signal?: AbortSignal,
   ): Promise<MpesaResponseBody> {
-    let res = await pedido(await this.getSessionToken());
+    let res = await pedido(await this.getSessionToken(false, signal));
 
     if (res.status === 401 || res.status === 403) {
       this.session = null;
-      res = await pedido(await this.getSessionToken(true));
+      signal?.throwIfAborted();
+      res = await pedido(await this.getSessionToken(true, signal));
     }
 
     const body = (await res.json().catch(() => ({}))) as MpesaResponseBody;
@@ -284,6 +291,11 @@ export class MpesaProvider implements DirectPaymentProvider {
 
 function trimBase(base: string): string {
   return base.replace(/\/+$/, '');
+}
+
+function combineTimeout(timeoutMs: number, signal?: AbortSignal): AbortSignal {
+  const timeout = AbortSignal.timeout(timeoutMs);
+  return signal ? AbortSignal.any([timeout, signal]) : timeout;
 }
 
 /** Aceita a chave com ou sem cabeçalho PEM — o portal dá-a das duas maneiras. */
