@@ -329,6 +329,22 @@ nem publicação no ChatGPT. Ver [`docs/MCP.md`](docs/MCP.md) e
 
 ---
 
+## V1 — Preparação do delivery para volume *(produto · 2026-09-14)*
+
+- [x] Conferência de extractos normalizados por loja, em centavos, sem alterar pagamentos.
+- [ ] Reconciliação de estados por loja, paginada, cancelável e autenticada.
+- [ ] Paginação real de pedidos na BD/painel, com fallback de actualização e testes de mais de 100 pedidos.
+- [~] B-105 Aplicar e validar a migration 1045 na BD de staging antes do deploy do painel.
+- [~] B-106 Configurar scheduler, segredo e contas; validar reconciliação por loja no ambiente de ensaio.
+- [~] B-107 Validar o formato e as referências do extracto real antes de criar o adaptador diário.
+
+Plano V2–V6, matriz de lacunas e cenários de carga em
+[`docs/PREPARACAO-VOLUME.md`](docs/PREPARACAO-VOLUME.md). Esta passagem prepara a base;
+não declara os 1.500 pedidos/dia, 30 pedidos/minuto ou 96.000 pedidos/ano já ensaiados.
+O KDS completo é uma evolução separada. Não executar integrações reais por inferência da proposta.
+
+---
+
 # DEPOIS (produto próprio — sem compromisso com o cliente)
 
 O HAWSMASH 2.0 é a **primeira instância multi-unidade** do Restaurant OS. O caminho para produto:

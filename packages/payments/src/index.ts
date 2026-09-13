@@ -30,3 +30,4 @@ export {
   MSISDN_ERROR_PT,
 } from './mpesa/msisdn';
 export { readMpesaCode, mpesaMessagePt, MPESA_FALLBACK_PT, type MpesaOutcome } from './mpesa/codes';
+export { paymentStatementSchema, reconcilePaymentStatement, parseStatementAmount, type StatementInput, type StatementIssue } from './statement';

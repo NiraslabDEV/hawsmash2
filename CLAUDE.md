@@ -465,6 +465,14 @@ arquitectura, não azar.
   horário de pico · erro 5xx repetido · stock crítico.
 - **Digest diário** ao dono: vendas por loja, fecho de caixa, incidentes.
 
+### 11.5.1 Preparação para operações de maior volume
+
+O reforço comum para novas instalações vive em [`docs/PREPARACAO-VOLUME.md`](docs/PREPARACAO-VOLUME.md).
+Prioridade: remover cortes de paginação, consultar pagamentos com a conta da loja correcta e
+conferir extractos por referência/centavos. A conferência de ficheiros é apenas de leitura;
+não é uma confirmação do fornecedor e nunca altera pagamentos. Carga, failover, automações
+de marketing e activação real têm critérios próprios; existir código não equivale a capacidade medida.
+
 ### 11.6 Dados: backups e restauro
 - Supabase **Pro** com PITR no projecto de produção.
 - `pg_dump` nocturno para armazenamento externo (retenção 30 dias) via cron.

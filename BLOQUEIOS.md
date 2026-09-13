@@ -517,6 +517,48 @@
 
 ---
 
+### B-105 · [V1] Validar paginação de pedidos na BD da instalação
+
+- Estado: **aberto — 2026-09-14**. Categoria: **infraestrutura/validação**. Desbloqueia: Gabriel.
+- Falta: aplicar a migration 1045 em staging e executar SQL/policies com perfis e lojas distintos,
+  mais de 100 pedidos, filtros e páginas vazias. O stack Supabase local/Docker não estava disponível.
+- Contorno: migration forward-only e testes preparados; UI recusa uma resposta incoerente da RPC
+  antiga. Não aplicar o frontend desta alteração antes da migration.
+- Onde: `supabase/migrations/20260913225235_1045_paginacao_pedidos.sql`, painel Pedidos,
+  testes SQL em `supabase/tests/` e [`docs/PREPARACAO-VOLUME.md`](docs/PREPARACAO-VOLUME.md).
+- Para fechar: registar versão da BD, resultado dos testes e ensaio dos perfis na instalação.
+  Ensaios de browser com RPC simulada não comprovam RLS nem execução da migration.
+- Evidência local adicional: a semântica SQL foi ensaiada num Postgres 17.5 embebido (PGlite),
+  com esquema/roles de teste. Isto não substitui as policies, triggers e PostgREST da instalação.
+
+### B-106 · [V1] Reconciliação contínua no ambiente real de ensaio
+
+- Estado: **aberto — 2026-09-14**. Categoria: **infraestrutura/integração**. Desbloqueia: Gabriel, com o fornecedor.
+- Falta: configurar `CRON_SECRET`, scheduler único por instalação e contas por loja; validar
+  `nextCursor` até `completed`, tempos limite e respostas de M-Pesa/Paysuite em ambiente de ensaio.
+- Contorno: reconciliação por loja com testes locais, pool limitado e cancelamento. Sem segredo a
+  rota fica fechada. Não foram feitas consultas ou cobranças reais nesta preparação.
+- Limites: sem lease distribuído; `providerFailed` é sinalizado na resposta e não muda o estado.
+  Transição auditada para falha definitiva, alerta persistente e controlo distribuído são trabalho V3.
+- Para fechar: scheduler com continuidade verificada, contas correctas e relatório de respostas
+  conhecidas/desconhecidas. Ver [`docs/PREPARACAO-VOLUME.md`](docs/PREPARACAO-VOLUME.md).
+
+### B-107 · [V1] Formato do extracto e ligação às referências internas
+
+- Estado: **aberto — 2026-09-14**. Categoria: **fornecedor/dados**. Desbloqueia: cliente/Gabriel/Vodacom.
+- Falta: amostra anonimizada do extracto oficial, descrição das colunas, referência de transacção,
+  fuso/data de liquidação, taxas/devoluções e forma autorizada de obter todas as páginas diariamente.
+- Contorno: contrato normalizado, função pura, CLI local e testes com 1.500 movimentos, diferenças,
+  duplicações, pendências e lojas distintas. O exemplo é detectável como `PLACEHOLDER_*`.
+- Decisão: não inventar CSV/API do banco. Taxas e devoluções aparecem para revisão; nenhuma
+  conferência altera o estado do pedido ou do pagamento.
+- Para fechar: adaptador testado contra a amostra, exportação completa por período/loja e posterior
+  integração auditada no painel. A amostra desbloqueia o adaptador, não prova a automação completa.
+- Onde: `packages/payments/src/statement.ts`, `scripts/reconcile-payment-statement.ts` e plano de volume.
+- Código local concluído: 17 testes de domínio/CLI passaram; adaptador e integração real continuam abertos.
+
+---
+
 ## RESOLVIDOS
 
 *(mover para aqui, com data, sem apagar o histórico)*

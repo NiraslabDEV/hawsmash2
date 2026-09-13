@@ -1,0 +1,14 @@
+{
+  "version": 1,
+  "storeId": "PLACEHOLDER_LOJA",
+  "provider": "mpesa",
+  "currency": "MZN",
+  "periodStart": "2026-09-13T22:00:00.000Z",
+  "periodEnd": "2026-09-14T22:00:00.000Z",
+  "ledger": [
+    { "id": "PLACEHOLDER_PAGAMENTO", "storeId": "PLACEHOLDER_LOJA", "reference": "PLACEHOLDER_REF", "amountCents": 103000, "occurredAt": "2026-09-14T10:00:00.000Z", "status": "confirmed" }
+  ],
+  "statement": [
+    { "id": "PLACEHOLDER_MOVIMENTO", "storeId": "PLACEHOLDER_LOJA", "reference": "PLACEHOLDER_REF", "amountCents": 103000, "occurredAt": "2026-09-14T10:01:00.000Z", "kind": "payment" }
+  ]
+}

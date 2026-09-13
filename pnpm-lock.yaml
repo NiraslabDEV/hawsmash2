@@ -160,6 +160,10 @@ importers:
         version: 2.1.9(@types/node@20.19.43)(terser@5.50.0)
 
   packages/payments:
+    dependencies:
+      zod:
+        specifier: ^4.4.3
+        version: 4.4.3
     devDependencies:
       eslint:
         specifier: ^8.57.0
