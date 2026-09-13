@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 /**
  * Testes de integração — stock management + heartbeats (F2.3)
  * Requer `supabase start` + `supabase db reset` antes de correr.
@@ -102,6 +103,7 @@ async function createDigitalOrder(customerName: string, qty = 1): Promise<string
       customerName:   customerName,
       fulfillmentType: 'pickup',
       paymentMethod:  'mpesa',
+      clientCheckoutId: randomUUID(),
       flow:           'digital',
     },
   });
@@ -272,6 +274,7 @@ describe.skip('(c) Rollback total quando item esgota', () => {
         customerName:   'Stock Test 4',
         fulfillmentType: 'pickup',
         paymentMethod:  'mpesa',
+        clientCheckoutId: randomUUID(),
         flow:           'digital',
       },
     });

@@ -3,3 +3,4 @@ export * from './order-machine';
 export * from './schemas';
 export * from './menu-import';
 export * from './category-tree';
+export * from './payment-routing';

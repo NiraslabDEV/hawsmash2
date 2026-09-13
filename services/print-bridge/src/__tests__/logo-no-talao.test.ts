@@ -20,7 +20,7 @@ const kitchen = {
   store_short_name: 'Maputo',
   order_number: 'MPT-0042',
   daily_number: 42,
-  channel: 'counter',
+  channel: 'counter' as const,
   customer_name: 'Balcão',
   items: [{ name: 'Classic Smash', quantity: 2 }],
   created_at: '2026-08-19T17:05:00.000Z',

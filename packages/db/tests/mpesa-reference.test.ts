@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 /**
  * Gate de integração da 1043 — a referência de pagamento do M-Pesa.
  *
@@ -26,6 +27,7 @@ const ANON_KEY =
 let admin: SupabaseClient;
 let anon: SupabaseClient;
 let storeSlug: string;
+let originalProvider: string;
 let menuItemId: string;
 const createdOrderIds: string[] = [];
 
@@ -39,6 +41,7 @@ async function criarPedido(): Promise<string> {
       customerPhone: "841234567",
       fulfillmentType: "pickup",
       paymentMethod: "mpesa",
+      clientCheckoutId: randomUUID(),
       flow: "digital",
     },
   });
@@ -55,9 +58,13 @@ beforeAll(async () => {
     auth: { autoRefreshToken: false, persistSession: false },
   });
 
-  const { data: stores, error } = await admin.from("stores").select("slug").limit(1);
+  const { data: stores, error } = await admin.from("stores").select("slug,payment_provider").limit(1);
   if (error || !stores?.length) throw new Error(`Setup 1043: lojas — ${error?.message}`);
   storeSlug = stores[0].slug;
+  originalProvider = stores[0].payment_provider;
+  // A RPC digital exige um gateway compatível; este teste não cobra nada.
+  const configured = await admin.from("stores").update({ payment_provider: "mpesa_sim" }).eq("slug", storeSlug);
+  if (configured.error) throw new Error(`Setup 1043: simulador — ${configured.error.message}`);
 
   const { data: items } = await admin.from("menu_items").select("id").limit(1);
   if (!items?.length) throw new Error("Setup 1043: sem itens de cardápio");
@@ -70,6 +77,7 @@ afterAll(async () => {
     await admin.from("event_log").delete().eq("order_id", id);
     await admin.from("orders").delete().eq("id", id);
   }
+  if (storeSlug && originalProvider) await admin.from("stores").update({ payment_provider: originalProvider }).eq("slug", storeSlug);
 });
 
 describe("1043 — referência de pagamento", () => {

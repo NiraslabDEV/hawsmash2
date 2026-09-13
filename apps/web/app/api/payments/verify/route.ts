@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { z } from 'zod';
 import { isDirectProvider } from '@delivery/payments';
 
 import { buildProvider, getPaymentConfig, isDirectFlow } from '@/lib/payments/config';
@@ -18,7 +19,7 @@ import { serviceClient } from '@/lib/payments/direct';
 export async function POST(request: Request) {
   const body = await request.json().catch(() => null);
   const orderId = body?.orderId as string | undefined;
-  if (!orderId) {
+  if (!z.string().uuid().safeParse(orderId).success) {
     return NextResponse.json({ error: 'order_id_required' }, { status: 400 });
   }
 
@@ -53,6 +54,7 @@ export async function POST(request: Request) {
   if (['paid', 'in_preparation', 'ready', 'delivered'].includes(order.status)) {
     return NextResponse.json({ status: 'paid' });
   }
+  if (order.status === 'cancelled') return NextResponse.json({ status: 'cancelled' });
 
   // A config é da loja do pedido, não da empresa: cada unidade pode ter a sua
   // conta. Sem isto, uma loja verificava pagamentos contra a conta de outra.
@@ -62,7 +64,10 @@ export async function POST(request: Request) {
     .eq('id', order.store_id)
     .maybeSingle();
 
-  const cfg = await getPaymentConfig(store?.slug ?? null);
+  if (!store?.slug) return NextResponse.json({ status: 'pending' });
+  let cfg;
+  try { cfg = await getPaymentConfig(store.slug, { requireStore: true, method: order.payment_method ?? '' }); }
+  catch { return NextResponse.json({ status: 'pending' }); }
   if (cfg.provider === 'manual') {
     return NextResponse.json({ status: 'manual' });
   }
@@ -96,17 +101,13 @@ export async function POST(request: Request) {
   }
 
   if (paymentStatus === 'failed') {
-    await svc
-      .from('orders')
-      .update({ status: 'payment_failed', updated_at: new Date().toISOString() })
-      .eq('id', order.id)
-      .in('status', ['awaiting_payment', 'payment_failed']);
-
-    await svc.from('event_log').insert({
-      order_id: order.id,
-      type: 'payment.failed',
-      payload: { provider: cfg.provider, source: 'return_verify' },
+    const { data: failure, error } = await svc.rpc('advance_order', {
+      p_order_id: order.id, p_event: 'PAYMENT_FAILED', p_reason: 'Falha definitiva confirmada na verificação do fornecedor.',
     });
+    if (error) return NextResponse.json({ status: 'pending' });
+    if (failure?.status && !['awaiting_payment', 'payment_failed'].includes(failure.status)) {
+      return NextResponse.json({ status: ['paid', 'in_preparation', 'ready', 'delivered'].includes(failure.status) ? 'paid' : failure.status });
+    }
 
     // No fluxo directo, roda-se a referência: agora sabemos que a tentativa
     // não levou dinheiro, e sem isto o cliente ficava sem poder tentar outra
@@ -139,7 +140,7 @@ export async function POST(request: Request) {
   });
 
   if (!confirm.ok) {
-    return NextResponse.json({ status: 'pending', error: confirm.error });
+    return NextResponse.json({ status: 'pending' });
   }
 
   return NextResponse.json({ status: 'paid', confirm: confirm.result });

@@ -733,3 +733,74 @@ falha e recuperação depois de implementar o mecanismo. Nenhum equipamento foi 
 | 1 | B-105 | o painel novo não deve ser publicado contra a RPC antiga |
 | 2 | B-106 | a reconciliação preparada não corre continuamente com as contas reais |
 | 3 | B-107 | a conferência serve ficheiros normalizados; ainda não existe importação diária do extracto oficial |
+
+---
+
+## Preparação e-Mola online · 2026-09-14
+
+### B-108 · [V1.1] Validar configuração e transições de e-Mola em staging
+
+- Estado: **aberto**. Categoria: **infraestrutura/validação**. Desbloqueia: Gabriel.
+- Falta: aplicar 1046/1047 antes do frontend e validar as RPCs com as policies, triggers,
+  perfis e PostgREST reais da instalação. O stack Supabase local completo não está disponível.
+- Contorno: testes de configuração/handlers, navegador com pagamentos simulados e SQL
+  embebido. A migration não activa o e-Mola de uma loja M-Pesa directa.
+- Para fechar: confirmar owner/manager/anon, segredos nunca devolvidos, lojas isoladas,
+  rejeição de troca de gateway com pagamentos pendentes e falha idempotente sem baixar pagos.
+- Evidência e limites em `docs/validation/`; contrato em `docs/EMOLA-ONLINE.md`.
+
+### B-109 · [V1.1] Conta e-Mola habilitada e ensaio com o fornecedor
+
+- Estado: **aberto**. Categoria: **fornecedor/integração**. Desbloqueia: Gabriel/cliente/Paysuite.
+- Falta: conta habilitada para e-Mola, credenciais da loja, callback HTTPS e ensaio de
+  sucesso/recusa/timeout/confirmação tardia/repetição. Condições e custos dependem do fornecedor.
+- Contorno: `emola_provider=mock` em ambiente de teste; produção não foi activada nem cobrada.
+- Decisão: usar o adaptador Paysuite existente para o caminho online. Não inventar uma API
+  directa da Movitel sem contrato/documentação de integração.
+- Limite operacional: se a resposta de criação ou a gravação do ID se perder, o callback
+  assinado pode recuperar a referência da tentativa iniciada. Sem callback nem ID, é preciso
+  recuperá-la com o fornecedor; ainda não há pesquisa automática por extracto. Uma tentativa
+  reclamada cujo processo parou antes de chamar o fornecedor também exige intervenção.
+  Não voltar a cobrar nem mudar a conta destinatária enquanto essa tentativa é incerta.
+- Para fechar: credenciais e callback validados com a conta correcta, relatório de cenários
+  e scheduler da reconciliação configurado (B-106 continua a acompanhar essa dependência comum).
+
+## PACOTE FINAL — e-Mola online · 2026-09-14
+
+**2 novos bloqueios nesta etapa: 1 infraestrutura/validação, 1 fornecedor/integração,
+0 hardware.** A segunda passagem mantém os dois abertos: simuladores não substituem staging
+e nenhuma credencial foi solicitada ou usada para cobrar nesta preparação.
+
+Ficou preparado: escolha por loja, coexistência com M-Pesa directo, checkout, verificação,
+webhook assinado e reconciliação por método, validação de valores/referências e acompanhamento
+da encomenda existente quando o resultado é incerto. Ensaios locais registados abaixo.
+
+- Motor: **681 testes**, lint/typecheck e build completo passaram. Foi corrigido apenas
+  o tipo literal de uma fixture antiga da impressora que impedia o build completo.
+- **13 testes de navegador** passaram com RPCs/pagamentos simulados, incluindo e-Mola,
+  M-Pesa, espera prolongada, resposta perdida, reutilização de chave e armazenamento bloqueado.
+- SQL embebido: **36 casos da 1046 e 22 da 1047 passaram**, incluindo reaplicação.
+  Não foram executados os testes pgTAP/RLS no stack completo de staging.
+
+### Para o cliente — mensagem pronta
+
+> 1. Precisamos de confirmar que a conta de comerciante está habilitada para receber e-Mola
+>    online, e de identificar a conta de cada loja para onde os pagamentos devem entrar.
+> 2. Precisamos do contacto do fornecedor para validar o ambiente de ensaio, callbacks,
+>    limites e recuperação da referência de um pagamento quando a resposta se perde.
+
+### Para o Gabriel
+
+- Aplicar 1046/1047 primeiro em staging, testar perfis/lojas e só depois publicar o código.
+- Inserir os segredos através do painel, configurar domínio HTTPS/callback e scheduler.
+- Confirmar custos e habilitação da conta com o fornecedor antes da activação comercial.
+
+### Hardware e impacto
+
+Não há validação física adicional: **0 horas de hardware nesta etapa**. O ensaio do
+pagamento no telemóvel depende da conta/ambiente disponibilizado pelo fornecedor.
+
+| Impacto | ID | Sem isto… |
+|---|---|---|
+| 1 | B-108 | o novo código não deve ser publicado contra uma BD sem 1046/1047 validadas |
+| 2 | B-109 | e-Mola automático está preparado e simulado, mas não recebe pagamentos reais |

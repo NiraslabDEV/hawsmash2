@@ -47,7 +47,7 @@ describe('MockProvider', () => {
     const p = provider.buildWebhookPayload('abc-123', 'success', 12550, 'emola');
     expect(p.event).toBe('payment.success');
     expect(p.data.reference).toBe('abc-123');
-    expect(p.data.amount).toBe(125.5);
+    expect(p.data.amount).toBe('125.50');
     expect(p.data.transaction?.method).toBe('emola');
     expect(p.request_id).toContain('whk_');
   });

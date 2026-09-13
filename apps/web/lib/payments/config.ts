@@ -1,4 +1,5 @@
 import { createClient } from '@supabase/supabase-js';
+import { getPaymentMode } from '@delivery/core';
 import {
   MockProvider,
   MpesaProvider,
@@ -38,7 +39,7 @@ export interface PaymentConfig {
 
 /** Colunas de segredo da loja. Nunca devolvidas a um cliente autenticado. */
 const STORE_COLUMNS =
-  'payment_provider, paysuite_api_key, paysuite_webhook_secret,' +
+  'payment_provider, emola_provider, paysuite_api_key, paysuite_webhook_secret,' +
   'mpesa_api_key, mpesa_public_key, mpesa_service_provider_code,' +
   'mpesa_session_base_url, mpesa_charge_base_url, mpesa_query_base_url';
 
@@ -69,12 +70,14 @@ function completeMpesa(partial: Partial<MpesaCredentials>): MpesaCredentials | n
   return partial as MpesaCredentials;
 }
 
-export async function getPaymentConfig(storeSlug?: string | null, options?: { signal?: AbortSignal; requireStore?: boolean }): Promise<PaymentConfig> {
+export async function getPaymentConfig(storeSlug?: string | null, options?: { signal?: AbortSignal; requireStore?: boolean; method?: string }): Promise<PaymentConfig> {
   options?.signal?.throwIfAborted();
+  const requireStore = options?.requireStore || options?.method === 'emola';
   let provider = (process.env.PAYMENT_PROVIDER ?? 'manual') as PaymentProviderName;
   let apiKey = process.env.PAYSUITE_API_KEY ?? null;
   let webhookSecret = process.env.PAYSUITE_WEBHOOK_SECRET ?? null;
   const mpesa = mpesaFromEnv();
+  let emolaProvider: string | null = null;
 
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -104,12 +107,19 @@ export async function getPaymentConfig(storeSlug?: string | null, options?: { si
           .eq('slug', storeSlug)
           .maybeSingle<StoreRow>();
 
-        if (options?.requireStore && (error || !data)) throw new Error('store_payment_config_unavailable');
+        if (requireStore && (error || !data)) throw new Error('store_payment_config_unavailable');
 
         if (data) {
           if (data.payment_provider) provider = data.payment_provider as PaymentProviderName;
+          emolaProvider = data.emola_provider ?? null;
           if (data.paysuite_api_key) apiKey = data.paysuite_api_key;
           if (data.paysuite_webhook_secret) webhookSecret = data.paysuite_webhook_secret;
+          if (options?.method === 'emola' && emolaProvider === 'paysuite') {
+            // Conta adicional explícita: nunca cair silenciosamente na conta
+            // global de outra unidade quando a chave desta loja está em falta.
+            apiKey = data.paysuite_api_key?.trim() || null;
+            webhookSecret = data.paysuite_webhook_secret?.trim() || null;
+          }
 
           if (data.mpesa_api_key) mpesa.apiKey = data.mpesa_api_key;
           if (data.mpesa_public_key) mpesa.publicKey = data.mpesa_public_key;
@@ -122,13 +132,14 @@ export async function getPaymentConfig(storeSlug?: string | null, options?: { si
       }
     } catch {
       options?.signal?.throwIfAborted();
-      if (options?.requireStore) throw new Error('store_payment_config_unavailable');
+      if (requireStore) throw new Error('store_payment_config_unavailable');
       /* sem BD acessível → usa só o .env */
     }
   }
 
-  if (options?.requireStore && (!storeSlug || !url || !serviceKey)) throw new Error('store_payment_config_unavailable');
+  if (requireStore && (!storeSlug || !url || !serviceKey)) throw new Error('store_payment_config_unavailable');
   options?.signal?.throwIfAborted();
+  if (options?.method !== undefined) provider = getPaymentMode(provider, emolaProvider, options.method);
   return { provider, apiKey, webhookSecret, mpesa: completeMpesa(mpesa) };
 }
 
@@ -152,8 +163,11 @@ export function buildProvider(
     case 'mpesa':
       if (!cfg.mpesa) throw new Error('mpesa_not_configured');
       return new MpesaProvider(cfg.mpesa);
+    case 'paysuite':
+      if (!cfg.apiKey?.trim() || !cfg.webhookSecret?.trim()) throw new Error('paysuite_not_configured');
+      return new PaysuiteProvider(cfg.apiKey, cfg.webhookSecret);
     default:
-      return new PaysuiteProvider(cfg.apiKey ?? '', cfg.webhookSecret ?? '');
+      throw new Error('payment_provider_unavailable');
   }
 }
 

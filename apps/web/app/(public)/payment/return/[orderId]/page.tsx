@@ -8,7 +8,7 @@
  * 1. **Dizer o que o cliente tem de fazer.** "A processar… não feche a página"
  *    é passivo, e o cliente ainda tem de marcar o PIN no telemóvel. Um ecrã
  *    passivo num momento de acção é o que gera o telefonema.
- * 2. **Ter saída.** Ao fim de 45 s aparece "está a demorar" com retry e
+ * 2. **Ter saída.** Ao fim de 45 s aparece "está a demorar" com acompanhamento e
  *    contacto da loja; no `failed` há sempre para onde ir. Sem isto, o cliente
  *    fecha o separador e o pedido fica em `awaiting_payment` para sempre.
  *
@@ -23,6 +23,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter, useParams } from 'next/navigation';
 import { useBrand } from '@/lib/brand/context';
+import { clearPendingCheckout } from '@/lib/payments/pending-checkout';
 
 import '../../../_storefront/landing.css';
 import '../../../_storefront/funnel.css';
@@ -76,6 +77,7 @@ export default function PaymentReturnPage() {
           if (!cancelled) {
             localStorage.removeItem('cart');
             localStorage.removeItem('pending_order_id');
+            clearPendingCheckout(localStorage, orderId);
             setPollStatus('paid');
             setTimeout(() => {
               if (!cancelled) router.replace(`/order-status/${orderId}`);
@@ -165,7 +167,7 @@ export default function PaymentReturnPage() {
           <div style={{ marginTop: 'auto', paddingTop: 24, display: 'flex', flexDirection: 'column', gap: 11 }}>
             <button
               type="button"
-              onClick={() => { localStorage.removeItem('pending_order_id'); router.push('/checkout'); }}
+              onClick={() => { localStorage.removeItem('pending_order_id'); clearPendingCheckout(localStorage, orderId); router.push('/checkout'); }}
               className="hf-btn hf-btn-gold"
             >
               <IcoRefresh />
@@ -213,12 +215,12 @@ export default function PaymentReturnPage() {
 
         {slow && pollStatus === 'polling' && (
           <div style={{ marginTop: 28, paddingTop: 20, borderTop: '1px solid rgba(255,255,255,.07)' }}>
-            <p style={{ margin: '0 0 12px', fontSize: 11, color: 'var(--hs-ink-faint)' }}>Não apareceu nada no telemóvel?</p>
+            <p style={{ margin: '0 0 12px', fontSize: 11, color: 'var(--hs-ink-faint)' }}>Ainda estamos a confirmar. Acompanha esta encomenda antes de tentar pagar novamente.</p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 11 }}>
-              <button type="button" onClick={() => router.push('/checkout')} className="hf-btn hf-btn-ghost">
+              <Link href={`/order-status/${orderId}`} className="hf-btn hf-btn-ghost">
                 <IcoRefresh />
-                Tentar outra vez
-              </button>
+                Acompanhar esta encomenda
+              </Link>
               {brand.storefront.contact.phone && (
                 <a
                   className="hf-btn hf-btn-quiet"

@@ -1,123 +1,80 @@
 import { NextResponse } from 'next/server';
-import { createClient } from '@/utils/supabase/server';
-import { createClient as createServiceClient } from '@supabase/supabase-js';
 import { isRedirectProvider } from '@delivery/payments';
+import { z } from 'zod';
 
 import { getPaymentConfig, buildProvider } from '@/lib/payments/config';
 import { referenceToOrderId } from '@/lib/payments/reference';
-import { fireConversions } from '@/lib/server-analytics/conversions';
+import { serviceClient } from '@/lib/payments/direct';
+import { confirmOrderPaid } from '@/lib/payments/confirm';
 
 export async function POST(request: Request) {
-  // 1. Ler raw body ANTES de qualquer parsing (assinatura é sobre o raw body)
+  // O conteúdo ainda não assinado serve apenas para localizar a conta. Nenhuma
+  // escrita ou confirmação ocorre antes de validar o HMAC dessa conta.
   const raw = await request.text();
-  const sig = request.headers.get('x-webhook-signature') ?? '';
+  if (Buffer.byteLength(raw) > 65_536) return new Response('payload_too_large', { status: 413 });
+  let payload: unknown;
+  try { payload = JSON.parse(raw); }
+  catch { return new Response('invalid_payload', { status: 400 }); }
+  const envelope = z.object({ data: z.object({ reference: z.string().max(100) }) }).safeParse(payload);
+  if (!envelope.success) return new Response('invalid_payload', { status: 400 });
+  const orderId = referenceToOrderId(envelope.data.data.reference);
+  if (!z.string().uuid().safeParse(orderId).success) return new Response('invalid_payload', { status: 400 });
 
-  // Config (provider + webhook secret) de settings → fallback .env (CLAUDE.md 6.2/16.2)
-  const cfg = await getPaymentConfig();
-  const provider = buildProvider(cfg);
-
-  // O M-Pesa directo não tem webhook: quem lá chegar está enganado ou a bater
-  // à porta errada. Responder 404 diz a verdade sem revelar o que corre aqui.
-  if (!isRedirectProvider(provider)) {
-    return new Response('not_found', { status: 404 });
-  }
-
-  // 2. Verificar assinatura HMAC-SHA256 (CLAUDE.md 12: webhook sem assinatura = rejeitado)
-  if (!provider.verifyWebhookSignature(raw, sig)) {
+  const svc = serviceClient();
+  const { data: order, error: readError } = await svc.from('orders')
+    .select('id,store_id,status,total_cents,payment_method,payment_provider_ref,checkout_started_at,customer_email,customer_name,order_number')
+    .eq('id', orderId).maybeSingle();
+  if (readError) return new Response('temporarily_unavailable', { status: 503 });
+  if (!order) return new Response('not_found', { status: 404 });
+  const { data: store } = await svc.from('stores').select('slug').eq('id', order.store_id).maybeSingle();
+  if (!store?.slug) return new Response('temporarily_unavailable', { status: 503 });
+  let cfg;
+  let provider;
+  try {
+    cfg = await getPaymentConfig(store.slug, { requireStore: true, method: order.payment_method ?? '' });
+    if (cfg.provider !== 'paysuite' && cfg.provider !== 'mock') return new Response('not_found', { status: 404 });
+    provider = buildProvider(cfg);
+  } catch { return new Response('temporarily_unavailable', { status: 503 }); }
+  if (!isRedirectProvider(provider)) return new Response('not_found', { status: 404 });
+  if (!provider.verifyWebhookSignature(raw, request.headers.get('x-webhook-signature') ?? '')) {
     return new Response('invalid_signature', { status: 401 });
   }
+  let parsed;
+  try { parsed = provider.parseWebhook(payload); }
+  catch { return new Response('invalid_payload', { status: 400 }); }
 
-  // 3. Parsear payload
-  let parsed: ReturnType<typeof provider.parseWebhook>;
-  try {
-    parsed = provider.parseWebhook(JSON.parse(raw));
-  } catch {
-    return new Response('invalid_payload', { status: 400 });
+  if (referenceToOrderId(parsed.requestId) !== order.id || parsed.amountCents !== order.total_cents ||
+      (parsed.method && parsed.method !== order.payment_method)) {
+    return new Response('payment_mismatch', { status: 409 });
   }
+  if (order.status === 'cancelled') return NextResponse.json({ ok: true, ignored: true });
 
-  // requestId = data.reference (alfanumérico) → orderId (CLAUDE.md 6.4)
-  const orderId = referenceToOrderId(parsed.requestId);
-
-  const supabase = await createClient();
-
-  // 4. Fluxo: pagamento falhado
+  // O callback assinado pode recuperar o ID perdido na resposta HTTP, mas só
+  // para a tentativa que o servidor já reclamou e validou por valor/método.
+  let storedReference = order.payment_provider_ref;
+  if (!storedReference) {
+    if (!order.checkout_started_at) return new Response('payment_reference_pending', { status: 503 });
+    const { error } = await svc.from('orders').update({ payment_provider_ref: parsed.providerRef })
+      .eq('id', order.id).eq('store_id', order.store_id).is('payment_provider_ref', null);
+    if (error) return new Response('payment_reference_pending', { status: 503 });
+    const { data: bound } = await svc.from('orders').select('payment_provider_ref')
+      .eq('id', order.id).eq('store_id', order.store_id).maybeSingle();
+    storedReference = bound?.payment_provider_ref;
+  }
+  if (storedReference !== parsed.providerRef) return new Response('payment_mismatch', { status: 409 });
   if (parsed.event === 'failed') {
-    // Transicionar para payment_failed (service role bypassa RLS)
-    const { data: orderRow } = await supabase
-      .from('orders')
-      .select('id, status')
-      .eq('id', orderId)
-      .single();
-
-    if (orderRow && ['awaiting_payment', 'payment_failed'].includes(orderRow.status)) {
-      await supabase
-        .from('orders')
-        .update({ status: 'payment_failed', updated_at: new Date().toISOString() })
-        .eq('id', orderId);
-
-      await supabase.from('event_log').insert({
-        order_id: orderId,
-        type:     'payment.failed',
-        payload:  { provider: cfg.provider, idempotency_key: parsed.requestId },
-      });
-    }
-
+    const { error } = await svc.rpc('advance_order', {
+      p_order_id: order.id, p_event: 'PAYMENT_FAILED', p_reason: 'Falha definitiva confirmada pelo webhook do fornecedor.',
+    });
+    if (error) return new Response('confirmation_pending', { status: 503 });
     return NextResponse.json({ ok: true, event: 'failed' });
   }
-
-  // 5. Fluxo: pagamento bem-sucedido — confirm_payment (idempotente, CLAUDE.md 14.3)
-  const { data: result, error } = await supabase.rpc('confirm_payment', {
-    p_idempotency_key: parsed.requestId,
-    p_order_id:        orderId,
-    p_provider:        cfg.provider,
-    p_provider_ref:    parsed.providerRef,
-    p_method:          parsed.method,
-    p_amount_cents:    parsed.amountCents,
-    p_raw_webhook:     JSON.parse(raw),
+  const result = await confirmOrderPaid({
+    svc, orderId: order.id, provider: cfg.provider, providerRef: parsed.providerRef,
+    method: parsed.method, amountCents: parsed.amountCents, source: 'webhook',
+    origin: new URL(request.url).origin,
+    customer: { email: order.customer_email, name: order.customer_name, orderNumber: order.order_number },
   });
-
-  if (error) {
-    console.error('[webhook/paysuite] confirm_payment error:', error);
-    // Retornar 200 para evitar reenvios do Paysuite — o erro está logado
-    return NextResponse.json({ ok: true, error: error.message });
-  }
-
-  if (result === 'duplicate') {
-    return NextResponse.json({ ok: true, duplicate: true });
-  }
-
-  // 6. Enviar email + disparar CAPI/Enhanced quando pago (best-effort, fire-and-forget)
-  if (result === 'ok') {
-    const { data: order } = await supabase
-      .from('orders')
-      .select('customer_email, customer_name, order_number, total_cents, payment_method')
-      .eq('id', orderId)
-      .single();
-
-    if (order?.customer_email) {
-      const origin = new URL(request.url).origin;
-      fetch(`${origin}/api/emails/send-approval-email`, {
-        method:  'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          to:            order.customer_email,
-          customerName:  order.customer_name,
-          orderNumber:   order.order_number,
-          totalCents:    order.total_cents,
-          paymentMethod: order.payment_method,
-        }),
-      }).catch((e) => console.error('[webhook] email failed:', e));
-    }
-
-    // CAPI + Enhanced Conversions — fire-and-forget, event_id = 'purchase_<orderId>'
-    // Usa service client para ler settings (B) sem depender do cookie de sessão.
-    const serviceSupabase = createServiceClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!,
-      { auth: { persistSession: false } },
-    );
-    fireConversions(orderId, order?.total_cents ?? 0, serviceSupabase).catch(() => {});
-  }
-
-  return NextResponse.json({ ok: true, result });
+  if (!result.ok) return new Response('confirmation_pending', { status: 503 });
+  return NextResponse.json({ ok: true, result: result.result });
 }

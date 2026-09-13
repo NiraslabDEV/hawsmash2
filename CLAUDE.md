@@ -488,6 +488,14 @@ Tudo gravado em **UTC**; apresentado em **Africa/Maputo**. Horários de loja e r
 loja. (O 1.0 teve um bug real de caixa por causa disto — não repetir.)
 
 ### 11.9 Degradação de pagamento
+
+**e-Mola online preparado por loja:** `stores.emola_provider` permite usar Paysuite
+ao lado do M-Pesa directo, com configuração própria e credenciais da unidade.
+Sem escolha explícita, o M-Pesa directo mantém e-Mola por comprovativo; lojas que
+já usam Paysuite preservam a herança. O checkout e as confirmações escolhem o
+fornecedor pelo método gravado, com a mesma matriz no servidor e na BD.
+Configuração, limites e ensaios em [`docs/EMOLA-ONLINE.md`](docs/EMOLA-ONLINE.md).
+
 Se o gateway falhar (API em baixo, chave inválida, credenciais por preencher), o checkout **não morre**: cai
 automaticamente no fluxo **manual por comprovativo** (herdado do 1.0) e avisa o painel. Uma loja nunca deixa
 de receber encomendas por causa do gateway.

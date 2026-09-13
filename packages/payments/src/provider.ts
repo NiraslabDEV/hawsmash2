@@ -17,13 +17,16 @@ export interface CreateCheckoutResponse {
   providerPaymentId: string;
 }
 
-export interface ParsedWebhook {
-  event: 'success' | 'failed';
+interface ParsedWebhookPayment {
   requestId: string;
   amountCents: number;
   providerRef: string;
-  method: PaymentMethod;
 }
+
+export type ParsedWebhook = ParsedWebhookPayment & (
+  | { event: 'success'; method: PaymentMethod }
+  | { event: 'failed'; method?: PaymentMethod }
+);
 
 /**
  * Gateway que leva o cliente para fora do site e o traz de volta (Paysuite).

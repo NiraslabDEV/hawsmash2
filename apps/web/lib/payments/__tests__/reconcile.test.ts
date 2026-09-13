@@ -27,6 +27,20 @@ function setup(orders: ReconciliationOrder[]) {
 }
 
 describe('reconciliação limitada por loja', () => {
+  it('na mesma loja distingue M-Pesa directo e e-Mola, incluindo o cache de fornecedores', async () => {
+    const state = setup([order(1), { ...order(2), payment_method: 'emola' }, { ...order(3), payment_method: 'emola' }]);
+    state.configForStore.mockImplementation(async (...args: unknown[]) => config(args[2] === 'emola' ? 'paysuite' : 'mpesa'));
+    const mpesa = vi.fn(async () => 'success' as const);
+    const emola = vi.fn(async () => 'success' as const);
+    state.build.mockImplementation((...args: unknown[]) => (args[0] as { provider: string }).provider === 'mpesa'
+      ? directProvider(mpesa)
+      : { flow: 'redirect', createCheckout: vi.fn(), parseWebhook: vi.fn(), verifyWebhookSignature: vi.fn(), getPaymentStatus: emola });
+    const result = await runPaymentReconciliation(state.deps);
+    expect(result.confirmed).toBe(3); expect(mpesa).toHaveBeenCalledTimes(1); expect(emola).toHaveBeenCalledTimes(2);
+    expect(state.configForStore).toHaveBeenCalledTimes(2);
+    expect(state.configForStore).toHaveBeenCalledWith('loja-a', expect.any(AbortSignal), 'emola');
+    expect(state.confirm).toHaveBeenCalledWith(expect.objectContaining({ orderId: order(2).id, provider: 'paysuite', method: 'emola', providerRef: order(2).payment_provider_ref }), expect.any(AbortSignal));
+  });
   it('usa a configuração de cada loja mesmo se a configuração global for manual', async () => {
     const state = setup([order(1), order(2, storeB)]);
     state.configForStore.mockImplementation(async (slug) => config(slug === 'loja-a' ? 'mpesa' : slug === 'loja-b' ? 'paysuite' : 'manual'));

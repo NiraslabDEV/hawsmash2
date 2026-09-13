@@ -3,7 +3,7 @@ import { defineConfig, devices } from '@playwright/test';
 export default defineConfig({
   testDir: './e2e',
   // O canal de agentes usa RPCs simulados na configuração isolada.
-  testIgnore: ['agents.spec.ts', 'orders-pagination.spec.ts'],
+  testIgnore: ['agents.spec.ts', 'orders-pagination.spec.ts', 'payment-methods.spec.ts'],
   outputDir: './output/playwright/test-results',
   fullyParallel: false,
   // Um worker só: estes testes correm contra a MESMA base de staging e mexem em

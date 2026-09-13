@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { createClient } from '@/utils/supabase/client';
+import { getPaymentMode } from '@delivery/core';
 
 /**
  * Pagamento da loja — como o dinheiro entra nesta unidade.
@@ -18,6 +19,7 @@ type Provider = 'manual' | 'mock' | 'paysuite' | 'mpesa' | 'mpesa_sim';
 
 interface PaymentStatus {
   payment_provider: Provider;
+  emola_provider: 'manual' | 'mock' | 'paysuite' | null;
   paysuite: { api_key: boolean; webhook_secret: boolean };
   mpesa: {
     api_key: boolean;
@@ -85,7 +87,9 @@ export function PaymentSection({ storeId, storeName }: { storeId: string; storeN
     setSaving(false);
 
     if (error) {
-      setMessage({ tone: 'erro', text: `Não guardou: ${error.message}` });
+      setMessage({ tone: 'erro', text: error.message.includes('pending_payments_provider_change')
+        ? 'Existem pagamentos pendentes nesta loja. Resolve-os antes de mudar o gateway; podes corrigir as credenciais.'
+        : `Não guardou: ${error.message}` });
       return;
     }
     setStatus(data as PaymentStatus);
@@ -97,6 +101,8 @@ export function PaymentSection({ storeId, storeName }: { storeId: string; storeN
 
   const usaMpesa = status.payment_provider === 'mpesa';
   const emFalta = MPESA_FIELDS.filter((campo) => !status.mpesa[campo.key]);
+  const emolaMode = getPaymentMode(status.payment_provider, status.emola_provider, 'emola');
+  const usaPaysuite = status.payment_provider === 'paysuite' || emolaMode === 'paysuite';
 
   return (
     <section className="rounded-2xl border border-white/[0.08] p-5 space-y-5">
@@ -197,6 +203,65 @@ export function PaymentSection({ storeId, storeName }: { storeId: string; storeN
             className="rounded-xl bg-[#e5a93c] px-5 py-3 text-sm font-black text-black disabled:opacity-50"
           >
             {saving ? 'A guardar…' : 'Guardar credenciais'}
+          </button>
+        </div>
+      )}
+
+      <div className="space-y-3 border-t border-white/[0.06] pt-5">
+        <label className="block">
+          <span className="font-bold text-white">e-Mola online</span>
+          <span className="mt-1 block text-xs text-[#8b8378]">
+            Escolhe como receber e-Mola nesta loja. O caminho do M-Pesa mantém a configuração acima.
+          </span>
+          <select
+            aria-label="e-Mola online"
+            disabled={saving}
+            value={status.emola_provider ?? ''}
+            onChange={(event) => guardar({ emola_provider: event.target.value })}
+            className="mt-2 w-full rounded-xl border border-white/10 bg-[#0f0e0c] px-3 py-3 text-sm text-white"
+          >
+            <option value="">Seguir configuração da loja</option>
+            <option value="manual">Comprovativo manual</option>
+            <option value="paysuite">Pagamento online por Paysuite</option>
+            <option value="mock">Simulação — sem dinheiro real</option>
+          </select>
+        </label>
+        <p className="text-xs text-[#C9BCAC]">
+          {emolaMode === 'manual'
+            ? 'e-Mola recebe por comprovativo. Para pagamento automático, configura o gateway e valida a integração antes de activar.'
+            : emolaMode === 'mock'
+              ? 'e-Mola está em simulação. Nenhum dinheiro é cobrado; usa apenas em testes.'
+              : 'e-Mola encaminha o cliente para o checkout seguro do Paysuite.'}
+        </p>
+      </div>
+
+      {usaPaysuite && (
+        <div className="space-y-4 rounded-xl border border-white/10 p-4">
+          <div>
+            <h3 className="font-bold text-white">Paysuite — conta desta loja</h3>
+            <p className="mt-1 text-xs text-[#8b8378]">
+              O e-Mola activado separadamente exige a chave e o segredo desta loja. Guarda ambos antes de testar.
+            </p>
+          </div>
+          {(!status.paysuite.api_key || !status.paysuite.webhook_secret) && (
+            <p className="text-sm text-[#ffb0b0]">Faltam credenciais do Paysuite nesta loja. O caminho separado de e-Mola permanece indisponível até estarem preenchidas.</p>
+          )}
+          {([
+            ['paysuite_api_key', 'Chave da API', status.paysuite.api_key],
+            ['paysuite_webhook_secret', 'Segredo do webhook', status.paysuite.webhook_secret],
+          ] as const).map(([field, label, present]) => (
+            <label key={field} className="block text-xs text-[#C9BCAC]">
+              {label} · {present ? 'preenchido' : 'por preencher'}
+              <input type="password" autoComplete="off" value={rascunho[field] ?? ''}
+                onChange={(event) => setRascunho({ ...rascunho, [field]: event.target.value })}
+                placeholder={present ? 'Escreve para substituir' : 'Por preencher'}
+                className="mt-1.5 w-full rounded-xl border border-white/10 bg-[#0f0e0c] px-3 py-2 text-sm text-white" />
+            </label>
+          ))}
+          <button type="button" disabled={saving || Object.keys(rascunho).length === 0}
+            onClick={() => guardar(rascunho)}
+            className="rounded-xl bg-[#e5a93c] px-5 py-3 text-sm font-black text-black disabled:opacity-50">
+            {saving ? 'A guardar…' : 'Guardar credenciais Paysuite'}
           </button>
         </div>
       )}

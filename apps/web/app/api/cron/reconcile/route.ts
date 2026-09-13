@@ -14,7 +14,7 @@ export async function GET(request: Request) {
       const svc = serviceClient();
       return runPaymentReconciliation({
         listPage: createReconciliationRepository(svc),
-        configForStore: (slug, signal) => getPaymentConfig(slug, { signal, requireStore: true }),
+        configForStore: (slug, signal, method) => getPaymentConfig(slug, { signal, requireStore: true, method }),
         buildProvider,
         confirm: (input, signal) => confirmOrderPaid({ ...input, svc: serviceClient({ signal }) }),
       }, { cursor, signal: request.signal });

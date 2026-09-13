@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { z } from 'zod';
 import { InvalidMsisdnError, MSISDN_ERROR_PT, isRedirectProvider, normalizeMsisdn } from '@delivery/payments';
 
 import { createClient } from '@/utils/supabase/server';
@@ -30,11 +31,22 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'invalid_json' }, { status: 400 });
   }
 
-  // Config da LOJA (cai em settings, e depois no .env) — cada unidade pode ter
-  // a sua conta (CLAUDE.md §5.6).
-  const cfg = await getPaymentConfig(
-    typeof payloadInicial.storeSlug === 'string' ? payloadInicial.storeSlug : null,
-  );
+  const selection = z.object({ paymentMethod: z.enum(['mpesa', 'emola', 'credit_card']), clientCheckoutId: z.string().uuid() }).safeParse(payloadInicial);
+  if (!selection.success) return NextResponse.json({ error: 'Método ou referência de pagamento inválidos.' }, { status: 400 });
+  let storeSlug: string;
+  try { storeSlug = resolveStoreSlug(payloadInicial.storeSlug); }
+  catch (error) {
+    if (error instanceof InvalidStoreSlugError) return NextResponse.json({ error: 'Loja inválida.' }, { status: 400 });
+    throw error;
+  }
+  let cfg;
+  let provider;
+  try {
+    cfg = await getPaymentConfig(storeSlug, { requireStore: true, method: selection.data.paymentMethod });
+    if (cfg.provider !== 'manual') provider = buildProvider(cfg, { autoWebhookMs: 2000 });
+  } catch {
+    return NextResponse.json({ error: 'payment_unavailable', status: 'unavailable', message: 'O pagamento automático está indisponível. Podes usar comprovativo.' }, { status: 503 });
+  }
 
   if (cfg.provider === 'manual') {
     return NextResponse.json(
@@ -62,15 +74,6 @@ export async function POST(request: Request) {
   }
 
   const supabase = await createClient();
-  let storeSlug: string;
-  try {
-    storeSlug = resolveStoreSlug(payload.storeSlug);
-  } catch (error) {
-    if (error instanceof InvalidStoreSlugError) {
-      return NextResponse.json({ error: 'Loja inválida.' }, { status: 400 });
-    }
-    throw error;
-  }
 
   // 1. Criar pedido com flow=digital — status = awaiting_payment (CLAUDE.md 5)
   const orderPayload = { ...payload, flow: 'digital' };
@@ -88,14 +91,38 @@ export async function POST(request: Request) {
   }
 
   // 2. Ler total calculado pelo servidor (NUNCA confiar no client)
-  const { data: order } = await supabase
+  const svc = serviceClient();
+  const { data: order } = await svc
     .from('orders')
-    .select('total_cents, order_number, payment_method, customer_email, customer_name')
+    .select('store_id,status,total_cents,order_number,payment_method,customer_email,customer_name,stores!inner(slug)')
     .eq('id', orderId)
+    .eq('stores.slug', storeSlug)
     .single();
 
-  if (!order) {
+  if (!order || order.payment_method !== selection.data.paymentMethod) {
     return NextResponse.json({ error: 'order_fetch_failed' }, { status: 500 });
+  }
+
+  // A criação bloqueia mudanças de gateway enquanto há pagamentos pendentes.
+  // Reler fecha a janela entre a primeira consulta de configuração e a criação.
+  try {
+    cfg = await getPaymentConfig(storeSlug, { requireStore: true, method: order.payment_method });
+    provider = buildProvider(cfg, { autoWebhookMs: 2000 });
+  } catch {
+    return NextResponse.json({ orderId, orderNumber: order.order_number, status: 'unavailable', message: 'O pagamento automático está indisponível. A loja vai confirmar contigo.' });
+  }
+
+  // Uma única chamada ganha o direito de iniciar o fornecedor. O identificador
+  // vem do navegador antes do primeiro POST e a BD verifica o mesmo payload.
+  const { data: claim, error: claimError } = await svc.rpc('claim_online_checkout', { p_order_id: orderId });
+  if (claimError || !claim) return NextResponse.json({ orderId, orderNumber: order.order_number, status: 'pending' });
+  if (!claim.claimed) {
+    const status = claim.status ?? order.status;
+    if (['paid', 'in_preparation', 'ready', 'delivered'].includes(status)) return NextResponse.json({ orderId, status: 'paid' });
+    if (status === 'payment_failed') return NextResponse.json({ orderId, status: 'failed', message: 'O fornecedor confirmou que esta tentativa não foi concluída.' });
+    if (status === 'cancelled') return NextResponse.json({ orderId, status: 'cancelled' });
+    return NextResponse.json({ orderId, orderNumber: order.order_number,
+      ...(claim.checkoutUrl ? { checkoutUrl: claim.checkoutUrl } : { status: 'pending' }) });
   }
 
   // URL público (com esquema) para return_url/callback_url — Paysuite valida-os.
@@ -107,25 +134,8 @@ export async function POST(request: Request) {
   // demorar (é o tempo de ele digitar o PIN) e pode não chegar — e é por isso
   // que `pending` é uma resposta legítima aqui, não um erro.
   if (isDirectFlow(cfg.provider) && msisdn) {
-    let provider;
-    try {
-      provider = buildProvider(cfg);
-    } catch {
-      // Loja marcada como M-Pesa mas sem credenciais: não se finge que dá.
-      // O pedido fica a aguardar pagamento e segue pelo caminho manual.
-      return NextResponse.json(
-        {
-          orderId,
-          orderNumber: order.order_number,
-          status: 'unavailable',
-          message: 'O pagamento automático está indisponível. A loja vai confirmar contigo.',
-        },
-        { status: 200 },
-      );
-    }
-
     const outcome = await runDirectCharge({
-      svc: serviceClient(),
+      svc,
       provider,
       providerName: cfg.provider,
       order: {
@@ -150,7 +160,6 @@ export async function POST(request: Request) {
   // Paysuite exige reference alfanumérico → orderToReference (CLAUDE.md 6.4)
   const idempotencyKey = orderToReference(orderId);
   // autoWebhookMs: no mock dispara webhook 2s depois (simula Paysuite); ignorado no real
-  const provider = buildProvider(cfg, { autoWebhookMs: 2000 });
   if (!isRedirectProvider(provider)) {
     return NextResponse.json({ error: 'provider_flow_mismatch' }, { status: 500 });
   }
@@ -169,25 +178,20 @@ export async function POST(request: Request) {
     });
     checkoutUrl      = result.checkoutUrl;
     providerPaymentId = result.providerPaymentId;
-  } catch (err) {
-    // Falha de checkout → cancelar o pedido (erro aqui é não-fatal)
-    await supabase.rpc('advance_order', {
-      p_order_id: orderId,
-      p_event:    'CANCEL',
-      p_reason:   'Falha ao criar checkout de pagamento',
-    });
-
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : 'checkout_failed' },
-      { status: 502 },
-    );
+  } catch {
+    // DECISÃO: a resposta pode ter-se perdido depois de o gateway criar o
+    // checkout. Não cancelar nem sugerir nova cobrança sem saber o resultado.
+    return NextResponse.json({ orderId, orderNumber: order.order_number, status: 'pending', message: 'Estamos a verificar o pagamento. Não voltes a pagar; acompanha esta encomenda.' });
   }
 
   // 4. Guardar provider_ref no pedido para reconciliação (CLAUDE.md F2.1)
-  await supabase
+  const { error: referenceError } = await svc
     .from('orders')
-    .update({ payment_provider_ref: providerPaymentId })
-    .eq('id', orderId);
+    .update({ payment_provider_ref: providerPaymentId, checkout_url: checkoutUrl })
+    .eq('id', orderId)
+    .eq('store_id', order.store_id);
+
+  if (referenceError) return NextResponse.json({ orderId, orderNumber: order.order_number, status: 'pending', message: 'Estamos a verificar o pagamento. Não voltes a pagar; acompanha esta encomenda.' });
 
   return NextResponse.json({ orderId, checkoutUrl, orderNumber: order.order_number });
 }

@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 /**
  * Testes de integração — payments + confirm_payment (F2.1)
  * Requer `supabase start` + `supabase db reset` antes de correr.
@@ -75,6 +76,7 @@ async function createDigitalOrder(qty = 1): Promise<string> {
       customerName:   'Teste Digital',
       fulfillmentType: 'pickup',
       paymentMethod:  'mpesa',
+      clientCheckoutId: randomUUID(),
       flow:           'digital',
     },
   });

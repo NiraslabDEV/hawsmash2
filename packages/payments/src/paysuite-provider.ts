@@ -1,10 +1,10 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
+import { formatPaysuiteAmount, parsePaysuiteWebhook } from './paysuite-webhook';
 import type {
   RedirectPaymentProvider,
   CreateCheckoutRequest,
   CreateCheckoutResponse,
   ParsedWebhook,
-  PaymentMethod,
   ProviderPaymentStatus,
 } from './provider';
 
@@ -22,19 +22,6 @@ const API_STATUS_MAP: Record<string, ProviderPaymentStatus> = {
   processing: 'pending',
 };
 
-interface PaysuiteWebhookBody {
-  event: string;
-  data: {
-    id: string;
-    amount: number | string;
-    reference: string;
-    transaction?: { id: string; method: string; paid_at: string };
-    error?: string;
-  };
-  created_at: number;
-  request_id: string;
-}
-
 export class PaysuiteProvider implements RedirectPaymentProvider {
   readonly flow = 'redirect' as const;
 
@@ -46,7 +33,7 @@ export class PaysuiteProvider implements RedirectPaymentProvider {
 
   async createCheckout(request: CreateCheckoutRequest): Promise<CreateCheckoutResponse> {
     // Boundary: centavos → string decimal (CLAUDE.md 6.4) — nunca float
-    const amount = (request.amountCents / 100).toFixed(2);
+    const amount = formatPaysuiteAmount(request.amountCents);
 
     const res = await fetch(`${this.apiBase}/payments`, {
       method: 'POST',
@@ -88,6 +75,7 @@ export class PaysuiteProvider implements RedirectPaymentProvider {
   }
 
   verifyWebhookSignature(rawBody: string, signatureHeader: string): boolean {
+    if (!this.webhookSecret.trim() || !/^[a-f0-9]{64}$/.test(signatureHeader)) return false;
     const expected = createHmac('sha256', this.webhookSecret).update(rawBody).digest('hex');
     try {
       const expectedBuf = Buffer.from(expected, 'utf8');
@@ -100,14 +88,7 @@ export class PaysuiteProvider implements RedirectPaymentProvider {
   }
 
   parseWebhook(payload: unknown): ParsedWebhook {
-    const p = payload as PaysuiteWebhookBody;
-    return {
-      event: p.event === 'payment.success' ? 'success' : 'failed',
-      requestId: p.data.reference,
-      amountCents: Math.round(Number(p.data.amount) * 100),
-      providerRef: p.data.id,
-      method: (p.data.transaction?.method ?? 'mpesa') as PaymentMethod,
-    };
+    return parsePaysuiteWebhook(payload);
   }
 
   // DECISÃO: erro de rede/API → 'pending' (nunca marcar failed sem certeza;

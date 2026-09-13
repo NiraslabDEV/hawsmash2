@@ -345,6 +345,19 @@ O KDS completo é uma evolução separada. Não executar integrações reais por
 
 ---
 
+## V1.1 — Caminho de e-Mola online *(produto · 2026-09-14)*
+
+- [x] ⏳ Escolha de e-Mola por loja, coexistência com M-Pesa directo, configuração auditada
+      pelo dono e guardas na BD; aplicar/validar 1046/1047 em staging antes de publicar.
+- [x] Checkout por método, confirmação assinada pela conta correcta, verificação e
+      reconciliação por loja/método, protecção de pagamento pendente e simulador.
+- [x] Identificador estável antes do envio, deduplicação transaccional e uma única
+      iniciação de pagamento por tentativa, com recuperação do checkout existente.
+- [~] B-108 Validar migrations 1046/1047, permissões e percurso integrado em staging.
+- [~] B-109 Habilitar conta e-Mola no fornecedor, configurar credenciais/callback e ensaiar.
+
+Ver [`docs/EMOLA-ONLINE.md`](docs/EMOLA-ONLINE.md). Preparação local, sem activação real.
+
 # DEPOIS (produto próprio — sem compromisso com o cliente)
 
 O HAWSMASH 2.0 é a **primeira instância multi-unidade** do Restaurant OS. O caminho para produto:

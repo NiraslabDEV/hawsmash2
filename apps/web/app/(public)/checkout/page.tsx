@@ -24,7 +24,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
-import { formatMT, type Cents } from '@delivery/core';
+import { formatMT, getPaymentMode, type Cents } from '@delivery/core';
 
 import '../_storefront/landing.css';
 import '../_storefront/funnel.css';
@@ -35,6 +35,8 @@ import { trackBeginCheckout, trackAddPaymentInfo, type TrackItem } from '@/lib/a
 import { useAccount } from '@/utils/useAccount';
 import { AGENT_CHECKOUT_KEY, consumeAgentCheckout } from '@/lib/agents/webmcp';
 import { parseStoreCookie } from '@/lib/store-context';
+import { clearPendingCheckout, getPendingCheckout, rememberPendingCheckout } from '@/lib/payments/pending-checkout';
+import { clearCheckoutAttempt, getCheckoutAttempt } from '@/lib/payments/checkout-attempt';
 import {
   FunnelRail,
   FunnelFoot,
@@ -272,10 +274,10 @@ export default function CheckoutPage() {
   const [address, setAddress]                 = useState('');
   const [scheduledFor, setScheduledFor]       = useState<string | null>(null);
 
-  // Fluxo de pagamento: 'manual' (comprovativo) ou 'auto' (Paysuite)
+  // O método decide o fluxo: M-Pesa directo pode coexistir com e-Mola online.
   const [paymentFlow, setPaymentFlow]     = useState<PaymentFlow>('manual');
   const [manualMethod, setManualMethod]   = useState<ManualMethod>('mpesa');
-  const [autoMethod, setAutoMethod]       = useState<AutoMethod>('mpesa');
+  const [preferredAutoMethod, setAutoMethod] = useState<AutoMethod>('mpesa');
 
   const [referralCode, setReferralCode]           = useState<string | null>(null);
 
@@ -333,11 +335,12 @@ export default function CheckoutPage() {
   const [paymentProof, setPaymentProof]           = useState<File | null>(null);
   const [uploading, setUploading]                 = useState(false);
   const [autoSubmitting, setAutoSubmitting]       = useState(false);
+  const submissionInProgress = useRef(false);
   // Número onde o pedido de PIN vai cair. Começa igual ao do pedido, mas
   // separa-se de propósito: muita gente encomenda de um número e paga do
   // M-Pesa de outra pessoa da casa.
   const [mpesaPhone, setMpesaPhone]               = useState('');
-  const [mpesaError, setMpesaError]               = useState<string | null>(null);
+  const [paymentError, setPaymentError]               = useState<string | null>(null);
 
   const storeSlug = useStoreSlug();
   const agentCheckout = useRef(false);
@@ -366,9 +369,14 @@ export default function CheckoutPage() {
     [menuData?.hours],
   );
   const paymentProvider: string = menuData?.payment_provider ?? 'manual';
-  const isDirectPayment = paymentProvider === 'mpesa' || paymentProvider === 'mpesa_sim';
-  const hasAutoPayment =
-    paymentProvider === 'mock' || paymentProvider === 'paysuite' || isDirectPayment;
+  const onlineMethods = (['mpesa', 'emola', 'credit_card'] as AutoMethod[]).filter(
+    (method) => getPaymentMode(paymentProvider, menuData?.emola_provider, method) !== 'manual',
+  );
+  const hasAutoPayment = onlineMethods.length > 0;
+  const autoMethod = onlineMethods.includes(preferredAutoMethod) ? preferredAutoMethod : onlineMethods[0];
+  const paymentMode = getPaymentMode(paymentProvider, menuData?.emola_provider, autoMethod ?? 'mpesa');
+  const isDirectPayment = paymentMode === 'mpesa' || paymentMode === 'mpesa_sim';
+  const activePaymentFlow = hasAutoPayment ? paymentFlow : 'manual';
 
   const subtotal = cart.reduce((sum, item) => {
     const menuItem = menuData?.categories
@@ -458,66 +466,121 @@ export default function CheckoutPage() {
     return true;
   }
 
-  // Submissão manual: cria pedido e mostra ecrã de comprovativo
-  const handleCreateManualOrder = () => {
-    if (!validate()) return;
-    rememberAddress();
-    trackAddPaymentInfo(cartTrackItems(), manualMethod);
-    createOrderMutation.mutate(buildOrderPayload(manualMethod));
+  async function resumePendingCheckout(): Promise<boolean> {
+    const pendingId = getPendingCheckout(localStorage, storeSlug, cart);
+    if (!pendingId) return false;
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => controller.abort(), 10_000);
+    try {
+      const res = await fetch('/api/payments/verify', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderId: pendingId }),
+        signal: controller.signal,
+      });
+      const data = await res.json();
+      if (res.ok && data.status === 'failed') {
+        clearPendingCheckout(localStorage, pendingId);
+        return false;
+      }
+    } catch { /* Resposta incerta acompanha a mesma encomenda. */ }
+    finally { window.clearTimeout(timer); }
+    router.push(`/payment/return/${pendingId}`);
+    return true;
+  }
+
+  // Voltar no navegador não deve duplicar um pagamento ainda por resolver.
+  const handleCreateManualOrder = async () => {
+    if (submissionInProgress.current || !validate()) return;
+    submissionInProgress.current = true;
+    setAutoSubmitting(true);
+    try {
+      if (await resumePendingCheckout()) return;
+      rememberAddress();
+      trackAddPaymentInfo(cartTrackItems(), manualMethod);
+      await createOrderMutation.mutateAsync(buildOrderPayload(manualMethod));
+    } catch { /* A mutation apresenta o erro ao cliente. */ }
+    finally { submissionInProgress.current = false; setAutoSubmitting(false); }
   };
 
   // Submissão automática: cria pedido digital e redireciona para Paysuite
   const handleCreateAutoOrder = async () => {
-    if (!validate()) return;
-    rememberAddress();
-    trackAddPaymentInfo(cartTrackItems(), autoMethod);
-    setMpesaError(null);
+    if (submissionInProgress.current || !autoMethod || !validate()) return;
+    submissionInProgress.current = true;
+    setPaymentError(null);
     setAutoSubmitting(true);
     try {
+      if (await resumePendingCheckout()) return;
+      rememberAddress();
+      trackAddPaymentInfo(cartTrackItems(), autoMethod);
+      const payload = {
+        ...buildOrderPayload(autoMethod),
+        ...(isDirectPayment ? { msisdn: mpesaPhone || customerPhone } : {}),
+      };
+      const clientCheckoutId = await getCheckoutAttempt(localStorage, payload);
       const res = await fetch('/api/payments', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({
-          ...buildOrderPayload(autoMethod),
-          ...(isDirectPayment ? { msisdn: mpesaPhone || customerPhone } : {}),
-        }),
+        body:    JSON.stringify({ ...payload, clientCheckoutId }),
       });
+      const dados = await res.json();
+      if (dados.status === 'unavailable' && !dados.orderId) {
+        setPaymentError(dados.message ?? 'Pagamento automático indisponível. Usa o comprovativo.');
+        setManualMethod(autoMethod === 'emola' ? 'emola' : 'mpesa');
+        setPaymentFlow('manual');
+        return;
+      }
       if (!res.ok) {
-        const err = await res.json();
         // O servidor manda a razão em português quando é o número que está mal.
-        if (err.error === 'invalid_msisdn') {
-          setMpesaError(err.message ?? 'Número inválido.');
+        if (dados.error === 'invalid_msisdn') {
+          setPaymentError(dados.message ?? 'Número inválido.');
           return;
         }
-        throw new Error(err.error || 'Falha ao iniciar pagamento');
+        throw new Error(dados.message || dados.error || 'Falha ao iniciar pagamento');
       }
-      const dados = await res.json();
       const newOrderId = dados.orderId as string | undefined;
       // Não apagar o carrinho aqui — só depois de o pagamento ser confirmado
       // em /payment/return. Se o utilizador voltar atrás, o carrinho mantém-se.
-      localStorage.setItem('pending_order_id', newOrderId ?? '');
+      if (newOrderId) {
+        localStorage.setItem('pending_order_id', newOrderId);
+        rememberPendingCheckout(localStorage, newOrderId, storeSlug, cart, clientCheckoutId);
+      }
+
+      if (dados.status === 'failed') {
+        if (newOrderId) clearPendingCheckout(localStorage, newOrderId);
+        clearCheckoutAttempt(localStorage, clientCheckoutId);
+        setPaymentError(dados.message ?? 'O pagamento não foi concluído.');
+        return;
+      }
+
+      if (newOrderId && dados.status === 'cancelled') {
+        clearPendingCheckout(localStorage, newOrderId);
+        router.push(`/order-status/${newOrderId}`);
+        return;
+      }
+
+      // Já há uma encomenda: uma resposta incerta acompanha essa referência,
+      // sem abrir outra através do comprovativo ou de um novo checkout.
+      if (newOrderId && (dados.status === 'pending' || dados.status === 'unavailable' || dados.status === 'paid')) {
+        router.push(`/payment/return/${newOrderId}`);
+        return;
+      }
 
       // Fluxo directo (M-Pesa): não há para onde redireccionar — a cobrança já
       // aconteceu. `pending` também segue para o ecrã de espera, que pergunta o
       // estado: o cliente pode ter pago e a resposta não ter chegado a tempo.
       if (isDirectPayment) {
-        if (dados.status === 'failed') {
-          setMpesaError(dados.message ?? 'O pagamento não foi concluído.');
-          return;
-        }
-        if (dados.status === 'unavailable') {
-          setMpesaError(dados.message ?? 'Pagamento automático indisponível.');
-          setPaymentFlow('manual');
-          return;
-        }
+        if (!newOrderId) throw new Error('Não foi possível obter a referência do pedido.');
         router.push(`/payment/return/${newOrderId}`);
         return;
       }
 
+      if (!dados.checkoutUrl) throw new Error('Não foi possível abrir o pagamento. Verifica o estado do pedido antes de tentar novamente.');
       router.push(dados.checkoutUrl);
     } catch (err) {
-      alert(err instanceof Error ? err.message : 'Erro desconhecido');
+      setPaymentError(err instanceof Error && !(err instanceof TypeError) ? err.message
+        : 'Não conseguimos confirmar a resposta. Tenta novamente para recuperar esta encomenda com a mesma referência.');
     } finally {
+      submissionInProgress.current = false;
       setAutoSubmitting(false);
     }
   };
@@ -812,7 +875,7 @@ export default function CheckoutPage() {
 
   const isSubmitting = createOrderMutation.isPending || autoSubmitting;
   const ctaLabel = isSubmitting
-    ? (paymentFlow === 'auto' ? 'A redirecionar…' : 'A criar pedido…')
+    ? (activePaymentFlow === 'auto' ? (isDirectPayment ? 'A iniciar pagamento…' : 'A redirecionar…') : 'A criar pedido…')
     : `Pagar ${fmt(dueCents)}`;
 
   return (
@@ -1042,26 +1105,36 @@ export default function CheckoutPage() {
           {/* Toggle manual/auto — só aparece se o gateway estiver configurado */}
           {hasAutoPayment && (
             <div className="hf-seg" style={{ marginBottom: 16 }}>
-              <button type="button" onClick={() => setPaymentFlow('auto')} className={`hf-seg-opt${paymentFlow === 'auto' ? ' is-on' : ''}`}>
+              <button type="button" onClick={() => { setPaymentFlow('auto'); setPaymentError(null); }} className={`hf-seg-opt${activePaymentFlow === 'auto' ? ' is-on' : ''}`}>
                 Pagar agora
                 <small>pagas aqui</small>
               </button>
-              <button type="button" onClick={() => setPaymentFlow('manual')} className={`hf-seg-opt${paymentFlow === 'manual' ? ' is-on' : ''}`}>
+              <button type="button" onClick={() => { setPaymentFlow('manual'); setPaymentError(null); }} className={`hf-seg-opt${activePaymentFlow === 'manual' ? ' is-on' : ''}`}>
                 Comprovativo
                 <small>já paguei</small>
               </button>
             </div>
           )}
 
-          {paymentFlow === 'manual' ? (
+          {activePaymentFlow === 'manual' ? (
             <div className="hf-tiles is-2">
               <Tile tight selected={manualMethod === 'mpesa'} onClick={() => setManualMethod('mpesa')} title="M-Pesa" sub="Comprovativo" />
               <Tile tight selected={manualMethod === 'emola'} onClick={() => setManualMethod('emola')} title="e-Mola" sub="Comprovativo" />
             </div>
           ) : (
             <>
-              {/* No M-Pesa directo não há escolha de método: é M-Pesa. Mostrar
-                  e-Mola e cartão seria oferecer o que a loja não aceita. */}
+              <div className={`hf-tiles is-${onlineMethods.length === 3 ? '3' : '2'}`} style={{ marginBottom: 16 }}>
+                {onlineMethods.map((method) => (
+                  <Tile
+                    key={method}
+                    tight
+                    selected={autoMethod === method}
+                    onClick={() => { setAutoMethod(method); setPaymentError(null); }}
+                    title={method === 'mpesa' ? 'M-Pesa' : method === 'emola' ? 'e-Mola' : 'Cartão'}
+                    sub={method === 'credit_card' ? 'Visa · MC' : 'Online'}
+                  />
+                ))}
+              </div>
               {isDirectPayment ? (
                 <>
                   <label style={{ display: 'block' }}>
@@ -1078,17 +1151,11 @@ export default function CheckoutPage() {
                         value={mpesaPhone || customerPhone}
                         onChange={(e) => {
                           setMpesaPhone(e.target.value);
-                          setMpesaError(null);
+                          setPaymentError(null);
                         }}
                       />
                     </div>
                   </label>
-
-                  {mpesaError && (
-                    <p className="hf-note" style={{ marginTop: 10, color: 'var(--hs-ember)' }}>
-                      {mpesaError}
-                    </p>
-                  )}
 
                   <p className="hf-note" style={{ marginTop: 14 }}>
                     Vais receber um pedido de PIN neste número. Confirma no telemóvel e
@@ -1096,25 +1163,20 @@ export default function CheckoutPage() {
                   </p>
                 </>
               ) : (
-                <>
-                  <div className="hf-tiles is-3">
-                    {(['mpesa', 'emola', 'credit_card'] as AutoMethod[]).map((m) => (
-                      <Tile
-                        key={m}
-                        tight
-                        selected={autoMethod === m}
-                        onClick={() => setAutoMethod(m)}
-                        title={m === 'mpesa' ? 'M-Pesa' : m === 'emola' ? 'e-Mola' : 'Cartão'}
-                        sub={m === 'credit_card' ? 'Visa · MC' : 'Na hora'}
-                      />
-                    ))}
-                  </div>
-                  <p className="hf-note" style={{ marginTop: 14 }}>
-                    Vais confirmar o pagamento no teu telemóvel e voltas aqui.
-                  </p>
-                </>
+                <p className="hf-note" style={{ marginTop: 14 }}>
+                  {autoMethod === 'emola' ? 'Vais continuar para o pagamento e-Mola.'
+                    : autoMethod === 'credit_card' ? 'Vais continuar para o pagamento com cartão.'
+                    : 'Vais continuar para o pagamento M-Pesa.'}
+                  {' '}Confirma o pagamento na página seguinte e regressa para acompanhar o pedido.
+                </p>
               )}
             </>
+          )}
+
+          {paymentError && (
+            <p role="status" className="hf-note" style={{ marginTop: 10, color: 'var(--hs-ember)' }}>
+              {paymentError}
+            </p>
           )}
 
           <p className="hf-note" style={{ marginTop: 14 }}>
@@ -1229,7 +1291,7 @@ export default function CheckoutPage() {
             <dd className="num">{fmt(dueCents)}</dd>
           </dl>
           <button
-            onClick={paymentFlow === 'auto' ? handleCreateAutoOrder : handleCreateManualOrder}
+            onClick={activePaymentFlow === 'auto' ? handleCreateAutoOrder : handleCreateManualOrder}
             disabled={cart.length === 0 || isSubmitting}
             className="hf-btn hf-btn-gold"
           >

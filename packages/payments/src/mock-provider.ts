@@ -1,4 +1,5 @@
-import { createHmac, randomUUID } from 'node:crypto';
+import { createHmac, randomUUID, timingSafeEqual } from 'node:crypto';
+import { formatPaysuiteAmount, parsePaysuiteWebhook } from './paysuite-webhook';
 import type {
   RedirectPaymentProvider,
   CreateCheckoutRequest,
@@ -17,12 +18,13 @@ export class MockProvider implements RedirectPaymentProvider {
   constructor(private options: { autoWebhookMs?: number } = {}) {}
 
   async createCheckout(request: CreateCheckoutRequest): Promise<CreateCheckoutResponse> {
+    formatPaysuiteAmount(request.amountCents);
     const providerPaymentId = `mock_${randomUUID()}`;
 
     if (this.options.autoWebhookMs) {
       const { amountCents, idempotencyKey, webhookUrl, method } = request;
       setTimeout(() => {
-        const payload = this.buildWebhookPayload(idempotencyKey, 'success', amountCents, method);
+        const payload = this.buildWebhookPayload(idempotencyKey, 'success', amountCents, method, providerPaymentId);
         const body = JSON.stringify(payload);
         fetch(webhookUrl, {
           method: 'POST',
@@ -51,28 +53,13 @@ export class MockProvider implements RedirectPaymentProvider {
   }
 
   verifyWebhookSignature(rawBody: string, signatureHeader: string): boolean {
+    if (!/^[a-f0-9]{64}$/.test(signatureHeader)) return false;
     const expected = this.signBody(rawBody);
-    if (signatureHeader.length !== expected.length) return false;
-    return signatureHeader === expected;
+    return timingSafeEqual(Buffer.from(signatureHeader, 'utf8'), Buffer.from(expected, 'utf8'));
   }
 
   parseWebhook(payload: unknown): ParsedWebhook {
-    const p = payload as {
-      event: string;
-      data: {
-        id: string;
-        amount: number | string;
-        reference: string;
-        transaction?: { method: string };
-      };
-    };
-    return {
-      event: p.event === 'payment.success' ? 'success' : 'failed',
-      requestId: p.data.reference,
-      amountCents: Math.round(Number(p.data.amount) * 100),
-      providerRef: p.data.id,
-      method: (p.data.transaction?.method ?? 'mpesa') as PaymentMethod,
-    };
+    return parsePaysuiteWebhook(payload);
   }
 
   buildWebhookPayload(
@@ -80,16 +67,17 @@ export class MockProvider implements RedirectPaymentProvider {
     event: 'success' | 'failed',
     amountCents: number,
     method: PaymentMethod = 'mpesa',
+    providerPaymentId?: string,
   ) {
     const data: {
       id: string;
-      amount: number;
+      amount: string;
       reference: string;
       transaction?: { id: string; method: PaymentMethod; paid_at: string };
       error?: string;
     } = {
-      id: `mock_pay_${requestId.slice(0, 8)}`,
-      amount: Number((amountCents / 100).toFixed(2)),
+      id: providerPaymentId ?? `mock_pay_${requestId.slice(0, 8)}`,
+      amount: formatPaysuiteAmount(amountCents),
       reference: requestId,
     };
     if (event === 'success') {

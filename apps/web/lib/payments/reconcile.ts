@@ -19,7 +19,7 @@ export type ReconciliationOrder = Omit<z.infer<typeof orderSchema>, 'stores'> & 
 type PageInput = { cutoff: string; after?: After; limit: number; signal: AbortSignal };
 export type ReconciliationDependencies = {
   listPage: (input: PageInput) => Promise<ReconciliationOrder[]>;
-  configForStore: (slug: string, signal: AbortSignal) => Promise<PaymentConfig>;
+  configForStore: (slug: string, signal: AbortSignal, method: string) => Promise<PaymentConfig>;
   buildProvider: (config: PaymentConfig) => PaymentProvider;
   confirm: (input: Omit<ConfirmOrderInput, 'svc'>, signal: AbortSignal) => Promise<ConfirmOrderResult>;
 };
@@ -77,15 +77,16 @@ export async function runPaymentReconciliation(deps: ReconciliationDependencies,
   let reason: 'complete' | 'budget_exhausted' | 'limit_reached' | 'read_failed' = 'complete';
 
   const configured = (order: ReconciliationOrder) => {
-    let provider = providers.get(order.store_id);
+    const key = `${order.store_id}:${order.payment_method ?? ''}`;
+    let provider = providers.get(key);
     if (!provider) {
       provider = (async () => {
-        const cfg = await deps.configForStore(order.storeSlug, signal);
+        const cfg = await deps.configForStore(order.storeSlug, signal, order.payment_method ?? '');
         signal.throwIfAborted();
         if (cfg.provider === 'manual') return null;
         return { name: cfg.provider, provider: deps.buildProvider(cfg) };
       })();
-      providers.set(order.store_id, provider);
+      providers.set(key, provider);
     }
     return provider;
   };
