@@ -1,10 +1,12 @@
 'use client';
 
-import { Fragment, useCallback, useEffect, useState } from 'react';
+import { Fragment, useCallback, useEffect, useReducer, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { createClient } from '@/utils/supabase/client';
 import { formatMT, type Cents } from '@delivery/core';
 import { format, parseISO, formatDistanceToNow } from 'date-fns';
 import { pt } from 'date-fns/locale';
+import { initialOrdersView, ORDERS_PAGE_SIZE as PAGE_SIZE, ordersViewReducer, requestOrdersPage, type OrdersViewAction } from '@/lib/orders-pagination';
 
 type Order = {
   id: string;
@@ -68,7 +70,6 @@ type ReconciliationOrder = {
 };
 
 const FATURADO_HIDDEN_KEY = 'pedidos_faturado_hidden';
-const PAGE_SIZE = 10;
 const money = (c: number) => formatMT(c as Cents);
 const GLASS = 'rounded-2xl border border-white/[0.08] bg-white/[0.04] backdrop-blur-[12px] shadow-[0_4px_24px_rgba(0,0,0,0.4)]';
 
@@ -107,15 +108,11 @@ function pctDelta(hoje: number, ontem: number | undefined): number | null {
 export default function PedidosPage() {
   const supabase = createClient();
 
-  const [loading, setLoading] = useState(true);
-  const [orders, setOrders] = useState<Order[]>([]);
   const [stats, setStats] = useState<Stats | null>(null);
   const [deviceStatus, setDeviceStatus] = useState<DeviceStatus | null>(null);
-  const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState<string>('all');
-  const [storeFilter, setStoreFilter] = useState<string>('all');
+  const [view, dispatchView] = useReducer(ordersViewReducer, initialOrdersView);
+  const { search, status: statusFilter, store: storeFilter, page } = view;
   const [stores, setStores] = useState<Array<{ slug: string; short_name: string }>>([]);
-  const [page, setPage] = useState(1);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [proofUrls, setProofUrls] = useState<Record<string, string>>({});
   const [showDenyModal, setShowDenyModal] = useState(false);
@@ -163,20 +160,33 @@ export default function PedidosPage() {
     if (data) setDeviceStatus(data);
   }, [supabase]);
 
-  const fetchOrders = useCallback(async () => {
-    setLoading(true);
-    try {
-      const filters: Record<string, unknown> = { limit: 100 };
-      if (search) filters.search = search;
-      if (statusFilter !== 'all') filters.status = statusFilter;
-      // "Todas" é leitura consolidada; a acção continua a exigir loja concreta.
-      if (storeFilter !== 'all') filters.store = storeFilter;
-      const { data, error } = await supabase.rpc('get_orders', { p_filters: filters });
-      if (!error && data) setOrders(data.orders || []);
-    } finally {
-      setLoading(false);
-    }
-  }, [supabase, search, statusFilter, storeFilter]);
+  const ordersQuery = useQuery({
+    // Cada loja/filtro/página tem identidade própria. Respostas antigas nunca
+    // substituem os pedidos da consulta actual, mesmo se o transporte atrasar.
+    queryKey: ['admin-orders', view],
+    queryFn: ({ signal }) => requestOrdersPage<Order>((filters, requestSignal) => {
+      const request = supabase.rpc('get_orders', { p_filters: filters });
+      return requestSignal ? request.abortSignal(requestSignal) : request;
+    }, view, signal),
+    staleTime: 0,
+    retry: 1,
+    refetchInterval: 15_000,
+    refetchOnWindowFocus: true,
+  });
+  const { refetch: refetchOrders } = ordersQuery;
+  const fetchOrders = useCallback(async () => { await refetchOrders(); }, [refetchOrders]);
+  const loading = ordersQuery.isPending;
+  const orders = ordersQuery.data?.orders ?? [];
+  const totalOrders = ordersQuery.data?.total ?? 0;
+  const totalPages = Math.max(1, Math.ceil(totalOrders / PAGE_SIZE));
+
+  function changeView(action: OrdersViewAction) {
+    dispatchView(action);
+    setExpandedId(null);
+    setShowDenyModal(false);
+    setSelectedOrder(null);
+    setDenyReason('');
+  }
 
   const fetchReconciliation = useCallback(async () => {
     const { data } = await supabase
@@ -191,8 +201,19 @@ export default function PedidosPage() {
 
   useEffect(() => { fetchStats(); fetchDeviceStatus(); fetchReconciliation(); fetchStores(); }, [fetchStats, fetchDeviceStatus, fetchReconciliation, fetchStores]);
   useEffect(() => { const i = setInterval(fetchDeviceStatus, 60000); return () => clearInterval(i); }, [fetchDeviceStatus]);
-  useEffect(() => { fetchOrders(); }, [fetchOrders]);
-  useEffect(() => { setPage(1); }, [search, statusFilter, storeFilter]); // reset paginação ao filtrar
+  useEffect(() => {
+    if (ordersQuery.data && page > totalPages) dispatchView({ type: 'page', page: totalPages });
+  }, [ordersQuery.data, page, totalPages]);
+
+  useEffect(() => {
+    // Realtime apenas invalida a leitura completa; nunca constrói pedidos.
+    const refresh = () => { void fetchOrders(); void fetchStats(); void fetchReconciliation(); };
+    const channel = supabase.channel('admin-orders-list')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'orders' }, refresh)
+      .subscribe();
+    const timer = window.setInterval(() => { void fetchStats(); void fetchReconciliation(); }, 15_000);
+    return () => { window.clearInterval(timer); void supabase.removeChannel(channel); };
+  }, [supabase, fetchOrders, fetchStats, fetchReconciliation]);
 
   const refreshData = async () => { await Promise.all([fetchStats(), fetchOrders(), fetchDeviceStatus(), fetchReconciliation()]); };
 
@@ -278,12 +299,11 @@ export default function PedidosPage() {
     return counts[key] ?? 0;
   };
 
-  // paginação local sobre o array carregado
-  const totalPages = Math.max(1, Math.ceil(orders.length / PAGE_SIZE));
-  const currentPage = Math.min(page, totalPages);
-  const pageOrders = orders.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
-  const fromIdx = orders.length === 0 ? 0 : (currentPage - 1) * PAGE_SIZE + 1;
-  const toIdx = Math.min(currentPage * PAGE_SIZE, orders.length);
+  // A resposta já é a página. O total vem da mesma consulta no servidor.
+  const currentPage = page;
+  const pageOrders = orders;
+  const fromIdx = orders.length === 0 ? 0 : (page - 1) * PAGE_SIZE + 1;
+  const toIdx = orders.length === 0 ? 0 : fromIdx + orders.length - 1;
 
   const ActionButtons = ({ order }: { order: Order }) => {
     const action = nextAction(order);
@@ -391,6 +411,7 @@ export default function PedidosPage() {
       )}
 
       {/* KPIs */}
+      {stats && <p className="text-xs text-[#8A7A69]">Indicadores de todas as lojas a que tens acesso. Os filtros abaixo aplicam-se à lista de pedidos.</p>}
       {stats && (
         <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
           <KpiCard label="Total faturado (hoje)" value={hideFaturado ? '••••' : money(stats.faturado_hoje)} accentBorder="border-t-[#22C55E]/60"
@@ -411,19 +432,19 @@ export default function PedidosPage() {
       <div className={`${GLASS} p-3 flex flex-wrap items-center gap-3`}>
         <div className="flex-1 min-w-[200px] flex items-center gap-2 bg-black/20 border border-white/[0.08] rounded-xl px-3 py-2.5">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8A7A69" strokeWidth="2"><circle cx="11" cy="11" r="7" /><path d="m21 21-4-4" /></svg>
-          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar pedido, cliente, telefone…"
+          <input value={search} onChange={(e) => changeView({ type: 'filter', field: 'search', value: e.target.value })} placeholder="Buscar pedido, cliente, telefone…"
             className="bg-transparent text-sm text-white placeholder-[#8A7A69] focus:outline-none w-full" />
         </div>
         <div className="flex items-center gap-2 bg-black/20 border border-white/[0.08] rounded-xl px-3 py-2.5 text-sm text-[#C9BCAC]">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="3" y="4" width="18" height="18" rx="2" /><path d="M16 2v4M8 2v4M3 10h18" /></svg>
           <span className="capitalize">{format(new Date(), "'Hoje,' dd/MM/yyyy", { locale: pt })}</span>
         </div>
-        <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}
+        <select value={statusFilter} onChange={(e) => changeView({ type: 'filter', field: 'status', value: e.target.value })} aria-label="Estado dos pedidos"
           className="bg-black/20 border border-white/[0.08] rounded-xl px-3 py-2.5 text-sm text-[#C9BCAC] focus:outline-none focus:border-[#F5A623]/40 cursor-pointer">
           {TABS.map((t) => <option key={t.key} value={t.key} className="bg-[#231610] text-white">{t.key === 'all' ? 'Todos os status' : t.label}</option>)}
         </select>
         {stores.length > 1 && (
-          <select value={storeFilter} onChange={(e) => setStoreFilter(e.target.value)} aria-label="Loja"
+          <select value={storeFilter} onChange={(e) => changeView({ type: 'filter', field: 'store', value: e.target.value })} aria-label="Loja"
             className="bg-black/20 border border-white/[0.08] rounded-xl px-3 py-2.5 text-sm text-[#C9BCAC] focus:outline-none focus:border-[#F5A623]/40 cursor-pointer">
             <option value="all" className="bg-[#231610] text-white">Todas as lojas</option>
             {stores.map((store) => (
@@ -439,7 +460,7 @@ export default function PedidosPage() {
           const active = statusFilter === t.key;
           const c = tabCount(t.key);
           return (
-            <button key={t.key} onClick={() => setStatusFilter(t.key)}
+            <button key={t.key} onClick={() => changeView({ type: 'filter', field: 'status', value: t.key })}
               className={`px-3 py-1.5 rounded-xl text-sm transition-all ${
                 active ? 'bg-[#F5A623]/15 border border-[#F5A623]/30 text-[#F5A623] font-semibold' : 'text-[#C9BCAC] hover:bg-white/[0.06] hover:text-white'
               }`}>
@@ -451,6 +472,13 @@ export default function PedidosPage() {
           );
         })}
       </div>
+
+      {ordersQuery.isError && (
+        <div role="alert" className="flex items-center justify-between gap-3 rounded-xl border border-amber-400/30 p-4 text-sm text-amber-200">
+          <span>{ordersQuery.error.message}{orders.length > 0 ? ' A mostrar a última consulta desta página.' : ''}</span>
+          <button type="button" onClick={() => void fetchOrders()} className="min-h-10 shrink-0 underline">Tentar novamente</button>
+        </div>
+      )}
 
       {/* Tabela (desktop) */}
       <div className={`hidden md:block ${GLASS} overflow-hidden`}>
@@ -511,8 +539,8 @@ export default function PedidosPage() {
         {/* Paginação */}
         {!loading && orders.length > 0 && (
           <div className="flex items-center justify-between px-4 py-3 border-t border-white/[0.06] text-sm text-[#8A7A69]">
-            <span>Exibindo {fromIdx} a {toIdx} de {orders.length} pedidos</span>
-            <Pagination page={currentPage} totalPages={totalPages} onChange={setPage} />
+            <span>Exibindo {fromIdx} a {toIdx} de {totalOrders} pedidos</span>
+            <Pagination page={currentPage} totalPages={totalPages} onChange={(next) => changeView({ type: 'page', page: next })} />
           </div>
         )}
       </div>
@@ -547,10 +575,10 @@ export default function PedidosPage() {
                 {expandedId === order.id && <div className="mt-3 border-t border-white/[0.06] pt-3"><OrderDetail order={order} proofUrl={proofUrls[order.id]} actions={null} /></div>}
               </div>
             ))}
-            {orders.length > PAGE_SIZE && (
+            {totalOrders > PAGE_SIZE && (
               <div className="flex items-center justify-between text-sm text-[#8A7A69] pt-1">
-                <span>{fromIdx}–{toIdx} de {orders.length}</span>
-                <Pagination page={currentPage} totalPages={totalPages} onChange={setPage} />
+                <span>{fromIdx}–{toIdx} de {totalOrders}</span>
+                <Pagination page={currentPage} totalPages={totalPages} onChange={(next) => changeView({ type: 'page', page: next })} />
               </div>
             )}
           </>
@@ -636,18 +664,18 @@ function PayBadge({ method }: { method: string }) {
 
 function Pagination({ page, totalPages, onChange }: { page: number; totalPages: number; onChange: (p: number) => void }) {
   if (totalPages <= 1) return null;
-  const pages = Array.from({ length: totalPages }, (_, i) => i + 1).filter((p) => p === 1 || p === totalPages || Math.abs(p - page) <= 1);
+  const pages = [...new Set([1, page - 1, page, page + 1, totalPages])].filter((p) => p >= 1 && p <= totalPages).sort((a, b) => a - b);
   const btn = 'min-w-[32px] h-8 px-2 grid place-items-center rounded-xl border text-sm transition-all';
   return (
     <div className="flex items-center gap-1.5">
-      <button disabled={page <= 1} onClick={() => onChange(page - 1)} className={`${btn} border-white/[0.08] text-[#C9BCAC] hover:bg-white/[0.06] disabled:opacity-40`}>‹</button>
+      <button aria-label="Página anterior" disabled={page <= 1} onClick={() => onChange(page - 1)} className={`${btn} border-white/[0.08] text-[#C9BCAC] hover:bg-white/[0.06] disabled:opacity-40`}>‹</button>
       {pages.map((p, i) => (
         <Fragment key={p}>
           {i > 0 && p - pages[i - 1] > 1 && <span className="text-[#8A7A69] px-0.5">…</span>}
-          <button onClick={() => onChange(p)} className={`${btn} ${p === page ? 'bg-[#F5A623] text-[#2A1710] border-transparent' : 'border-white/[0.08] text-[#C9BCAC] hover:bg-white/[0.06]'}`}>{p}</button>
+          <button aria-label={`Página ${p}`} aria-current={p === page ? 'page' : undefined} onClick={() => onChange(p)} className={`${btn} ${p === page ? 'bg-[#F5A623] text-[#2A1710] border-transparent' : 'border-white/[0.08] text-[#C9BCAC] hover:bg-white/[0.06]'}`}>{p}</button>
         </Fragment>
       ))}
-      <button disabled={page >= totalPages} onClick={() => onChange(page + 1)} className={`${btn} border-white/[0.08] text-[#C9BCAC] hover:bg-white/[0.06] disabled:opacity-40`}>›</button>
+      <button aria-label="Página seguinte" disabled={page >= totalPages} onClick={() => onChange(page + 1)} className={`${btn} border-white/[0.08] text-[#C9BCAC] hover:bg-white/[0.06] disabled:opacity-40`}>›</button>
     </div>
   );
 }

@@ -333,7 +333,7 @@ nem publicação no ChatGPT. Ver [`docs/MCP.md`](docs/MCP.md) e
 
 - [x] Conferência de extractos normalizados por loja, em centavos, sem alterar pagamentos.
 - [x] Reconciliação de estados por loja, paginada, cancelável e autenticada.
-- [ ] Paginação real de pedidos na BD/painel, com fallback de actualização e testes de mais de 100 pedidos.
+- [x] ⏳ Paginação real de pedidos na BD/painel e deliveries activos no POS, com fallback de actualização e testes além de 100 pedidos; validar staging em B-105.
 - [~] B-105 Aplicar e validar a migration 1045 na BD de staging antes do deploy do painel.
 - [~] B-106 Configurar scheduler, segredo e contas; validar reconciliação por loja no ambiente de ensaio.
 - [~] B-107 Validar o formato e as referências do extracto real antes de criar o adaptador diário.

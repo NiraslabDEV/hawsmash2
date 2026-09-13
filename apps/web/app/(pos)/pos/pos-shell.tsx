@@ -34,6 +34,7 @@ import { connectionStatus } from '@/lib/pos/connection-status';
 import { buildPosUpsellFunnel, type PosUpsellStep } from '@/lib/pos/pos-upsell';
 import { isPosPin, POS_IDLE_TIMEOUT_MS } from '@/lib/pos/session';
 import { OrdersBoard } from './orders-board';
+import { loadActiveDeliveryOrders } from '@/lib/pos/delivery-orders';
 import { TouchKeyboard } from './touch-keyboard';
 import { buildPickupSlots } from '@/lib/pos/schedule';
 import {
@@ -228,8 +229,11 @@ export function PosShell() {
   // 'delivery' é só consulta — o cashier acompanha o que está a sair pela
   // loja online sem sair do POS nem precisar de acesso ao painel admin.
   const [posView, setPosView] = useState<'menu' | 'delivery'>('menu');
-  const [deliveryOrders, setDeliveryOrders] = useState<DeliveryOrder[]>([]);
+  const [deliveryResult, setDeliveryResult] = useState<{ storeSlug: string; orders: DeliveryOrder[] }>({ storeSlug: '', orders: [] });
+  const deliveryOrders = deliveryResult.storeSlug === context?.storeSlug ? deliveryResult.orders : [];
   const [deliveryLoading, setDeliveryLoading] = useState(false);
+  const [deliveryError, setDeliveryError] = useState<string | null>(null);
+  const deliveryRequest = useRef<AbortController | null>(null);
   const [cart, setCart] = useState<Cart>({});
   /** Item à espera de escolha de variante (HAW/WAGYU, Zero, 6 unidades…). */
   const [variantPick, setVariantPick] = useState<MenuItem | null>(null);
@@ -460,17 +464,21 @@ export function PosShell() {
 
   const fetchDeliveryOrders = useCallback(async () => {
     if (!context) return;
+    deliveryRequest.current?.abort();
+    const controller = new AbortController();
+    deliveryRequest.current = controller;
     setDeliveryLoading(true);
+    setDeliveryError(null);
     try {
-      const { data, error } = await supabase.rpc('get_orders', {
-        p_filters: { store: context.storeSlug, limit: 50 },
-      });
-      if (!error && data) {
-        const all = (data.orders ?? []) as DeliveryOrder[];
-        setDeliveryOrders(all.filter((order) => order.channel === 'delivery'));
-      }
+      const orders = await loadActiveDeliveryOrders<DeliveryOrder>((filters, signal) => {
+        const request = supabase.rpc('get_orders', { p_filters: filters });
+        return signal ? request.abortSignal(signal) : request;
+      }, context.storeSlug, controller.signal);
+      if (!controller.signal.aborted) setDeliveryResult({ storeSlug: context.storeSlug, orders });
+    } catch {
+      if (!controller.signal.aborted) setDeliveryError('Não foi possível actualizar. Os pedidos apresentados são da última consulta.');
     } finally {
-      setDeliveryLoading(false);
+      if (!controller.signal.aborted) setDeliveryLoading(false);
     }
   }, [context, supabase]);
 
@@ -481,8 +489,10 @@ export function PosShell() {
     if (posView !== 'delivery' || !context) return;
     void fetchDeliveryOrders();
     const timer = window.setInterval(() => void fetchDeliveryOrders(), 20_000);
-    return () => window.clearInterval(timer);
+    return () => { window.clearInterval(timer); deliveryRequest.current?.abort(); };
   }, [posView, context, fetchDeliveryOrders]);
+
+  useEffect(() => { setDeliveryError(null); }, [context?.storeSlug]);
 
   useEffect(() => {
     if (!context) return;
@@ -1416,7 +1426,8 @@ export function PosShell() {
                   {deliveryLoading ? 'A actualizar…' : 'Actualizar'}
                 </button>
               </div>
-              {deliveryOrders.length === 0 && !deliveryLoading && (
+              {deliveryError && <p role="alert" className="rounded-xl border border-amber-400/30 p-3 text-sm text-amber-200">{deliveryError}</p>}
+              {deliveryOrders.length === 0 && !deliveryLoading && !deliveryError && (
                 <p className="rounded-2xl border border-white/10 bg-[#1a1816] p-6 text-center text-[#847e72]">
                   Sem pedidos de delivery neste momento.
                 </p>

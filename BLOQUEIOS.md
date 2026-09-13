@@ -530,6 +530,8 @@
   Ensaios de browser com RPC simulada não comprovam RLS nem execução da migration.
 - Evidência local adicional: a semântica SQL foi ensaiada num Postgres 17.5 embebido (PGlite),
   com esquema/roles de teste. Isto não substitui as policies, triggers e PostgREST da instalação.
+- Código local concluído e dois ensaios de navegador passaram. Relatório dos 24 casos SQL em
+  [`docs/validation/1045-paginacao-local.md`](docs/validation/1045-paginacao-local.md).
 
 ### B-106 · [V1] Reconciliação contínua no ambiente real de ensaio
 
@@ -678,3 +680,56 @@ o site continua a funcionar quando a API não existe.
 |---|---|---|
 | 1 | B-103 | agentes externos não conseguem usar este novo canal no domínio da instalação; site e POS mantêm o percurso existente |
 | 2 | B-104 | clientes não têm uma ligação publicada/validada no ChatGPT; gerar o pacote não a substitui |
+
+---
+
+## PACOTE FINAL — preparação para volume · 2026-09-14
+
+Esta passagem cobre V1. **3 novos bloqueios: 2 de infraestrutura/integração (B-105/B-106),
+1 de fornecedor/dados (B-107), 0 de hardware nesta etapa.** A segunda passagem confirmou
+que o ensaio SQL embebido melhora a evidência de B-105, mas não fecha a validação de staging.
+Os bloqueios anteriores, incluindo a activação do MCP e publicação no ChatGPT, continuam separados.
+
+### O que ficou preparado e verificado
+
+- Conferência de extractos normalizados, sem escrita financeira, com CLI local e 17 testes.
+- Reconciliação por loja, autenticação obrigatória, continuidade por cursor e consultas canceláveis.
+- Paginação real no painel e leitura paginada de deliveries activos no POS; filtros no servidor,
+  cancelamento de respostas antigas e actualização por nova leitura.
+- Motor: **577 testes**, lint/typecheck e build passaram. Dois testes de navegador com RPCs
+  simuladas passaram. PostgreSQL 17.5 embebido: **24 casos passaram**; a RPC antiga falhou 22.
+  Não foram executados os 13 testes pgTAP contra o stack completo da instalação.
+
+Não foi medida a capacidade de produção nem concluído o conjunto da proposta. Fila por prazo,
+agrupamento de entregas, reserva de impressão, marketing, SEO e ensaio de carga continuam no
+plano V2–V6 de `docs/PREPARACAO-VOLUME.md`. Há código-base em várias destas áreas; isso não
+transforma os critérios novos em entregas verificadas.
+
+### Para o cliente — mensagem pronta
+
+> 1. Precisamos de uma amostra anonimizada do extracto de comerciante do M-Pesa e da descrição
+>    das colunas, incluindo referências, taxas, devoluções e data/hora de liquidação.
+> 2. Precisamos de confirmar com a Vodacom como obter o extracto completo diariamente e quais
+>    são os limites de consulta para as contas das cozinhas.
+
+Sem alterar valores comerciais ou iniciar serviços a partir do documento da proposta.
+
+### Para o Gabriel
+
+| ID | Próxima acção | Como verificar |
+|---|---|---|
+| B-105 | Aplicar 1045 primeiro na BD de staging, testar SQL/RLS e só depois publicar frontend | Perfis e lojas isolados, página 13, filtros e POS com mais de 100 activos |
+| B-106 | Configurar scheduler único, segredo e contas por loja | Seguir todos os cursores, medir timeouts e registar resultados no ambiente de ensaio |
+| B-107 | Validar o contrato do extracto e implementar o adaptador | Amostra real anonimizada, nenhuma linha omitida, discrepâncias explicadas |
+
+### Hardware e impacto na abertura
+
+V1 não exigiu ensaio físico. A reserva de impressão de V4 continua a precisar de duas
+impressoras, papel/rede e técnico local; reservar **2–4 horas como estimativa** para testar
+falha e recuperação depois de implementar o mecanismo. Nenhum equipamento foi declarado validado.
+
+| Impacto | Dependência | Sem isto… |
+|---|---|---|
+| 1 | B-105 | o painel novo não deve ser publicado contra a RPC antiga |
+| 2 | B-106 | a reconciliação preparada não corre continuamente com as contas reais |
+| 3 | B-107 | a conferência serve ficheiros normalizados; ainda não existe importação diária do extracto oficial |
