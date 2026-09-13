@@ -1,0 +1,9 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/mcp.schema.json",
+  "mcpServers": {
+    "restaurant-os": {
+      "type": "streamable-http",
+      "url": "https://PLACEHOLDER_SITE_DOMAIN/api/mcp"
+    }
+  }
+}

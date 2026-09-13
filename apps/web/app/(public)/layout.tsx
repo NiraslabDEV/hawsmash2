@@ -3,6 +3,7 @@ import type { Metadata } from 'next';
 import { Plus_Jakarta_Sans, Anton, Bebas_Neue, DM_Sans } from 'next/font/google';
 
 import { getBrand } from '@/lib/brand/server';
+import { AgentTools } from './agent-tools';
 
 // Base URL robusta: a env pode vir SEM esquema (ex.: Railway dá "host.up.railway.app").
 // new URL() exige protocolo — prefixamos https:// e caímos em localhost se for inválida.
@@ -97,6 +98,7 @@ export default async function PublicLayout({ children }: { children: ReactNode }
       style={{ ...cssVars, minHeight: '100vh', background: 'var(--st-bg)', color: 'var(--st-text)' }}
     >
       {children}
+      {process.env.AGENT_TOOLS_ENABLED === 'true' && <AgentTools />}
     </div>
   );
 }

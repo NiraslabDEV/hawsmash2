@@ -477,6 +477,46 @@
 
 ---
 
+### B-103 · [A1] Canal de agentes: activação HTTPS e validação da instalação
+
+- Estado: **aberto — 2026-09-14**
+- Categoria: **infraestrutura/domínio**. Desbloqueia: Gabriel, com acesso ao deploy e domínio da instalação.
+- O que falta: publicar a versão em staging, configurar `AGENT_PUBLIC_BASE_URL` para a origem
+  HTTPS correcta e activar `AGENT_TOOLS_ENABLED`; confirmar RPCs com a chave pública e testar
+  lojas, escolhas, zonas e chegada ao checkout. Se houver várias réplicas, configurar também
+  limite agregado no proxy antes da exposição pública.
+- Como avancei: ferramentas, validação, revisão do carrinho e pacote de plugin implementados;
+  testes locais e ensaio com RPC simulado. A flag fica **desligada por omissão**. Não foi
+  declarada nem efectuada nesta entrega a activação pública desta integração em produção.
+- Onde está: [`docs/MCP.md`](docs/MCP.md), `.env.example`, `apps/web/lib/agents/`,
+  `playwright.agents.config.ts` e `scripts/smoke-public-mcp.mjs`.
+- Para fechar: ligação SDK ao MCP HTTPS e percurso completo até à revisão/checkout de staging,
+  sem cobrança real; registar domínio, versão e resultado. A ausência deste canal não altera
+  a venda pelo site/POS existente.
+- Custo/tempo: usa o deploy da instalação; eventual alteração de plano depende da infraestrutura.
+  Estimativa de 30–60 min depois de domínio e acesso estarem disponíveis.
+
+### B-104 · [A1] Canal de agentes: ligação e publicação no ChatGPT
+
+- Estado: **aberto — 2026-09-14**
+- Categoria: **publicação**. Desbloqueia: Gabriel/conta destinatária e processo de validação da plataforma.
+- O que falta: gerar o pacote para o domínio validado em B-103, testar a ligação na conta
+  destinatária, preencher identidade/marca e política de privacidade da instalação e completar
+  o processo de submissão/publicação aplicável. Publicar o endereço MCP ou gerar um ZIP não
+  instala o plugin nas contas dos clientes nem garante descoberta no ChatGPT.
+- Como avancei: pacote reutilizável e gerador prontos, com as quatro ferramentas públicas e
+  instruções de uso. O checkout final continua no domínio do restaurante e exige acção humana.
+  Nenhuma submissão, aprovação de directório ou instalação na conta do utilizador foi verificada.
+- Onde está: [`plugins/restaurant-os/README.md`](plugins/restaurant-os/README.md),
+  `scripts/package-agent-plugin.mjs`, [`docs/MCP.md`](docs/MCP.md) e
+  [ADR 0005](docs/decisions/0005-canal-publico-de-agentes.md).
+- Para fechar: documentar ligação funcional na conta destinatária e o estado real da publicação,
+  incluindo eventuais condições da plataforma. Metadados do restaurante são dados por instalação.
+- Custo/tempo: preparação estimada em 30–60 min com os dados prontos; aprovação e disponibilidade
+  dependem da plataforma e não têm prazo confirmado nesta entrega.
+
+---
+
 ## RESOLVIDOS
 
 *(mover para aqui, com data, sem apagar o histórico)*
@@ -550,3 +590,47 @@
 | 9 | **B-008** / **B-014** | há backup do Supabase (PITR), mas não há cópia externa testada |
 | 10 | **B-010** | não há data marcada para o cutover |
 | 11 | **B-003** / **B-007** / **B-011** | nada bloqueia a venda |
+
+---
+
+## PACOTE FINAL — canal de agentes · 2026-09-14
+
+Este pacote cobre apenas a entrega A1; preserva o histórico e a contagem da corrida anterior.
+**2 novos bloqueios abertos: 1 de infraestrutura/domínio (B-103), 1 de publicação (B-104),
+0 de hardware.** A segunda passagem confirmou que nenhum dos dois é resolvido pelo ensaio local.
+
+### O que ficou feito e o que foi verificado
+
+MCP público, WebMCP, estimativa do pedido por loja, revisão no site e pacote reutilizável de
+plugin estão implementados. Schemas estritos, isolamento da loja, opções, dinheiro em centavos,
+filtragem de dados e repetição sem escrita têm testes. O ensaio local usou RPC simulado, cliente
+oficial MCP e Chrome 152 experimental com WebMCP nativo. O carrinho preparado segue para o
+checkout normal após confirmação humana, sem criar encomenda nem iniciar pagamento no agente.
+Activação pública e publicação no ChatGPT continuam por validar, em B-103/B-104.
+
+### Para o cliente (mensagem pronta a enviar)
+
+> Estamos a preparar a opção de escolher comida através de um agente e concluir no site do restaurante.
+>
+> 1. Para apresentar a ligação aos clientes, confirma o nome público, o logótipo e o contacto de apoio do restaurante.
+> 2. Envia o endereço da política de privacidade que deve acompanhar esta ligação.
+
+Estes dados completam B-104; não são bloqueios adicionais nem dados para inventar no código.
+
+### Para o Gabriel (decisões e acessos)
+
+| ID | Acção para fechar | Evidência necessária |
+|---|---|---|
+| B-103 | Publicar e activar em staging da instalação, configurar origem HTTPS e limite do proxy quando aplicável | Cliente SDK e percurso até ao checkout validados nesse domínio, sem cobrança real |
+| B-104 | Gerar pacote para esse domínio, ligar à conta destinatária e completar metadados/submissão | Ligação funcional e estado de publicação registados, sem confundir pacote gerado com plugin publicado |
+
+### Hardware e impacto na abertura
+
+Não foi criado nenhum bloqueio de hardware: **0 ensaios físicos adicionais, 0 tempo de hardware**
+para este canal. O suporte WebMCP depende da versão/política do navegador e é validado em runtime;
+o site continua a funcionar quando a API não existe.
+
+| Prioridade | ID | Sem isto, no dia 1… |
+|---|---|---|
+| 1 | B-103 | agentes externos não conseguem usar este novo canal no domínio da instalação; site e POS mantêm o percurso existente |
+| 2 | B-104 | clientes não têm uma ligação publicada/validada no ChatGPT; gerar o pacote não a substitui |

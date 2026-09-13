@@ -1,0 +1,23 @@
+{
+  "name": "restaurant-os",
+  "version": "0.1.0",
+  "author": { "name": "Restaurant OS" },
+  "description": "Consultar lojas e cardápios, obter uma estimativa e preparar um carrinho para revisão no site.",
+  "homepage": "https://PLACEHOLDER_SITE_DOMAIN",
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Restaurant OS",
+    "shortDescription": "Escolha a refeição e reveja o carrinho no site.",
+    "longDescription": "Consulte o cardápio e a disponibilidade por loja, obtenha uma estimativa do servidor e abra um carrinho para rever. O cliente confirma o pedido e o pagamento no checkout do restaurante.",
+    "category": "Shopping",
+    "developerName": "Restaurant OS",
+    "capabilities": [],
+    "websiteURL": "https://PLACEHOLDER_SITE_DOMAIN",
+    "defaultPrompt": [
+      "Mostra as lojas e o cardápio disponível.",
+      "Quanto custa este carrinho para levantamento?",
+      "Prepara a minha refeição para rever no site."
+    ]
+  },
+  "mcpServers": "./.mcp.json"
+}

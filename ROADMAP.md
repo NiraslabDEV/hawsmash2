@@ -310,6 +310,25 @@ isolamento entre lojas."*
 
 ---
 
+## A1 🟢 Canal de encomendas por agente *(produto · 2026-09-14)*
+
+- [x] MCP público `/api/mcp` e WebMCP no funil público, com serviço comum para
+      `list_stores`, `get_menu`, `quote_order` e `prepare_checkout`; preços/loja/opções
+      validados, dados filtrados e checkout final com revisão humana.
+- [x] Pacote de plugin reutilizável por instalação, gerador e documentação;
+      flag desligada por omissão. Testes unitários, cliente SDK MCP e ensaio de browser
+      com RPC simulado; WebMCP nativo observado em Chrome 152 experimental.
+- [~] B-103 Activar no domínio HTTPS da instalação e validar o percurso em staging
+      com dados/configuração dessa instalação, antes de o expor ao público.
+- [~] B-104 Ligar o pacote à conta destinatária e completar validação/publicação
+      no ChatGPT com identidade e política de privacidade da instalação.
+
+**Âmbito verificado:** implementação e ensaio local isolado. Não implica activação em produção
+nem publicação no ChatGPT. Ver [`docs/MCP.md`](docs/MCP.md) e
+[`CLAUDE.md §13.1`](CLAUDE.md).
+
+---
+
 # DEPOIS (produto próprio — sem compromisso com o cliente)
 
 O HAWSMASH 2.0 é a **primeira instância multi-unidade** do Restaurant OS. O caminho para produto:

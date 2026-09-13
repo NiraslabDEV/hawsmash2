@@ -519,6 +519,20 @@ Qualquer não-terminal → cancelled (com motivo, logado)
 - `order-status` com estado ao vivo; `purchase` de tracking **só** quando `paid`/`approved` (§16 do motor).
 - Tracking por loja: os eventos levam `store` como dimensão, para medir campanhas por unidade.
 
+### 13.1 Canal de encomendas por agente *(produto · 2026-09-14)*
+
+Cada instalação pode expor `/api/mcp` e registar WebMCP nas páginas públicas que o navegador
+suportar. As ferramentas públicas consultam lojas/cardápio, calculam uma estimativa e preparam
+uma ligação de revisão; não dão acesso ao painel, não criam encomendas nem cobram. O servidor
+valida preços, escolhas, canal e zona na loja explícita. O cliente revê o carrinho e conclui
+no checkout normal, por acção humana; contactos e pagamento são preenchidos nesse site.
+
+`AGENT_TOOLS_ENABLED=false` por omissão mantém o canal desligado até à activação da instalação.
+O pacote de plugin reutiliza o mesmo MCP; gerar o pacote não o publica no ChatGPT.
+Contrato, configuração e ensaios em [`docs/MCP.md`](docs/MCP.md), decisão em
+[ADR 0005](docs/decisions/0005-canal-publico-de-agentes.md), activação/publicação em
+[`BLOQUEIOS.md` B-103/B-104](BLOQUEIOS.md).
+
 ---
 
 ## 14. TVs

@@ -33,6 +33,8 @@ import { useStoreSlug } from '@/utils/useStore';
 import { buildScheduleSlots, type StoreHour } from '@/lib/store-hours';
 import { trackBeginCheckout, trackAddPaymentInfo, type TrackItem } from '@/lib/analytics/track';
 import { useAccount } from '@/utils/useAccount';
+import { AGENT_CHECKOUT_KEY, consumeAgentCheckout } from '@/lib/agents/webmcp';
+import { parseStoreCookie } from '@/lib/store-context';
 import {
   FunnelRail,
   FunnelFoot,
@@ -260,6 +262,7 @@ export default function CheckoutPage() {
   const supabase = createClient();
 
   const [cart, setCart]                 = useState<any[]>([]);
+  const [cartHydrated, setCartHydrated] = useState(false);
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
   const [customerEmail, setCustomerEmail] = useState('');
@@ -337,6 +340,8 @@ export default function CheckoutPage() {
   const [mpesaError, setMpesaError]               = useState<string | null>(null);
 
   const storeSlug = useStoreSlug();
+  const agentCheckout = useRef(false);
+  const agentPreferencesConsumed = useRef(false);
 
   // Conta do cliente. Se este telemóvel já fez um pedido, o sistema conhece-o
   // e ele não volta a escrever nome nem morada. Nunca bloqueia nada: sem
@@ -355,7 +360,7 @@ export default function CheckoutPage() {
     },
   });
 
-  const zones = menuData?.zones ?? [];
+  const zones = useMemo(() => menuData?.zones ?? [], [menuData?.zones]);
   const scheduleSlots = useMemo(
     () => buildScheduleSlots((menuData?.hours ?? []) as StoreHour[]),
     [menuData?.hours],
@@ -553,6 +558,9 @@ export default function CheckoutPage() {
   };
 
   useEffect(() => {
+    try {
+      agentCheckout.current = Boolean(sessionStorage.getItem(AGENT_CHECKOUT_KEY));
+    } catch { /* O checkout normal funciona sem armazenamento de sessão. */ }
     const saved = localStorage.getItem('cart');
     if (saved) setCart(JSON.parse(saved));
     const savedCode = localStorage.getItem('referral_code');
@@ -563,11 +571,14 @@ export default function CheckoutPage() {
       // marca como válido (foi validado na loja); detalhe é revalidado no servidor
       setCouponResult({ valid: true });
     }
+    setCartHydrated(true);
   }, []);
 
   useEffect(() => {
-    localStorage.setItem('cart', JSON.stringify(cart));
-  }, [cart]);
+    // Só persistir depois de ler o carrinho: StrictMode repete os efeitos de
+    // montagem e não pode gravar o [] inicial por cima da selecção guardada.
+    if (cartHydrated) localStorage.setItem('cart', JSON.stringify(cart));
+  }, [cart, cartHydrated]);
 
   // Preenche o que o cliente já nos deu. Só toca em campos vazios — se ele
   // escreveu outra coisa nesta sessão, é a dele que vale.
@@ -576,7 +587,8 @@ export default function CheckoutPage() {
     setCustomerName((n) => n || profile.name || '');
     setCustomerPhone((p) => p || profile.phone || '');
     const favourite = profile.addresses.find((a) => a.is_default) ?? profile.addresses[0];
-    if (favourite) setAddressId((cur) => cur || favourite.id);
+    // Uma selecção assistida já tem zona: a morada automática não a substitui.
+    if (favourite && !agentCheckout.current) setAddressId((cur) => cur || favourite.id);
   }, [profile]);
 
   // A zona pertence à loja: uma morada guardada com zona de Maputo não
@@ -591,6 +603,18 @@ export default function CheckoutPage() {
     const zoneBelongsHere = zones?.some((z: any) => z.id === saved.delivery_zone_id);
     setDeliveryZoneId(zoneBelongsHere ? String(saved.delivery_zone_id) : '');
   }, [addressId, profile, zones]);
+
+  useEffect(() => {
+    if (agentPreferencesConsumed.current || !menuData || parseStoreCookie(document.cookie) !== storeSlug) return;
+    agentPreferencesConsumed.current = true;
+    try {
+      const preference = consumeAgentCheckout(sessionStorage, storeSlug, zones.map((zone: { id: string }) => zone.id));
+      if (preference) {
+        setFulfillmentType(preference.fulfillmentType);
+        setDeliveryZoneId(preference.deliveryZoneId);
+      }
+    } catch { /* Storage recusado pelo browser: preencher o canal normalmente. */ }
+  }, [menuData, storeSlug, zones]);
 
   // Morada nova de quem já tem conta: fica guardada para a próxima. Fire and
   // forget — a venda nunca espera nem pára por causa disto (§1, regra 1).

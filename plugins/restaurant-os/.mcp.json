@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "restaurant-os": {
+      "type": "http",
+      "url": "https://PLACEHOLDER_SITE_DOMAIN/api/mcp"
+    }
+  }
+}
