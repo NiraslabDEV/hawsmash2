@@ -4,6 +4,7 @@ import {
   MockProvider,
   MpesaProvider,
   MpesaSimulator,
+  EmolaSimulator,
   PaysuiteProvider,
   type PaymentProvider,
 } from '@delivery/payments';
@@ -19,7 +20,7 @@ import {
  * saem em `get_menu()` nem em nenhuma RPC anónima (CLAUDE.md §5.6 · §17).
  */
 
-export type PaymentProviderName = 'manual' | 'mock' | 'paysuite' | 'mpesa' | 'mpesa_sim';
+export type PaymentProviderName = 'manual' | 'mock' | 'paysuite' | 'mpesa' | 'mpesa_sim' | 'emola' | 'emola_sim';
 
 export interface MpesaCredentials {
   apiKey: string;
@@ -140,6 +141,11 @@ export async function getPaymentConfig(storeSlug?: string | null, options?: { si
   if (requireStore && (!storeSlug || !url || !serviceKey)) throw new Error('store_payment_config_unavailable');
   options?.signal?.throwIfAborted();
   if (options?.method !== undefined) provider = getPaymentMode(provider, emolaProvider, options.method);
+  if (provider === 'emola' || provider === 'emola_sim') {
+    // A ligação directa é independente: nunca recebe credenciais do M-Pesa ou
+    // de um gateway. O contrato Movitel real ainda não está disponível.
+    return { provider, apiKey: null, webhookSecret: null, mpesa: null };
+  }
   return { provider, apiKey, webhookSecret, mpesa: completeMpesa(mpesa) };
 }
 
@@ -160,6 +166,11 @@ export function buildProvider(
       return new MockProvider({ autoWebhookMs: opts?.autoWebhookMs });
     case 'mpesa_sim':
       return new MpesaSimulator();
+    case 'emola_sim':
+      if (process.env.NODE_ENV === 'production') throw new Error('emola_sim_disabled_in_production');
+      return new EmolaSimulator();
+    case 'emola':
+      throw new Error('emola_direct_contract_unavailable');
     case 'mpesa':
       if (!cfg.mpesa) throw new Error('mpesa_not_configured');
       return new MpesaProvider(cfg.mpesa);
@@ -173,5 +184,5 @@ export function buildProvider(
 
 /** O provider cobra sem o cliente sair do site? */
 export function isDirectFlow(provider: PaymentProviderName): boolean {
-  return provider === 'mpesa' || provider === 'mpesa_sim';
+  return provider === 'mpesa' || provider === 'mpesa_sim' || provider === 'emola' || provider === 'emola_sim';
 }

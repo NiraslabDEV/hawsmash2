@@ -2,7 +2,7 @@ import { expect, test, type Page } from '@playwright/test';
 import { agentMenuFixture, agentOrderFixture } from '../apps/web/lib/agents/__tests__/fixtures';
 import { rememberPendingCheckout } from '../apps/web/lib/payments/pending-checkout';
 
-async function checkout(page: Page, emolaProvider: 'paysuite' | 'manual' | null) {
+async function checkout(page: Page, emolaProvider: 'paysuite' | 'manual' | 'emola_sim' | 'emola' | null) {
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
   await page.route('**/api/menu?**', (route) => route.fulfill({ json: {
@@ -120,7 +120,7 @@ test('depois de 45 segundos a saída acompanha a mesma encomenda sem novo checko
   await page.clock.install();
   await page.route('**/api/payments/verify', (route) => route.fulfill({ json: { status: 'pending' } }));
   await page.goto(`/payment/return/${orderId}`);
-  await expect(page.getByRole('heading', { name: /Confirma no telemóvel/i })).toBeVisible();
+  await expect(page.getByRole('heading', { name: /A confirmar o pagamento/i })).toBeVisible();
   await page.clock.fastForward(46_000);
   await expect(page.getByRole('link', { name: 'Acompanhar esta encomenda' })).toHaveAttribute('href', `/order-status/${orderId}`);
   await expect(page.getByRole('button', { name: 'Tentar outra vez' })).toHaveCount(0);
@@ -231,3 +231,50 @@ for (const status of ['paid', 'cancelled'] as const) {
     await expect(page).toHaveURL(new RegExp(`/${status === 'paid' ? 'payment/return' : 'order-status'}/${orderId}$`));
   });
 }
+
+test('e-Mola directo simulado tem número próprio e aviso de simulação', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await checkout(page, 'emola_sim');
+  await page.getByRole('textbox', { name: 'Número M-Pesa *' }).fill('840000009');
+  await page.getByRole('button', { name: 'e-Mola Simulação' }).click();
+  await expect(page.getByRole('textbox', { name: 'Número M-Pesa *' })).toHaveCount(0);
+  await page.getByRole('textbox', { name: 'Número e-Mola *' }).fill('860000008');
+  await expect(page.getByText('Simulação e-Mola: este teste não contacta a operadora nem movimenta dinheiro.')).toBeVisible();
+  await expect(page.getByText(/Vais receber um pedido de PIN/)).toHaveCount(0);
+  await page.getByRole('button', { name: /^M-Pesa/ }).click();
+  await expect(page.getByRole('textbox', { name: 'Número M-Pesa *' })).toHaveValue('840000009');
+  await page.getByRole('button', { name: 'e-Mola Simulação' }).click();
+  await expect(page.getByRole('textbox', { name: 'Número e-Mola *' })).toHaveValue('860000008');
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await page.screenshot({ path: 'output/playwright/payments/emola-directo-simulacao.png', fullPage: true });
+  let payload: Record<string, unknown> = {};
+  await page.route('**/api/payments', async (route) => {
+    payload = route.request().postDataJSON();
+    await route.fulfill({ json: { orderId: '10000000-0000-4000-8000-000000000010', status: 'pending' } });
+  });
+  await page.route('**/api/payments/verify', (route) => route.fulfill({ json: { status: 'pending' } }));
+  await page.getByRole('button', { name: /^Pagar \d+ MT$/i }).click();
+  await expect(page).toHaveURL(/\/payment\/return\/10000000-0000-4000-8000-000000000010$/);
+  expect(payload).toMatchObject({ paymentMethod: 'emola', msisdn: '860000008' });
+  expect(payload.clientCheckoutId).toMatch(/^[0-9a-f-]{36}$/);
+  await expect(page.getByRole('heading', { name: /A confirmar o pagamento/i })).toBeVisible();
+  await expect(page.getByText(/Marca o teu PIN/)).toHaveCount(0);
+});
+
+test('e-Mola directo real por integrar cai no comprovativo mantendo e-Mola', async ({ page }) => {
+  await checkout(page, 'emola');
+  await page.getByRole('button', { name: /^e-Mola/ }).click();
+  await expect(page.getByRole('textbox', { name: 'Número e-Mola *' })).toBeVisible();
+  await expect(page.getByText('O pagamento e-Mola directo está em preparação.', { exact: false })).toBeVisible();
+  await page.route('**/api/payments', (route) => route.fulfill({ status: 503, json: {
+    status: 'unavailable', message: 'O pagamento automático está indisponível. Podes usar comprovativo.',
+  } }));
+  let manualOrders = 0;
+  await page.route('**/api/create-order', (route) => { manualOrders++; return route.abort(); });
+  await page.getByRole('button', { name: /^Pagar \d+ MT$/i }).click();
+  await expect(page.getByRole('button', { name: 'e-Mola Comprovativo' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByText('O pagamento automático está indisponível. Podes usar comprovativo.')).toBeVisible();
+  expect(manualOrders).toBe(0);
+  expect(await page.evaluate(() => localStorage.getItem('pending_order_id'))).toBeNull();
+});

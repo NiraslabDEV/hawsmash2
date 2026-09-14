@@ -340,6 +340,7 @@ export default function CheckoutPage() {
   // separa-se de propósito: muita gente encomenda de um número e paga do
   // M-Pesa de outra pessoa da casa.
   const [mpesaPhone, setMpesaPhone]               = useState('');
+  const [emolaPhone, setEmolaPhone]               = useState('');
   const [paymentError, setPaymentError]               = useState<string | null>(null);
 
   const storeSlug = useStoreSlug();
@@ -375,7 +376,9 @@ export default function CheckoutPage() {
   const hasAutoPayment = onlineMethods.length > 0;
   const autoMethod = onlineMethods.includes(preferredAutoMethod) ? preferredAutoMethod : onlineMethods[0];
   const paymentMode = getPaymentMode(paymentProvider, menuData?.emola_provider, autoMethod ?? 'mpesa');
-  const isDirectPayment = paymentMode === 'mpesa' || paymentMode === 'mpesa_sim';
+  const isEmolaDirect = paymentMode === 'emola' || paymentMode === 'emola_sim';
+  const isDirectPayment = paymentMode === 'mpesa' || paymentMode === 'mpesa_sim' || isEmolaDirect;
+  const isSimulatedPayment = paymentMode === 'emola_sim' || paymentMode === 'mpesa_sim';
   const activePaymentFlow = hasAutoPayment ? paymentFlow : 'manual';
 
   const subtotal = cart.reduce((sum, item) => {
@@ -514,7 +517,7 @@ export default function CheckoutPage() {
       trackAddPaymentInfo(cartTrackItems(), autoMethod);
       const payload = {
         ...buildOrderPayload(autoMethod),
-        ...(isDirectPayment ? { msisdn: mpesaPhone || customerPhone } : {}),
+        ...(isDirectPayment ? { msisdn: (isEmolaDirect ? emolaPhone : mpesaPhone) || customerPhone } : {}),
       };
       const clientCheckoutId = await getCheckoutAttempt(localStorage, payload);
       const res = await fetch('/api/payments', {
@@ -1131,14 +1134,15 @@ export default function CheckoutPage() {
                     selected={autoMethod === method}
                     onClick={() => { setAutoMethod(method); setPaymentError(null); }}
                     title={method === 'mpesa' ? 'M-Pesa' : method === 'emola' ? 'e-Mola' : 'Cartão'}
-                    sub={method === 'credit_card' ? 'Visa · MC' : 'Online'}
+                    sub={getPaymentMode(paymentProvider, menuData?.emola_provider, method).endsWith('_sim') ? 'Simulação'
+                      : method === 'credit_card' ? 'Visa · MC' : 'Online'}
                   />
                 ))}
               </div>
               {isDirectPayment ? (
                 <>
                   <label style={{ display: 'block' }}>
-                    <span className="hf-lbl">Número M-Pesa *</span>
+                    <span className="hf-lbl">Número {isEmolaDirect ? 'e-Mola' : 'M-Pesa'} *</span>
                     <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
                       <span style={{ position: 'absolute', left: 16, color: 'var(--hs-ink-mute)', display: 'flex', pointerEvents: 'none' }}><IcoPhone /></span>
                       <input
@@ -1147,20 +1151,31 @@ export default function CheckoutPage() {
                         autoComplete="tel"
                         className="hf-fld num"
                         style={{ paddingLeft: 46 }}
-                        placeholder="84 123 4567"
-                        value={mpesaPhone || customerPhone}
+                        placeholder={isEmolaDirect ? '+258 XX XXX XXXX' : '84 123 4567'}
+                        value={(isEmolaDirect ? emolaPhone : mpesaPhone) || customerPhone}
                         onChange={(e) => {
-                          setMpesaPhone(e.target.value);
+                          if (isEmolaDirect) setEmolaPhone(e.target.value);
+                          else setMpesaPhone(e.target.value);
                           setPaymentError(null);
                         }}
                       />
                     </div>
                   </label>
 
-                  <p className="hf-note" style={{ marginTop: 14 }}>
-                    Vais receber um pedido de PIN neste número. Confirma no telemóvel e
-                    <strong> não feches esta página</strong> — ela avisa-te quando estiver pago.
-                  </p>
+                  {isSimulatedPayment ? (
+                    <p role="status" className="hf-note" style={{ marginTop: 14 }}>
+                      Simulação {isEmolaDirect ? 'e-Mola' : 'M-Pesa'}: este teste não contacta a operadora nem movimenta dinheiro.
+                    </p>
+                  ) : isEmolaDirect ? (
+                    <p className="hf-note" style={{ marginTop: 14 }}>
+                      O pagamento e-Mola directo está em preparação. Se estiver indisponível, podes usar comprovativo.
+                    </p>
+                  ) : (
+                    <p className="hf-note" style={{ marginTop: 14 }}>
+                      Vais receber um pedido de PIN neste número. Confirma no telemóvel e
+                      <strong> não feches esta página</strong> — ela avisa-te quando estiver pago.
+                    </p>
+                  )}
                 </>
               ) : (
                 <p className="hf-note" style={{ marginTop: 14 }}>

@@ -19,7 +19,7 @@ type Provider = 'manual' | 'mock' | 'paysuite' | 'mpesa' | 'mpesa_sim';
 
 interface PaymentStatus {
   payment_provider: Provider;
-  emola_provider: 'manual' | 'mock' | 'paysuite' | null;
+  emola_provider: 'manual' | 'mock' | 'paysuite' | 'emola' | 'emola_sim' | null;
   paysuite: { api_key: boolean; webhook_secret: boolean };
   mpesa: {
     api_key: boolean;
@@ -211,7 +211,8 @@ export function PaymentSection({ storeId, storeName }: { storeId: string; storeN
         <label className="block">
           <span className="font-bold text-white">e-Mola online</span>
           <span className="mt-1 block text-xs text-[#8b8378]">
-            Escolhe como receber e-Mola nesta loja. O caminho do M-Pesa mantém a configuração acima.
+            Escolhe como receber e-Mola nesta loja. A ligação directa à Movitel dispensa Paysuite.
+            O caminho do M-Pesa mantém a configuração acima.
           </span>
           <select
             aria-label="e-Mola online"
@@ -222,12 +223,18 @@ export function PaymentSection({ storeId, storeName }: { storeId: string; storeN
           >
             <option value="">Seguir configuração da loja</option>
             <option value="manual">Comprovativo manual</option>
-            <option value="paysuite">Pagamento online por Paysuite</option>
-            <option value="mock">Simulação — sem dinheiro real</option>
+            <option value="emola">e-Mola directo — integração pendente</option>
+            <option value="emola_sim">e-Mola directo simulado — desenvolvimento/teste</option>
+            <option value="paysuite">Gateway Paysuite (opcional)</option>
+            <option value="mock">Simulação de gateway — sem dinheiro real</option>
           </select>
         </label>
         <p className="text-xs text-[#C9BCAC]">
-          {emolaMode === 'manual'
+          {emolaMode === 'emola'
+            ? 'Ligação directa à Movitel preparada. Falta o contrato técnico e o acesso à API; ainda não é possível cobrar.'
+            : emolaMode === 'emola_sim'
+              ? 'Simulação local de e-Mola directo, apenas para desenvolvimento e teste. Nenhum dinheiro é cobrado; o simulador está bloqueado em produção.'
+            : emolaMode === 'manual'
             ? 'e-Mola recebe por comprovativo. Para pagamento automático, configura o gateway e valida a integração antes de activar.'
             : emolaMode === 'mock'
               ? 'e-Mola está em simulação. Nenhum dinheiro é cobrado; usa apenas em testes.'
@@ -240,11 +247,13 @@ export function PaymentSection({ storeId, storeName }: { storeId: string; storeN
           <div>
             <h3 className="font-bold text-white">Paysuite — conta desta loja</h3>
             <p className="mt-1 text-xs text-[#8b8378]">
-              O e-Mola activado separadamente exige a chave e o segredo desta loja. Guarda ambos antes de testar.
+              {emolaMode === 'paysuite'
+                ? 'O caminho opcional de e-Mola por Paysuite exige a chave e o segredo desta loja. Guarda ambos antes de testar.'
+                : 'Estas credenciais servem os métodos encaminhados pelo Paysuite. O e-Mola directo é independente.'}
             </p>
           </div>
           {(!status.paysuite.api_key || !status.paysuite.webhook_secret) && (
-            <p className="text-sm text-[#ffb0b0]">Faltam credenciais do Paysuite nesta loja. O caminho separado de e-Mola permanece indisponível até estarem preenchidas.</p>
+            <p className="text-sm text-[#ffb0b0]">Faltam credenciais do Paysuite nesta loja para os métodos que usam esse gateway.</p>
           )}
           {([
             ['paysuite_api_key', 'Chave da API', status.paysuite.api_key],

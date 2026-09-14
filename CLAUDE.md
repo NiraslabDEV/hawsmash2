@@ -489,11 +489,12 @@ loja. (O 1.0 teve um bug real de caixa por causa disto — não repetir.)
 
 ### 11.9 Degradação de pagamento
 
-**e-Mola online preparado por loja:** `stores.emola_provider` permite usar Paysuite
-ao lado do M-Pesa directo, com configuração própria e credenciais da unidade.
-Sem escolha explícita, o M-Pesa directo mantém e-Mola por comprovativo; lojas que
-já usam Paysuite preservam a herança. O checkout e as confirmações escolhem o
-fornecedor pelo método gravado, com a mesma matriz no servidor e na BD.
+**e-Mola directo preparado por loja:** `stores.emola_provider='emola'` reserva a
+integração Movitel sem Paysuite; API e BD recusam iniciar até existir contrato e
+adaptador real. `emola_sim` ensaia o percurso em desenvolvimento/teste, sem rede
+ou dinheiro, e é recusado em produção. M-Pesa directo mantém configuração própria.
+O motor preserva gateways legados para outras instalações. Checkout, confirmação
+e reconciliação escolhem o fornecedor pelo método e loja da encomenda gravada.
 Configuração, limites e ensaios em [`docs/EMOLA-ONLINE.md`](docs/EMOLA-ONLINE.md).
 
 Se o gateway falhar (API em baixo, chave inválida, credenciais por preencher), o checkout **não morre**: cai
@@ -505,9 +506,10 @@ Tempo esgotado, erro do M-Pesa, rede em baixo ou código desconhecido deixam o p
 falhado. O cliente pode ter digitado o PIN e o dinheiro ter saído; quem decide é o M-Pesa, quando lhe
 perguntarmos (verificação activa no ecrã de espera, e cron de reconciliação).
 
-E a que impede cobrar duas vezes: a referência enviada ao M-Pesa (`ensure_payment_reference`) é **sempre a
-mesma** enquanto não se mandar rodar, e **só roda depois de uma falha definitiva**. Um duplo clique ou um
-retry repetem a mesma tentativa — que o M-Pesa recusa como duplicada — em vez de criarem uma cobrança nova.
+O checkout digital persiste `clientCheckoutId` e reclama uma única iniciação na BD
+(1047). A referência enviada ao fornecedor conserva-se para consultas, mesmo após
+falha definitiva. Repetir o envio recupera a mesma encomenda; uma nova tentativa
+após falha definitiva usa outra chave/encomenda. Resultado incerto nunca reinicia cobrança.
 
 ---
 

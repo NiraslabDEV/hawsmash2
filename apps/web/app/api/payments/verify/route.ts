@@ -2,9 +2,10 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 import { isDirectProvider } from '@delivery/payments';
 
-import { buildProvider, getPaymentConfig, isDirectFlow } from '@/lib/payments/config';
+import { buildProvider, getPaymentConfig } from '@/lib/payments/config';
 import { confirmOrderPaid } from '@/lib/payments/confirm';
 import { serviceClient } from '@/lib/payments/direct';
+import { getPaymentLookup } from '@/lib/payments/lookup';
 
 /**
  * Verificação ACTIVA do pagamento — chamada pelo ecrã de espera do cliente.
@@ -72,19 +73,15 @@ export async function POST(request: Request) {
     return NextResponse.json({ status: 'manual' });
   }
 
-  // A referência a perguntar depende do fluxo: o gateway de redirect conhece o
-  // pagamento pelo id dele; o M-Pesa directo conhece-o pela nossa referência.
-  const lookup = isDirectFlow(cfg.provider) ? order.payment_reference : order.payment_provider_ref;
-  if (!lookup) {
-    return NextResponse.json({ status: order.status });
-  }
-
   let provider;
   try {
     provider = buildProvider(cfg);
   } catch {
     return NextResponse.json({ status: 'pending' });
   }
+
+  const lookup = getPaymentLookup(cfg.provider, provider.flow, order);
+  if (!lookup) return NextResponse.json({ status: order.status });
 
   if (!isDirectProvider(provider) && !provider.getPaymentStatus) {
     return NextResponse.json({ status: order.status });
@@ -109,13 +106,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ status: ['paid', 'in_preparation', 'ready', 'delivered'].includes(failure.status) ? 'paid' : failure.status });
     }
 
-    // No fluxo directo, roda-se a referência: agora sabemos que a tentativa
-    // não levou dinheiro, e sem isto o cliente ficava sem poder tentar outra
-    // vez (o M-Pesa recusaria a repetição como duplicada).
-    if (isDirectFlow(cfg.provider)) {
-      await svc.rpc('ensure_payment_reference', { p_order_id: order.id, p_rotate: true });
-    }
-
+    // Conserva a referência: este checkout só inicia uma tentativa (1047).
+    // Consultas repetidas têm de perguntar pelo pagamento que foi enviado.
     return NextResponse.json({ status: 'failed' });
   }
 
@@ -126,6 +118,7 @@ export async function POST(request: Request) {
   const confirm = await confirmOrderPaid({
     svc,
     orderId: order.id,
+    storeId: order.store_id,
     provider: cfg.provider,
     providerRef: order.payment_provider_ref ?? order.payment_reference,
     method: order.payment_method ?? 'mpesa',

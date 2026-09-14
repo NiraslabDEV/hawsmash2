@@ -7,7 +7,7 @@ vi.mock('@supabase/supabase-js', () => ({ createClient: () => ({ from: () => {
     maybeSingle: async () => ({ data: mocked.store, error: null }),
   }; return chain;
 } }) }));
-import { buildProvider, getPaymentConfig, type PaymentConfig } from '../config';
+import { buildProvider, getPaymentConfig, isDirectFlow, type PaymentConfig } from '../config';
 
 beforeEach(() => {
   vi.stubEnv('NEXT_PUBLIC_SUPABASE_URL', 'https://supabase.example');
@@ -53,5 +53,30 @@ describe('e-Mola com configuração da própria loja', () => {
     expect(() => buildProvider({ ...base, provider: 'manual' })).toThrow('payment_provider_unavailable');
     expect(() => buildProvider({ ...base, provider: 'desconhecido' } as unknown as PaymentConfig)).toThrow('payment_provider_unavailable');
     expect(() => buildProvider({ ...base, provider: 'paysuite', webhookSecret: '  ' })).toThrow('paysuite_not_configured');
+  });
+  it.each(['emola', 'emola_sim'])('%s ignora credenciais dos outros meios de pagamento', async (provider) => {
+    mocked.store!.emola_provider = provider;
+    const config = await getPaymentConfig('loja-a', { requireStore: true, method: 'emola' });
+    expect(config).toEqual({ provider, apiKey: null, webhookSecret: null, mpesa: null });
+    expect(isDirectFlow(config.provider)).toBe(true);
+  });
+  it('e-Mola real bloqueia a construção antes de qualquer operação externa', async () => {
+    mocked.store!.emola_provider = 'emola';
+    const config = await getPaymentConfig('loja-a', { requireStore: true, method: 'emola' });
+    expect(() => buildProvider(config)).toThrow('emola_direct_contract_unavailable');
+  });
+  it('e-Mola simulado constrói provider directo sem credenciais de gateway', async () => {
+    mocked.store = { payment_provider: 'mpesa', emola_provider: 'emola_sim' };
+    const config = await getPaymentConfig('loja-a', { requireStore: true, method: 'emola' });
+    const provider = buildProvider(config);
+    expect(provider.flow).toBe('direct');
+    expect(provider).toHaveProperty('charge');
+  });
+  it('e-Mola simulado fica bloqueado em produção', () => {
+    vi.stubEnv('NODE_ENV', 'production');
+    const config: PaymentConfig = { provider: 'emola_sim', apiKey: null, webhookSecret: null, mpesa: null };
+    expect(() => buildProvider(config)).toThrow('emola_sim_disabled_in_production');
+    vi.stubEnv('NODE_ENV', 'development');
+    expect(buildProvider(config).flow).toBe('direct');
   });
 });

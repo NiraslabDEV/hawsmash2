@@ -205,12 +205,12 @@ export default function PaymentReturnPage() {
 
         <p className="hf-eyebrow is-centered" style={{ marginTop: 24, justifyContent: 'center' }}>A ouvir o pagamento</p>
         <h1 className="hf-display is-sm" style={{ marginTop: 14 }}>
-          Confirma no<br />telemóvel.
+          A confirmar<br />o pagamento.
         </h1>
         <p className="hf-lead is-centered">
           {pollStatus === 'timeout'
             ? 'Vamos abrir o teu pedido — o estado aparece lá assim que confirmarmos.'
-            : 'Vai aparecer um pedido de pagamento. Marca o teu PIN e volta aqui — a página trata do resto.'}
+            : 'Estamos a verificar o estado desta encomenda. Mantém esta página aberta para acompanhar a confirmação.'}
         </p>
 
         {slow && pollStatus === 'polling' && (

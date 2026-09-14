@@ -70,7 +70,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: true, event: 'failed' });
   }
   const result = await confirmOrderPaid({
-    svc, orderId: order.id, provider: cfg.provider, providerRef: parsed.providerRef,
+    svc, orderId: order.id, storeId: order.store_id, provider: cfg.provider, providerRef: parsed.providerRef,
     method: parsed.method, amountCents: parsed.amountCents, source: 'webhook',
     origin: new URL(request.url).origin,
     customer: { email: order.customer_email, name: order.customer_name, orderNumber: order.order_number },

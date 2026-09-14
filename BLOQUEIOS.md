@@ -736,71 +736,78 @@ falha e recuperação depois de implementar o mecanismo. Nenhum equipamento foi 
 
 ---
 
-## Preparação e-Mola online · 2026-09-14
+## Preparação e-Mola directo · 2026-09-14
 
-### B-108 · [V1.1] Validar configuração e transições de e-Mola em staging
+### B-108 · [V1.1/V1.2] Validar configuração e transições de e-Mola em staging
 
 - Estado: **aberto**. Categoria: **infraestrutura/validação**. Desbloqueia: Gabriel.
-- Falta: aplicar 1046/1047 antes do frontend e validar as RPCs com as policies, triggers,
+- Falta: aplicar 1046/1047/1048 antes do frontend e validar RPCs, policies, triggers,
   perfis e PostgREST reais da instalação. O stack Supabase local completo não está disponível.
-- Contorno: testes de configuração/handlers, navegador com pagamentos simulados e SQL
-  embebido. A migration não activa o e-Mola de uma loja M-Pesa directa.
-- Para fechar: confirmar owner/manager/anon, segredos nunca devolvidos, lojas isoladas,
-  rejeição de troca de gateway com pagamentos pendentes e falha idempotente sem baixar pagos.
-- Evidência e limites em `docs/validation/`; contrato em `docs/EMOLA-ONLINE.md`.
+- Contorno: testes de domínio/configuração/handlers, navegador simulado e SQL embebido.
+  As migrations não activam cobranças em lojas existentes.
+- Para fechar: ensaiar owner/manager/anon, isolamento, idempotência, recusa de troca de
+  fornecedor com pagamentos pendentes, guarda da integração real e confirmação sem baixar pagos.
+- Evidência e limites em `docs/validation/`; configuração em `docs/EMOLA-ONLINE.md`.
 
-### B-109 · [V1.1] Conta e-Mola habilitada e ensaio com o fornecedor
+### B-109 · [V1.2] Contrato e acesso à integração directa Movitel
 
-- Estado: **aberto**. Categoria: **fornecedor/integração**. Desbloqueia: Gabriel/cliente/Paysuite.
-- Falta: conta habilitada para e-Mola, credenciais da loja, callback HTTPS e ensaio de
-  sucesso/recusa/timeout/confirmação tardia/repetição. Condições e custos dependem do fornecedor.
-- Contorno: `emola_provider=mock` em ambiente de teste; produção não foi activada nem cobrada.
-- Decisão: usar o adaptador Paysuite existente para o caminho online. Não inventar uma API
-  directa da Movitel sem contrato/documentação de integração.
-- Limite operacional: se a resposta de criação ou a gravação do ID se perder, o callback
-  assinado pode recuperar a referência da tentativa iniciada. Sem callback nem ID, é preciso
-  recuperá-la com o fornecedor; ainda não há pesquisa automática por extracto. Uma tentativa
-  reclamada cujo processo parou antes de chamar o fornecedor também exige intervenção.
-  Não voltar a cobrar nem mudar a conta destinatária enquanto essa tentativa é incerta.
-- Para fechar: credenciais e callback validados com a conta correcta, relatório de cenários
-  e scheduler da reconciliação configurado (B-106 continua a acompanhar essa dependência comum).
+- Estado: **aberto**. Categoria: **fornecedor/integração**. Desbloqueia: Gabriel/cliente/Movitel.
+- Direcção confirmada: **e-Mola directo, sem Paysuite**, ao lado de M-Pesa directo.
+  A opção anterior via Paysuite foi substituída para esta instalação; o motor mantém
+  esse adaptador para instalações que o utilizem.
+- Falta: conta de comerciante por loja, contrato técnico oficial, ambientes, autenticação,
+  unidades/limites, criação/consulta, idempotência, códigos de estado e recuperação de
+  resposta perdida. Se houver callback, também assinatura e reenvios. Tarifas a confirmar
+  directamente com a Movitel; não foi presumido custo zero.
+- Contorno: `emola_provider=emola_sim` em desenvolvimento/teste. API/RPC recusam cobranças
+  `emola` reais; o simulador também é recusado em produção. Nenhum endpoint ou segredo inventado.
+- Para fechar: implementar o adaptador e credenciais a partir do contrato, substituir
+  as guardas por validação real em nova migration e ensaiar no ambiente do fornecedor.
+  Não basta inserir uma chave. Configurar a reconciliação em B-106.
+- Pesquisa: não encontrámos documentação técnica pública oficial suficiente na
+  [página e-Mola Movitel](https://www.movitel.co.mz/digital-services/emola).
+  O [atendimento oficial](https://www.movitel.co.mz/support/warranty-service-point)
+  indica a linha geral 100; a ausência na pesquisa não demonstra inexistência de API.
 
-## PACOTE FINAL — e-Mola online · 2026-09-14
+## PACOTE FINAL — e-Mola directo · 2026-09-14
 
-**2 novos bloqueios nesta etapa: 1 infraestrutura/validação, 1 fornecedor/integração,
-0 hardware.** A segunda passagem mantém os dois abertos: simuladores não substituem staging
-e nenhuma credencial foi solicitada ou usada para cobrar nesta preparação.
+**2 bloqueios desta etapa continuam abertos: 1 infraestrutura/validação,
+1 fornecedor/integração, 0 hardware.** A segunda passagem confirma que os
+simuladores não substituem staging nem o contrato Movitel.
 
-Ficou preparado: escolha por loja, coexistência com M-Pesa directo, checkout, verificação,
-webhook assinado e reconciliação por método, validação de valores/referências e acompanhamento
-da encomenda existente quando o resultado é incerto. Ensaios locais registados abaixo.
+Preparado localmente: escolha directa por loja, telefone e-Mola separado do M-Pesa,
+simulação de sucesso/recusa/pendência, confirmação pelo método gravado, consulta
+noutro processo e reconciliação. Preservada a idempotência do checkout e a referência
+da tentativa; falha definitiva passa pelo domínio. Não há cobrança real implementada
+para Movitel, activação de conta ou publicação em produção.
 
-- Motor: **681 testes**, lint/typecheck e build completo passaram. Foi corrigido apenas
-  o tipo literal de uma fixture antiga da impressora que impedia o build completo.
-- **13 testes de navegador** passaram com RPCs/pagamentos simulados, incluindo e-Mola,
-  M-Pesa, espera prolongada, resposta perdida, reutilização de chave e armazenamento bloqueado.
-- SQL embebido: **36 casos da 1046 e 22 da 1047 passaram**, incluindo reaplicação.
-  Não foram executados os testes pgTAP/RLS no stack completo de staging.
+Validação final do motor: **774 testes**, lint/typecheck e build completo passaram;
+**15 testes de navegador** passaram com RPCs/pagamentos simulados. Foram também
+ensaiados duplicados, anulações e respostas inválidas no confirmador comum.
+SQL embebido: **16 casos da 1048 passaram**, incluindo reaplicação; relatórios
+anteriores 1046/1047 permanecem disponíveis. pgTAP/RLS em staging por executar.
 
 ### Para o cliente — mensagem pronta
 
-> 1. Precisamos de confirmar que a conta de comerciante está habilitada para receber e-Mola
->    online, e de identificar a conta de cada loja para onde os pagamentos devem entrar.
-> 2. Precisamos do contacto do fornecedor para validar o ambiente de ensaio, callbacks,
->    limites e recuperação da referência de um pagamento quando a resposta se perde.
+> 1. Precisamos do contacto comercial/técnico da Movitel para receber pagamentos
+>    e-Mola directamente e identificar a conta de comerciante de cada loja.
+> 2. Precisamos da documentação oficial de integração e do ambiente de ensaio,
+>    com as condições comerciais e o procedimento de recuperação de pagamentos.
 
 ### Para o Gabriel
 
-- Aplicar 1046/1047 primeiro em staging, testar perfis/lojas e só depois publicar o código.
-- Inserir os segredos através do painel, configurar domínio HTTPS/callback e scheduler.
-- Confirmar custos e habilitação da conta com o fornecedor antes da activação comercial.
+- Obter o pacote de integração directa Movitel e acesso de ensaio; não contratar Paysuite.
+- Implementar o adaptador com os contratos recebidos, guardar segredos só no servidor
+  e validar sucesso, recusa, timeout, repetição e confirmação tardia.
+- Aplicar 1046/1047/1048 em staging antes do código, testar perfis/lojas e configurar
+  o scheduler; remover a guarda real apenas com adaptador e validação concluídos.
 
 ### Hardware e impacto
 
-Não há validação física adicional: **0 horas de hardware nesta etapa**. O ensaio do
-pagamento no telemóvel depende da conta/ambiente disponibilizado pelo fornecedor.
+Sem ensaio físico adicional: **0 horas de hardware nesta preparação**. O teste
+real no telemóvel depende da conta e do ambiente de ensaio disponibilizados pela Movitel.
 
 | Impacto | ID | Sem isto… |
 |---|---|---|
-| 1 | B-108 | o novo código não deve ser publicado contra uma BD sem 1046/1047 validadas |
-| 2 | B-109 | e-Mola automático está preparado e simulado, mas não recebe pagamentos reais |
+| 1 | B-108 | o código novo não deve ser publicado contra uma BD sem migrations validadas |
+| 2 | B-109 | e-Mola directo permanece em preparação; a loja pode receber comprovativos |

@@ -354,9 +354,20 @@ O KDS completo é uma evolução separada. Não executar integrações reais por
 - [x] Identificador estável antes do envio, deduplicação transaccional e uma única
       iniciação de pagamento por tentativa, com recuperação do checkout existente.
 - [~] B-108 Validar migrations 1046/1047, permissões e percurso integrado em staging.
-- [~] B-109 Habilitar conta e-Mola no fornecedor, configurar credenciais/callback e ensaiar.
+- [~] B-109 Integração directa Movitel e ensaio acompanhados em V1.2 (orientação actual).
 
 Ver [`docs/EMOLA-ONLINE.md`](docs/EMOLA-ONLINE.md). Preparação local, sem activação real.
+
+## V1.2 — e-Mola directo Movitel *(produto · 2026-09-14)*
+
+- [x] ⏳ Caminho directo independente por loja, simulador sem rede, telefone próprio,
+      confirmação pelo método gravado e consulta por referência persistida; guarda
+      impede API/RPC reais sem contrato e simulador em produção. Validar 1048 em B-108.
+- [~] B-108 Validar 1046/1047/1048, permissões e percurso completo no staging Supabase.
+- [~] B-109 Obter contrato/conta Movitel, implementar o adaptador directo e ensaiar.
+
+V1.2 orienta a instalação para ligação directa; a compatibilidade de V1.1 com
+Paysuite permanece no motor. Nenhuma cobrança real ou adesão a fornecedor foi feita.
 
 # DEPOIS (produto próprio — sem compromisso com o cliente)
 

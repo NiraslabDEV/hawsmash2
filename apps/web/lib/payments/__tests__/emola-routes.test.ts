@@ -7,7 +7,7 @@ const state = vi.hoisted(() => ({
   order: {} as Record<string, unknown>, store: { slug: 'loja-a' } as { slug: string } | null,
   checkout: vi.fn(), status: vi.fn(), writes: [] as { table: string; value: unknown }[],
 }));
-vi.mock('../config', () => ({ getPaymentConfig: state.config, buildProvider: state.build, isDirectFlow: (name: string) => ['mpesa', 'mpesa_sim'].includes(name) }));
+vi.mock('../config', () => ({ getPaymentConfig: state.config, buildProvider: state.build, isDirectFlow: (name: string) => ['mpesa', 'mpesa_sim', 'emola', 'emola_sim'].includes(name) }));
 vi.mock('../direct', () => ({ serviceClient: () => ({ from: state.from, rpc: state.rpc }), runDirectCharge: state.direct }));
 vi.mock('../confirm', () => ({ confirmOrderPaid: state.confirm }));
 vi.mock('@/utils/supabase/server', () => ({ createClient: async () => ({ from: state.from, rpc: state.rpc }) }));
@@ -171,5 +171,52 @@ describe('e-Mola online ao lado de M-Pesa directo', () => {
     const responses = await Promise.all([checkout(request({ storeSlug: 'loja-a', paymentMethod: 'emola' })), checkout(request({ storeSlug: 'loja-a', paymentMethod: 'emola' }))]);
     expect(state.checkout).toHaveBeenCalledTimes(1);
     expect(await Promise.all(responses.map((response) => response.json()))).toEqual(expect.arrayContaining([expect.objectContaining({ orderId, status: 'pending' })]));
+  });
+});
+
+describe('e-Mola directo preparado sem contrato real', () => {
+  beforeEach(() => {
+    state.config.mockResolvedValue({ provider: 'emola_sim', apiKey: null, webhookSecret: null, mpesa: null });
+  });
+  it.each(['860000000', '870000000'])('usa o normalizador e-Mola para %s e conserva método/loja no domínio', async (phone) => {
+    const response = await checkout(request({ storeSlug: 'loja-a', paymentMethod: 'emola', msisdn: phone }));
+    expect(response.status).toBe(200);
+    expect(state.direct).toHaveBeenCalledWith(expect.objectContaining({
+      providerName: 'emola_sim', msisdn: `258${phone}`,
+      order: expect.objectContaining({ id: orderId, payment_method: 'emola', store_id: storeId, total_cents: 12345 }),
+    }));
+    expect(state.checkout).not.toHaveBeenCalled();
+  });
+  it.each(['700000000', ''])('recusa telefone e-Mola inválido antes de criar pedido: %s', async (phone) => {
+    const response = await checkout(request({ storeSlug: 'loja-a', paymentMethod: 'emola', msisdn: phone }));
+    expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({ error: 'invalid_msisdn' });
+    expect(state.rpc).not.toHaveBeenCalled(); expect(state.direct).not.toHaveBeenCalled();
+  });
+  it('o modo real indisponível devolve comprovativo antes de criar ou cobrar', async () => {
+    state.config.mockResolvedValue({ provider: 'emola', apiKey: null, webhookSecret: null, mpesa: null });
+    state.build.mockImplementation(() => { throw new Error('emola_direct_contract_unavailable'); });
+    const response = await checkout(request({ storeSlug: 'loja-a', paymentMethod: 'emola', msisdn: '870000000' }));
+    expect(response.status).toBe(503);
+    expect(await response.json()).toMatchObject({ status: 'unavailable' });
+    expect(state.rpc).not.toHaveBeenCalled(); expect(state.direct).not.toHaveBeenCalled(); expect(state.checkout).not.toHaveBeenCalled();
+  });
+  it('uma resposta incerta conserva o pedido sem redireccionar nem fazer outra tentativa', async () => {
+    state.direct.mockResolvedValue({ status: 'pending', message: 'Simulação pendente.' });
+    const response = await checkout(request({ storeSlug: 'loja-a', paymentMethod: 'emola', msisdn: '870000000' }));
+    expect(await response.json()).toMatchObject({ orderId, status: 'pending' });
+    expect(state.direct).toHaveBeenCalledTimes(1); expect(state.checkout).not.toHaveBeenCalled();
+  });
+  it('duas submissões com a mesma chave só iniciam uma operação directa', async () => {
+    let claims = 0;
+    state.rpc.mockImplementation(async (name: string) => ({ data: name === 'claim_online_checkout' ? { claimed: ++claims === 1, checkoutUrl: null } : orderId, error: null }));
+    await Promise.all([1, 2].map(() => checkout(request({ storeSlug: 'loja-a', paymentMethod: 'emola', msisdn: '870000000' }))));
+    expect(state.direct).toHaveBeenCalledTimes(1); expect(state.checkout).not.toHaveBeenCalled();
+  });
+  it('a verificação simulada usa o identificador persistido e conserva e-Mola', async () => {
+    state.order.payment_reference = 'PLACEHOLDER_EMOLA_REFERENCE';
+    expect(await (await verify(request({ orderId }))).json()).toMatchObject({ status: 'paid' });
+    expect(state.status).toHaveBeenCalledWith('PLACEHOLDER_PROVIDER_ID');
+    expect(state.confirm).toHaveBeenCalledWith(expect.objectContaining({ method: 'emola', provider: 'emola_sim', amountCents: 12345 }));
   });
 });

@@ -70,13 +70,10 @@ export interface DirectChargeResult {
 }
 
 /**
- * Gateway que cobra **sem sair do site**: manda um pedido de PIN ao telemóvel
- * do cliente e responde quando ele confirmar (M-Pesa da Vodacom).
- *
- * Diferenças que mudam o desenho, e não são detalhe:
- * - **não há redirect** — o cliente fica no nosso ecrã a olhar para o telemóvel;
- * - **não há webhook** — quem não souber o estado tem de ir perguntar;
- * - **a chamada demora** — até dois minutos à espera do PIN.
+ * Fluxo de pagamento sem redirect. A iniciação e a consulta são comuns;
+ * autenticação, confirmação e eventual callback pertencem ao contrato de cada
+ * fornecedor. O M-Pesa directo usa PIN e consulta; o simulador e-Mola não
+ * representa nem substitui o contrato de integração real da Movitel.
  */
 export interface DirectPaymentProvider {
   readonly flow: 'direct';

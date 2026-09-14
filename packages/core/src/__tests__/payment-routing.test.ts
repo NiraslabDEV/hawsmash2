@@ -23,4 +23,13 @@ describe('encaminhamento dos pagamentos por método', () => {
     expect(getPaymentMode('paysuite', null, 'cash')).toBe('manual');
     expect(getPaymentMode('paysuite', null, 'outro')).toBe('manual');
   });
+  it.each(['emola', 'emola_sim'])('encaminha %s directamente sem alterar M-Pesa', (provider) => {
+    expect(getPaymentMode('mpesa', provider, 'emola')).toBe(provider);
+    expect(getPaymentMode('mpesa', provider, 'mpesa')).toBe('mpesa');
+    expect(getPaymentMode('mpesa', provider, 'credit_card')).toBe('manual');
+  });
+  it('e-Mola directo não exige um gateway base activo', () => {
+    expect(getPaymentMode('manual', 'emola', 'emola')).toBe('emola');
+    expect(getPaymentMode('manual', 'emola_sim', 'emola')).toBe('emola_sim');
+  });
 });

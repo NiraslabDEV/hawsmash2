@@ -4,6 +4,7 @@ import type { PaymentProvider } from '@delivery/payments';
 import { z } from 'zod';
 import type { PaymentConfig } from './config';
 import type { ConfirmOrderInput, ConfirmOrderResult } from './confirm';
+import { getPaymentLookup } from './lookup';
 
 const afterSchema = z.object({ createdAt: z.string().datetime({ offset: true }), id: z.string().uuid() }).strict();
 const cursorSchema = z.object({ v: z.literal(1), cutoff: z.string().datetime({ offset: true }), after: afterSchema.nullable() }).strict();
@@ -95,7 +96,7 @@ export async function runPaymentReconciliation(deps: ReconciliationDependencies,
       const configuredProvider = await configured(order);
       if (!configuredProvider) return 'skipped' as const;
       const { name, provider } = configuredProvider;
-      const reference = provider.flow === 'direct' ? order.payment_reference : order.payment_provider_ref;
+      const reference = getPaymentLookup(name, provider.flow, order);
       if (!reference || !provider.getPaymentStatus) return 'skipped' as const;
       const queryDeadline = new AbortController();
       const queryTimer = setTimeout(() => queryDeadline.abort(), statusTimeoutMs);
@@ -113,7 +114,7 @@ export async function runPaymentReconciliation(deps: ReconciliationDependencies,
       }
       if (status !== 'success' || signal.aborted) return 'pending' as const;
       const result = await deps.confirm({
-        orderId: order.id, provider: name, providerRef: order.payment_provider_ref ?? order.payment_reference,
+        orderId: order.id, storeId: order.store_id, provider: name, providerRef: order.payment_provider_ref ?? order.payment_reference,
         method: order.payment_method ?? 'mpesa', amountCents: order.total_cents, source: 'reconciliation',
       }, signal);
       return result.ok ? 'confirmed' as const : 'errors' as const;

@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
-import { InvalidMsisdnError, MSISDN_ERROR_PT, isRedirectProvider, normalizeMsisdn } from '@delivery/payments';
+import { InvalidEmolaMsisdnError, EMOLA_MSISDN_ERROR_PT, normalizeEmolaMsisdn,
+  InvalidMsisdnError, MSISDN_ERROR_PT, isRedirectProvider, normalizeMsisdn } from '@delivery/payments';
 
 import { createClient } from '@/utils/supabase/server';
 import { getPaymentConfig, buildProvider, isDirectFlow } from '@/lib/payments/config';
@@ -63,11 +64,15 @@ export async function POST(request: Request) {
   let msisdn: string | null = null;
   if (isDirectFlow(cfg.provider)) {
     try {
-      msisdn = normalizeMsisdn(String(payload.msisdn ?? ''));
+      msisdn = selection.data.paymentMethod === 'emola'
+        ? normalizeEmolaMsisdn(String(payload.msisdn ?? ''))
+        : normalizeMsisdn(String(payload.msisdn ?? ''));
     } catch (error) {
-      const reason = error instanceof InvalidMsisdnError ? error.reason : 'empty';
+      const message = error instanceof InvalidEmolaMsisdnError ? EMOLA_MSISDN_ERROR_PT[error.reason]
+        : error instanceof InvalidMsisdnError ? MSISDN_ERROR_PT[error.reason]
+        : 'Escreve um número de telemóvel válido para este pagamento.';
       return NextResponse.json(
-        { error: 'invalid_msisdn', message: MSISDN_ERROR_PT[reason] },
+        { error: 'invalid_msisdn', message },
         { status: 400 },
       );
     }
@@ -128,7 +133,8 @@ export async function POST(request: Request) {
   // URL público (com esquema) para return_url/callback_url — Paysuite valida-os.
   const appBase = resolvePublicBase(request);
 
-  // ── Fluxo DIRECTO (M-Pesa): cobra-se já, sem o cliente sair do site ──────
+  // Fluxo directo: o fornecedor real ou simulador foi resolvido para o método
+  // desta encomenda; a preparação e-Mola real é recusada antes de criar pedido.
   //
   // O cliente fica neste ecrã a olhar para o telemóvel. A resposta pode
   // demorar (é o tempo de ele digitar o PIN) e pode não chegar — e é por isso
@@ -140,6 +146,8 @@ export async function POST(request: Request) {
       providerName: cfg.provider,
       order: {
         id: orderId,
+        store_id: order.store_id,
+        payment_method: order.payment_method,
         total_cents: order.total_cents,
         order_number: order.order_number,
         customer_email: order.customer_email,

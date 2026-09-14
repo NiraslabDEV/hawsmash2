@@ -22,6 +22,9 @@ export {
 // ── M-Pesa directo (Vodacom) ────────────────────────────────────────────────
 export { MpesaProvider, MpesaConfigError, type MpesaConfig } from './mpesa/mpesa-provider';
 export { MpesaSimulator } from './mpesa/simulator';
+// ── Preparação e-Mola directa: só simulador, sem contrato/API real inventados ──
+export { EmolaSimulator } from './emola/simulator';
+export { normalizeEmolaMsisdn, InvalidEmolaMsisdnError, EMOLA_MSISDN_ERROR_PT } from './emola/msisdn';
 export {
   normalizeMsisdn,
   isValidMsisdn,
