@@ -769,6 +769,21 @@ falha e recuperação depois de implementar o mecanismo. Nenhum equipamento foi 
   O [atendimento oficial](https://www.movitel.co.mz/support/warranty-service-point)
   indica a linha geral 100; a ausência na pesquisa não demonstra inexistência de API.
 
+### B-110 · [POS] Validar a entrada por cartão + PIN contra um Supabase real
+
+- Estado: **aberto**. Categoria: **infraestrutura/validação**. Desbloqueia: Gabriel.
+- Falta: aplicar a 1049 em staging e correr `packages/db/tests/pos-card-login.test.ts`
+  (isolamento por loja, travão de tentativas, recusa da verificação ao browser). O stack
+  Supabase local não está disponível nesta máquina, logo o SQL não foi executado.
+- Falta também confirmar em staging a abertura de sessão sem palavra-passe
+  (`auth.admin.generateLink` + `verifyOtp`) com o provedor de email **activo** no projecto:
+  é o único passo da entrada por cartão que depende de configuração do Supabase, e sem ele
+  a rota `/api/pos/login` responde 503 e o POS manda entrar por email.
+- Contorno: o ecrã de entrada por email continua a existir (vincular terminal, criar PIN),
+  e o desbloqueio de quem já tem sessão usa a RPC antiga `unlock_pos_device`.
+- Para fechar: 1049 aplicada, gate verde em staging, e uma entrada real pelo cartão num
+  terminal com os dois perfis (caixa e gerente).
+
 ## PACOTE FINAL — e-Mola directo · 2026-09-14
 
 **2 bloqueios desta etapa continuam abertos: 1 infraestrutura/validação,

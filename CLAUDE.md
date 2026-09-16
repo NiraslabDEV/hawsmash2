@@ -246,7 +246,7 @@ create table staff_profiles (
   user_id uuid primary key references auth.users(id) on delete cascade,
   full_name text not null,
   role text not null check (role in ('owner','manager','cashier','kitchen')),
-  pin_hash text null,                    -- PIN de 4-6 dígitos p/ acções sensíveis no POS
+  pin_hash text null,                    -- PIN de 4-6 dígitos: entrada no POS pelo cartão + acções sensíveis
   active boolean not null default true,
   created_at timestamptz not null default now()
 );
@@ -281,7 +281,10 @@ proposta (§6 "Registo de auditoria").
 > Ecrã touch no balcão de cada loja. **Vender em menos de 15 segundos**, com a mão, sem teclado.
 
 ### 7.1 Fluxo
-1. Operador entra (Supabase Auth; sessão longa no dispositivo) → o dispositivo já sabe a loja.
+1. Operador entra pelo **seu cartão + PIN**: o ecrã mostra a grelha da equipa **daquela loja** e um
+   teclado de números. O PIN certo abre a **sessão Supabase daquela pessoa** (nunca uma sessão do
+   terminal) — é o que mantém cada venda assinada por quem a fez (§6). Email e palavra-passe ficam
+   só para dois momentos: vincular o terminal e criar o primeiro PIN. O dispositivo já sabe a loja.
 2. Grelha de categorias → produtos (alvos grandes, foto opcional, esgotado a cinzento e **não clicável**).
 3. Carrinho lateral: quantidade ±, nota por item, remover, **descontos só com perfil ≥ manager**.
 4. Tipo: **Balcão (comer/levar)** · **Delivery no balcão** (pede nome/telefone/zona) · **Levantamento**.
@@ -326,6 +329,9 @@ O POS é uma **PWA** com service worker:
 
 ### 7.6 Ecrã
 - Fullscreen/kiosk, alvos ≥ 64 px, contraste alto, **sem hover** (é touch), teclado numérico próprio.
+- **Entrar e render turno são o mesmo ecrã:** bloquear o POS devolve a grelha de cartões. Quem se ausentou
+  volta ao seu turno com o seu PIN; quem rende toca no próprio cartão e a sessão passa a ser dele. O PIN
+  errado tem travão (5 erros → espera que duplica até 15 min) — sem isso, quatro algarismos adivinham-se.
 - Atalho físico opcional: tecla `F9` = abrir gaveta (com permissão), `F2` = repetir último talão.
 - **Nunca** um `confirm()` do browser em fluxo de venda — diálogos próprios, grandes.
 

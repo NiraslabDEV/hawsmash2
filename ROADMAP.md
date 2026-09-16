@@ -108,6 +108,9 @@ _Os dias são referência de calendário, não paragens: a corrida não pára en
 - [x] RPC `void_sale(p_order_id, p_reason)` com perfil ≥ manager e reposição de stock
 - [x] `/pos`: grelha touch, carrinho, teclado numérico, troco, 4 formas de pagamento, pagamento misto
 - [x] Vinculação do dispositivo à loja (`devices`) + sessão longa + bloqueio de ecrã com PIN
+- [x] ⏳ **Entrada pelo cartão da pessoa** (1049): grelha da equipa da loja + PIN no teclado do ecrã,
+      em vez de email/palavra-passe. Bloquear devolve a mesma grelha (render turno é um toque).
+      Validar 1049 e a abertura de sessão em staging — B-110
 - [x] Testes Vitest: idempotência (mesma `client_sale_id` 2× → 1 pedido), troco, esgotado, anulação
 - [x] Playwright: venda ponta a ponta (dinheiro com troco) e anulação com motivo
 - [x] **Tirar no upsell o que se pôs no upsell** — cada cartão do funil tem `−` / `+` e há caminho de volta

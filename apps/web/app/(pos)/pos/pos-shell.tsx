@@ -34,6 +34,7 @@ import { connectionStatus } from '@/lib/pos/connection-status';
 import { buildPosUpsellFunnel, type PosUpsellStep } from '@/lib/pos/pos-upsell';
 import { isPosPin, POS_IDLE_TIMEOUT_MS } from '@/lib/pos/session';
 import { OrdersBoard } from './orders-board';
+import { PosLogin } from './pos-login';
 import { loadActiveDeliveryOrders } from '@/lib/pos/delivery-orders';
 import { TouchKeyboard } from './touch-keyboard';
 import { buildPickupSlots } from '@/lib/pos/schedule';
@@ -220,6 +221,9 @@ export function PosShell() {
   const [binding, setBinding] = useState(false);
   const [pinConfigured, setPinConfigured] = useState(false);
   const [locked, setLocked] = useState(false);
+  /** Terminal já vinculado mas sem sessão: é o ecrã dos cartões da equipa. */
+  const [cardLoginDeviceId, setCardLoginDeviceId] = useState<string | null>(null);
+  const [sessionUserId, setSessionUserId] = useState<string | null>(null);
   const [pin, setPin] = useState('');
   const [pinConfirmation, setPinConfirmation] = useState('');
   const [pinError, setPinError] = useState<string | null>(null);
@@ -300,9 +304,20 @@ export function PosShell() {
 
     const { data: sessionData } = await supabase.auth.getSession();
     if (!sessionData.session) {
+      // Terminal já vinculado entra pelos cartões da equipa — ninguém escreve
+      // um email num ecrã tátil com fila à frente (§7.1). O email fica para
+      // quem ainda não é deste PC: vincular o terminal e criar o primeiro PIN.
+      const bound = window.localStorage.getItem(DEVICE_STORAGE_KEY);
+      if (bound) {
+        setCardLoginDeviceId(bound);
+        setLoading(false);
+        return;
+      }
       router.replace('/login?next=/pos');
       return;
     }
+    setCardLoginDeviceId(null);
+    setSessionUserId(sessionData.session.user.id);
 
     const { data: devices, error: devicesError } = await supabase
       .from('devices')
@@ -654,29 +669,53 @@ export function PosShell() {
     setLocked(false);
   }
 
-  async function unlockDevice() {
-    if (!context || !isPosPin(pin)) {
-      setPinError('Introduz o teu PIN de 4 a 6 algarismos.');
-      return;
-    }
-    setSubmitting(true);
-    setPinError(null);
-    const { error: unlockError } = await supabase.rpc('unlock_pos_device', {
-      p_device_id: context.deviceId,
-      p_pin: pin,
-    });
-    setSubmitting(false);
-    if (unlockError) {
-      setPinError(
-        unlockError.message.includes('invalid_pin')
-          ? 'PIN incorrecto.'
-          : errorMessage(unlockError.message),
-      );
-      return;
-    }
-    setPin('');
-    setLocked(false);
-  }
+  /**
+   * Desbloqueio de quem já tem a sessão aberta neste PC.
+   *
+   * Existe a par da entrada por cartão de propósito: quem bloqueou para ir ao
+   * WC volta ao mesmo turno sem trocar de sessão, e a fila offline continua a
+   * sincronizar em pano de fundo enquanto o ecrã está trancado. Trocar de
+   * operador é o outro caminho — esse passa pelo servidor e abre sessão nova.
+   */
+  const unlockCurrentUser = useCallback(
+    async (candidatePin: string): Promise<{ ok: boolean; reason?: string }> => {
+      if (!context) return { ok: false, reason: 'invalid_device' };
+      if (!isPosPin(candidatePin)) return { ok: false, reason: 'invalid_pin_format' };
+      const { error: unlockError } = await supabase.rpc('unlock_pos_device', {
+        p_device_id: context.deviceId,
+        p_pin: candidatePin,
+      });
+      if (unlockError) {
+        return {
+          ok: false,
+          reason: unlockError.message.includes('invalid_pin') ? 'invalid_pin' : 'unknown',
+        };
+      }
+      setLocked(false);
+      return { ok: true };
+    },
+    [context, supabase],
+  );
+
+  /**
+   * Alguem entrou — pelo cartao ou a desbloquear o proprio turno.
+   *
+   * O carrinho a meio FICA: nao e dinheiro nenhum ate finalizar, e perder um
+   * pedido de doze linhas porque o turno rendeu seria pior do que herda-lo.
+   * O que nao fica e a ultima venda: reimprimir ou anular a venda de outra
+   * pessoa com um toque distraido e exactamente o tipo de acidente que a
+   * auditoria do §6 depois tem de explicar.
+   */
+  const handleAuthenticated = useCallback(
+    async (userId: string) => {
+      if (sessionUserId && userId !== sessionUserId) {
+        setLastSale(null);
+        setVoidOpen(false);
+      }
+      await loadPos();
+    },
+    [loadPos, sessionUserId],
+  );
 
   const lines = useMemo(() => cartLines(cart), [cart]);
   const subtotalCents = useMemo(() => cartTotalCents(cart), [cart]);
@@ -1204,11 +1243,73 @@ export function PosShell() {
 
   const networkStatus = connectionStatus(online, pendingSales, recentlySynced);
 
+  /**
+   * Rodapé do terminal — vive nos ecrãs de entrada e de bloqueio, nunca no
+   * cabeçalho do POS: no cabeçalho seria um botão ao lado do "Pedidos" que
+   * desliga o terminal a meio de um serviço. Aqui é preciso parar primeiro e
+   * ainda confirmar.
+   */
+  const terminalFooter = (
+    <div className="space-y-3">
+      <a
+        href="/login?next=/pos"
+        className="grid min-h-14 w-full place-items-center rounded-2xl border border-white/15 px-4 text-sm font-bold text-[#847e72] active:bg-white/[0.05]"
+      >
+        Entrar por email · criar o meu PIN
+      </a>
+      {!unbindConfirm ? (
+        <button
+          type="button"
+          onClick={() => setUnbindConfirm(true)}
+          className="min-h-14 w-full rounded-2xl border border-white/15 px-4 text-sm font-bold text-[#847e72] active:bg-white/[0.05]"
+        >
+          Sair · desvincular este PC
+        </button>
+      ) : (
+        <div className="rounded-2xl border border-red-500/40 bg-red-950/30 p-4">
+          <p className="text-sm font-bold text-red-200">
+            Desvincular este PC de <strong>{context?.storeName ?? 'esta loja'}</strong>?
+          </p>
+          <p className="mt-1 text-xs text-[#a89f92]">
+            O terminal volta ao ecrã de registo e será preciso escolher a loja
+            e o token do bridge outra vez. As vendas já feitas não se perdem.
+          </p>
+          <div className="mt-4 flex gap-3">
+            <button
+              type="button"
+              onClick={() => setUnbindConfirm(false)}
+              className="min-h-14 flex-1 rounded-xl bg-white/[0.08] px-4 font-bold active:bg-white/15"
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              onClick={unbindDevice}
+              className="min-h-14 flex-1 rounded-xl bg-red-600 px-4 font-black text-white active:bg-red-700"
+            >
+              Desvincular
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+
   if (loading) {
     return (
       <main className="grid min-h-screen place-items-center bg-[#0a0807] text-[#e5a93c]">
         <p className="text-xl font-bold">A preparar o POS…</p>
       </main>
+    );
+  }
+
+  if (cardLoginDeviceId) {
+    return (
+      <PosLogin
+        deviceId={cardLoginDeviceId}
+        onAuthenticated={handleAuthenticated}
+        footer={terminalFooter}
+      />
     );
   }
 
@@ -1363,7 +1464,7 @@ export function PosShell() {
           onClick={() => void lockDevice()}
           className="min-h-16 rounded-xl bg-white/[0.07] px-4 text-sm font-bold active:bg-white/15"
         >
-          Bloquear
+          Bloquear · trocar
         </button>
         <div
           role="status"
@@ -2338,19 +2439,30 @@ export function PosShell() {
         </div>
       )}
 
-      {(!pinConfigured || locked) && (
+      {/* Ecrã bloqueado é o MESMO ecrã de entrada: os cartões da equipa. Quem
+          se ausentou volta ao seu turno com o seu PIN; quem rende o turno toca
+          no próprio cartão e a sessão passa a ser dele — é o que mantém cada
+          venda assinada por quem a fez (§6). */}
+      {pinConfigured && locked && (
+        <div className="fixed inset-0 z-[70] overflow-auto bg-[#0a0807]">
+          <PosLogin
+            deviceId={context.deviceId}
+            currentUserId={sessionUserId}
+            onUnlockCurrentUser={unlockCurrentUser}
+            onAuthenticated={handleAuthenticated}
+            footer={terminalFooter}
+          />
+        </div>
+      )}
+
+      {!pinConfigured && (
         <div className="fixed inset-0 z-[70] grid place-items-center bg-black/95 p-4">
           <section className="w-full max-w-md rounded-3xl border border-[#e5a93c]/30 bg-[#151310] p-7 text-center shadow-2xl">
-            <p className="text-sm font-black tracking-[0.2em] text-[#e5a93c]">
-              {pinConfigured ? 'POS BLOQUEADO' : 'CRIAR PIN'}
-            </p>
-            <h2 className="mt-3 text-3xl font-black">
-              {pinConfigured ? context.deviceLabel : 'Protege este turno'}
-            </h2>
+            <p className="text-sm font-black tracking-[0.2em] text-[#e5a93c]">CRIAR PIN</p>
+            <h2 className="mt-3 text-3xl font-black">Protege este turno</h2>
             <p className="mt-2 text-sm text-[#a89f91]">
-              {pinConfigured
-                ? 'Introduz o teu PIN pessoal para continuar.'
-                : 'Escolhe 4 a 6 algarismos. O PIN é guardado apenas como hash.'}
+              Escolhe 4 a 6 algarismos. É com este PIN que passas a entrar pelo
+              teu cartão neste terminal — o email não volta a ser preciso.
             </p>
             <input
               type="password"
@@ -2362,28 +2474,24 @@ export function PosShell() {
               value={pin}
               onChange={(event) => setPin(event.target.value.replace(/\D/g, '').slice(0, 6))}
               onKeyDown={(event) => {
-                if (event.key === 'Enter') {
-                  void (pinConfigured ? unlockDevice() : configurePin());
-                }
+                if (event.key === 'Enter') void configurePin();
               }}
               className="mt-6 min-h-16 w-full rounded-2xl border border-white/15 bg-black/40 px-4 text-center text-3xl font-black tracking-[0.5em] outline-none focus:border-[#e5a93c]"
             />
-            {!pinConfigured && (
-              <input
-                type="password"
-                inputMode="numeric"
-                pattern="[0-9]*"
-                autoComplete="off"
-                aria-label="Confirmar PIN"
-                placeholder="Confirmar PIN"
-                value={pinConfirmation}
-                onChange={(event) => setPinConfirmation(event.target.value.replace(/\D/g, '').slice(0, 6))}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter') void configurePin();
-                }}
-                className="mt-3 min-h-16 w-full rounded-2xl border border-white/15 bg-black/40 px-4 text-center text-xl font-black tracking-[0.35em] outline-none focus:border-[#e5a93c]"
-              />
-            )}
+            <input
+              type="password"
+              inputMode="numeric"
+              pattern="[0-9]*"
+              autoComplete="off"
+              aria-label="Confirmar PIN"
+              placeholder="Confirmar PIN"
+              value={pinConfirmation}
+              onChange={(event) => setPinConfirmation(event.target.value.replace(/\D/g, '').slice(0, 6))}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') void configurePin();
+              }}
+              className="mt-3 min-h-16 w-full rounded-2xl border border-white/15 bg-black/40 px-4 text-center text-xl font-black tracking-[0.35em] outline-none focus:border-[#e5a93c]"
+            />
             {pinError && (
               <p role="alert" className="mt-4 rounded-xl bg-red-950/60 p-3 font-bold text-red-200">
                 {pinError}
@@ -2391,54 +2499,14 @@ export function PosShell() {
             )}
             <button
               type="button"
-              disabled={submitting || !isPosPin(pin) || (!pinConfigured && pin !== pinConfirmation)}
-              onClick={() => void (pinConfigured ? unlockDevice() : configurePin())}
+              disabled={submitting || !isPosPin(pin) || pin !== pinConfirmation}
+              onClick={() => void configurePin()}
               className="mt-5 min-h-16 w-full rounded-2xl bg-[#e5a93c] px-5 text-lg font-black text-black disabled:opacity-40"
             >
-              {submitting ? 'A confirmar…' : pinConfigured ? 'Desbloquear' : 'Guardar PIN'}
+              {submitting ? 'A confirmar…' : 'Guardar PIN'}
             </button>
 
-            {/* Desvincular vive AQUI, no ecra bloqueado, e nao no cabecalho:
-                no cabecalho seria um botao ao lado do "Pedidos" que desliga o
-                terminal a meio de um servico. Aqui e preciso bloquear primeiro
-                — um gesto deliberado — e ainda confirmar. */}
-            <div className="mt-8 border-t border-white/10 pt-5">
-              {!unbindConfirm ? (
-                <button
-                  type="button"
-                  onClick={() => setUnbindConfirm(true)}
-                  className="min-h-14 w-full rounded-2xl border border-white/15 px-4 text-sm font-bold text-[#847e72] active:bg-white/[0.05]"
-                >
-                  Sair · desvincular este PC
-                </button>
-              ) : (
-                <div className="rounded-2xl border border-red-500/40 bg-red-950/30 p-4">
-                  <p className="text-sm font-bold text-red-200">
-                    Desvincular este PC de <strong>{context.storeName}</strong>?
-                  </p>
-                  <p className="mt-1 text-xs text-[#a89f92]">
-                    O terminal volta ao ecrã de registo e será preciso escolher a loja
-                    e o token do bridge outra vez. As vendas já feitas não se perdem.
-                  </p>
-                  <div className="mt-4 flex gap-3">
-                    <button
-                      type="button"
-                      onClick={() => setUnbindConfirm(false)}
-                      className="min-h-14 flex-1 rounded-xl bg-white/[0.08] px-4 font-bold active:bg-white/15"
-                    >
-                      Cancelar
-                    </button>
-                    <button
-                      type="button"
-                      onClick={unbindDevice}
-                      className="min-h-14 flex-1 rounded-xl bg-red-600 px-4 font-black text-white active:bg-red-700"
-                    >
-                      Desvincular
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
+            <div className="mt-8 border-t border-white/10 pt-5 text-left">{terminalFooter}</div>
           </section>
         </div>
       )}
