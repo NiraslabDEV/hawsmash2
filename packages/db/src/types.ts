@@ -2343,6 +2343,7 @@ export type Database = {
         Returns: Json
       }
       list_system_alerts: { Args: never; Returns: Json }
+      list_system_alerts_all: { Args: never; Returns: Json }
       lock_pos_device: { Args: { p_device_id: string }; Returns: Json }
       open_cash_drawer: {
         Args: { p_device_id: string; p_reason: string; p_request_id: string }

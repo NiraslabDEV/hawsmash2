@@ -37,7 +37,10 @@ export async function GET(request: Request) {
     auth: { persistSession: false, autoRefreshToken: false },
   });
 
-  const { data: alertData, error: alertError } = await supabase.rpc('list_system_alerts');
+  // Porta do cron (1050), não a do painel: aqui não há sessão, e são precisos
+  // os alertas das duas lojas para escolher a quem se manda cada aviso. A do
+  // painel exige auth.uid() e respondia not_authenticated em cada corrida.
+  const { data: alertData, error: alertError } = await supabase.rpc('list_system_alerts_all');
   if (alertError) {
     console.error('[cron/alerts]', alertError.message);
     return NextResponse.json({ ok: false, error: alertError.message }, { status: 500 });
