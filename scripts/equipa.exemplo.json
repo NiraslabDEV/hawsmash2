@@ -1,0 +1,43 @@
+{
+  "_comentario": [
+    "Modelo para scripts/criar-equipa.mjs. Copia para CREDENCIAIS-EQUIPA.json",
+    "(o .gitignore trava tudo o que comece por CREDENCIAIS) e preenche.",
+    "",
+    "papel: owner | manager | cashier | kitchen",
+    "lojas: slugs de public.stores. O owner vê todas, mesmo sem lista.",
+    "pin:   4 a 6 algarismos; é o que abre o cartão da pessoa no POS (§7.1).",
+    "password: opcional. Sem ela o script gera uma e imprime-a uma única vez.",
+    "          O dono precisa da sua no ficheiro para o script poder entrar",
+    "          e criar o resto da equipa pelas RPC do produto."
+  ],
+  "pessoas": [
+    {
+      "email": "dono@exemplo.test",
+      "nome": "Nome do Dono",
+      "papel": "owner",
+      "lojas": [],
+      "password": "troca-esta-password",
+      "pin": "1234"
+    },
+    {
+      "email": "gerente.loja-a@exemplo.test",
+      "nome": "Nome do Gerente",
+      "papel": "manager",
+      "lojas": ["loja-a"],
+      "pin": "2345"
+    },
+    {
+      "email": "caixa.loja-a@exemplo.test",
+      "nome": "Nome do Caixa",
+      "papel": "cashier",
+      "lojas": ["loja-a"],
+      "pin": "3456"
+    },
+    {
+      "email": "cozinha.loja-b@exemplo.test",
+      "nome": "Nome da Cozinha",
+      "papel": "kitchen",
+      "lojas": ["loja-b"]
+    }
+  ]
+}

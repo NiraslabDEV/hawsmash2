@@ -19,7 +19,8 @@
     "client:limpar-demo": "node scripts/limpar-demonstracao.mjs",
     "menu:import": "tsx scripts/import-menu.ts",
     "bridge:dev": "cd services/print-bridge && USE_SIMULATOR=true SIMULATOR_PORT=9100 SIMULATOR_VERBOSE=true pnpm dev",
-    "clean": "turbo run clean && rm -rf node_modules"
+    "clean": "turbo run clean && rm -rf node_modules",
+    "equipa:criar": "node scripts/criar-equipa.mjs"
   },
   "dependencies": {
     "next": "14.2.35"
