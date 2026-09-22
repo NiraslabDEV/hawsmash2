@@ -12,6 +12,9 @@ export default defineConfig({
     globals: true,
     environment: 'node',
     include: ['**/__tests__/**/*.test.ts'],
-    exclude: ['node_modules', '**/node_modules/**', 'dist', '**/tests/**'],
+    // Worktrees de ferramentas (.kilo, .git/worktrees) guardam cópias detached do
+    // repositório. O gate mede a árvore de trabalho — nunca um commit antigo que
+    // ainda tem os testes de ontem a apontar para o código de hoje.
+    exclude: ['node_modules', '**/node_modules/**', 'dist', '**/tests/**', '**/.kilo/**'],
   },
 });

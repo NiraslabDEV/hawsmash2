@@ -32,8 +32,14 @@ const SERVICE_KEY =
 let anon: SupabaseClient;
 let admin: SupabaseClient;
 
+// O cliente escreve o telefone como lhe apetece, e é assim que se semeia aqui.
+// A 1038 fixou o canónico — só dígitos, sempre os últimos 9 — por isso o que
+// fica gravado e o que as RPC devolvem nunca traz o "+258". Manter as duas
+// formas é o que faz este teste provar que a normalização acontece.
 const ALICE = "+258840000901";
 const BRUNO = "+258840000902";
+const ALICE_GRAVADO = "840000901";
+const BRUNO_GRAVADO = "840000902";
 const ADDRESS_ALICE = "Av. Julius Nyerere 812, Sommerschield";
 
 let aliceOrderId: string;
@@ -74,14 +80,19 @@ beforeAll(async () => {
   anon = createClient(SUPABASE_URL, ANON_KEY);
   admin = createClient(SUPABASE_URL, SERVICE_KEY);
 
-  await admin.from("customers").delete().in("phone", [ALICE, BRUNO]);
+  // Apagar pelas duas formas: a normalizada é a que lá está, e a antiga limpa o
+  // que ficou para trás de quando este teste semeava sem normalizar.
+  await admin.from("customers").delete().in("phone", [ALICE, BRUNO, ALICE_GRAVADO, BRUNO_GRAVADO]);
   aliceOrderId = await seedOrder(ALICE, "Aisha", ADDRESS_ALICE);
 });
 
 afterAll(async () => {
-  await admin.from("orders").delete().in("customer_phone", [ALICE, BRUNO]);
+  await admin
+    .from("orders")
+    .delete()
+    .in("customer_phone", [ALICE, BRUNO, ALICE_GRAVADO, BRUNO_GRAVADO]);
   await admin.from("orders").delete().like("order_number", "TST-%");
-  await admin.from("customers").delete().in("phone", [ALICE, BRUNO]);
+  await admin.from("customers").delete().in("phone", [ALICE, BRUNO, ALICE_GRAVADO, BRUNO_GRAVADO]);
 });
 
 describe("conta do cliente — o que o anónimo não alcança", () => {
@@ -107,7 +118,7 @@ describe("conta do cliente — prender o dispositivo", () => {
     expect(data?.token).toBeTruthy();
     aliceToken = data.token;
 
-    expect(data.profile.phone).toBe(ALICE);
+    expect(data.profile.phone).toBe(ALICE_GRAVADO);
     expect(data.profile.addresses).toHaveLength(1);
     expect(data.profile.addresses[0].address).toBe(ADDRESS_ALICE);
     // A primeira morada assume o lugar de defeito sozinha.
@@ -123,7 +134,7 @@ describe("conta do cliente — prender o dispositivo", () => {
 
   it("o token abre a conta; um token inventado não abre nada", async () => {
     const { data: mine } = await admin.rpc("account_me", { p_token: aliceToken });
-    expect(mine.phone).toBe(ALICE);
+    expect(mine.phone).toBe(ALICE_GRAVADO);
 
     const { data: nobody } = await admin.rpc("account_me", { p_token: "a".repeat(64) });
     expect(nobody).toBeNull();
@@ -136,7 +147,7 @@ describe("conta do cliente — prender o dispositivo", () => {
     const { data: devices, error } = await admin
       .from("customer_devices")
       .select("token_hash")
-      .eq("customer_phone", ALICE);
+      .eq("customer_phone", ALICE_GRAVADO);
 
     expect(error).toBeNull();
     expect(devices!.length).toBeGreaterThan(0);
@@ -254,7 +265,7 @@ describe("conta do cliente — código para telemóvel novo", () => {
     const token = bind.token;
 
     const { data: antes } = await admin.rpc("account_me", { p_token: token });
-    expect(antes.phone).toBe(ALICE);
+    expect(antes.phone).toBe(ALICE_GRAVADO);
 
     await admin.rpc("account_logout", { p_token: token });
 

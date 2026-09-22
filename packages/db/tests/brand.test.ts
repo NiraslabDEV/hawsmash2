@@ -82,23 +82,30 @@ beforeAll(async () => {
   if (error || !stores?.length) throw new Error(`Setup marca: lojas — ${error?.message}`);
   maputoStoreId = stores[0].id;
 
+  owner = await createUser("dono", "owner", []);
+
   // Guarda o estado real para o repor no fim: este teste corre contra a mesma
   // base que os outros e não pode deixar a marca trocada atrás de si.
-  const { data: current } = await admin.from("brand_settings").select("*").eq("id", 1).maybeSingle();
-  brandBefore = current ?? null;
-
-  owner = await createUser("dono", "owner", []);
+  //
+  // Pelo contrato público, não pela tabela. A 1040 fechou a escrita directa de
+  // propósito (§18.2: "Escrita: por RPC, nunca directa"), e a leitura directa
+  // voltava vazia — com o que o `brandBefore` ficava sempre nulo e o `afterAll`
+  // ia pelo ramo de apagar em vez de repor. Foi assim que o staging ficou com
+  // "Marca de Teste" na montra.
+  const { data: atual } = await admin.rpc("get_brand");
+  brandBefore = (atual as Record<string, unknown> | null) ?? null;
   manager = await createUser("gerente", "manager", [maputoStoreId]);
 });
 
 afterAll(async () => {
   if (!admin) return;
-  await admin.from("event_log").delete().eq("type", "brand.updated").in("actor_user_id", createdUserIds);
-  if (brandBefore) {
-    await admin.from("brand_settings").upsert(brandBefore);
-  } else {
-    await admin.from("brand_settings").delete().eq("id", 1);
+  // Repor antes de apagar o dono: `update_brand` exige uma sessão de dono, e a
+  // do teste é a única que existe aqui.
+  if (brandBefore && owner) {
+    const { id: _id, updated_at: _updated_at, ...patch } = brandBefore as Record<string, unknown>;
+    await owner.rpc("update_brand", { p_patch: patch });
   }
+  await admin.from("event_log").delete().eq("type", "brand.updated").in("actor_user_id", createdUserIds);
   for (const userId of createdUserIds) {
     await admin.auth.admin.deleteUser(userId);
   }

@@ -198,6 +198,16 @@ beforeAll(async () => {
 beforeEach(async () => {
   await setStock(maputoStoreId, { stock_qty: 5, low_stock_qty: 0 });
   await setStock(matolaStoreId, { stock_qty: 5, low_stock_qty: 0 });
+
+  // A venda de balcão também desconta a ficha técnica (§10.1), e os
+  // ingredientes são da empresa — outro ficheiro desta suite pode ter deixado
+  // o queijo a zero. Sem isto, estas vendas morrem em `out_of_ingredient` por
+  // causa do vizinho, e o ficheiro passa ou falha conforme a ordem por que a
+  // suite correu. Encher antes de cada teste é o que torna o gate repetível.
+  await admin
+    .from("store_ingredients")
+    .update({ qty: 1000 })
+    .in("store_id", [maputoStoreId, matolaStoreId]);
 });
 
 afterAll(async () => {
