@@ -203,12 +203,14 @@ describe("quadro do POS · o pedido que vem da internet", () => {
 
     const { data: papel } = await admin
       .from("print_jobs")
-      .select("station,kind,status,store_id")
+      .select("station,kind,status,store_id,payload")
       .eq("order_id", orderId);
 
     const comanda = (papel ?? []).find((j) => j.kind === "order" && j.station === "kitchen");
     expect(comanda, "aprovar tem de deixar uma comanda na fila da cozinha").toBeTruthy();
     // A comanda é da loja do pedido — a bridge da outra loja ignora-a (regra 3).
     expect(comanda!.store_id).toBe(maputoStoreId);
+    // E é a comanda HAWSMASH, a mesma do balcão — não o formato antigo (1062).
+    expect((papel ?? []).every((j) => j.kind !== "order" || (j as { payload?: { template?: string } }).payload?.template === "kitchen")).toBe(true);
   });
 });

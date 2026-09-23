@@ -244,6 +244,8 @@ export default function AparenciaPage() {
             <Field label="Instagram (link)" value={str(row.social, 'instagram')} onChange={(v) => set({ social: { ...row.social, instagram: v } })} placeholder="https://instagram.com/…" />
             <Field label="Facebook (link)" value={str(row.social, 'facebook')} onChange={(v) => set({ social: { ...row.social, facebook: v } })} />
             <Field label="WhatsApp (link)" value={str(row.social, 'whatsapp')} onChange={(v) => set({ social: { ...row.social, whatsapp: v } })} placeholder="https://wa.me/258…" />
+            {/* Vira o QR do rodapé do talão dos pedidos online. Sem ele, o QR é o do Instagram. */}
+            <Field label="Avaliação no Google (link)" value={str(row.social, 'google_review')} onChange={(v) => set({ social: { ...row.social, google_review: v } })} placeholder="https://g.page/r/…/review" />
             <Field label="Telefone" value={str(row.contact, 'phone')} onChange={(v) => set({ contact: { ...row.contact, phone: v } })} />
             <Field label="Instagram (@)" value={str(row.contact, 'instagram')} onChange={(v) => set({ contact: { ...row.contact, instagram: v } })} />
             <Field label="Morada" value={str(row.contact, 'addressLine1')} onChange={(v) => set({ contact: { ...row.contact, addressLine1: v } })} />

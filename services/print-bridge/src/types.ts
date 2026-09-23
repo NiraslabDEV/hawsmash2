@@ -67,9 +67,37 @@ export interface KitchenTicketPayload {
   delivery_zone?: string | null;
   /** Hora marcada. null = para já. */
   scheduled_for?: string | null;
-  items: Array<{ name: string; quantity: number; notes?: string | null }>;
+  items: Array<{
+    name: string;
+    quantity: number;
+    notes?: string | null;
+    /** Só nos pedidos online (via): o talão completo leva o preço de cada linha. */
+    line_total_cents?: number | null;
+  }>;
   notes?: string | null;
   created_at: string;
+
+  // ── Pedido online (1063): o talão completo do HAWSMASH 1.0, em vias ────────
+  // Uma bridge que não conheça estes campos ignora-os e imprime a comanda de
+  // cozinha, como antes. É isso que deixa actualizar a base de dados e as
+  // bridges das lojas por qualquer ordem.
+  /** Presente = pedido online: sai o talão completo em vez da comanda curta. */
+  formato?: 'talao_completo';
+  /** 'controlo' fica na loja; 'cliente' vai com o pedido; 'cozinha' é a 3.ª via. */
+  via?: 'controlo' | 'cliente' | 'cozinha' | null;
+  store_address?: string | null;
+  store_phone?: string | null;
+  subtotal_cents?: number | null;
+  delivery_fee_cents?: number | null;
+  discount_cents?: number | null;
+  total_cents?: number | null;
+  payment_method?: string | null;
+  /** Link de avaliação no Google — é o QR do rodapé quando existe. */
+  review_url?: string | null;
+  /** O Instagram da marca: o texto (@…) e o link, que é o QR quando não há avaliação. */
+  instagram?: string | null;
+  instagram_url?: string | null;
+  receipt_footer?: string | null;
 }
 
 export interface CustomerReceiptPayload {

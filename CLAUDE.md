@@ -363,12 +363,19 @@ print_jobs (id, store_id, order_id null, station text, kind text, reprint_seq in
 - **Simulador** (`pnpm bridge:dev`) para desenvolver sem hardware.
 
 ### 8.3 Talão (80 mm · 48 colunas · CP1252)
-Dois formatos, ambos com **`short_name` da loja no cabeçalho**:
-- **Comanda de cozinha:** número do dia GRANDE, canal (BALCÃO/DELIVERY/LEVANTAMENTO), itens + qty + notas,
-  hora, **sem preços**.
-- **Talão do cliente:** loja, morada, número do pedido, itens com preço, subtotal, taxa de entrega (se houver),
-  **TOTAL a dupla altura**, forma de pagamento, **troco** se dinheiro, rodapé (`stores.receipt_footer`).
-Formato de referência: `docs/legacy/HAWSMASH-1.0-CLAUDE.md §12.2` (já validado em papel).
+Três formatos, todos com **`short_name` da loja no cabeçalho**:
+- **Comanda de cozinha** (venda de balcão): número do dia GRANDE, canal (BALCÃO/DELIVERY/LEVANTAMENTO),
+  itens + qty + notas, hora, **sem preços**. Uma só.
+- **Talão do cliente** (venda de balcão): loja, morada, número do pedido, itens com preço, subtotal, taxa de
+  entrega (se houver), **TOTAL a dupla altura**, forma de pagamento, **troco** se dinheiro, rodapé
+  (`stores.receipt_footer`).
+- **Talão do pedido online** (aprovação manual ou pagamento digital, 1063): o talão do HAWSMASH 1.0 num só
+  papel — senha, cliente, entrega/levantamento, **HORÁRIO a dobrar**, itens em altura dupla com preço, nota,
+  totais, **TOTAL** grande, `[ PAGO VIA … ]` e rodapé com QR (avaliação no Google, ou Instagram). Sai em
+  **vias** (`stores.kitchen_ticket_copies`, 2 por defeito): **VIA DE CONTROLO** fica na loja, **VIA DO
+  CLIENTE** vai para a cozinha e depois cola-se no saco. Decisão do dono, 23 Set.
+Formato de referência: `docs/legacy/HAWSMASH-1.0-CLAUDE.md §12.2` e `docs/legacy/hawsmash-print-bridge`
+(já validados em papel). Morada, telefone, Instagram e link de avaliação vêm da base de dados, nunca do código.
 
 **Regra herdada e inegociável:** falha de impressão **nunca** esconde nem bloqueia o pedido. O painel é o canal
 primário; o papel é redundância.

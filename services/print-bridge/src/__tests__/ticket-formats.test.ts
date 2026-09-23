@@ -187,3 +187,94 @@ describe('entrega vendida ao balcão', () => {
   });
 });
 
+
+// ── Pedido online (1063): o talão completo do HAWSMASH 1.0, em vias ──────────
+const online: KitchenTicketPayload = {
+  template: 'kitchen',
+  formato: 'talao_completo',
+  via: 'controlo',
+  store_short_name: 'Maputo',
+  store_address: 'Av. 24 de Julho, 141, Maputo',
+  store_phone: '86 076 0009',
+  order_number: 'MPT-0042',
+  daily_number: 7,
+  channel: 'pickup',
+  fulfillment_type: 'pickup',
+  customer_name: 'MARIA ALBERTINA',
+  customer_phone: '840000001',
+  items: [{ name: 'Classic Smash', quantity: 2, notes: 'Sem cebola', line_total_cents: 60000 }],
+  notes: 'Chego às 20h',
+  subtotal_cents: 60000,
+  delivery_fee_cents: 0,
+  discount_cents: 0,
+  total_cents: 60000,
+  payment_method: 'mpesa',
+  review_url: 'https://g.page/r/exemplo/review',
+  instagram: '@marca',
+  instagram_url: 'https://instagram.com/marca',
+  created_at: '2026-09-23T13:04:00.000Z',
+};
+
+describe('talão do pedido online (o do 1.0, em vias)', () => {
+  it('traz tudo num só papel: pedido, senha, cliente, horário, artigos com preço, total e pagamento', () => {
+    const texto = decodeReceipt(createKitchenTicket(online));
+    for (const trecho of [
+      '*** VIA DE CONTROLO ***',
+      'PEDIDO: MPT-0042',
+      'SENHA',
+      'CLIENTE: MARIA ALBERTINA',
+      'TEL: 840000001',
+      '** LEVANTAMENTO **',
+      'HORARIO:',
+      'AGORA',
+      '2x Classic Smash',
+      '> Sem cebola',
+      '** NOTA DO CLIENTE **',
+      'TOTAL:',
+      '[ PAGO VIA M-PESA ]',
+      'Obrigado! Bom apetite, Maria!',
+      'pode avaliar-nos no Google?',
+      '@marca',
+    ]) {
+      expect(texto, trecho).toContain(trecho);
+    }
+  });
+
+  it('a via do cliente diz que é do cliente — é o que evita entregar a errada', () => {
+    const texto = decodeReceipt(createKitchenTicket({ ...online, via: 'cliente' }));
+    expect(texto).toContain('*** VIA DO CLIENTE ***');
+    expect(texto).not.toContain('VIA DE CONTROLO');
+  });
+
+  it('uma entrega leva a zona e a morada, e a hora marcada substitui o AGORA', () => {
+    const texto = decodeReceipt(
+      createKitchenTicket({
+        ...online,
+        channel: 'delivery',
+        fulfillment_type: 'delivery',
+        delivery_zone: 'Sommerschield',
+        address: 'Rua da Sé 114',
+        delivery_fee_cents: 15000,
+        scheduled_for: '2026-09-23T18:00:00.000Z',
+      }),
+    );
+    expect(texto).toContain('** ENTREGA **');
+    expect(texto).toContain('Zona: Sommerschield');
+    expect(texto).toContain('Morada: Rua da Sé 114');
+    expect(texto).toContain('Taxa de entrega:');
+    expect(texto).not.toContain('AGORA');
+  });
+
+  it('sem avaliação no Google, o QR é o do Instagram', () => {
+    const texto = decodeReceipt(createKitchenTicket({ ...online, review_url: null }));
+    expect(texto).toContain('Maria, siga-nos no Instagram:');
+    expect(texto).not.toContain('Google');
+  });
+
+  it('sem o formato do talão, continua a sair a comanda curta — bridges e base actualizam por qualquer ordem', () => {
+    const texto = decodeReceipt(createKitchenTicket(kitchen));
+    expect(texto).toContain('Nº 42');
+    expect(texto).not.toContain('VIA DE');
+    expect(texto).not.toContain('TOTAL');
+  });
+});

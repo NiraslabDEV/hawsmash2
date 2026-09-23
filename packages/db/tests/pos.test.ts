@@ -899,6 +899,8 @@ describe("F3 — talões da venda", () => {
       .order("kind");
 
     expect(error).toBeNull();
+    // No balcão: o talão do cliente e uma comanda. As vias são só do pedido
+    // online (1063) — aqui o cliente leva o talão na mão.
     expect(jobs).toHaveLength(2);
 
     const kitchen = jobs?.find((job) => job.kind === "order");

@@ -31,6 +31,9 @@ const BOLD_OFF = Buffer.from([ESC, 0x45, 0]);
 const SIZE_NORMAL = Buffer.from([GS, 0x21, 0x00]);
 const SIZE_DOUBLE = Buffer.from([GS, 0x21, 0x11]);
 const SIZE_TRIPLE = Buffer.from([GS, 0x21, 0x22]);
+// So a altura a dobrar: mantem as 48 colunas. E o corpo dos artigos no talao
+// completo — le-se de relance e o preco continua a caber na mesma linha.
+const SIZE_DBL_H = Buffer.from([GS, 0x21, 0x01]);
 export const CUT_FULL = Buffer.from([GS, 0x56, 0x00]);
 const WIDTH = 48;
 // A dobrar a largura, cabe metade: 48 -> 24. Quem escreve uma linha em
@@ -245,6 +248,178 @@ function scheduleBlock(scheduledFor?: string | null): Buffer[] {
   ];
 }
 
+// QR code nativo da impressora (GS ( k) — nao e imagem, e o firmware que o
+// desenha. Igual ao do SLICE e ao do HAWSMASH 1.0, ja validado em papel.
+function qrCode(data: string, size = 5, ecLevel = 0x31 /* M */): Buffer {
+  const bytes = Buffer.from(data, 'latin1');
+  const storeLen = bytes.length + 3;
+  return Buffer.concat([
+    Buffer.from([GS, 0x28, 0x6b, 0x04, 0x00, 0x31, 0x41, 0x32, 0x00]), // modelo 2
+    Buffer.from([GS, 0x28, 0x6b, 0x03, 0x00, 0x31, 0x43, size]), // tamanho do modulo
+    Buffer.from([GS, 0x28, 0x6b, 0x03, 0x00, 0x31, 0x45, ecLevel]), // correccao de erro
+    Buffer.from([GS, 0x28, 0x6b, storeLen & 0xff, (storeLen >> 8) & 0xff, 0x31, 0x50, 0x30]),
+    bytes,
+    Buffer.from([GS, 0x28, 0x6b, 0x03, 0x00, 0x31, 0x51, 0x30]), // imprimir
+  ]);
+}
+
+// Primeiro nome, capitalizado ("MARIA ALBERTINA" -> "Maria"): o rodape fala
+// com o cliente pelo nome, como no 1.0.
+function firstName(full: string | null | undefined): string {
+  const palavra = String(full ?? '').trim().split(/\s+/)[0] ?? '';
+  return palavra ? palavra.charAt(0).toUpperCase() + palavra.slice(1).toLowerCase() : '';
+}
+
+const VIA_LABEL: Record<string, string> = {
+  controlo: '*** VIA DE CONTROLO ***',
+  cliente: '*** VIA DO CLIENTE ***',
+  cozinha: '*** VIA DA COZINHA ***',
+};
+
+/**
+ * O talao de um pedido online — o do HAWSMASH 1.0, em vias.
+ *
+ * E o papel que a loja ja conhecia e que o dono pediu de volta (23 Set): tudo
+ * num so talao — cliente, entrega ou levantamento, o HORARIO a dobrar, os
+ * artigos em letra alta com o preco, a nota, os totais, o TOTAL grande, a
+ * forma de pagamento e o rodape que agradece pelo nome.
+ *
+ * Sai em duas vias com o mesmo conteudo e um rotulo diferente, como no SLICE:
+ * a VIA DE CONTROLO fica na loja, a VIA DO CLIENTE vai para a cozinha e depois
+ * cola-se no saco. O rotulo e o que impede que alguem entregue a errada.
+ *
+ * Do 2.0 fica a SENHA — o numero do dia que a TV chama (CLAUDE §5.4). Tudo o
+ * que era da marca e no 1.0 estava escrito aqui (morada, telefone, Instagram,
+ * link de avaliacao) chega agora no payload, da base de dados (§18.2).
+ */
+export function createOnlineTicket(payload: KitchenTicketPayload): Buffer {
+  const chunks: Buffer[] = brandHeader(payload.store_short_name);
+  if (payload.store_address) {
+    for (const moradaLinha of wrap(payload.store_address)) chunks.push(line(moradaLinha));
+  }
+  if (payload.store_phone) chunks.push(line(`Tel: ${payload.store_phone}`));
+  chunks.push(ALIGN_LEFT, line(rule('=')));
+
+  const via = payload.via ? VIA_LABEL[payload.via] : undefined;
+  if (via) {
+    chunks.push(ALIGN_CENTER, BOLD_ON, line(via), BOLD_OFF, ALIGN_LEFT, line(rule('=')));
+  }
+
+  chunks.push(line(twoColumns(`PEDIDO: ${payload.order_number}`, maputoTime(payload.created_at))));
+  chunks.push(ALIGN_CENTER, line('SENHA'));
+  chunks.push(SIZE_TRIPLE, BOLD_ON, line(`${payload.daily_number}`), BOLD_OFF, SIZE_NORMAL);
+  chunks.push(ALIGN_LEFT, line(rule('=')));
+
+  chunks.push(BOLD_ON);
+  for (const nomeLinha of wrap(`CLIENTE: ${payload.customer_name.toUpperCase()}`)) {
+    chunks.push(line(nomeLinha));
+  }
+  chunks.push(BOLD_OFF);
+  if (payload.customer_phone) chunks.push(line(`TEL: ${payload.customer_phone}`));
+  chunks.push(line(rule('=')));
+
+  if (payload.fulfillment_type === 'delivery') {
+    chunks.push(BOLD_ON, line('** ENTREGA **'), BOLD_OFF);
+    if (payload.delivery_zone) chunks.push(line(`Zona: ${payload.delivery_zone}`));
+    if (payload.address) {
+      for (const moradaLinha of wrap(`Morada: ${payload.address}`)) chunks.push(line(moradaLinha));
+    } else {
+      chunks.push(BOLD_ON, line('MORADA: A CONFIRMAR POR TELEFONE'), BOLD_OFF);
+    }
+  } else {
+    chunks.push(BOLD_ON, line('** LEVANTAMENTO **'), BOLD_OFF);
+    chunks.push(line('Levantamento no balcao'));
+  }
+  // O horario em bloco proprio e grande: "agora" e "as 20h" entram na mesma
+  // fila, e troca-los e o erro mais caro da cozinha.
+  chunks.push(line('HORARIO:'));
+  chunks.push(
+    SIZE_DOUBLE,
+    BOLD_ON,
+    line(payload.scheduled_for ? maputoTime(payload.scheduled_for) : 'AGORA'),
+    BOLD_OFF,
+    SIZE_NORMAL,
+  );
+  chunks.push(line(rule('=')));
+
+  chunks.push(line(twoColumns('Descricao', 'Total')));
+  chunks.push(line(rule('-')));
+  for (const item of payload.items) {
+    const total = item.line_total_cents != null ? formatMT(cents(item.line_total_cents)) : '';
+    chunks.push(BOLD_ON, SIZE_DBL_H, line(twoColumns(`${item.quantity}x ${item.name}`, total)), SIZE_NORMAL, BOLD_OFF);
+    if (item.notes) {
+      for (const notaLinha of wrap(`  > ${item.notes}`)) chunks.push(line(notaLinha));
+    }
+  }
+  chunks.push(line(rule('=')));
+
+  if (payload.notes) {
+    chunks.push(BOLD_ON, line('** NOTA DO CLIENTE **'), BOLD_OFF);
+    for (const notaLinha of wrap(payload.notes)) chunks.push(line(notaLinha));
+    chunks.push(line(rule('=')));
+  }
+
+  if (payload.subtotal_cents != null) {
+    chunks.push(line(twoColumns('Subtotal:', formatMT(cents(payload.subtotal_cents)))));
+  }
+  if (payload.fulfillment_type === 'delivery' && (payload.delivery_fee_cents ?? 0) > 0) {
+    chunks.push(line(twoColumns('Taxa de entrega:', formatMT(cents(payload.delivery_fee_cents ?? 0)))));
+  }
+  if ((payload.discount_cents ?? 0) > 0) {
+    chunks.push(line(twoColumns('Desconto:', signedMT(-(payload.discount_cents ?? 0)))));
+  }
+  if (payload.total_cents != null) {
+    chunks.push(line(rule('=')));
+    chunks.push(
+      ALIGN_CENTER,
+      SIZE_DOUBLE,
+      BOLD_ON,
+      line(`TOTAL: ${formatMT(cents(payload.total_cents))}`),
+      BOLD_OFF,
+      SIZE_NORMAL,
+      ALIGN_LEFT,
+    );
+  }
+  chunks.push(line(rule('=')));
+
+  if (payload.payment_method) {
+    chunks.push(
+      ALIGN_CENTER,
+      BOLD_ON,
+      line(`[ PAGO VIA ${formatPaymentMethod(payload.payment_method).toUpperCase()} ]`),
+      BOLD_OFF,
+      ALIGN_LEFT,
+      line(rule('=')),
+    );
+  }
+
+  const nome = firstName(payload.customer_name);
+  chunks.push(ALIGN_CENTER, BOLD_ON);
+  chunks.push(line(nome ? `Obrigado! Bom apetite, ${nome}!` : 'Obrigado! Bom apetite!'));
+  chunks.push(BOLD_OFF, feed(1));
+  if (payload.review_url) {
+    chunks.push(line(nome ? `${nome}, pode avaliar-nos no Google?` : 'Pode avaliar-nos no Google?'));
+    chunks.push(line('Vai fazer muita diferença para nós.'));
+    chunks.push(line('Scaneia rapidinho o QR code:'), feed(1));
+    chunks.push(qrCode(payload.review_url, 5), feed(1));
+    chunks.push(line(nome ? `Obrigado mais uma vez, ${nome}. Até à próxima!` : 'Obrigado mais uma vez. Até à próxima!'));
+    if (payload.instagram) {
+      chunks.push(feed(1), line('Siga-nos no Instagram:'), BOLD_ON, line(payload.instagram), BOLD_OFF);
+    }
+  } else if (payload.instagram_url) {
+    chunks.push(line(nome ? `${nome}, siga-nos no Instagram:` : 'Siga-nos no Instagram:'));
+    if (payload.instagram) chunks.push(BOLD_ON, line(payload.instagram), BOLD_OFF);
+    chunks.push(feed(1), qrCode(payload.instagram_url, 5), feed(1));
+  }
+  if (payload.receipt_footer) {
+    chunks.push(feed(1));
+    for (const rodapeLinha of wrap(payload.receipt_footer)) chunks.push(line(rodapeLinha));
+  }
+
+  chunks.push(ALIGN_LEFT, feed(FEED_BEFORE_CUT), CUT_FULL);
+  return Buffer.concat(chunks);
+}
+
 /**
  * A comanda da cozinha.
  *
@@ -257,6 +432,9 @@ function scheduleBlock(scheduledFor?: string | null): Buffer[] {
  * notas a dobrar. A dobrar so cabem 24 colunas, dai o wrap por WIDTH_DOUBLE.
  */
 export function createKitchenTicket(payload: KitchenTicketPayload): Buffer {
+  // Pedido online (1063): sai o talao completo do 1.0, na via que vier.
+  if (payload.formato === 'talao_completo') return createOnlineTicket(payload);
+
   const chunks: Buffer[] = brandHeader(payload.store_short_name);
   chunks.push(SIZE_TRIPLE, BOLD_ON, line(`Nº ${payload.daily_number}`), BOLD_OFF, SIZE_NORMAL);
   chunks.push(SIZE_DOUBLE, BOLD_ON, line(fulfillmentLabel(payload)), BOLD_OFF, SIZE_NORMAL);
