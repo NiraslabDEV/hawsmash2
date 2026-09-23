@@ -40,9 +40,22 @@ jobs:
         with:
           version: latest
 
+      # Só os serviços que os testes usam (db, auth, rest, realtime, storage,
+      # kong). O resto (Studio, logs, imgproxy, edge, pooler, mail) eram ~6
+      # imagens a mais por corrida, e o ghcr.io começou a devolver
+      # `toomanyrequests` — a 23 Set quatro corridas seguidas morreram aqui
+      # sem chegar a correr um teste. O pull repete com pausa crescente.
       - name: Preparar Supabase local
         run: |
-          supabase start
+          for tentativa in 1 2 3; do
+            if supabase start -x studio,imgproxy,vector,logflare,edge-runtime,supavisor,mailpit,postgres-meta; then
+              break
+            fi
+            if [ "$tentativa" = 3 ]; then exit 1; fi
+            echo "supabase start falhou (tentativa $tentativa) — nova tentativa em $((tentativa * 45))s"
+            supabase stop --no-backup || true
+            sleep $((tentativa * 45))
+          done
           supabase db reset
 
       - name: Gates de base de dados
