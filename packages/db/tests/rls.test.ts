@@ -52,6 +52,30 @@ let maputoStoreId: string;
 let matolaStoreId: string;
 const testUserIds: string[] = [];
 
+/**
+ * Os pedidos que este ficheiro cria pela RPC pública. Não têm marca própria —
+ * são clientes com nome fixo e sem telefone — por isso a limpeza apaga pelo
+ * nome E só o que nasceu durante esta corrida.
+ *
+ * Sem isto cada corrida deixava ~9 pedidos por aprovar em Maputo. A 23 Set
+ * eram 308, o quadro do POS só mostrava pedidos de teste, e aprovar um deles
+ * imprimia uma comanda a sério na loja.
+ */
+const PEDIDOS_DE_TESTE = [
+  "Teste RLS RPC",
+  "Teste Preco",
+  "Teste Entrega",
+  "Teste Log",
+  "Teste Numero",
+  "Teste Horario",
+  "Teste Status",
+  "Teste Morada",
+  "Teste Vazio",
+  "Teste Zona",
+];
+/** Com um minuto de folga: o relógio desta máquina e o da base não são o mesmo. */
+let inicioCorrida: string;
+
 async function createStaffClient(
   email: string,
   role: "owner" | "manager" | "cashier" | "kitchen",
@@ -93,6 +117,7 @@ async function createStaffClient(
 }
 
 beforeAll(async () => {
+  inicioCorrida = new Date(Date.now() - 60_000).toISOString();
   anon  = createClient(SUPABASE_URL, ANON_KEY);
   admin = createClient(SUPABASE_URL, SERVICE_KEY);
 
@@ -158,6 +183,19 @@ afterAll(async () => {
     .from("delivery_zones")
     .delete()
     .like("name", "Zona RLS F1 %");
+
+  const { data: pedidos } = await admin
+    .from("orders")
+    .select("id")
+    .in("customer_name", PEDIDOS_DE_TESTE)
+    .gte("created_at", inicioCorrida);
+  const ids = (pedidos ?? []).map((pedido) => pedido.id as string);
+  if (ids.length > 0) {
+    for (const tabela of ["event_log", "print_jobs", "payments", "stock_movements", "order_items"]) {
+      await admin.from(tabela).delete().in("order_id", ids);
+    }
+    await admin.from("orders").delete().in("id", ids);
+  }
 
   for (const userId of testUserIds) {
     await admin.auth.admin.deleteUser(userId);

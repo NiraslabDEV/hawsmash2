@@ -26,6 +26,12 @@ let itemId: string;
 let posDeviceId: string;
 
 const createdUserIds: string[] = [];
+/**
+ * As quantidades de matéria-prima como estavam antes deste ficheiro correr.
+ * O `beforeEach` enche tudo a 1000 para as vendas não dependerem do vizinho;
+ * no fim repõe-se o que lá estava — o staging é partilhado com um POS a sério.
+ */
+let ingredientesAntes: Array<{ store_id: string; ingredient_id: string; qty: number }> | null = null;
 const createdDeviceIds: string[] = [];
 const createdOrderIds: string[] = [];
 const suffix = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
@@ -204,6 +210,13 @@ beforeEach(async () => {
   // o queijo a zero. Sem isto, estas vendas morrem em `out_of_ingredient` por
   // causa do vizinho, e o ficheiro passa ou falha conforme a ordem por que a
   // suite correu. Encher antes de cada teste é o que torna o gate repetível.
+  if (ingredientesAntes === null) {
+    const { data } = await admin
+      .from("store_ingredients")
+      .select("store_id,ingredient_id,qty")
+      .in("store_id", [maputoStoreId, matolaStoreId]);
+    ingredientesAntes = (data ?? []) as Array<{ store_id: string; ingredient_id: string; qty: number }>;
+  }
   await admin
     .from("store_ingredients")
     .update({ qty: 1000 })
@@ -212,6 +225,13 @@ beforeEach(async () => {
 
 afterAll(async () => {
   if (!admin) return;
+  for (const linha of ingredientesAntes ?? []) {
+    await admin
+      .from("store_ingredients")
+      .update({ qty: linha.qty })
+      .eq("store_id", linha.store_id)
+      .eq("ingredient_id", linha.ingredient_id);
+  }
   if (createdOrderIds.length > 0) {
     await admin.from("stock_movements").delete().in("order_id", createdOrderIds);
     await admin.from("orders").delete().in("id", createdOrderIds);
