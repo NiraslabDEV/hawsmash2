@@ -3,7 +3,9 @@ import {
   BOARD_LIMIT,
   BOARD_ORDER,
   advanceErrorMessage,
+  REJECT_REASONS,
   buildBoard,
+  canDecide,
   columnOf,
   fulfillmentLabel,
   isLate,
@@ -30,6 +32,9 @@ function order(over: Partial<BoardOrder> = {}): BoardOrder {
     payment_method: 'cash',
     payment_proof_path: null,
     flow: 'manual',
+    address: null,
+    delivery_zone_id: null,
+    delivery_fee_cents: 0,
     ...over,
   };
 }
@@ -46,7 +51,7 @@ describe('quadro de pedidos · o que chega ao ecrã', () => {
     const cedo = order({ id: 'cedo', created_at: '2026-09-23T10:00:00.000Z' });
     const tarde = order({ id: 'tarde', created_at: '2026-09-23T12:00:00.000Z' });
 
-    const [aFazer] = buildBoard([tarde, cedo]);
+    const [, aFazer] = buildBoard([tarde, cedo]);
     expect(aFazer.orders.map((o) => o.id)).toEqual(['cedo', 'tarde']);
   });
 });
@@ -98,7 +103,9 @@ describe('quadro de pedidos · conferir o pagamento', () => {
 describe('quadro de pedidos do balcão', () => {
   it('põe cada estado na coluna certa', () => {
     expect(columnOf('paid')).toBe('incoming');
-    expect(columnOf('awaiting_approval')).toBe('incoming');
+    expect(columnOf('approved')).toBe('incoming');
+    expect(columnOf('awaiting_approval')).toBe('online');
+    expect(columnOf('awaiting_payment')).toBe('online');
     expect(columnOf('in_preparation')).toBe('preparing');
     expect(columnOf('ready')).toBe('ready');
   });
@@ -127,10 +134,22 @@ describe('quadro de pedidos do balcão', () => {
     expect(nextStep('cancelled')).toBeNull();
   });
 
-  it('as três colunas têm cores diferentes, para se lerem de longe', () => {
+  it('a internet é a primeira coluna do fluxo', () => {
+    expect(buildBoard([]).map((coluna) => coluna.title)).toEqual(['INTERNET', 'A FAZER', 'EM PREPARO', 'PRONTO']);
+  });
+
+  it('as quatro colunas têm cores diferentes, para se lerem de longe', () => {
     const tons = buildBoard([]).map((coluna) => coluna.tone);
-    expect(tons).toEqual(['amber', 'blue', 'green']);
-    expect(new Set(tons).size).toBe(3);
+    expect(tons).toEqual(['violet', 'amber', 'blue', 'green']);
+    expect(new Set(tons).size).toBe(4);
+  });
+
+  it('aprovar ou recusar só num pedido por aprovar — nunca num por pagar', () => {
+    expect(canDecide(order({ status: 'awaiting_approval' }))).toBe(true);
+    expect(canDecide(order({ status: 'awaiting_payment' }))).toBe(false);
+    expect(canDecide(order({ status: 'approved' }))).toBe(false);
+    expect(REJECT_REASONS.length).toBeGreaterThan(0);
+    expect(REJECT_REASONS.every((m) => m.trim().length > 0)).toBe(true);
   });
 
   // Um agendado para as 20h não pode andar à frente de um que é para agora só
@@ -140,7 +159,7 @@ describe('quadro de pedidos do balcão', () => {
       order({ order_number: 'A', created_at: '2026-08-24T12:00:00.000Z', scheduled_for: '2026-08-24T20:00:00.000Z' }),
       order({ order_number: 'B', created_at: '2026-08-24T12:30:00.000Z', scheduled_for: null }),
     ]);
-    expect(board[0].orders.map((o) => o.order_number)).toEqual(['B', 'A']);
+    expect(board[1].orders.map((o) => o.order_number)).toEqual(['B', 'A']);
   });
 
   it('distingue o agendado do que é para agora', () => {

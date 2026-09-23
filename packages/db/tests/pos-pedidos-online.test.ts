@@ -28,7 +28,7 @@ const SERVICE_KEY =
 const SELECT =
   "id,daily_number,order_number,status,channel,fulfillment_type," +
   "customer_name,customer_phone,total_cents,scheduled_for,created_at," +
-  "payment_method,payment_proof_path,flow";
+  "payment_method,payment_proof_path,flow,address,delivery_zone_id,delivery_fee_cents";
 const ACTIVE = [
   "awaiting_approval",
   "awaiting_payment",

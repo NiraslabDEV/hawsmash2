@@ -10,6 +10,7 @@ import {
   BOARD_STATUSES,
   advanceErrorMessage,
   buildBoard,
+  canDecide,
   fulfillmentLabel,
   isLate,
   isScheduled,
@@ -19,6 +20,18 @@ import {
   type BoardColumn,
   type BoardOrder,
 } from '@/lib/pos/orders-board';
+import {
+  canEditAddress,
+  canEditSchedule,
+  orderEditErrorMessage,
+  zoneChoices,
+  type DeliveryZoneOption,
+} from '@/lib/pos/order-edit';
+import { buildPickupSlots, formatSlot } from '@/lib/pos/schedule';
+import { TouchKeyboard } from './touch-keyboard';
+import { OrderDecision } from './order-decision';
+
+type DecisionError = { texto: string; mudouDeEstado: boolean };
 
 type OrderLine = { name_snapshot: string; qty: number; unit_price_cents: number; notes: string | null };
 
@@ -31,6 +44,11 @@ const POLL_MS = 12_000;
 const mt = (value: number) => formatMT(value as Cents);
 
 const TONE: Record<BoardColumn['tone'], { head: string; card: string; arrow: string }> = {
+  violet: {
+    head: 'bg-violet-500/15 text-violet-200 border-violet-500/30',
+    card: 'border-violet-500/30 bg-violet-500/[0.07]',
+    arrow: 'bg-violet-400 text-black',
+  },
   amber: {
     head: 'bg-amber-500/15 text-amber-200 border-amber-500/30',
     card: 'border-amber-500/30 bg-amber-500/[0.07]',
@@ -58,7 +76,19 @@ function hora(iso: string | null): string {
   }).format(new Date(iso));
 }
 
-export function OrdersBoard({ storeId, onClose }: { storeId: string; onClose: () => void }) {
+export function OrdersBoard({
+  storeId,
+  zones,
+  closesAt,
+  onClose,
+}: {
+  storeId: string;
+  /** As zonas da loja, do `get_menu` — para mudar a zona de uma entrega. */
+  zones: DeliveryZoneOption[];
+  /** O fecho de hoje: as janelas de hora acabam aí. */
+  closesAt: string | null;
+  onClose: () => void;
+}) {
   const [supabase] = useState(() => createClient());
   const [orders, setOrders] = useState<BoardOrder[]>([]);
   const [loading, setLoading] = useState(true);
@@ -146,14 +176,26 @@ export function OrdersBoard({ storeId, onClose }: { storeId: string; onClose: ()
     void load();
   }
 
-  /**
-   * A seta do cartão. Num pedido manual por aprovar não aprova directamente:
-   * abre o comprovativo. Aprovar sem olhar para o recibo é mandar fazer comida
-   * que pode não estar paga — e o botão de aprovar vive dentro da conferência.
-   */
+  /** A seta do cartão: um toque, um passo. */
   function tocarSeta(order: BoardOrder) {
-    if (needsProofCheck(order)) abrir(order);
-    else void advance(order);
+    void advance(order);
+  }
+
+  /**
+   * Aprovar e recusar vivem no próprio cartão da coluna INTERNET (decisão do
+   * dono, 24 Set): o caixa decide sem abrir nada. O comprovativo continua a
+   * um toque — tocar no cartão abre a conferência, com os mesmos dois botões.
+   */
+  function decidido() {
+    setError(null);
+    setAberto(null);
+    void load();
+  }
+
+  function decisaoFalhou({ texto, mudouDeEstado }: DecisionError) {
+    setError(texto);
+    if (mudouDeEstado) setAberto(null);
+    void load();
   }
 
   /** Abrir a conferência limpa o erro do pedido anterior. */
@@ -164,6 +206,9 @@ export function OrdersBoard({ storeId, onClose }: { storeId: string; onClose: ()
 
   const board = buildBoard(orders);
   const agora = Date.now();
+  // O detalhe mostra a versão mais recente do pedido: depois de alterar a
+  // morada, o recarregamento traz a linha nova e o ecrã acompanha.
+  const abertoAtual = aberto ? orders.find((o) => o.id === aberto.id) ?? aberto : null;
 
   return (
     <div className="fixed inset-0 z-40 flex flex-col bg-[#0a0807] text-[#f6f1e6]">
@@ -189,7 +234,7 @@ export function OrdersBoard({ storeId, onClose }: { storeId: string; onClose: ()
         </p>
       )}
 
-      <div className="grid min-h-0 flex-1 grid-cols-3 gap-3 overflow-hidden p-3">
+      <div className="grid min-h-0 flex-1 grid-cols-4 gap-3 overflow-hidden p-3">
         {board.map((coluna) => (
           <section key={coluna.id} className="flex min-h-0 flex-col">
             <h3
@@ -257,20 +302,34 @@ export function OrdersBoard({ storeId, onClose }: { storeId: string; onClose: ()
                     )}
                     {conferir && (
                       <p className="mt-2 rounded-lg bg-black/30 px-2 py-1 text-center text-xs font-black tracking-[0.15em] text-[#e5a93c]">
-                        {order.payment_proof_path ? '📎 CONFERIR COMPROVATIVO' : 'SEM COMPROVATIVO'} · {paymentLabel(order)}
+                        {order.payment_proof_path ? '📎 VER COMPROVATIVO' : 'SEM COMPROVATIVO'} · {paymentLabel(order)}
+                      </p>
+                    )}
+                    {order.status === 'awaiting_payment' && (
+                      <p className="mt-2 rounded-lg bg-black/30 px-2 py-1 text-center text-xs font-black tracking-[0.15em] text-sky-200">
+                        À ESPERA DO PAGAMENTO · {paymentLabel(order)}
                       </p>
                     )}
                     </button>
 
-                    {passo && (
+                    {canDecide(order) ? (
+                      <div className="mt-3">
+                        <OrderDecision
+                          orderId={order.id}
+                          numero={String(order.daily_number ?? order.order_number)}
+                          onDone={decidido}
+                          onError={decisaoFalhou}
+                        />
+                      </div>
+                    ) : passo && (
                       <button
                         type="button"
                         disabled={aMexer}
                         onClick={() => tocarSeta(order)}
-                        aria-label={`${conferir ? 'Conferir' : passo.label} — pedido ${order.daily_number ?? order.order_number}`}
+                        aria-label={`${passo.label} — pedido ${order.daily_number ?? order.order_number}`}
                         className={`mt-3 flex min-h-16 w-full items-center justify-center gap-2 rounded-xl text-lg font-black active:scale-[0.98] disabled:opacity-40 ${TONE[coluna.tone].arrow}`}
                       >
-                        {aMexer ? '…' : conferir ? 'Conferir →' : `${passo.label} →`}
+                        {aMexer ? '…' : `${passo.label} →`}
                       </button>
                     )}
                   </article>
@@ -287,16 +346,21 @@ export function OrdersBoard({ storeId, onClose }: { storeId: string; onClose: ()
         </p>
       )}
 
-      {aberto && (
+      {abertoAtual && (
         <DetalhePedido
-          order={aberto}
-          aMexer={moving.has(aberto.id)}
+          order={abertoAtual}
+          zones={zones}
+          closesAt={closesAt}
+          onAlterado={() => void load()}
+          aMexer={moving.has(abertoAtual.id)}
           erro={error}
           onFechar={() => {
             setError(null);
             setAberto(null);
           }}
-          onAvancar={() => void advance(aberto)}
+          onAvancar={() => void advance(abertoAtual)}
+          onDecidido={decidido}
+          onErroDecisao={decisaoFalhou}
         />
       )}
     </div>
@@ -311,25 +375,74 @@ export function OrdersBoard({ storeId, onClose }: { storeId: string; onClose: ()
  * ver antes de aprovar. O comprovativo abre por url assinado de curta duração
  * — o bucket é privado (§17) e o caminho nunca vira endereço público.
  */
-function DetalhePedido({
+export function DetalhePedido({
   order,
-  aMexer,
+  zones,
+  closesAt,
+  onAlterado,
+  aMexer = false,
   erro,
   onFechar,
   onAvancar,
+  onDecidido,
+  onErroDecisao,
 }: {
   order: BoardOrder;
-  aMexer: boolean;
+  zones: DeliveryZoneOption[];
+  closesAt: string | null;
+  /** Depois de uma alteração: recarregar o quadro, que traz a linha nova. */
+  onAlterado: () => void;
+  aMexer?: boolean;
   /** Porque é que o último toque não avançou este pedido, se não avançou. */
   erro: string | null;
   onFechar: () => void;
-  onAvancar: () => void;
+  /** Sem esta, o detalhe não avança estados — é só conferir e decidir (aba Delivery). */
+  onAvancar?: () => void;
+  onDecidido: () => void;
+  onErroDecisao: (erro: DecisionError) => void;
 }) {
   const [supabase] = useState(() => createClient());
   const [linhas, setLinhas] = useState<OrderLine[] | null>(null);
   const [proofUrl, setProofUrl] = useState<string | null>(null);
   const [proofErro, setProofErro] = useState(false);
   const passo = nextStep(order.status);
+  /** Que alteração está aberta por cima do detalhe. */
+  const [editar, setEditar] = useState<'address' | 'zone' | 'schedule' | null>(null);
+  const [aGuardar, setAGuardar] = useState(false);
+  const [editErro, setEditErro] = useState<string | null>(null);
+  const [editOk, setEditOk] = useState<string | null>(null);
+  const moradaEditavel = canEditAddress(order);
+  const horaEditavel = canEditSchedule(order);
+  const zonaNome = zones.find((z) => z.id === order.delivery_zone_id)?.name ?? null;
+
+  async function alterar(changes: Record<string, unknown>, feito: string) {
+    if (aGuardar) return;
+    setAGuardar(true);
+    setEditErro(null);
+    setEditOk(null);
+    // Uma chave por toque. Se a rede repetir o envio, o servidor reconhece-a
+    // e não imprime uma segunda via (regra 4).
+    const { data, error: rpcError } = await supabase.rpc('update_order_details', {
+      p_order_id: order.id,
+      p_changes: changes,
+      p_request_id: crypto.randomUUID(),
+    });
+    setAGuardar(false);
+    setEditar(null);
+    if (rpcError) {
+      setEditErro(orderEditErrorMessage(rpcError.message));
+      onAlterado();
+      return;
+    }
+    const r = (data ?? {}) as { changed?: string[]; reprinted?: boolean };
+    if (!r.changed || r.changed.length === 0) {
+      setEditOk('Nada mudou — já estava assim.');
+      return;
+    }
+    setEditOk(r.reprinted ? `${feito} Saiu uma via ALTERADO na cozinha — troca a do saco.` : feito);
+    onAlterado();
+  }
+
   const ePdf = (order.payment_proof_path ?? '').toLowerCase().endsWith('.pdf');
 
   useEffect(() => {
@@ -384,6 +497,82 @@ function DetalhePedido({
 
       <div className="grid min-h-0 flex-1 grid-cols-2 gap-4 overflow-hidden p-4">
         <section className="flex min-h-0 flex-col gap-3 overflow-y-auto">
+          {/* Morada e hora: o que o cliente liga a pedir para mudar. O botão
+              só aparece quando o servidor vai aceitar (1072). */}
+          <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
+            {order.fulfillment_type === 'delivery' && (
+              <>
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-xs font-black tracking-[0.2em] text-[#847e72]">MORADA</p>
+                    <p className="mt-1 break-words text-lg font-bold">
+                      {order.address || 'Sem morada — confirmar por telefone'}
+                    </p>
+                  </div>
+                  {moradaEditavel && (
+                    <button
+                      type="button"
+                      disabled={aGuardar}
+                      onClick={() => setEditar('address')}
+                      className="min-h-14 shrink-0 rounded-xl bg-white/10 px-4 text-base font-black active:bg-white/20 disabled:opacity-40"
+                    >
+                      Alterar
+                    </button>
+                  )}
+                </div>
+                <div className="mt-3 flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-xs font-black tracking-[0.2em] text-[#847e72]">ZONA</p>
+                    <p className="mt-1 truncate text-lg font-bold">
+                      {zonaNome ?? '—'} · {mt(order.delivery_fee_cents)}
+                    </p>
+                  </div>
+                  {moradaEditavel && zones.length > 1 && (
+                    <button
+                      type="button"
+                      disabled={aGuardar}
+                      onClick={() => setEditar('zone')}
+                      className="min-h-14 shrink-0 rounded-xl bg-white/10 px-4 text-base font-black active:bg-white/20 disabled:opacity-40"
+                    >
+                      Alterar
+                    </button>
+                  )}
+                </div>
+              </>
+            )}
+            <div
+              className={`flex items-center justify-between gap-3 ${
+                order.fulfillment_type === 'delivery' ? 'mt-3' : ''
+              }`}
+            >
+              <div>
+                <p className="text-xs font-black tracking-[0.2em] text-[#847e72]">HORA</p>
+                <p className="mt-1 text-2xl font-black">{formatSlot(order.scheduled_for)}</p>
+              </div>
+              {horaEditavel && (
+                <button
+                  type="button"
+                  disabled={aGuardar}
+                  onClick={() => setEditar('schedule')}
+                  className="min-h-14 shrink-0 rounded-xl bg-white/10 px-4 text-base font-black active:bg-white/20 disabled:opacity-40"
+                >
+                  Alterar
+                </button>
+              )}
+            </div>
+            {aGuardar && <p className="mt-3 text-sm font-bold text-[#847e72]">A guardar…</p>}
+            {editErro && (
+              <p role="alert" className="mt-3 rounded-xl bg-red-500/15 px-3 py-2 text-base font-bold text-red-100">
+                {editErro}
+              </p>
+            )}
+            {editOk && (
+              <p role="status" className="mt-3 rounded-xl bg-emerald-500/15 px-3 py-2 text-base font-bold text-emerald-100">
+                {editOk}
+              </p>
+            )}
+          </div>
+
           <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
             <p className="text-xs font-black tracking-[0.2em] text-[#847e72]">PAGAMENTO</p>
             <p className="mt-1 text-2xl font-black">{paymentLabel(order)}</p>
@@ -460,7 +649,103 @@ function DetalhePedido({
         </p>
       )}
 
-      {passo && (
+      {editar === 'address' && (
+        <TouchKeyboard
+          label="Nova morada"
+          value={order.address ?? ''}
+          maxLength={300}
+          onCancel={() => setEditar(null)}
+          onConfirm={(valor) => void alterar({ address: valor }, 'Morada alterada.')}
+        />
+      )}
+
+      {(editar === 'zone' || editar === 'schedule') && (
+        <div className="fixed inset-0 z-[60] flex items-end justify-center bg-black/70 p-4 sm:items-center">
+          <div className="flex max-h-full w-full max-w-2xl flex-col rounded-3xl border border-white/10 bg-[#141210] p-5 shadow-2xl">
+            <p className="text-xs font-black tracking-[0.25em] text-[#847e72]">
+              {editar === 'schedule' ? 'PARA QUANDO?' : 'PARA ONDE?'}
+            </p>
+            <h2 className="mb-4 text-3xl font-black text-[#f6f1e6]">
+              {editar === 'schedule' ? 'Nova hora' : 'Nova zona'}
+            </h2>
+            <div className="min-h-0 flex-1 overflow-y-auto">
+              {editar === 'schedule' ? (
+                // As mesmas janelas da venda ao balcão, até ao fecho da loja.
+                <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+                  {[
+                    { value: '', label: 'Agora' },
+                    ...buildPickupSlots({ now: new Date(), closesAt }),
+                  ].map((slot) => (
+                    <button
+                      key={slot.value || 'agora'}
+                      type="button"
+                      disabled={aGuardar}
+                      onClick={() =>
+                        void alterar(
+                          { scheduledFor: slot.value || null },
+                          `Hora alterada para ${slot.label.toLowerCase()}.`,
+                        )
+                      }
+                      className="min-h-16 rounded-xl bg-white/[0.08] text-xl font-black text-[#f6f1e6] active:scale-[0.98] disabled:opacity-40"
+                    >
+                      {slot.label}
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {zoneChoices(zones, order).map(({ zone, allowed }) => (
+                    <button
+                      key={zone.id}
+                      type="button"
+                      disabled={!allowed || aGuardar}
+                      onClick={() =>
+                        void alterar({ deliveryZoneId: zone.id }, `Zona alterada para ${zone.name}.`)
+                      }
+                      className={`flex min-h-16 items-center justify-between gap-3 rounded-xl px-4 text-left active:scale-[0.98] disabled:opacity-35 ${
+                        zone.id === order.delivery_zone_id
+                          ? 'bg-[#e5a93c] text-black'
+                          : 'bg-white/[0.08] text-[#f6f1e6]'
+                      }`}
+                    >
+                      <span className="text-lg font-black">{zone.name}</span>
+                      <span className="shrink-0 text-right text-sm font-black">
+                        {mt(zone.fee_cents)}
+                        {!allowed && <span className="block text-xs">taxa diferente</span>}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+            {editar === 'zone' && (
+              <p className="mt-3 text-sm text-[#c8bfb0]">
+                Só as zonas com a mesma taxa. Para uma zona com outra taxa, o pedido tem de ser
+                anulado e refeito, com gerente.
+              </p>
+            )}
+            <button
+              type="button"
+              onClick={() => setEditar(null)}
+              className="mt-4 min-h-16 w-full shrink-0 rounded-2xl bg-white/10 text-lg font-black text-[#f6f1e6] active:bg-white/20"
+            >
+              Fechar
+            </button>
+          </div>
+        </div>
+      )}
+
+      {canDecide(order) ? (
+        <footer className="shrink-0 border-t border-white/10 p-4">
+          <OrderDecision
+            orderId={order.id}
+            numero={String(order.daily_number ?? order.order_number)}
+            size="lg"
+            onDone={onDecidido}
+            onError={onErroDecisao}
+          />
+        </footer>
+      ) : passo && onAvancar && (
         <footer className="shrink-0 border-t border-white/10 p-4">
           <button
             type="button"

@@ -37,7 +37,8 @@ import { OrdersBoard } from './orders-board';
 import { AvailabilityPanel } from './availability-panel';
 import { useNewOrderAlert } from './use-new-order-alert';
 import { PosLogin } from './pos-login';
-import { loadActiveDeliveryOrders } from '@/lib/pos/delivery-orders';
+import { loadActiveOnlineOrders } from '@/lib/pos/delivery-orders';
+import { OnlineOrdersTab, type OnlineOrder } from './online-orders-tab';
 import { TouchKeyboard } from './touch-keyboard';
 import { buildPickupSlots, formatSlot } from '@/lib/pos/schedule';
 import { noteHasChip, toggleNoteChip } from '@/lib/pos/notes';
@@ -117,31 +118,6 @@ type AvailableStore = {
   id: string;
   slug: string;
   short_name: string;
-};
-
-type DeliveryOrder = {
-  id: string;
-  order_number: string;
-  daily_number: number | null;
-  channel: string | null;
-  status: string;
-  customer_name: string;
-  customer_phone: string;
-  address: string | null;
-  total_cents: number;
-  created_at: string;
-  items: Array<{ id: string; name: string; qty: number }>;
-};
-
-const DELIVERY_STATUS_META: Record<string, { label: string; className: string }> = {
-  awaiting_approval: { label: 'Novo', className: 'bg-amber-500/15 text-amber-300' },
-  awaiting_payment: { label: 'A pagar', className: 'bg-blue-500/15 text-blue-300' },
-  paid: { label: 'Pago', className: 'bg-blue-500/15 text-blue-300' },
-  approved: { label: 'Aceite', className: 'bg-emerald-500/15 text-emerald-300' },
-  in_preparation: { label: 'Em preparo', className: 'bg-orange-500/15 text-orange-300' },
-  ready: { label: 'Pronto', className: 'bg-purple-500/15 text-purple-300' },
-  delivered: { label: 'Entregue', className: 'bg-green-500/15 text-green-400' },
-  cancelled: { label: 'Cancelado', className: 'bg-red-500/15 text-red-300' },
 };
 
 // O carrinho vive em `lib/pos/cart.ts`: é lá que se decide o preço da variante
@@ -270,7 +246,7 @@ export function PosShell() {
   // 'delivery' é só consulta — o cashier acompanha o que está a sair pela
   // loja online sem sair do POS nem precisar de acesso ao painel admin.
   const [posView, setPosView] = useState<'menu' | 'delivery'>('menu');
-  const [deliveryResult, setDeliveryResult] = useState<{ storeSlug: string; orders: DeliveryOrder[] }>({ storeSlug: '', orders: [] });
+  const [deliveryResult, setDeliveryResult] = useState<{ storeSlug: string; orders: OnlineOrder[] }>({ storeSlug: '', orders: [] });
   const deliveryOrders = deliveryResult.storeSlug === context?.storeSlug ? deliveryResult.orders : [];
   const [deliveryLoading, setDeliveryLoading] = useState(false);
   const [deliveryError, setDeliveryError] = useState<string | null>(null);
@@ -547,6 +523,46 @@ export function PosShell() {
     return () => window.clearInterval(timer);
   }, [context, refreshMenu]);
 
+  // Um "esgotado" marcado no painel ou noutro terminal chega ao balcão em
+  // segundos: o POS é um quiosque e ninguém o recarrega à mão. O realtime só
+  // dispara o refetch (CLAUDE §11.3) e junta rajadas — uma venda mexe em
+  // várias linhas de store_items de uma vez. Se o realtime cair, o polling
+  // de 15 s acima assume.
+  useEffect(() => {
+    if (!context) return;
+    let debounce: number | undefined;
+    const refetch = () => {
+      window.clearTimeout(debounce);
+      debounce = window.setTimeout(() => void refreshMenu(), 800);
+    };
+    const channel = supabase
+      .channel(`pos-menu-${context.storeId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'store_items',
+          filter: `store_id=eq.${context.storeId}`,
+        },
+        refetch,
+      )
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'menu_items' }, refetch)
+      .subscribe();
+    // Ecrã que volta a acender ou rede que volta: lê já, não no próximo ciclo.
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') refetch();
+    };
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('online', refetch);
+    return () => {
+      window.clearTimeout(debounce);
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('online', refetch);
+      void supabase.removeChannel(channel);
+    };
+  }, [context, refreshMenu, supabase]);
+
   const fetchDeliveryOrders = useCallback(async () => {
     if (!context) return;
     deliveryRequest.current?.abort();
@@ -555,7 +571,7 @@ export function PosShell() {
     setDeliveryLoading(true);
     setDeliveryError(null);
     try {
-      const orders = await loadActiveDeliveryOrders<DeliveryOrder>((filters, signal) => {
+      const orders = await loadActiveOnlineOrders<OnlineOrder>((filters, signal) => {
         const request = supabase.rpc('get_orders', { p_filters: filters });
         return signal ? request.abortSignal(signal) : request;
       }, context.storeSlug, controller.signal);
@@ -797,7 +813,7 @@ export function PosShell() {
   // worker (`/pos-sw.js`) é quem guarda; aqui só se pedem os ficheiros.
   //
   // `warmedPhotoUrls` lembra o que já foi pedido nesta sessão: o menu
-  // refresca a cada 2 min (MENU_REFRESH_MS) e cria arrays novos mesmo quando
+  // refresca a cada 15 s (MENU_REFRESH_MS) e cria arrays novos mesmo quando
   // nada mudou, e sem esta memória o efeito pedia TODAS as fotos outra vez a
   // cada ciclo — em wifi fraco isso competia com a venda a decorrer e dava a
   // sensação de o POS estar a travar. Só se pede o que ainda não se pediu.
@@ -1026,10 +1042,13 @@ export function PosShell() {
   );
   const cashPaymentCents =
     paymentPlan.payments.find((payment) => payment.method === 'cash')?.amountCents ?? 0;
+  // No misto, o que se escreve no botão Dinheiro já é o recebido (payment.ts);
+  // o campo "Recebido" à parte só existe no pagamento só em dinheiro.
+  const receivedCents = mixed ? (paymentPlan.cashReceivedCents ?? 0) : cashReceivedCents;
   const changeCents = useMemo(() => {
-    if (cashPaymentCents === 0 || cashReceivedCents < cashPaymentCents) return null;
-    return calculateChange(cashPaymentCents, cashReceivedCents);
-  }, [cashPaymentCents, cashReceivedCents]);
+    if (cashPaymentCents === 0 || receivedCents < cashPaymentCents) return null;
+    return calculateChange(cashPaymentCents, receivedCents);
+  }, [cashPaymentCents, receivedCents]);
 
   /**
    * Pagamento móvel: o guião que o operador diz e o número que o cliente marca.
@@ -1059,7 +1078,7 @@ export function PosShell() {
     if (paying) {
       // Troco em primeiro lugar: é o número que o cliente quer confirmar.
       if (cashPaymentCents > 0 && changeCents !== null) {
-        return { step: 'change', receivedCents: cashReceivedCents, changeCents };
+        return { step: 'change', receivedCents, changeCents };
       }
       const method = methods[0] ?? 'cash';
       return {
@@ -1081,7 +1100,6 @@ export function PosShell() {
     return { step: 'cart', itemCount: count, totalCents };
   }, [
     cashPaymentCents,
-    cashReceivedCents,
     changeCents,
     confirmation,
     count,
@@ -1090,6 +1108,7 @@ export function PosShell() {
     methods,
     mobileInstructions,
     paying,
+    receivedCents,
     totalCents,
   ]);
 
@@ -1262,7 +1281,7 @@ export function PosShell() {
           ...(line.notes ? { notes: line.notes } : {}),
         })),
         payments: paymentPlan.payments,
-        ...(cashPaymentCents > 0 ? { cashReceivedCents } : {}),
+        ...(cashPaymentCents > 0 ? { cashReceivedCents: receivedCents } : {}),
         totalCents,
       });
     } catch {
@@ -1304,7 +1323,7 @@ export function PosShell() {
         deviceId: context.deviceId,
         items: salePayloadItems(lines),
         payments: paymentPlan.payments,
-        ...(cashPaymentCents > 0 ? { cashReceivedCents } : {}),
+        ...(cashPaymentCents > 0 ? { cashReceivedCents: receivedCents } : {}),
         // Campos que a RPC sempre aceitou e o POS nunca enviou. Só vão no
         // caminho online: offline o POS vende balcão e não cria entregas
         // (CLAUDE §7.5), por isso a fila local não os transporta.
@@ -1661,54 +1680,15 @@ export function PosShell() {
 
         <section className="overflow-y-auto p-3 lg:p-4">
           {posView === 'delivery' ? (
-            <div className="mx-auto flex w-full max-w-3xl flex-col gap-3">
-              <div className="flex items-center justify-between gap-3">
-                <h2 className="text-xl font-black">Delivery · {context.storeName}</h2>
-                <button
-                  type="button"
-                  onClick={() => void fetchDeliveryOrders()}
-                  disabled={deliveryLoading}
-                  className="min-h-12 shrink-0 rounded-xl bg-white/[0.07] px-4 text-sm font-bold active:bg-white/15 disabled:opacity-40"
-                >
-                  {deliveryLoading ? 'A actualizar…' : 'Actualizar'}
-                </button>
-              </div>
-              {deliveryError && <p role="alert" className="rounded-xl border border-amber-400/30 p-3 text-sm text-amber-200">{deliveryError}</p>}
-              {deliveryOrders.length === 0 && !deliveryLoading && !deliveryError && (
-                <p className="rounded-2xl border border-white/10 bg-[#1a1816] p-6 text-center text-[#847e72]">
-                  Sem pedidos de delivery neste momento.
-                </p>
-              )}
-              {deliveryOrders.map((order) => {
-                const meta =
-                  DELIVERY_STATUS_META[order.status] ??
-                  ({ label: order.status, className: 'bg-white/10 text-white' } as const);
-                return (
-                  <div key={order.id} className="rounded-2xl border border-white/10 bg-[#1a1816] p-4">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <p className="text-lg font-black">
-                          #{order.daily_number ?? order.order_number} · {order.customer_name}
-                        </p>
-                        <p className="truncate text-sm text-[#847e72]">
-                          {order.customer_phone}
-                          {order.address ? ` · ${order.address}` : ''}
-                        </p>
-                      </div>
-                      <span
-                        className={`shrink-0 rounded-full px-3 py-1 text-xs font-black uppercase ${meta.className}`}
-                      >
-                        {meta.label}
-                      </span>
-                    </div>
-                    <p className="mt-2 text-sm text-[#c8bfb0]">
-                      {order.items.map((it) => `${it.qty}× ${it.name}`).join(', ')}
-                    </p>
-                    <p className="mt-2 text-lg font-black text-[#e5a93c]">{mt(order.total_cents)}</p>
-                  </div>
-                );
-              })}
-            </div>
+            <OnlineOrdersTab
+              storeName={context.storeName}
+              orders={deliveryOrders}
+              loading={deliveryLoading}
+              error={deliveryError}
+              zones={channels.zones}
+              closesAt={channels.closesAt}
+              onRefresh={() => void fetchDeliveryOrders()}
+            />
           ) : (
           <div className="grid grid-cols-2 gap-3 md:grid-cols-3 2xl:grid-cols-4">
             {visibleItems.map((item) => {
@@ -1957,7 +1937,12 @@ export function PosShell() {
           quando há mesmo escolha — um toque a mais em cada batata frita seriam
           segundos que ao balcão não existem. */}
       {boardOpen && (
-        <OrdersBoard storeId={context.storeId} onClose={() => setBoardOpen(false)} />
+        <OrdersBoard
+          storeId={context.storeId}
+          zones={channels.zones}
+          closesAt={channels.closesAt}
+          onClose={() => setBoardOpen(false)}
+        />
       )}
       {availabilityOpen && (
         <AvailabilityPanel
@@ -1965,7 +1950,7 @@ export function PosShell() {
           storeSlug={context.storeSlug}
           onClose={() => {
             setAvailabilityOpen(false);
-            // O balcão tem de ficar a cinzento já, não daqui a dois minutos.
+            // O balcão tem de ficar a cinzento já, sem esperar pelo realtime.
             void refreshMenu();
           }}
         />
@@ -2328,7 +2313,9 @@ export function PosShell() {
                       ? 'Pagamento completo'
                       : paymentPlan.remainingCents > 0
                         ? `Faltam ${mt(paymentPlan.remainingCents)}`
-                        : `Excede ${mt(Math.abs(paymentPlan.remainingCents))}`}
+                        : methods.includes('cash')
+                          ? 'Os meios digitais já passam do total — reduz a parcela'
+                          : `Excede ${mt(Math.abs(paymentPlan.remainingCents))} — só o dinheiro dá troco`}
                   </p>
                 )}
 
@@ -2372,12 +2359,13 @@ export function PosShell() {
                           }`}
                         >
                           {payMethods.find((entry) => entry.id === method)?.label ?? method}
+                          {method === 'cash' && <span className="block text-xs">recebido</span>}
                         </button>
                       ))}
                     </div>
                   )}
 
-                  {cashPaymentCents > 0 && (
+                  {!mixed && cashPaymentCents > 0 && (
                     <button
                       type="button"
                       onClick={() => setKeypadTarget('cash_received')}
@@ -2394,7 +2382,7 @@ export function PosShell() {
                   {/* Valores rápidos: é o que a caixa recebe em nove de cada dez
                       vendas. Poupa três toques por venda e um erro de digitação
                       num campo onde o erro vira troco errado. */}
-                  {keypadTarget === 'cash_received' && (
+                  {(keypadTarget === 'cash_received' || keypadTarget === 'cash') && (
                     <div className="mb-3 grid grid-cols-4 gap-2">
                       {[50_000, 100_000, 200_000].map((valor) => (
                         <button
@@ -2418,7 +2406,9 @@ export function PosShell() {
 
                   <div className="mb-3 flex items-center justify-between rounded-xl bg-black/30 px-4 py-3">
                     <span className="text-sm text-[#847e72]">
-                      {keypadTarget === 'cash_received' ? 'Valor recebido' : 'Parcela'}
+                      {keypadTarget === 'cash_received' || keypadTarget === 'cash'
+                        ? 'Valor recebido'
+                        : 'Parcela'}
                     </span>
                     <strong className="text-3xl font-black">{mt(targetValue())}</strong>
                   </div>
@@ -2439,7 +2429,7 @@ export function PosShell() {
                   {/* Em dinheiro o "Exacto" já está na fila rápida, por cima do
                       teclado. Este botão fica só para as parcelas do pagamento
                       misto — dois botões com a mesma função é um deles a mais. */}
-                  {keypadTarget !== 'cash_received' && (
+                  {keypadTarget !== 'cash_received' && keypadTarget !== 'cash' && (
                     <button
                       type="button"
                       onClick={fillRemaining}

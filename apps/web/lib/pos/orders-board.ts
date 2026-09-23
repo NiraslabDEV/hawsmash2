@@ -26,7 +26,7 @@ export type OrderStatus =
 
 export type OrderEvent = 'APPROVE' | 'START_PREPARATION' | 'MARK_READY' | 'DELIVER' | 'CANCEL';
 
-export type BoardColumnId = 'incoming' | 'preparing' | 'ready';
+export type BoardColumnId = 'online' | 'incoming' | 'preparing' | 'ready';
 
 export type BoardOrder = {
   id: string;
@@ -45,13 +45,17 @@ export type BoardOrder = {
   /** Caminho no bucket privado. Nunca é um url: abre-se assinado, à parte. */
   payment_proof_path: string | null;
   flow: string | null;
+  /** Entregas: o que o caixa pode mudar quando o cliente liga (1072). */
+  address: string | null;
+  delivery_zone_id: string | null;
+  delivery_fee_cents: number;
 };
 
 /** As colunas que o quadro lê. Uma só definição, para o teste medir o mesmo. */
 export const BOARD_SELECT =
   'id,daily_number,order_number,status,channel,fulfillment_type,' +
   'customer_name,customer_phone,total_cents,scheduled_for,created_at,' +
-  'payment_method,payment_proof_path,flow';
+  'payment_method,payment_proof_path,flow,address,delivery_zone_id,delivery_fee_cents';
 
 export const BOARD_STATUSES: OrderStatus[] = [
   'awaiting_approval',
@@ -83,15 +87,21 @@ export type BoardColumn = {
   /**
    * A cor muda com a coluna de propósito: quem olha o quadro de longe tem de
    * saber onde está a pressão sem ler uma palavra. Âmbar espera, azul está a
-   * ser feito, verde está à espera de sair.
+   * ser feito, verde está à espera de sair. Violeta é a internet: pedidos que
+   * ainda esperam uma decisão de quem está ao balcão.
    */
-  tone: 'amber' | 'blue' | 'green';
+  tone: 'violet' | 'amber' | 'blue' | 'green';
   orders: BoardOrder[];
 };
 
+/**
+ * A primeira coluna é a da internet: o que chegou do site e ainda não entrou na
+ * cozinha. Só pedidos online vivem nestes dois estados — o balcão nasce `paid`.
+ * Aprovado (ou pago pelo gateway), o pedido passa para A FAZER.
+ */
 const COLUMN_OF_STATUS: Partial<Record<OrderStatus, BoardColumnId>> = {
-  awaiting_approval: 'incoming',
-  awaiting_payment: 'incoming',
+  awaiting_approval: 'online',
+  awaiting_payment: 'online',
   approved: 'incoming',
   paid: 'incoming',
   in_preparation: 'preparing',
@@ -137,6 +147,7 @@ export function nextStep(
  */
 export function buildBoard(orders: BoardOrder[]): BoardColumn[] {
   const colunas: BoardColumn[] = [
+    { id: 'online', title: 'INTERNET', tone: 'violet', orders: [] },
     { id: 'incoming', title: 'A FAZER', tone: 'amber', orders: [] },
     { id: 'preparing', title: 'EM PREPARO', tone: 'blue', orders: [] },
     { id: 'ready', title: 'PRONTO', tone: 'green', orders: [] },
@@ -254,4 +265,46 @@ export function advanceErrorMessage(raw: string | undefined | null): {
  */
 export function needsProofCheck(order: BoardOrder): boolean {
   return order.status === 'awaiting_approval' && order.flow !== 'digital';
+}
+
+/**
+ * Pode ser recusado do POS?
+ *
+ * Só o que espera aprovação. Um pedido `awaiting_payment` fica de fora de
+ * propósito: o cliente pode já ter digitado o PIN e o dinheiro estar a sair —
+ * "não sei" nunca vira "não pagou" (§11.9). Quem o resolve é o fornecedor.
+ */
+export function canDecide(order: { status: string }): boolean {
+  return order.status === 'awaiting_approval';
+}
+
+/**
+ * Os motivos de recusa, de um toque. O servidor exige motivo para cancelar
+ * (`cancel_reason_required`) e o motivo fica no `event_log` — é o que responde
+ * ao cliente que liga a perguntar porquê.
+ */
+export const REJECT_REASONS = [
+  'Pagamento não recebido',
+  'Comprovativo inválido',
+  'Produto esgotado',
+  'Fora da zona de entrega',
+  'Loja a fechar',
+  'Cliente pediu para cancelar',
+] as const;
+
+/** Os canais que são "internet": o site. `counter` é o POS, `dine_in` a mesa. */
+export const ONLINE_CHANNELS = ['delivery', 'pickup'] as const;
+
+/**
+ * A ordem da aba de pedidos online: primeiro o que espera decisão (o mais
+ * antigo à frente — é o cliente que espera há mais tempo), depois o resto, o
+ * mais recente primeiro.
+ */
+export function sortOnlineOrders<T extends { status: string; created_at: string }>(orders: T[]): T[] {
+  return [...orders].sort((a, b) => {
+    const da = canDecide(a) ? 0 : 1;
+    const db = canDecide(b) ? 0 : 1;
+    if (da !== db) return da - db;
+    return da === 0 ? a.created_at.localeCompare(b.created_at) : b.created_at.localeCompare(a.created_at);
+  });
 }

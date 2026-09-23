@@ -184,8 +184,10 @@ Tem de sair: **dois talões** — `*** VIA DE CONTROLO ***` e `*** VIA DO CLIENT
 ser `/l/maputo`**: a Matola não tem bridge e nada dela sai nesta impressora. Faz um pedido de
 levantamento, paga por M-Pesa (manual) e anexa um comprovativo qualquer.
 No POS tem de: **tocar alto**, e o botão **Pedidos** ficar vermelho a piscar com o número 1. Abre
-**Pedidos**; o cartão mostra `📎 CONFERIR COMPROVATIVO`. Toca em **Conferir →**, vê o comprovativo e toca
-em **Aprovar**. Tem de sair: **dois talões** com `** LEVANTAMENTO **` e `[ PAGO VIA M-PESA ]`.
+**Pedidos**; o pedido está na primeira coluna, **INTERNET**, com `📎 VER COMPROVATIVO` e os botões
+**Aprovar** / **Recusar** no próprio cartão. Toca no cartão para ver o comprovativo e toca em **Aprovar**
+(o mesmo pedido aparece também na aba **Delivery** do POS, com os mesmos botões). O cartão passa para
+**A FAZER**. Tem de sair: **dois talões** com `** LEVANTAMENTO **` e `[ PAGO VIA M-PESA ]`.
 
 **c) Reimpressão.** No painel `/pedidos`, nesse pedido, toca em **"2.ª via cliente"**. Tem de sair **um**
 talão com `*** REIMPRESSÃO ***`.
