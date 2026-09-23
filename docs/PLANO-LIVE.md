@@ -312,6 +312,7 @@ arquivado, **não se apaga durante 90 dias** (`CLAUDE.md §15`).
 | 1 · staging | 22 Set | Gabriel + agente | ✅ Restaurado e migrado até à `1051`. B-110 fechado: `pos-card-login` 11/11. Fotos da `1042` confirmadas |
 | 2 · gate + main | 22 Set | Gabriel + agente | ⏳ Gate verde (91 ficheiros / 788 testes) e integração verde contra staging. **Falta o merge `dev` → `main`** |
 | 3 · schema LIVE | 23 Set 00:20 | Gabriel + agente | ✅ 16 aplicadas (`1037`…`1052`). LIVE em **119 migrations**, lista idêntica ao repo. Fotos do cardápio corrigidas pela `1052` |
+| 3 · schema LIVE (2.ª) | 23 Set 14:33 | Gabriel + agente | ✅ `1060` (promoções) e `1061` (esgotado no balcão). LIVE em **121 migrations**. Corpos das 7 funções novas conferidos por `md5` contra o repo: idênticos. `get_menu` das duas lojas responde pelo embrulho novo, sem campanha activa — e nenhuma pode activar nas lojas HAWSMASH, porque têm POS (`counter_enabled`) |
 | 4 · equipa | | | ⏳ `scripts/criar-equipa.mjs` escrito e provado em staging. Espera a decisão 0.3 |
 | 5 · Railway | | | ⬜ |
 | 6 · verificação | | | ⬜ |
