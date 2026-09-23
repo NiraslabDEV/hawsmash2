@@ -201,7 +201,7 @@ ensaio em staging não prova o cardápio do LIVE**. A Fase 6 tem de olhar para a
   mesmos 714 pedidos com que entrou;
 - avisos do Supabase relidos: nada de novo. Os `SECURITY DEFINER` chamáveis por `anon` são o padrão do
   §17 (acesso público só por RPC), e os dois `security definer view` (`funnel_rates`,
-  `funnel_by_source`) são anteriores a esta janela — ficam anotados, não foram tocados.
+  `funnel_by_source`) são anteriores a esta janela — ficam anotados, não foram tocados. *(Resolvido na 1066: removidas e substituídas por `analytics_sessions` com `security_invoker` — ver [`RASTREIO.md`](RASTREIO.md).)*
 
 ### 6.3 O plano original desta fase
 

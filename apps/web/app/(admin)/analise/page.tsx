@@ -30,11 +30,19 @@ interface FunnelStep {
   pct: number | null;
 }
 
+/** Uma linha do funil por origem (get_funnel_metrics, migration 1066). */
 interface SourceRow {
+  channel: string;
   source: string;
+  medium: string;
+  campaign: string | null;
   sessions: number;
+  carts: number;
+  checkouts: number;
   purchases: number;
   revenue_cents: number;
+  pct_cart: number | null;
+  pct_conv: number | null;
 }
 
 interface AttributionChannelRow {
@@ -85,10 +93,12 @@ interface FunnelMetrics {
   funnel: {
     total_sessions: number;
     step_menu: number;
+    step_cart: number;
     step_checkout: number;
     step_payment: number;
     step_purchase: number;
-    pct_menu_to_checkout: number | null;
+    pct_menu_to_cart: number | null;
+    pct_cart_to_checkout: number | null;
     pct_checkout_to_payment: number | null;
     pct_payment_to_purchase: number | null;
     pct_overall: number | null;
@@ -365,20 +375,20 @@ export default function AnalisePage() {
 
       const [{ data, error: err }, { data: fData, error: fErr }, attr] = await Promise.all([
         supabase.rpc('get_dashboard_metrics', { p_period: period, p_store_id: storeId }),
-        supabase.rpc('get_funnel_metrics'),
-        supabase.rpc('get_attribution_report', { p_from: periodStartIso(period) }),
+        supabase.rpc('get_funnel_metrics', { p_from: periodStartIso(period), p_store_id: storeId }),
+        supabase.rpc('get_attribution_report', { p_from: periodStartIso(period), p_store_id: storeId }),
       ]);
 
-      if (err || fErr) {
-        setError((err ?? fErr)!.message);
+      if (err) {
+        setError(err.message);
       } else {
         setMetrics(data as DashboardMetrics);
-        setFunnel(fData as FunnelMetrics);
       }
 
-      // A atribuição é leitura de marketing: se falhar (um manager sem acesso
-      // consolidado, por exemplo) esconde-se o cartão em vez de derrubar a
+      // Funil e atribuição são leitura de marketing: se falharem (um papel
+      // sem acesso, por exemplo) esconde-se o cartão em vez de derrubar a
       // página inteira de operação.
+      setFunnel(fErr ? null : (fData as FunnelMetrics));
       setAttribution(attr.error ? null : (attr.data as AttributionReport));
       setLoading(false);
     }
@@ -735,8 +745,9 @@ export default function AnalisePage() {
           </p>
 
           {/* Funil de conversão first-party */}
-          {funnel && (
+          {(funnel || attribution) && (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {funnel && (
               <div className={card}>
                 <h2 className="text-lg font-bold text-[#F5A623] mb-1">Funil de Conversão</h2>
                 <p className="text-[#C9BCAC] text-xs mb-4">
@@ -746,7 +757,10 @@ export default function AnalisePage() {
                   const f = funnel.funnel;
                   const steps: FunnelStep[] = [
                     { label: 'Viram o cardápio',    count: f.step_menu,     pct: null },
-                    { label: 'Iniciaram checkout',  count: f.step_checkout, pct: f.pct_menu_to_checkout },
+                    { label: 'Puseram no carrinho', count: f.step_cart,     pct: f.pct_menu_to_cart },
+                    // Pode passar de 100%: quem volta com o carrinho guardado
+                    // faz checkout sem add_to_cart nessa sessão (RASTREIO.md §6.5).
+                    { label: 'Iniciaram checkout',  count: f.step_checkout, pct: f.pct_cart_to_checkout },
                     { label: 'Escolheram pagamento',count: f.step_payment,  pct: f.pct_checkout_to_payment },
                     { label: 'Compraram',           count: f.step_purchase, pct: f.pct_payment_to_purchase },
                   ];
@@ -776,6 +790,7 @@ export default function AnalisePage() {
                   );
                 })()}
               </div>
+              )}
 
               {/* Origem das vendas — atribuição multi-fonte (migration 1029) */}
               <div className={card}>
@@ -816,6 +831,56 @@ export default function AnalisePage() {
                   </div>
                 )}
               </div>
+            </div>
+          )}
+
+          {/* Funil por origem — de onde vêm as sessões e até onde chegam */}
+          {funnel && (
+            <div className={card}>
+              <h2 className="text-lg font-bold text-[#F5A623] mb-1">Funil por Origem</h2>
+              <p className="text-[#C9BCAC] text-xs mb-4">
+                Sessões por fonte e campanha · quantas chegam ao carrinho e à compra. Muito tráfego com
+                carrinho quase a zero é segmentação, não criativo.
+              </p>
+              {funnel.by_source.length === 0 ? (
+                <p className="text-[#C9BCAC] text-sm">Sem sessões neste período.</p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-white/[0.08]">
+                        <th className="text-left py-2 px-3 text-[#C9BCAC] font-medium">Canal</th>
+                        <th className="text-left py-2 px-3 text-[#C9BCAC] font-medium">Fonte / meio</th>
+                        <th className="text-left py-2 px-3 text-[#C9BCAC] font-medium">Campanha</th>
+                        <th className="text-right py-2 px-3 text-[#C9BCAC] font-medium">Sessões</th>
+                        <th className="text-right py-2 px-3 text-[#C9BCAC] font-medium">Carrinho</th>
+                        <th className="text-right py-2 px-3 text-[#C9BCAC] font-medium">Compras</th>
+                        <th className="text-right py-2 px-3 text-[#C9BCAC] font-medium">Faturado</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {funnel.by_source.slice(0, 15).map((row, i) => (
+                        <tr key={`${row.channel}-${row.source}-${row.campaign}-${i}`} className="border-b border-white/[0.04]">
+                          <td className="py-2 px-3 text-[#F3E4CE]">{channelLabel(row.channel)}</td>
+                          <td className="py-2 px-3 text-[#C9BCAC]">{row.source} / {row.medium}</td>
+                          <td className="py-2 px-3 text-[#C9BCAC]">{row.campaign ?? '—'}</td>
+                          <td className="py-2 px-3 text-right text-[#F3E4CE]">{row.sessions.toLocaleString()}</td>
+                          <td className="py-2 px-3 text-right text-[#F3E4CE]">
+                            {row.carts.toLocaleString()}
+                            {row.pct_cart != null && (
+                              <span className="text-[#C9BCAC] ml-1">({row.pct_cart}%)</span>
+                            )}
+                          </td>
+                          <td className="py-2 px-3 text-right text-[#F3E4CE]">{row.purchases.toLocaleString()}</td>
+                          <td className="py-2 px-3 text-right text-[#F5A623] font-bold">
+                            {formatCents(row.revenue_cents)}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
           )}
 

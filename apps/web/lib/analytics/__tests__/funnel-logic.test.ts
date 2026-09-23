@@ -1,6 +1,6 @@
 /**
  * F4.4 — Testa a lógica de cálculo do funil de conversão.
- * Replica a lógica da view SQL funnel_rates em TS puro
+ * Replica a lógica de get_funnel_metrics / analytics_sessions (1066) em TS puro
  * para validar que os cálculos estão corretos com seed conhecido.
  */
 import { describe, it, expect } from 'vitest';
@@ -14,22 +14,26 @@ interface AnalyticsEvent {
 interface FunnelRates {
   total_sessions: number;
   step_menu: number;
+  step_cart: number;
   step_checkout: number;
   step_payment: number;
   step_purchase: number;
-  pct_menu_to_checkout: number | null;
+  pct_menu_to_cart: number | null;
+  pct_cart_to_checkout: number | null;
   pct_checkout_to_payment: number | null;
   pct_payment_to_purchase: number | null;
   pct_overall: number | null;
 }
 
-/** Replica exacta da view SQL funnel_rates (GROUP BY session_id + bool_or). */
+/** Replica exacta de analytics_sessions (GROUP BY session_id + bool_or, sem 'unknown'). */
 function computeFunnel(events: AnalyticsEvent[]): FunnelRates {
-  const sessions = new Map<string, { saw_menu: boolean; began_checkout: boolean; added_payment: boolean; purchased: boolean }>();
+  const sessions = new Map<string, { saw_menu: boolean; added_to_cart: boolean; began_checkout: boolean; added_payment: boolean; purchased: boolean }>();
 
   for (const e of events) {
-    const s = sessions.get(e.session_id) ?? { saw_menu: false, began_checkout: false, added_payment: false, purchased: false };
+    if (!e.session_id || e.session_id === 'unknown') continue;
+    const s = sessions.get(e.session_id) ?? { saw_menu: false, added_to_cart: false, began_checkout: false, added_payment: false, purchased: false };
     if (e.type === 'view_menu')        s.saw_menu        = true;
+    if (e.type === 'add_to_cart')      s.added_to_cart   = true;
     if (e.type === 'begin_checkout')   s.began_checkout  = true;
     if (e.type === 'add_payment_info') s.added_payment   = true;
     if (e.type === 'purchase')         s.purchased       = true;
@@ -39,6 +43,7 @@ function computeFunnel(events: AnalyticsEvent[]): FunnelRates {
   const vals = [...sessions.values()];
   const total    = vals.length;
   const menu     = vals.filter((s) => s.saw_menu).length;
+  const cart     = vals.filter((s) => s.added_to_cart).length;
   const checkout = vals.filter((s) => s.began_checkout).length;
   const payment  = vals.filter((s) => s.added_payment).length;
   const purchase = vals.filter((s) => s.purchased).length;
@@ -48,10 +53,12 @@ function computeFunnel(events: AnalyticsEvent[]): FunnelRates {
   return {
     total_sessions: total,
     step_menu: menu,
+    step_cart: cart,
     step_checkout: checkout,
     step_payment: payment,
     step_purchase: purchase,
-    pct_menu_to_checkout:    pct(checkout, menu),
+    pct_menu_to_cart:        pct(cart, menu),
+    pct_cart_to_checkout:    pct(checkout, cart),
     pct_checkout_to_payment: pct(payment, checkout),
     pct_payment_to_purchase: pct(purchase, payment),
     pct_overall:             pct(purchase, menu),
@@ -60,17 +67,20 @@ function computeFunnel(events: AnalyticsEvent[]): FunnelRates {
 
 // ── seed conhecido ───────────────────────────────────────────────────────────
 // 4 sessões distintas com o funil completo ou parcial:
-//   sess-A: percorre funil inteiro (menu → checkout → payment → purchase)
+//   sess-A: percorre funil inteiro (menu → carrinho → checkout → payment → purchase)
 //   sess-B: chega ao checkout mas não ao pagamento
 //   sess-C: apenas view_menu
+//   sess-D: sem add_to_cart nesta sessão — voltou com o carrinho guardado
 //   sess-D: percorre funil inteiro (outro cliente)
 const SEED: AnalyticsEvent[] = [
   { session_id: 'sess-A', type: 'view_menu' },
+  { session_id: 'sess-A', type: 'add_to_cart' },
   { session_id: 'sess-A', type: 'begin_checkout' },
   { session_id: 'sess-A', type: 'add_payment_info' },
   { session_id: 'sess-A', type: 'purchase', value_cents: 45000 },
 
   { session_id: 'sess-B', type: 'view_menu' },
+  { session_id: 'sess-B', type: 'add_to_cart' },
   { session_id: 'sess-B', type: 'begin_checkout' },
 
   { session_id: 'sess-C', type: 'view_menu' },
@@ -104,8 +114,16 @@ describe('computeFunnel — seed conhecido', () => {
     expect(r.step_purchase).toBe(2);
   });
 
-  it('pct_menu_to_checkout = 75% (3/4)', () => {
-    expect(r.pct_menu_to_checkout).toBe(75);
+  it('step_cart = 2 (A e B puseram no carrinho nesta sessão)', () => {
+    expect(r.step_cart).toBe(2);
+  });
+
+  it('pct_menu_to_cart = 50% (2/4)', () => {
+    expect(r.pct_menu_to_cart).toBe(50);
+  });
+
+  it('pct_cart_to_checkout = 150% — checkouts > carrinhos é cliente que volta, não bug', () => {
+    expect(r.pct_cart_to_checkout).toBe(150);
   });
 
   it('pct_checkout_to_payment ≈ 66.7% (2/3)', () => {
@@ -126,7 +144,7 @@ describe('computeFunnel — edge cases', () => {
     const r = computeFunnel([]);
     expect(r.total_sessions).toBe(0);
     expect(r.step_menu).toBe(0);
-    expect(r.pct_menu_to_checkout).toBeNull();
+    expect(r.pct_menu_to_cart).toBeNull();
     expect(r.pct_overall).toBeNull();
   });
 
@@ -137,6 +155,16 @@ describe('computeFunnel — edge cases', () => {
     ]);
     expect(r.step_menu).toBe(1);
     expect(r.total_sessions).toBe(1);
+  });
+
+  it("eventos 'unknown' (antes do cookie de sessão) não entram no funil", () => {
+    const r = computeFunnel([
+      { session_id: 'unknown', type: 'view_menu' },
+      { session_id: 'unknown', type: 'purchase', value_cents: 1000 },
+      { session_id: 'real', type: 'view_menu' },
+    ]);
+    expect(r.total_sessions).toBe(1);
+    expect(r.step_purchase).toBe(0);
   });
 
   it('compra sem view_menu contabiliza purchase mas não menu', () => {

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 
+import { resolveSessionId } from '@/lib/analytics/session';
 import {
   FIRST_TOUCH_COOKIE,
   FIRST_TOUCH_MAX_AGE,
@@ -27,20 +28,30 @@ import {
  * terceiros (`dl_consent`), como antes.
  */
 export function middleware(req: NextRequest) {
-  const res = NextResponse.next();
-
   const selfHost = req.nextUrl.hostname;
-  const cookieHeader = req.headers.get('cookie');
 
   // ── sessao (30 min deslizantes) ───────────────────────────────────────────
-  const existingSession = req.cookies.get(SESSION_COOKIE)?.value;
-  const sessionId = existingSession && existingSession.length <= 64 ? existingSession : crypto.randomUUID();
-  res.cookies.set(SESSION_COOKIE, sessionId, {
+  // 'unknown', vazio ou lixo nunca passam: um id invalido colapsava o site
+  // inteiro numa sessao so no funil.
+  const session = resolveSessionId(req.cookies.get(SESSION_COOKIE)?.value);
+
+  // Sessao nova tambem entra no pedido que segue: o /api/track le-a do
+  // cookie e, sem isto, o primeiro evento de uma sessao expirada ficava com
+  // um id diferente do resto.
+  if (session.isNew) req.cookies.set(SESSION_COOKIE, session.id);
+  const res = NextResponse.next({ request: { headers: req.headers } });
+
+  res.cookies.set(SESSION_COOKIE, session.id, {
     path: '/',
     maxAge: SESSION_MAX_AGE,
     sameSite: 'lax',
-    httpOnly: false, // o cliente precisa de o ler para juntar ao pedido
+    secure: process.env.NODE_ENV === 'production',
+    httpOnly: true, // so o servidor le (track e create-order)
   });
+
+  // O /api/track so precisa de renovar a sessao. A origem sela-se nas
+  // paginas: o referer de um fetch e a propria loja, nunca uma origem.
+  if (req.nextUrl.pathname === '/api/track') return res;
 
   // ── toque desta visita ────────────────────────────────────────────────────
   const touch = buildTouch({
@@ -79,15 +90,15 @@ export function middleware(req: NextRequest) {
     });
   }
 
-  // Deixa o cabecalho de cookie intacto para o resto da cadeia (auth do painel).
-  void cookieHeader;
-
   return res;
 }
 
 export const config = {
-  // So paginas publicas: o POS e o painel nao geram trafego de marketing.
+  // Paginas publicas + /api/track (renova a sessao a quem fica parado numa
+  // pagina). Fora: POS, TVs e o resto da API — webhooks e crons nao tem
+  // browser do outro lado e nao devem levar Set-Cookie.
   matcher: [
     '/((?!api|_next/static|_next/image|favicon.ico|pos|tv|kds|manifest.webmanifest|sw.js|.*\\.(?:png|jpg|jpeg|gif|webp|svg|ico|css|js|woff2?)$).*)',
+    '/api/track',
   ],
 };

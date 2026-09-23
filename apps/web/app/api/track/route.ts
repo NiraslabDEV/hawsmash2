@@ -8,6 +8,8 @@ import {
   attributionPayload,
   decodeTouch,
 } from '@/lib/attribution';
+import { isBotUserAgent } from '@/lib/analytics/bots';
+import { SESSION_COOKIE, SESSION_MAX_AGE, resolveSessionId } from '@/lib/analytics/session';
 import { parseStoreCookie, resolveStoreSlug } from '@/lib/store-context';
 
 interface TrackBody {
@@ -65,8 +67,19 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: result.error }, { status: 400 });
   }
 
+  // Robôs fora do funil: headless Chrome, scrapers e monitores de uptime
+  // correm JS e chegam aqui. Contá-los inflacionava o topo do funil e fazia a
+  // loja parecer que não converte. 200 na mesma — não é erro do cliente.
+  if (isBotUserAgent(req.headers.get('user-agent'))) {
+    return NextResponse.json({ ok: true, ignored: 'bot' });
+  }
+
   const cookieStore = await cookies();
-  const sessionId = cookieStore.get('dl_session')?.value ?? 'unknown';
+  // O middleware já emite a sessão; se ainda assim faltar, gera-se aqui e
+  // devolve-se na resposta — nunca voltar a gravar 'unknown', que colapsa o
+  // site inteiro numa sessão só no funil.
+  const session = resolveSessionId(cookieStore.get(SESSION_COOKIE)?.value);
+  const sessionId = session.id;
   const customerPhone = cookieStore.get('dl_phone')?.value ?? null;
 
   // A origem vem do cookie selado pelo middleware, não do que o browser envia
@@ -116,5 +129,15 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false }, { status: 500 });
   }
 
-  return NextResponse.json({ ok: true });
+  const res = NextResponse.json({ ok: true });
+  if (session.isNew) {
+    res.cookies.set(SESSION_COOKIE, sessionId, {
+      path: '/',
+      maxAge: SESSION_MAX_AGE,
+      sameSite: 'lax',
+      secure: process.env.NODE_ENV === 'production',
+      httpOnly: true,
+    });
+  }
+  return res;
 }

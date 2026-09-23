@@ -2050,26 +2050,21 @@ export type Database = {
       }
     }
     Views: {
-      funnel_by_source: {
+      analytics_sessions: {
         Row: {
-          purchases: number | null
+          added_payment: boolean | null
+          added_to_cart: boolean | null
+          began_checkout: boolean | null
+          campaign: string | null
+          channel: string | null
+          medium: string | null
+          purchased: boolean | null
           revenue_cents: number | null
-          sessions: number | null
+          saw_menu: boolean | null
+          session_id: string | null
           source: string | null
-        }
-        Relationships: []
-      }
-      funnel_rates: {
-        Row: {
-          pct_checkout_to_payment: number | null
-          pct_menu_to_checkout: number | null
-          pct_overall: number | null
-          pct_payment_to_purchase: number | null
-          step_checkout: number | null
-          step_menu: number | null
-          step_payment: number | null
-          step_purchase: number | null
-          total_sessions: number | null
+          started_at: string | null
+          store_id: string | null
         }
         Relationships: []
       }
@@ -2288,7 +2283,10 @@ export type Database = {
         Returns: Json
       }
       get_device_status: { Args: never; Returns: Json }
-      get_funnel_metrics: { Args: never; Returns: Json }
+      get_funnel_metrics: {
+        Args: { p_from?: string; p_store_id?: string; p_to?: string }
+        Returns: Json
+      }
       get_menu: {
         Args: {
           p_channel?: string

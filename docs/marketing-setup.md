@@ -128,3 +128,16 @@ aparecem no código do site nem na resposta pública do cardápio.
 3. **Guardar**.
 4. Abrir o site, **Aceitar** cookies, fazer um teste, confirmar no **Realtime** do GA4 / **Pixel Helper**.
 5. Pronto — sem tocar em código.
+
+---
+
+## 9. Anúncios do Meta — os parâmetros de URL
+
+No Ads Manager → *Parâmetros de URL*, colar exactamente:
+
+```
+utm_source={{site_source_name}}&utm_medium=cpc&utm_campaign={{campaign.name}}&utm_content={{ad.name}}
+```
+
+Assim cada anúncio aparece na **Análise → Aquisição** com o nome da campanha, numa linha só. O sistema
+aguenta outros formatos, mas este é o limpo. Como o rastreio funciona por dentro: [`RASTREIO.md`](RASTREIO.md).

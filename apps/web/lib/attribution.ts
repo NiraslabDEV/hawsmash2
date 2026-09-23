@@ -24,12 +24,12 @@
 
 // ── cookies ─────────────────────────────────────────────────────────────────
 
-export const SESSION_COOKIE = 'dl_session';
+// A sessao vive em lib/analytics/session.ts (validacao do id incluida);
+// reexporta-se aqui para quem ja importava tudo deste modulo.
+export { SESSION_COOKIE, SESSION_MAX_AGE } from './analytics/session';
 export const FIRST_TOUCH_COOKIE = 'dl_attr_first';
 export const LAST_TOUCH_COOKIE = 'dl_attr_last';
 
-/** Sessao: 30 min deslizantes — a mesma janela que o GA4 usa. */
-export const SESSION_MAX_AGE = 30 * 60;
 /** Primeiro toque: 180 dias. Quem descobriu a marca em Marco conta em Agosto. */
 export const FIRST_TOUCH_MAX_AGE = 60 * 60 * 24 * 180;
 /** Ultimo toque: 30 dias — a janela de atribuicao de campanha. */
@@ -129,33 +129,135 @@ const SOURCE_ALIASES: Record<string, string> = {
   'x.com': 'x', 'twitter.com': 'x', 't.co': 'x',
   'youtube.com': 'youtube', 'youtu.be': 'youtube', yt: 'youtube',
   qrcode: 'qr', 'qr-code': 'qr', qr_code: 'qr',
+  // Anuncios do Meta: o mesmo trafego chega como `MetaAds` (escrito a mao),
+  // `ig`/`fb`/`an`/`msg` (`{{site_source_name}}`) ou `facebook` (fbclid).
+  metaads: 'facebook', meta: 'facebook', 'meta ads': 'facebook', 'meta-ads': 'facebook',
+  fbads: 'facebook', 'fb ads': 'facebook', 'facebook ads': 'facebook',
+  facebook_ads: 'facebook', 'facebook-ads': 'facebook',
+  'ig ads': 'instagram', 'instagram ads': 'instagram', instagram_feed: 'instagram',
+  an: 'audience_network', 'audience network': 'audience_network',
+  msg: 'messenger', 'messenger.com': 'messenger',
+  googleads: 'google', 'google ads': 'google', google_ads: 'google', adwords: 'google',
+  'whatsapp business': 'whatsapp', 'tik tok': 'tiktok', tiktokads: 'tiktok',
 };
 
 /** Fontes que ja se sabe a que canal pertencem quando nao ha mais nada. */
 const AI_SOURCES = ['chatgpt', 'perplexity', 'gemini', 'copilot', 'claude', 'meta.ai'];
 const SOCIAL_SOURCES = [
-  'instagram', 'facebook', 'tiktok', 'x', 'youtube', 'linkedin',
+  'instagram', 'facebook', 'audience_network', 'messenger',
+  'tiktok', 'x', 'youtube', 'linkedin',
   'threads', 'telegram', 'snapchat', 'pinterest', 'reddit',
 ];
+/** Familia Meta: link etiquetado com uma destas e sem meio valido e anuncio. */
+const META_SOURCES = ['facebook', 'instagram', 'audience_network', 'messenger'];
+
+/**
+ * Meios que existem. O `utm_medium` devia dizer COMO chegou, mas os anuncios
+ * do Meta chegam com o NOME DA CAMPANHA aqui (`PIZZA DELIVERY`,
+ * `New Traffic Ad`). O que nao estiver nesta lista e nome de campanha no
+ * campo errado e passa para `utm_campaign` (ver buildTouch).
+ * Os valores canonicos sao os que classifyChannel reconhece.
+ */
+const MEDIUM_ALIASES: Record<string, string> = {
+  cpc: 'cpc', ppc: 'cpc', cpm: 'cpc', paid: 'cpc', ads: 'cpc', ad: 'cpc',
+  anuncio: 'cpc', 'anúncio': 'cpc', sem: 'cpc', paidsearch: 'cpc', paid_search: 'cpc',
+  paid_social: 'paid_social', paidsocial: 'paid_social', 'paid social': 'paid_social',
+  'paid-social': 'paid_social', social_paid: 'paid_social',
+  display: 'display', banner: 'banner', retargeting: 'retargeting', remarketing: 'remarketing',
+  social: 'social', 'rede social': 'social', socialmedia: 'social', 'social media': 'social',
+  social_media: 'social', organic_social: 'social', social_organic: 'social',
+  stories: 'social', bio: 'social', ig: 'social', fb: 'social',
+  organic: 'organic', organico: 'organic', 'orgânico': 'organic', search: 'organic', seo: 'organic',
+  ai: 'ai', ia: 'ai', llm: 'ai',
+  email: 'email', 'e-mail': 'email', mail: 'email', newsletter: 'email',
+  sms: 'sms', mensagem: 'sms',
+  qr: 'qr', qrcode: 'qr', qr_code: 'qr', mesa: 'qr', cartaz: 'qr', flyer: 'qr', print: 'qr',
+  influencer: 'influencer', creator: 'influencer', parceria: 'influencer', partner: 'influencer',
+  referral: 'referral', indicacao: 'referral', 'indicação': 'referral',
+  // "directo" declarado nao diz nada que a ausencia de meio nao diga
+  direct: '', direto: '', directo: '',
+};
+
+/** Apps Android que abrem o site com `android-app://<pacote>` como referrer. */
+const ANDROID_APP_HOSTS: Record<string, string> = {
+  'com.whatsapp': 'whatsapp.com',
+  'com.whatsapp.w4b': 'whatsapp.com',
+  'com.instagram.android': 'instagram.com',
+  'com.facebook.katana': 'facebook.com',
+  'com.facebook.lite': 'facebook.com',
+  'com.facebook.orca': 'messenger.com',
+  'com.google.android.googlequicksearchbox': 'google.com',
+  'com.google.android.gm': 'mail.google.com',
+  'org.telegram.messenger': 't.me',
+  'com.zhiliaoapp.musically': 'tiktok.com',
+  'com.linkedin.android': 'linkedin.com',
+  'com.twitter.android': 'x.com',
+};
 const SEARCH_SOURCES = ['google', 'bing', 'yahoo', 'duckduckgo', 'yandex', 'ecosia', 'brave'];
 
 // ── normalizacao ────────────────────────────────────────────────────────────
 
+/**
+ * Valores que chegam no lugar de uma origem real e contam como AUSENTES —
+ * senao criam linhas fantasma no painel:
+ *   `{{campaign.name}}`  macro do Meta que nao foi substituida;
+ *   `--sanitized--`      proxy/antivirus de empresa que limpou a query;
+ *   `(not set)`/`undefined`/`null`  lixo de templates mal preenchidos.
+ * Vale para os TRES campos (fonte, meio e campanha) — verificar so dois foi o
+ * bug da primeira tentativa no SLICE.
+ */
+const PLACEHOLDER_RE = /^(--sanitized--|\(?(not set|not provided)\)?|undefined|null|none|-+)$/i;
+
+export function isPlaceholder(value: string): boolean {
+  if (value.includes('{{') || value.includes('}}')) return true;
+  return PLACEHOLDER_RE.test(value);
+}
+
+/**
+ * Limpa um valor de utm: `+` volta a ser espaco (`New+Traffic+Ad` e
+ * `New Traffic Ad` sao a mesma campanha), espacos colapsam, minusculas, e
+ * placeholders viram vazio.
+ */
 function clean(value: string | null | undefined, max = 120): string {
   if (!value) return '';
-  return value.trim().toLowerCase().slice(0, max);
+  const v = value.replace(/\+/g, ' ').replace(/\s+/g, ' ').trim().toLowerCase();
+  if (!v || isPlaceholder(v)) return '';
+  return v.slice(0, max);
+}
+
+/**
+ * Id numerico de campanha do Meta (`{{campaign.id}}` no campo errado). Nao e
+ * origem — mas so os anuncios do Meta produzem um link assim.
+ */
+export function isMetaCampaignId(value: string | null | undefined): boolean {
+  return !!value && /^\d{6,}$/.test(value.trim());
 }
 
 export function normalizeSource(raw: string | null | undefined): string {
   const v = clean(raw).replace(/^www\./, '');
-  if (!v) return '';
+  if (!v || isMetaCampaignId(v)) return '';
   return SOURCE_ALIASES[v] ?? v;
+}
+
+/** Meio canonico, ou `undefined` quando o valor nao e um meio (e campanha). */
+export function normalizeMedium(raw: string | null | undefined): string | undefined {
+  const v = clean(raw);
+  if (!v) return '';
+  return MEDIUM_ALIASES[v];
 }
 
 export function hostOf(referrer: string | null | undefined): string {
   if (!referrer) return '';
   try {
-    return new URL(referrer).hostname.toLowerCase().replace(/^www\./, '');
+    const url = new URL(referrer);
+    // android-app://com.whatsapp/ — o "host" e o pacote da app que abriu o link.
+    if (url.protocol === 'android-app:') {
+      const pkg = (url.hostname || url.pathname.replace(/\//g, '')).toLowerCase();
+      if (!pkg) return '';
+      return ANDROID_APP_HOSTS[pkg] ?? (pkg.includes('whatsapp') ? 'whatsapp.com' : pkg);
+    }
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') return '';
+    return url.hostname.toLowerCase().replace(/^www\./, '');
   } catch {
     return '';
   }
@@ -210,6 +312,7 @@ export function classifyChannel(input: ClassifyInput): Channel {
       return source === 'whatsapp' ? 'whatsapp' : 'organic_social';
     }
     if (/^(referral|indicacao)$/.test(medium)) return 'referral';
+    if (medium === 'ai') return 'ai_assistant';
   }
 
   // (2) ids de clique de redes sociais: dizem a plataforma, não o pagamento.
@@ -260,13 +363,51 @@ export function buildTouch({ url, referrer, selfHost, now }: BuildTouchInput): T
   const referrerHost = hostOf(referrer);
   const internal = Boolean(self) && (referrerHost === self || referrerHost.endsWith('.' + self));
 
-  let source = normalizeSource(q.get('utm_source') ?? q.get('source') ?? q.get('ref'));
-  let medium = clean(q.get('utm_medium'));
+  const rawSource = clean(q.get('utm_source') ?? q.get('source') ?? q.get('ref'));
+  const rawMedium = clean(q.get('utm_medium'));
+  let campaign = clean(q.get('utm_campaign'), 200);
+
+  let source = normalizeSource(rawSource);
+  const knownMedium = normalizeMedium(rawMedium);
+  let medium = knownMedium ?? '';
+
+  // O anuncio pode por qualquer coisa na fonte e no meio. Antes de classificar
+  // separa-se o que e mesmo origem/meio do que e nome ou id de campanha — esse
+  // vai para a campanha em vez de virar uma linha nova no painel.
+  //   utm_medium=PIZZA DELIVERY → e o nome da campanha. O NOME ganha ao id
+  //   numerico, porque e o que o dono reconhece.
+  if (knownMedium === undefined && (!campaign || isMetaCampaignId(campaign))) {
+    campaign = rawMedium.slice(0, 200);
+  }
+  //   utm_source=120250536398130239 sem campanha → guarda o id na campanha.
+  if (rawSource && !source && !campaign) campaign = rawSource.slice(0, 200);
 
   // Sem utm mas com referrer externo: a fonte e quem nos enviou.
   if (!source && referrerHost && !internal) source = normalizeSource(referrerHost);
 
-  const channel = classifyChannel({ source, medium, referrerHost, clickIds, selfHost: self });
+  // Sem utm nem referrer, o id de clique diz pelo menos a plataforma.
+  if (!source) {
+    if (clickIds.gclid || clickIds.gbraid || clickIds.wbraid) source = 'google';
+    else if (clickIds.msclkid) source = 'bing';
+    else if (clickIds.fbclid) source = 'facebook';
+    else if (clickIds.ttclid) source = 'tiktok';
+  }
+
+  // Id de campanha do Meta e mais nada: so um anuncio do Meta gera este link.
+  // Conta-lo como directo sujava a linha que mede quem chega por conta propria.
+  if (!source && isMetaCampaignId(rawSource)) {
+    source = 'facebook';
+    if (!medium) medium = 'cpc';
+  }
+
+  // Link etiquetado com a familia Meta e sem meio valido e anuncio: uma
+  // partilha organica do Instagram nao traz utm, chega pelo referrer.
+  if (rawSource && !medium && META_SOURCES.includes(source)) medium = 'cpc';
+
+  let channel = classifyChannel({ source, medium, referrerHost, clickIds, selfHost: self });
+
+  // Um link etiquetado e uma origem, mesmo que nao se saiba qual canal.
+  if (channel === 'direct' && rawSource) channel = 'referral';
 
   // Preencher os buracos para o relatorio nunca ter celula vazia.
   if (!source) source = channel === 'direct' ? 'direto' : channel === 'internal' ? 'interno' : 'desconhecido';
@@ -288,9 +429,8 @@ export function buildTouch({ url, referrer, selfHost, now }: BuildTouchInput): T
     ts: Math.floor((now ?? Date.now()) / 1000),
   };
 
-  const campaign = clean(q.get('utm_campaign'));
-  const content = clean(q.get('utm_content'));
-  const term = clean(q.get('utm_term'));
+  const content = clean(q.get('utm_content'), 200);
+  const term = clean(q.get('utm_term'), 200);
   if (campaign) touch.c = campaign;
   if (content) touch.ct = content;
   if (term) touch.t = term;
