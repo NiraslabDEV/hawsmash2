@@ -40,7 +40,8 @@ returns boolean language sql stable security invoker set search_path='' as $$
     and not exists(
       select 1 from public.store_items si join public.menu_items mi on mi.id=si.menu_item_id
       where si.store_id=p_store and si.available and mi.available and (
-        mi.is_gift or exists(select 1 from public.menu_item_variants v where v.menu_item_id=mi.id and v.active)
+        mi.is_gift or exists(select 1 from public.menu_item_variants v
+          where v.menu_item_id=mi.id and v.active and v.price_cents<>mi.price_cents)
         or exists(select 1 from public.menu_addons a where a.menu_item_id=mi.id and a.active)
         or exists(select 1 from public.menu_modifier_groups g where g.menu_item_id=mi.id and g.active)
       )
@@ -122,24 +123,38 @@ $$;
 create or replace function public.get_menu(p_store_slug text,p_channel text default null,p_include_unavailable boolean default false)
 returns jsonb language plpgsql stable security definer set search_path='' as $$
 declare v_menu jsonb; v_store uuid; v_campaign public.store_campaigns; v_categories jsonb:='[]';
-  v_category jsonb; v_item jsonb; v_items jsonb;
+  v_category jsonb; v_item jsonb; v_items jsonb; v_variant jsonb; v_variants jsonb;
+  v_catalog_price integer; v_variant_list integer;
 begin
   v_menu:=private.get_menu_before_campaign(p_store_slug,p_channel,p_include_unavailable);
   select id into v_store from public.stores where slug=p_store_slug and active;
   v_campaign:=private.active_store_campaign(v_store);
-  if v_campaign.id is null then return v_menu||jsonb_build_object('campaign',null); end if;
   for v_category in select value from jsonb_array_elements(v_menu->'categories') loop
     v_items:='[]';
     for v_item in select value from jsonb_array_elements(v_category->'items') loop
-      v_items:=v_items||jsonb_build_array(v_item||jsonb_build_object(
-        'list_price_cents',(v_item->>'price_cents')::integer,
-        'price_cents',private.campaign_discount((v_item->>'price_cents')::integer,v_campaign.discount_bps)));
+      select price_cents into v_catalog_price from public.menu_items where id=(v_item->>'id')::uuid;
+      v_variants:='[]';
+      for v_variant in select value from jsonb_array_elements(coalesce(v_item->'variants','[]'::jsonb)) loop
+        -- O checkout soma às variantes a diferença do override da loja.
+        -- O menu tem de mostrar essa mesma soma, também após a expiração.
+        v_variant_list:=(v_variant->>'price_cents')::integer+(v_item->>'price_cents')::integer-v_catalog_price;
+        v_variants:=v_variants||jsonb_build_array(v_variant||case
+          when v_campaign.id is null then jsonb_build_object('price_cents',v_variant_list)
+          else jsonb_build_object('list_price_cents',v_variant_list,
+            'price_cents',private.campaign_discount(v_variant_list,v_campaign.discount_bps)) end);
+      end loop;
+      v_items:=v_items||jsonb_build_array(v_item||case
+        when v_campaign.id is null then jsonb_build_object('variants',v_variants)
+        else jsonb_build_object('list_price_cents',(v_item->>'price_cents')::integer,
+          'price_cents',private.campaign_discount((v_item->>'price_cents')::integer,v_campaign.discount_bps),
+          'variants',v_variants) end);
     end loop;
     v_categories:=v_categories||jsonb_build_array(v_category||jsonb_build_object('items',v_items));
   end loop;
-  return v_menu||jsonb_build_object('categories',v_categories,'campaign',jsonb_build_object(
+  return v_menu||jsonb_build_object('categories',v_categories,'campaign',case
+    when v_campaign.id is null then null else jsonb_build_object(
     'id',v_campaign.id,'discount_bps',v_campaign.discount_bps,'starts_at',v_campaign.starts_at,
-    'ends_at',v_campaign.ends_at,'title',v_campaign.title,'banner_url',v_campaign.banner_url));
+    'ends_at',v_campaign.ends_at,'title',v_campaign.title,'banner_url',v_campaign.banner_url) end);
 end;
 $$;
 revoke all on function public.get_menu(text,text,boolean) from public;

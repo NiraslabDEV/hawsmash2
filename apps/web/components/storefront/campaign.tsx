@@ -50,13 +50,16 @@ export function CampaignBanner({ campaign, onEnd }: { campaign?: StoreCampaign |
 }
 
 /** Ambos os preços vêm da RPC. A UI não inventa referências nem descontos. */
-export function CampaignPrice({ priceCents, listPriceCents }: { priceCents: number; listPriceCents?: number }) {
+export function CampaignPrice({ priceCents, listPriceCents, discountBps }: { priceCents: number; listPriceCents?: number; discountBps?: number }) {
   const discounted = Number.isInteger(listPriceCents) && (listPriceCents ?? 0) > priceCents;
   return (
     <div className={styles.prices}>
       {discounted ? <span className={styles.list}>Tabela <s>{formatMT(listPriceCents as Cents)}</s></span> : null}
       <span className={styles.current}>{discounted ? <small>Na campanha</small> : null}<strong>{formatMT(priceCents as Cents)}</strong></span>
-      {discounted ? <span className={styles.saving}>Poupa {formatMT(((listPriceCents ?? 0) - priceCents) as Cents)}</span> : null}
+      {discounted ? <span className={styles.saving}>
+        {discountBps ? <b className={styles.badge}>−{discountBps / 100}%</b> : null}
+        Poupa {formatMT(((listPriceCents ?? 0) - priceCents) as Cents)}
+      </span> : null}
     </div>
   );
 }

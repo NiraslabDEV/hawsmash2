@@ -1,8 +1,10 @@
 # Campanhas por loja
 
 A migration 1060 prepara campanhas para catálogos simples de lojas online (delivery/levantamento).
-Não activa nada ao instalar. Não suporta POS, variantes, brindes nem modificadores: a activação
-recusa esse catálogo. Se essas capacidades forem ligadas depois, o desconto e o banner são suspensos.
+Não activa nada ao instalar. Não suporta POS, brindes, adicionais nem modificadores:
+a activação recusa esse catálogo. Variantes só entram se tiverem o mesmo preço base do produto
+(por exemplo Coca-Cola Normal/Zero). Uma variante de preço diferente suspende a campanha inteira,
+incluindo o banner, até existir suporte completo para esse preço.
 
 `start_store_campaign(store_id, id, increase_bps, discount_bps, ends_at, title, banner_url)` exige
 sessão de dono. Uma chave UUID repetida com os mesmos parâmetros não volta a aumentar preços.
