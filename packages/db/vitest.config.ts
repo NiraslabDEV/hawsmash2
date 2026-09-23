@@ -6,6 +6,8 @@ import { defineConfig } from "vitest/config";
 export default defineConfig({
   test: {
     include: ["tests/**/*.test.ts"],
+    // Antes de criar uma única venda: nenhuma impressora real à escuta.
+    globalSetup: ["tests/setup/impressora-real.ts"],
     testTimeout: 30_000,
     hookTimeout: 30_000,
     fileParallelism: false,
