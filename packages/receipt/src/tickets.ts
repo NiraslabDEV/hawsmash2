@@ -594,7 +594,7 @@ function buildTestReceipt(payload: TestPrintPayload): Op[] {
     ALIGN_CENTER, BOLD_ON, line('DELIVERY OS'), BOLD_OFF, feed(1),
     SIZE_DOUBLE, BOLD_ON, line('TESTE'), BOLD_OFF, SIZE_NORMAL, feed(1),
     ALIGN_LEFT, line(payload.message ?? 'Teste de impressao -- Delivery OS'),
-    line(`Hora: ${new Date().toLocaleTimeString('pt-MZ')}`),
+    line(`Hora: ${new Date().toLocaleTimeString('pt-MZ', { timeZone: 'Africa/Maputo' })}`),
     feed(FEED_BEFORE_CUT), CUT,
   ];
 }
@@ -629,7 +629,7 @@ export function buildReceipt(payload: PrintPayload, layout: PrintLayout = FACTOR
   // Agendamento não se aplica a mesa (é sempre "agora").
   if (job.fulfillment_type !== 'dine_in') {
     const schedule = job.scheduled_for
-      ? `Horario: ${new Date(job.scheduled_for).toLocaleTimeString('pt-MZ', { hour: '2-digit', minute: '2-digit' })}`
+      ? `Horario: ${new Date(job.scheduled_for).toLocaleTimeString('pt-MZ', { timeZone: 'Africa/Maputo', hour: '2-digit', minute: '2-digit' })}`
       : 'Horario: AGORA (ASAP)';
     ops.push(line(schedule));
   }
@@ -646,7 +646,7 @@ export function buildReceipt(payload: PrintPayload, layout: PrintLayout = FACTOR
     ops.push(feed(1), line('--- NOTAS ---'), line(job.notes));
   }
 
-  ops.push(feed(1), line(`Hora: ${new Date(job.created_at).toLocaleTimeString('pt-MZ')}`));
+  ops.push(feed(1), line(`Hora: ${new Date(job.created_at).toLocaleTimeString('pt-MZ', { timeZone: 'Africa/Maputo' })}`));
   ops.push(feed(FEED_BEFORE_CUT), CUT);
   return ops;
 }
