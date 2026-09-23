@@ -426,3 +426,11 @@ detalhe do pedido no quadro do POS (1072, `update_order_details`).
 - [x] Comanda já impressa → via **PEDIDO ALTERADO** na cozinha, com o que mudou; idempotente por `p_request_id`.
 - [x] Gate `packages/db/tests/alterar-pedido.test.ts` (15): dinheiro, papel, repetição, perfis e isolamento de loja.
 - [ ] Aplicar 1072 no staging; gerar o `.exe` do bridge (sem ele a via sai sem o rótulo ALTERADO).
+
+## Análise e Aquisição — base visual do dashboard · 2026-09-24
+
+- [x] Redesenhar Vendas e Aquisição: hierarquia, indicadores, gráficos, funil, tabelas e exportação; componentes reutilizáveis e estilos limitados à nova base.
+- [x] Validar no browser: 8 cenários Playwright locais, desktop/móvel/320 px, auditoria axe A/AA da área redesenhada, teclado, filtros, falhas, estados vazios e CSV.
+- [x] Corrigir períodos móveis de Aquisição, exportação no fuso de Maputo, formatação `formatMT`, respostas atrasadas e lojas autorizadas na exportação.
+- [x] Documentar a base em `docs/ANALISE-DESIGN.md` para migrar as restantes páginas numa próxima etapa.
+- [~] B-111 — validar em staging com sessões e dados reais antes de promover. Não foi publicado em produção nesta corrida.

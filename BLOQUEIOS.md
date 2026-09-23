@@ -831,3 +831,27 @@ real no telemóvel depende da conta e do ambiente de ensaio disponibilizados pel
 
 Código preparado e ensaiado em transacção SQL local. A activação exige dono autenticado e staging da instalação; nenhuma campanha foi activada no motor. Ver docs/CAMPANHAS.md.
 
+
+### B-111 · [Análise] Validação da nova interface em staging
+
+- Estado: **aberto**. Categoria: **infraestrutura/validação**. Desbloqueia: Gabriel.
+- Vendas e Aquisição verificadas com RPCs/sessões simuladas e capturas desktop/móvel. Nesta corrida não se usou sessão real de staging nem se publicou a alteração.
+- Para fechar: publicar a branch `dev` no staging e conferir números, filtros de loja/período e CSV com um dono e um gerente reais. Sem cobrança, sem migrations e sem alteração de vendas.
+- A auditoria automática A/AA cobre `.insights`. A sidebar/barra global ainda não foi migrada; a revisão com leitor de ecrã e a avaliação integral WCAG permanecem por fazer.
+
+## PACOTE FINAL — Análise e Aquisição · 2026-09-24
+
+Âmbito desta corrida: as duas vistas da aba Análise, não a execução das outras fases do produto.
+
+- **Para o cliente:** nenhuma pergunta ou dado comercial em falta nesta etapa.
+- **Para Gabriel:** B-111 — validar em staging e conferir o relatório/exportação com os dados reais. Nenhuma conta paga, credencial nova ou migration necessária para o redesenho.
+- **Hardware:** nenhum bloqueio; 0 horas de validação física adicional.
+- **Decisões:** base visual opt-in para migração posterior; falhas de marketing independentes de vendas; acesso de loja resolvido antes de consultar métricas. Registadas em `docs/ANALISE-DESIGN.md`.
+- **Segunda passagem:** a correcção da loja de exportação ficou coberta pelo ensaio de gerente; B-111 continua aberto porque mocks não validam dados e sessões reais.
+- **Bloqueios novos abertos por categoria:** cliente 0; infraestrutura/validação (Gabriel) 1; hardware 0.
+
+| Impacto na abertura | ID | Sem isto… |
+|---|---|---|
+| Melhoria de gestão; não altera a venda no balcão | B-111 | a nova interface não está validada com os dados reais para promoção; o POS e o fluxo de venda mantêm-se |
+
+Validação final desta etapa: `pnpm lint`, `pnpm test` (942), build de produção com configuração local e 8 testes Playwright passaram. Capturas revistas em `output/playwright/analysis-*.png`. Limites: dados simulados, auditoria automática restrita à nova área; B-111 não está fechado.
