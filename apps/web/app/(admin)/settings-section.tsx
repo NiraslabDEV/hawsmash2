@@ -329,6 +329,13 @@ function SettingsModal({
               Os itens oferecidos marcam-se no <strong className="text-white">Cardápio</strong>.
               Sem nada marcado, o ecrã salta sozinho — nunca trava o pedido.
             </p>
+            {/* Até à 1067 este interruptor também desligava o funil do balcão.
+                Agora o balcão tem o seu, por loja — dizê-lo evita o "desliguei e
+                o POS continua a oferecer". */}
+            <p className="text-[11px] text-[#C9BCAC]/70 mt-1">
+              Isto é a loja online. O upsell do balcão (passos e frases) configura-se por loja na
+              aba <strong className="text-white">POS</strong>.
+            </p>
           </div>
 
           <div>

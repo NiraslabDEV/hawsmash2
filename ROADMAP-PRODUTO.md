@@ -142,6 +142,7 @@ cliente no caminho de um ficheiro que todos os outros vão usar.
 - [x] Logo do talão sai do código do print-bridge para ficheiro de instalação (`brand-logo.b64`)
 - [x] Instalador do quiosque deixa de trazer o domínio de um cliente por omissão
 - [x] Textos da montra (hero, cardápio, rodapé, promos) passam a ser dados editáveis na Aparência
+- [x] Configuração do POS (pagamentos, frases do upsell, notas rápidas) passa a dado por loja — aba POS (1067, ADR 0006)
 - [ ] Secções da página inicial passam a ser dados também na **ordem** e no **ligado/desligado**
 - [x] `public/assets/hawsmash/` → `public/assets/storefront/`, com migration a acertar os `photo_url`
 - [ ] Imagens de montra em `brand-assets`, não no repositório

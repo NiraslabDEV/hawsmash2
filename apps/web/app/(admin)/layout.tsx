@@ -24,6 +24,7 @@ function Icon({ name }: { name: string }) {
     equipa: <path d="M17 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9.5 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" />,
     sistema: <path d="M4 5h16v10H4zM2 19h20M9 19v-4M15 19v-4M8 9h.01M12 9h4" />,
     lojas: <path d="M4 9h16l-1-4H5L4 9Zm0 0v10a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1V9M9 20v-6h6v6" />,
+    pos: <path d="M3 4h18v11H3zM8 20h8M12 15v5M7 8h4M7 11h2M15 8h2v3h-2z" />,
     aparencia: <path d="M12 3a9 9 0 1 0 0 18h1.5a2 2 0 0 0 1.4-3.4 2 2 0 0 1 1.4-3.4H18a3 3 0 0 0 3-3 9 9 0 0 0-9-8.2ZM7.5 12h.01M10 8h.01M14 8h.01M16.5 11h.01" />,
   };
   return (
@@ -70,6 +71,7 @@ const NAV: NavItem[] = [
   { href: '/lista-espera', label: 'Clientes', icon: 'clientes', roles: ['owner', 'manager'] },
   { href: '/marketing', label: 'Marketing', icon: 'marketing', roles: ['owner', 'manager'] },
   { href: '/lojas', label: 'Lojas', icon: 'lojas', roles: ['owner', 'manager'] },
+  { href: '/definicoes-pos', label: 'POS', icon: 'pos', roles: ['owner', 'manager'] },
   { href: '/equipa', label: 'Equipa', icon: 'equipa', roles: ['owner'] },
   { href: '/aparencia', label: 'Aparência', icon: 'aparencia', roles: ['owner'] },
   { href: '/sistema', label: 'Sistema', icon: 'sistema', roles: ['owner', 'manager'] },

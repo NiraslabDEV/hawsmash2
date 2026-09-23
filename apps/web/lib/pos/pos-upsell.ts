@@ -17,7 +17,12 @@
  */
 
 import { companionOffers, type UpsellCartLine, type UpsellItem } from '@/lib/upsell';
-import { upsellScript, type PosUpsellStepKind } from './upsell-scripts';
+import { pickScript, type PosUpsellStepKind } from './upsell-scripts';
+import {
+  FACTORY_POS_SETTINGS,
+  type PosUpsellStepId,
+  type PosUpsellStepSetting,
+} from './settings';
 
 export interface PosUpsellCategory {
   name: string;
@@ -72,8 +77,14 @@ export function buildPosUpsellFunnel(input: {
   cart: UpsellCartLine[];
   /** Estável durante uma venda, diferente entre vendas. Roda as frases. */
   seed: number;
+  /**
+   * Os passos como a loja os configurou no painel (título, frases, ligado).
+   * Sem isto usa o valor de fábrica de `settings.ts`.
+   */
+  steps?: Record<PosUpsellStepId, PosUpsellStepSetting>;
 }): PosUpsellStep[] {
   const { enabled, categories, cart, seed } = input;
+  const steps = input.steps ?? FACTORY_POS_SETTINGS.upsell.steps;
   if (!enabled || cart.length === 0) return [];
 
   const todos = categories.flatMap((category) => category.items);
@@ -98,22 +109,22 @@ export function buildPosUpsellFunnel(input: {
 
   const passos: PosUpsellStep[] = [];
 
-  const acompanhar = doPasso(false);
+  const acompanhar = steps.companion.enabled ? doPasso(false) : [];
   if (acompanhar.length > 0) {
     passos.push({
       kind: 'companion',
-      title: 'Falta acompanhar?',
-      script: upsellScript('companion', seed),
+      title: steps.companion.title,
+      script: pickScript(steps.companion.scripts, seed),
       items: acompanhar,
     });
   }
 
-  const sobremesas = doPasso(true);
+  const sobremesas = steps.dessert.enabled ? doPasso(true) : [];
   if (sobremesas.length > 0) {
     passos.push({
       kind: 'dessert',
-      title: 'E para fechar?',
-      script: upsellScript('dessert', seed),
+      title: steps.dessert.title,
+      script: pickScript(steps.dessert.scripts, seed),
       items: sobremesas,
     });
   }

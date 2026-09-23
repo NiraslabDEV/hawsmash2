@@ -23,8 +23,15 @@ const LEMBRETE_MS = 60_000;
  * O que já estava na fila quando o POS abriu não toca — senão cada arranque
  * seria um alarme falso. Mas um pedido por aprovar continua a fazer piscar,
  * porque continua à espera de alguém.
+ *
+ * `sound` vem das definições do POS da loja (aba POS do painel). Desligado, o
+ * botão continua a piscar — só não toca.
  */
-export function useNewOrderAlert(storeId: string | null, boardOpen: boolean): AlertState {
+export function useNewOrderAlert(
+  storeId: string | null,
+  boardOpen: boolean,
+  sound = true,
+): AlertState {
   const [supabase] = useState(() => createClient());
   const [orders, setOrders] = useState<AlertOrder[]>([]);
   const [naoVistos, setNaoVistos] = useState<Set<string>>(new Set());
@@ -32,6 +39,8 @@ export function useNewOrderAlert(storeId: string | null, boardOpen: boolean): Al
   const conhecidos = useRef<Set<string> | null>(null);
   const quadroAberto = useRef(boardOpen);
   quadroAberto.current = boardOpen;
+  const somLigado = useRef(sound);
+  somLigado.current = sound;
 
   const load = useCallback(async () => {
     if (!storeId) return;
@@ -65,7 +74,7 @@ export function useNewOrderAlert(storeId: string | null, boardOpen: boolean): Al
         return seguinte;
       });
     }
-    tocarAlarme();
+    if (somLigado.current) tocarAlarme();
   }, [storeId, supabase]);
 
   useEffect(() => {
@@ -99,7 +108,9 @@ export function useNewOrderAlert(storeId: string | null, boardOpen: boolean): Al
 
   useEffect(() => {
     if (boardOpen || estado.porAprovar === 0) return;
-    const timer = window.setInterval(() => tocarAlarme(), LEMBRETE_MS);
+    const timer = window.setInterval(() => {
+      if (somLigado.current) tocarAlarme();
+    }, LEMBRETE_MS);
     return () => window.clearInterval(timer);
   }, [boardOpen, estado.porAprovar]);
 

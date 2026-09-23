@@ -66,6 +66,22 @@ describe('funil do balcão', () => {
     expect(funil([{ menuItemId: 'b1', qty: 1 }], false)).toEqual([]);
   });
 
+  it('usa o título e as frases da loja, e salta o passo que a loja desligou', () => {
+    const passos = buildPosUpsellFunnel({
+      enabled: true,
+      categories: categorias,
+      cart: [{ menuItemId: 'b1', qty: 1 }],
+      seed: 0,
+      steps: {
+        companion: { enabled: true, title: 'Com batata?', scripts: ['Leva batata?'] },
+        dessert: { enabled: false, title: 'Doce?', scripts: ['Um doce?'] },
+      },
+    });
+    expect(passos.map((p) => p.kind)).toEqual(['companion']);
+    expect(passos[0].title).toBe('Com batata?');
+    expect(passos[0].script).toBe('Leva batata?');
+  });
+
   it('ignora o que está esgotado', () => {
     const semBatata: PosUpsellCategory[] = [
       { name: 'Burgers', items: [burger] },

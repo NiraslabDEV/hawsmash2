@@ -385,3 +385,19 @@ O HAWSMASH 2.0 é a **primeira instância multi-unidade** do Restaurant OS. O ca
 - [x] Ensaio SQL local transaccional: arredondamento, retry, isolamento, expiração e total do pedido.
 - [x] ⏳ Validar checkout público completo e activar apenas depois de staging (ver docs/CAMPANHAS.md).
 
+
+## Definições do POS por loja — 2026-09-23
+
+Aba **POS** no painel (`/definicoes-pos`): cada loja configura o seu balcão sem deploy.
+Contrato e checklist para levar a outros projectos: [`docs/POS-DEFINICOES.md`](docs/POS-DEFINICOES.md) ·
+[ADR 0006](docs/decisions/0006-definicoes-do-pos-por-loja.md).
+
+- [x] `store_pos_settings` (1067): RLS por loja, escrita só por RPC, `event_log` com as secções mudadas.
+- [x] Frases do upsell e notas rápidas desta casa saem do código para dados (1068); fábrica neutra.
+- [x] POS lê as definições (cache offline, relê a cada 2 min): pagamentos, misto, upsell por passo,
+      notas rápidas, tipo de pedido ao abrir, nome/telefone no balcão, confirmação, som.
+- [x] Painel: editar por loja, repor fábrica, descartar, copiar para outra loja.
+- [x] Testes: contrato (`settings.test.ts`), isolamento entre lojas (`pos-settings.test.ts`), e2e local.
+- [x] 1067/1068 aplicadas no staging (`db push --include-all`, versões canónicas); anon recusado.
+- [ ] Correr `e2e/definicoes-pos.spec.ts` contra o staging.
+- [ ] Aplicar 1067/1068 no LIVE, na próxima janela (nunca em horário de loja).

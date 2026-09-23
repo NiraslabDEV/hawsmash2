@@ -93,12 +93,22 @@ test('captura os ecrãs do POS a 1366x768', async ({ page }) => {
   const cards = page.locator('section button').filter({ hasText: /MT/ });
   const total = await cards.count();
   console.log(`>>> produtos visíveis na grelha: ${total}`);
+  // Produtos com variantes (HAW/WAGYU, sabores) abrem o "QUAL?": escolhe a primeira.
+  const escolherVariante = async () => {
+    const pergunta = page.getByText('QUAL?');
+    if (await pergunta.isVisible().catch(() => false)) {
+      await pergunta.locator('..').getByRole('button').first().click();
+    }
+  };
   for (let i = 0; i < Math.min(total, 5); i++) {
     await cards.nth(i).click();
     await page.waitForTimeout(200);
+    await escolherVariante();
   }
   await cards.nth(0).click();
+  await escolherVariante();
   await cards.nth(0).click();
+  await escolherVariante();
   await page.waitForTimeout(500);
   await page.screenshot({ path: `${DIR}/02-carrinho-cheio.png` });
 

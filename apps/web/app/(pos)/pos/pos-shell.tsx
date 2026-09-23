@@ -42,6 +42,14 @@ import { TouchKeyboard } from './touch-keyboard';
 import { buildPickupSlots, formatSlot } from '@/lib/pos/schedule';
 import { noteHasChip, toggleNoteChip } from '@/lib/pos/notes';
 import {
+  enabledPaymentMethods,
+  FACTORY_POS_SETTINGS,
+  fetchPosSettings,
+  readCachedPosSettings,
+  writeCachedPosSettings,
+  type PosSettings,
+} from '@/lib/pos/settings';
+import {
   cartCount,
   cartLines,
   cartTotalCents,
@@ -85,7 +93,6 @@ type StoreChannels = {
   zones: DeliveryZone[];
   /** Horario do dia de hoje, para saber ate quando se pode agendar. */
   closesAt: string | null;
-  upsellEnabled: boolean;
   pickupEnabled: boolean;
   deliveryEnabled: boolean;
 };
@@ -142,12 +149,9 @@ const DELIVERY_STATUS_META: Record<string, { label: string; className: string }>
 type AllocationMap = Partial<Record<CounterPaymentMethod, number>>;
 
 const DEVICE_STORAGE_KEY = 'hs_pos_device_id';
-const METHODS: Array<{ id: CounterPaymentMethod; label: string }> = [
-  { id: 'cash', label: 'Dinheiro' },
-  { id: 'mpesa', label: 'M-Pesa' },
-  { id: 'emola', label: 'e-Mola' },
-  { id: 'credit_card', label: 'Cartão' },
-];
+// Meios de pagamento, notas rápidas, upsell, tipo de pedido por defeito e
+// tempo de confirmação vêm das definições do POS da loja
+// (`lib/pos/settings.ts`, aba POS do painel) — não deste ficheiro.
 
 const mt = (value: number) => formatMT(value as Cents);
 
@@ -184,25 +188,6 @@ function errorMessage(message?: string): string {
   }
   return message;
 }
-
-/**
- * Os "sem" de todos os dias, a um toque.
- *
- * Escrever "sem jalapeño" letra a letra num ecrã táctil, com o cliente à
- * frente, é tempo que o balcão não tem. Estes são os que se repetem; o resto
- * escreve-se no teclado do POS.
- */
-const NOTAS_RAPIDAS = [
-  'SEM JALAPENO',
-  'SEM CEBOLA',
-  'SEM MOLHO',
-  'SEM QUEIJO',
-  'SEM TOMATE',
-  'SEM PICANTE',
-  'BEM PASSADO',
-  'MAL PASSADO',
-  'PARA LEVAR',
-] as const;
 
 const KEYBOARD_LABELS = {
   name: 'Nome do cliente',
@@ -314,7 +299,18 @@ export function PosShell() {
   const [paying, setPaying] = useState(false);
   const [boardOpen, setBoardOpen] = useState(false);
   const [availabilityOpen, setAvailabilityOpen] = useState(false);
-  const alerta = useNewOrderAlert(context?.storeId ?? null, boardOpen);
+  /**
+   * Definições do POS desta loja (aba POS do painel). Arranca no valor de
+   * fábrica e é trocada pela da loja ao carregar — ou pela cache, offline.
+   */
+  const [posSettings, setPosSettings] = useState<PosSettings>(FACTORY_POS_SETTINGS);
+  const payMethods = useMemo(() => enabledPaymentMethods(posSettings), [posSettings]);
+  const quickNotes = posSettings.quickNotes;
+  const alerta = useNewOrderAlert(
+    context?.storeId ?? null,
+    boardOpen,
+    posSettings.alerts.newOrderChime,
+  );
   const [voidOpen, setVoidOpen] = useState(false);
   const [voidReason, setVoidReason] = useState('');
   const [reprintPending, setReprintPending] = useState(false);
@@ -444,7 +440,6 @@ export function PosShell() {
       const full = payload as {
         zones?: DeliveryZone[];
         hours?: Array<{ dow: number; opens: string; closes: string; active?: boolean }>;
-        upsell_enabled?: boolean;
         store?: { pickup_enabled?: boolean; delivery_enabled?: boolean };
       };
       const hoje = new Date().getDay();
@@ -452,7 +447,6 @@ export function PosShell() {
       setChannels({
         zones: full.zones ?? [],
         closesAt: horarioDeHoje?.closes ?? null,
-        upsellEnabled: full.upsell_enabled !== false,
         pickupEnabled: full.store?.pickup_enabled !== false,
         deliveryEnabled: full.store?.delivery_enabled !== false,
       });
@@ -466,6 +460,19 @@ export function PosShell() {
       : readCachedPaymentInfo(window.localStorage, store.slug) ?? EMPTY_PAYMENT_INFO;
     setPaymentInfo(numeros);
     if (payload) writeCachedPaymentInfo(window.localStorage, store.slug, numeros);
+
+    // Definições do POS da loja. Mesma regra dos números: ficam em cache, porque
+    // offline o balcão continua a precisar dos seus meios de pagamento e das
+    // suas notas. Falhar a leitura nunca pára o POS — cai na cache ou na fábrica.
+    const cachedSettings = readCachedPosSettings(window.localStorage, store.slug);
+    if (cachedSettings) setPosSettings(cachedSettings);
+    if (payload) {
+      const lidas = await fetchPosSettings(supabase, device.store_id);
+      if (lidas) {
+        setPosSettings(lidas);
+        writeCachedPosSettings(window.localStorage, store.slug, lidas);
+      }
+    }
     setActiveCategory((current) => current ?? nextCategories[0]?.id ?? null);
     const { data: pinStatus, error: pinStatusError } = await supabase.rpc('pos_pin_status', {
       p_device_id: device.id,
@@ -524,6 +531,13 @@ export function PosShell() {
       );
     } catch {
       // A última cache válida continua visível; a venda não pára por uma atualização falhada.
+    }
+    // O que o dono muda na aba POS chega ao balcão no mesmo ritmo do cardápio,
+    // sem reiniciar o terminal. Falhar aqui mantém o que já estava.
+    const lidas = await fetchPosSettings(supabase, context.storeId);
+    if (lidas) {
+      setPosSettings(lidas);
+      writeCachedPosSettings(window.localStorage, context.storeSlug, lidas);
     }
   }, [context, supabase]);
 
@@ -824,7 +838,7 @@ export function PosShell() {
       // A venda seguinte é de outro cliente: nome, telefone, zona e nota não
       // podem transitar. Um talão com o nome do cliente anterior é o género de
       // erro que só se descobre com o cliente à frente.
-      setFulfillment('counter');
+      setFulfillment(defaultFulfillmentRef.current);
       setCustomerName('');
       setCustomerPhone('');
       setCustomerLookup(null);
@@ -838,11 +852,42 @@ export function PosShell() {
   const [channels, setChannels] = useState<StoreChannels>({
     zones: [],
     closesAt: null,
-    upsellEnabled: true,
     pickupEnabled: true,
     deliveryEnabled: true,
   });
   const [fulfillment, setFulfillment] = useState<FulfillmentType>('counter');
+
+  /**
+   * O tipo de pedido com que o POS abre (definições da loja) — mas só se esse
+   * canal estiver mesmo disponível agora. Offline, ou com a entrega desligada
+   * na loja, volta ao balcão: oferecer o que não se cumpre é pior (§7.5).
+   */
+  const canalPermitido = useCallback(
+    (tipo: FulfillmentType) =>
+      tipo === 'counter' ||
+      (online && (tipo === 'pickup' ? channels.pickupEnabled : channels.deliveryEnabled)),
+    [online, channels.pickupEnabled, channels.deliveryEnabled],
+  );
+  const defaultFulfillment: FulfillmentType = canalPermitido(posSettings.cart.defaultFulfillment)
+    ? posSettings.cart.defaultFulfillment
+    : 'counter';
+  const defaultFulfillmentRef = useRef(defaultFulfillment);
+  defaultFulfillmentRef.current = defaultFulfillment;
+
+  // Carrinho vazio e o padrão da loja mudou (chegaram as definições, ou a rede
+  // voltou): o próximo pedido já começa no tipo certo. Com carrinho a meio não
+  // se mexe — é a escolha de quem está a atender.
+  useEffect(() => {
+    if (lines.length === 0) setFulfillment(defaultFulfillment);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [defaultFulfillment]);
+
+  // Um canal que deixou de estar disponível a meio (a rede caiu) não pode
+  // continuar escolhido.
+  useEffect(() => {
+    if (!canalPermitido(fulfillment)) setFulfillment('counter');
+  }, [canalPermitido, fulfillment]);
+
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
   /**
@@ -933,7 +978,8 @@ export function PosShell() {
    */
   function startCheckout() {
     const passos = buildPosUpsellFunnel({
-      enabled: channels.upsellEnabled,
+      enabled: posSettings.upsell.enabled,
+      steps: posSettings.upsell.steps,
       categories,
       cart: lines.map((line) => ({ menuItemId: line.menuItemId, qty: line.qty })),
       // Estável durante esta venda, diferente na próxima: roda as frases sem as
@@ -1121,13 +1167,33 @@ export function PosShell() {
     setMixed(enabled);
     setAllocations({});
     if (enabled) {
-      setMethods(['cash', 'mpesa']);
-      setKeypadTarget('cash');
+      // Os dois primeiros meios ligados na loja (por defeito dinheiro + M-Pesa).
+      const par = payMethods.slice(0, 2).map((m) => m.id);
+      setMethods(par);
+      setKeypadTarget(par[0] ?? 'cash');
     } else {
-      setMethods([methods[0] ?? 'cash']);
-      setKeypadTarget(methods[0] === 'cash' ? 'cash_received' : methods[0] ?? 'cash');
+      const primeiro = methods[0] ?? payMethods[0]?.id ?? 'cash';
+      setMethods([primeiro]);
+      setKeypadTarget(primeiro === 'cash' ? 'cash_received' : primeiro);
     }
   }
+
+  const mixedAvailable = posSettings.payments.allowMixed && payMethods.length >= 2;
+
+  // A loja desligou o meio que estava escolhido (ou o misto): volta ao primeiro
+  // meio ligado. Sem isto o ecrã podia cobrar por um botão que já não existe.
+  useEffect(() => {
+    const ligados = new Set(payMethods.map((m) => m.id));
+    const valido = methods.every((m) => ligados.has(m)) && (!mixed || mixedAvailable);
+    if (valido) return;
+    // Volta a um estado limpo de um só meio: uma parcela de um pagamento misto
+    // atribuída a um meio que já não existe não pode ficar pendurada.
+    const primeiro = payMethods[0]?.id ?? 'cash';
+    setMixed(false);
+    setAllocations({});
+    setMethods([primeiro]);
+    setKeypadTarget(primeiro === 'cash' ? 'cash_received' : primeiro);
+  }, [payMethods, mixedAvailable, methods, mixed]);
 
   function targetValue(): number {
     return keypadTarget === 'cash_received'
@@ -1218,7 +1284,7 @@ export function PosShell() {
       setAllocations({});
       setCashReceivedCents(0);
       setPendingSales((current) => current + 1);
-      window.setTimeout(() => setConfirmation(null), 3000);
+      window.setTimeout(() => setConfirmation(null), posSettings.sale.confirmationSeconds * 1000);
       const bridge = readLocalBridgeConfig(window.localStorage);
       if (bridge) {
         void printOfflineSale(queuedSale, bridge)
@@ -1279,7 +1345,7 @@ export function PosShell() {
     setSaleId(crypto.randomUUID());
     setAllocations({});
     setCashReceivedCents(0);
-    window.setTimeout(() => setConfirmation(null), 3000);
+    window.setTimeout(() => setConfirmation(null), posSettings.sale.confirmationSeconds * 1000);
   }
 
   async function voidLastSale() {
@@ -1720,11 +1786,7 @@ export function PosShell() {
                 cumpre. Offline fica só o balcão (CLAUDE §7.5). */}
             <div className="grid grid-cols-3 gap-2">
               {(['counter', 'pickup', 'delivery'] as FulfillmentType[]).map((tipo) => {
-                const permitido =
-                  tipo === 'counter' ||
-                  (online &&
-                    (tipo === 'pickup' ? channels.pickupEnabled : channels.deliveryEnabled));
-                if (!permitido) return null;
+                if (!canalPermitido(tipo)) return null;
                 return (
                   <button
                     key={tipo}
@@ -1750,6 +1812,9 @@ export function PosShell() {
                 Nome e telefone aparecem em qualquer venda, não só entrega:
                 é o que deixa reconhecer quem compra ao balcão também. */}
             <div className="mt-2 grid grid-cols-2 gap-2">
+              {/* A loja pode dispensar nome e telefone no balcão (aba POS). */}
+              {(fulfillment !== 'counter' || posSettings.cart.askCustomerOnCounter) && (
+              <>
               <CartField
                 label="Nome"
                 value={customerName.trim()}
@@ -1770,6 +1835,8 @@ export function PosShell() {
                 warn={fulfillment !== 'counter'}
                 onClick={() => setKeyboardField('phone')}
               />
+              </>
+              )}
               {fulfillment === 'delivery' && (
                 <CartField
                   className="col-span-2"
@@ -2042,10 +2109,13 @@ export function PosShell() {
             </div>
             {/* A frase existe para ser dita em voz alta. É o que separa um balcão
                 que oferece de um que não oferece — e quem tem fila à frente não
-                inventa uma boa pergunta de cada vez. */}
-            <p className="mt-2 rounded-2xl bg-[#e5a93c]/10 px-5 py-3 text-xl font-bold italic text-[#e5a93c]">
-              “{funnelStep.script}”
-            </p>
+                inventa uma boa pergunta de cada vez. As frases são da loja (aba
+                POS); um passo sem frases continua a oferecer, só não sugere. */}
+            {funnelStep.script && (
+              <p className="mt-2 rounded-2xl bg-[#e5a93c]/10 px-5 py-3 text-xl font-bold italic text-[#e5a93c]">
+                “{funnelStep.script}”
+              </p>
+            )}
           </header>
 
           <div className="min-h-0 flex-1 overflow-y-auto p-4">
@@ -2211,6 +2281,9 @@ export function PosShell() {
                   </p>
                 </div>
 
+                {/* Misto só faz sentido com dois meios ligados e com a loja a
+                    deixar dividir a conta (aba POS). */}
+                {mixedAvailable && (
                 <label className="flex min-h-14 items-center justify-between rounded-xl bg-white/[0.05] px-4 text-base font-bold">
                   Pagamento misto
                   <input
@@ -2220,9 +2293,10 @@ export function PosShell() {
                     className="h-6 w-6 accent-[#e5a93c]"
                   />
                 </label>
+                )}
 
                 <div className="grid grid-cols-2 gap-3">
-                  {METHODS.map((method) => {
+                  {payMethods.map((method) => {
                     const selected = methods.includes(method.id);
                     return (
                       <button
@@ -2297,7 +2371,7 @@ export function PosShell() {
                             keypadTarget === method ? 'bg-white text-black' : 'bg-white/10'
                           }`}
                         >
-                          {METHODS.find((entry) => entry.id === method)?.label}
+                          {payMethods.find((entry) => entry.id === method)?.label ?? method}
                         </button>
                       ))}
                     </div>
@@ -2446,7 +2520,7 @@ export function PosShell() {
                   ? customerAddress
                   : orderNote
           }
-          suggestions={keyboardField === 'orderNote' ? [...NOTAS_RAPIDAS] : []}
+          suggestions={keyboardField === 'orderNote' ? quickNotes : []}
           onCancel={() => setKeyboardField(null)}
           onConfirm={(valor) => {
             if (keyboardField === 'name') setCustomerName(valor);
@@ -2470,13 +2544,14 @@ export function PosShell() {
                 noteDraft ? 'bg-[#e5a93c]/15 text-[#e5a93c]' : 'bg-white/[0.05] text-[#57514a]'
               }`}
             >
-              {noteDraft || 'Toca nos atalhos — somam-se'}
+              {noteDraft ||
+                (quickNotes.length > 0 ? 'Toca nos atalhos — somam-se' : 'Toca em Escrever')}
             </p>
 
             {/* Os atalhos somam-se ("SEM CEBOLA, SEM MOLHO") e um segundo toque
                 tira-os. Nada vai para o carrinho até ao OK. */}
             <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3">
-              {NOTAS_RAPIDAS.map((nota) => {
+              {quickNotes.map((nota) => {
                 const escolhida = noteHasChip(noteDraft, nota);
                 return (
                   <button
@@ -2535,7 +2610,7 @@ export function PosShell() {
           label={`Nota · ${noteLine.name}`}
           value={noteDraft}
           maxLength={120}
-          suggestions={[...NOTAS_RAPIDAS]}
+          suggestions={quickNotes}
           onCancel={() => setNoteKeyboard(false)}
           onConfirm={(valor) => {
             setCart((actual) => setLineNotes(actual, noteLine, valor || null));

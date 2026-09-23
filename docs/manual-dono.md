@@ -13,6 +13,7 @@
 | **Estoque** | Entrada, quebra, contagem e histórico de movimentos, por loja |
 | **Cardápio** | Produtos, preços e fotos (catálogo partilhado pelas duas lojas) |
 | **Lojas** | Morada, contactos, números de pagamento, rodapé do talão, horário, zonas e o **fecho da loja** |
+| **POS** | Como o balcão de cada loja vende: que meios de pagamento aparecem, as frases do upsell que a equipa diz, os atalhos de nota ("SEM CEBOLA"), com que tipo de pedido abre e se toca quando chega um pedido. Chega ao POS sozinho em até 2 minutos. *Copiar para outra loja* poupa fazer tudo duas vezes |
 | **Equipa** | Contas, perfis, lojas e PIN — só tu mexes aqui |
 | **Sistema** | Semáforo de cada loja: POS, impressão, último pedido, fila, caixa, estoque |
 | **Análise** | Vendas, produtos, horas de pico |
@@ -26,7 +27,7 @@ O painel só te mostra dinheiro e dados das lojas a que tens acesso. Como dono, 
 | Perfil | Vê | Pode |
 |---|---|---|
 | **Dono** | as duas lojas | tudo, incluindo preços, equipa e anulações |
-| **Gerente** | a sua loja | aprovar, anular, caixa, estoque, cardápio da loja |
+| **Gerente** | a sua loja | aprovar, anular, caixa, estoque, cardápio da loja, definições do POS da loja |
 | **Caixa** | a sua loja | vender no POS, imprimir, fechar a sua caixa |
 | **Cozinha** | a sua loja | ver pedidos e avançar o preparo. **Não vê dinheiro** |
 

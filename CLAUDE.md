@@ -335,6 +335,16 @@ O POS é uma **PWA** com service worker:
 - Atalho físico opcional: tecla `F9` = abrir gaveta (com permissão), `F2` = repetir último talão.
 - **Nunca** um `confirm()` do browser em fluxo de venda — diálogos próprios, grandes.
 
+### 7.7 Definições do POS por loja (aba **POS**)
+Meios de pagamento (ligados, nome, ordem, misto), upsell do balcão (passos, títulos, frases), notas
+rápidas, tipo de pedido ao abrir, nome/telefone no balcão, segundos da confirmação e som de pedido
+novo são **dados da loja** em `store_pos_settings` (1067), editados pelo `owner` ou pelo `manager`
+da loja e registados em `event_log`. O POS lê-os com `resolvePosSettings` por cima do valor de
+fábrica (`apps/web/lib/pos/settings.ts`), guarda a última cópia para offline e relê a cada 2 min.
+São escolhas de **ecrã**, não regras de dinheiro: o servidor não as impõe. O upsell da loja online
+continua em `settings`. Contrato, portabilidade e checklist de cópia:
+[`docs/POS-DEFINICOES.md`](docs/POS-DEFINICOES.md) · [ADR 0006](docs/decisions/0006-definicoes-do-pos-por-loja.md).
+
 ---
 
 ## 8. IMPRESSÃO E GAVETA
@@ -633,6 +643,8 @@ O 1.0 continua a vender **até ao dia do cutover**. Nada pára.
 - ❌ **Nome de cliente em caminhos, tabelas ou variáveis do produto.** O produto não sabe como se
   chama o cliente que o está a usar. Travado por `config/__tests__/nomes-de-cliente.test.ts`.
 - ❌ **Perguntas e respostas do chat dentro do código** — são conteúdo de loja, vivem em `chat_topics` (§19).
+- ❌ **Frases do upsell, notas rápidas ou meios de pagamento do POS dentro do código** — vivem em
+  `store_pos_settings` (§7.7). O código só tem o valor de fábrica, neutro.
 - ❌ Avançar fase do ROADMAP com testes vermelhos.
 
 ---

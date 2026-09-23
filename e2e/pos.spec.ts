@@ -157,6 +157,8 @@ test('vende em dinheiro com troco e anula com motivo', async ({ page }) => {
   await dismissCookies(page);
 
   await page.getByRole('button', { name: /Classic Smash/ }).click();
+  // O Classic tem variantes (HAW/WAGYU, migration 1018): o POS pergunta qual.
+  await page.getByRole('button', { name: /^HAW\s*300/ }).click();
   await page.getByRole('button', { name: 'PAGAR' }).click();
   await page.getByRole('button', { name: 'Continuar →' }).click();
   await page.getByRole('button', { name: 'Ir pagar →' }).click();
@@ -238,6 +240,8 @@ test('guarda a venda com a rede desligada e sincroniza ao regressar', async ({ c
   await expect(page.getByText('SEM LIGAÇÃO · 0 vendas por sincronizar')).toBeVisible();
 
   await page.getByRole('button', { name: /Classic Smash/ }).click();
+  // O Classic tem variantes (HAW/WAGYU, migration 1018): o POS pergunta qual.
+  await page.getByRole('button', { name: /^HAW\s*300/ }).click();
   await page.getByRole('button', { name: 'PAGAR' }).click();
   await page.getByRole('button', { name: 'Continuar →' }).click();
   await page.getByRole('button', { name: 'Ir pagar →' }).click();
