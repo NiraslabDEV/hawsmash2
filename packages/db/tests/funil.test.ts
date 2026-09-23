@@ -175,6 +175,16 @@ describe("(a) isolamento entre lojas", () => {
 });
 
 describe("(b) quem pode ler", () => {
+  it("o servidor (service_role) lê a view por sessão — relatórios e digest", async () => {
+    const { data, error } = await admin
+      .from("analytics_sessions")
+      .select("session_id")
+      .in("session_id", sessionIds);
+    expect(error).toBeNull();
+    expect(data!.length).toBe(3);
+  });
+
+
   it("anon não chama a RPC nem lê a view", async () => {
     const rpc = await anon.rpc("get_funnel_metrics", { p_from: since });
     expect(rpc.error).not.toBeNull();
