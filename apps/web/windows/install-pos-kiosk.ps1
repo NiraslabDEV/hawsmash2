@@ -19,7 +19,9 @@ if (-not $edgePath) {
   throw 'Microsoft Edge não encontrado. Instala o Edge antes de configurar o POS.'
 }
 
-$arguments = "--kiosk `"$PosUrl`" --edge-kiosk-type=fullscreen --no-first-run --disable-session-crashed-bubble"
+# --autoplay-policy: o toque de "chegou um pedido" tem de soar mesmo antes de
+# alguém tocar no ecrã — um POS acabado de reiniciar não pode estar mudo.
+$arguments = "--kiosk `"$PosUrl`" --edge-kiosk-type=fullscreen --no-first-run --disable-session-crashed-bubble --autoplay-policy=no-user-gesture-required"
 $action = New-ScheduledTaskAction -Execute $edgePath -Argument $arguments
 $trigger = New-ScheduledTaskTrigger -AtLogOn -User $env:USERNAME
 $settings = New-ScheduledTaskSettingsSet -RestartCount 999 -RestartInterval (New-TimeSpan -Minutes 1) -ExecutionTimeLimit (New-TimeSpan -Days 3650)

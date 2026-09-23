@@ -35,6 +35,7 @@ import { buildPosUpsellFunnel, type PosUpsellStep } from '@/lib/pos/pos-upsell';
 import { isPosPin, POS_IDLE_TIMEOUT_MS } from '@/lib/pos/session';
 import { OrdersBoard } from './orders-board';
 import { AvailabilityPanel } from './availability-panel';
+import { useNewOrderAlert } from './use-new-order-alert';
 import { PosLogin } from './pos-login';
 import { loadActiveDeliveryOrders } from '@/lib/pos/delivery-orders';
 import { TouchKeyboard } from './touch-keyboard';
@@ -263,6 +264,7 @@ export function PosShell() {
   const [paying, setPaying] = useState(false);
   const [boardOpen, setBoardOpen] = useState(false);
   const [availabilityOpen, setAvailabilityOpen] = useState(false);
+  const alerta = useNewOrderAlert(context?.storeId ?? null, boardOpen);
   const [voidOpen, setVoidOpen] = useState(false);
   const [voidReason, setVoidReason] = useState('');
   const [reprintPending, setReprintPending] = useState(false);
@@ -1437,12 +1439,24 @@ export function PosShell() {
         </div>
         {/* O caixa gere as entregas sem sair do terminal. E daqui que se ve
             o que ja foi pago e ainda nao saiu pela porta. */}
+        {/* Um pedido da internet faz-se ver daqui: pisca enquanto houver algum
+            por aprovar ou por ver, com o número no crachá. */}
         <button
           type="button"
           onClick={() => setBoardOpen(true)}
-          className="min-h-14 shrink-0 rounded-xl bg-white/[0.08] px-5 text-base font-black active:bg-white/20"
+          aria-label={alerta.piscar ? `Pedidos — ${alerta.aAtender} à espera` : 'Pedidos'}
+          className={`relative min-h-14 shrink-0 rounded-xl px-5 text-base font-black ${
+            alerta.piscar
+              ? 'animate-pulse bg-red-600 text-white ring-4 ring-red-400/60'
+              : 'bg-white/[0.08] active:bg-white/20'
+          }`}
         >
           Pedidos
+          {alerta.piscar && (
+            <span className="absolute -right-2 -top-2 flex h-7 min-w-7 items-center justify-center rounded-full bg-[#e5a93c] px-2 text-sm font-black text-black">
+              {alerta.aAtender}
+            </span>
+          )}
         </button>
         {/* "Acabou o Double" — tira o produto do site e do balcão num toque. */}
         <button
