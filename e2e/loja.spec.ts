@@ -71,11 +71,13 @@ async function orderFromStore(page: Page, slug: string, customerName: string) {
 
   await page.goto('/checkout');
   await dismissCookies(page);
-  await page.getByPlaceholder('Seu nome').fill(customerName);
-  await page.getByPlaceholder('+258 XX XXX XXX').fill(`+2588${suffix}01`);
-  await page.getByRole('button', { name: /Levantamento/ }).click();
-  await page.getByRole('button', { name: 'Criar Pedido' }).click();
-  await expect(page.getByText('Pagamento Manual')).toBeVisible();
+  // Checkout do HAWSMASH 1.0 (4ea2494): "Levantar", "O teu nome", e o botão
+  // mostra o total. O pedido manual abre no ecrã "Total a pagar".
+  await page.getByRole('button', { name: /Levantar/ }).click();
+  await page.getByPlaceholder('O teu nome').fill(customerName);
+  await page.getByPlaceholder('+258 XX XXX XXXX').first().fill(`+2588${suffix}01`);
+  await page.getByRole('button', { name: /^Pagar .*MT/ }).click();
+  await expect(page.getByText('Total a pagar')).toBeVisible();
 
   const { data: order } = await admin
     .from('orders')
