@@ -44,8 +44,12 @@ jobs:
       # kong). O resto (Studio, logs, imgproxy, edge, pooler, mail) eram ~6
       # imagens a mais por corrida, e o ghcr.io começou a devolver
       # `toomanyrequests` — a 23 Set quatro corridas seguidas morreram aqui
-      # sem chegar a correr um teste. O pull repete com pausa crescente.
+      # sem chegar a correr um teste. O pull repete com pausa crescente, e vem
+      # do espelho da Supabase na AWS (quota própria) em vez do ghcr.io que o
+      # setup-cli fixa por omissão — três tentativas no ghcr falharam todas.
       - name: Preparar Supabase local
+        env:
+          SUPABASE_INTERNAL_IMAGE_REGISTRY: public.ecr.aws
         run: |
           for tentativa in 1 2 3; do
             if supabase start -x studio,imgproxy,vector,logflare,edge-runtime,supavisor,mailpit,postgres-meta; then
