@@ -16,6 +16,7 @@
  */
 
 import { useEffect, useState } from 'react';
+import { noteHasChip, toggleNoteChip } from '@/lib/pos/notes';
 
 const LINHAS_TEXTO = [
   ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0'],
@@ -92,16 +93,26 @@ export function TouchKeyboard({
 
         {suggestions.length > 0 && (
           <div className="mt-3 flex gap-2 overflow-x-auto pb-1">
-            {suggestions.map((sugestao) => (
-              <button
-                key={sugestao}
-                type="button"
-                onClick={() => setDraft(sugestao)}
-                className="min-h-14 shrink-0 rounded-xl bg-white/[0.08] px-4 text-base font-bold text-[#c8bfb0] active:bg-white/20"
-              >
-                {sugestao}
-              </button>
-            ))}
+            {/* Somam-se ao que já está escrito (e tiram-se com outro toque):
+                "sem cebola" e "sem molho" são o mesmo pedido, não um ou outro. */}
+            {suggestions.map((sugestao) => {
+              const escolhida = noteHasChip(draft, sugestao);
+              return (
+                <button
+                  key={sugestao}
+                  type="button"
+                  onClick={() => {
+                    setDraft((actual) => toggleNoteChip(actual, sugestao).slice(0, maxLength));
+                    setCaps(false);
+                  }}
+                  className={`min-h-14 shrink-0 rounded-xl px-4 text-base font-bold active:scale-[0.98] ${
+                    escolhida ? 'bg-[#e5a93c] text-black' : 'bg-white/[0.08] text-[#c8bfb0]'
+                  }`}
+                >
+                  {escolhida ? `✓ ${sugestao}` : sugestao}
+                </button>
+              );
+            })}
           </div>
         )}
 

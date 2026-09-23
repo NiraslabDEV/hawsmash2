@@ -39,7 +39,8 @@ import { useNewOrderAlert } from './use-new-order-alert';
 import { PosLogin } from './pos-login';
 import { loadActiveDeliveryOrders } from '@/lib/pos/delivery-orders';
 import { TouchKeyboard } from './touch-keyboard';
-import { buildPickupSlots } from '@/lib/pos/schedule';
+import { buildPickupSlots, formatSlot } from '@/lib/pos/schedule';
+import { noteHasChip, toggleNoteChip } from '@/lib/pos/notes';
 import {
   cartCount,
   cartLines,
@@ -209,6 +210,55 @@ const KEYBOARD_LABELS = {
   address: 'Morada da entrega',
   orderNote: 'Nota do pedido',
 } as const;
+
+/**
+ * Uma barra do painel do carrinho: o nome do campo em cima, o que já tem em
+ * baixo. Tocar abre o sítio de o preencher. `warn` pinta a âmbar enquanto
+ * estiver vazio — é o que falta antes de a entrega sair bem.
+ */
+function CartField({
+  label,
+  value,
+  placeholder,
+  warn = false,
+  className = '',
+  onClick,
+}: {
+  label: string;
+  value: string;
+  placeholder: string;
+  warn?: boolean;
+  className?: string;
+  onClick: () => void;
+}) {
+  const vazio = !value;
+  const alerta = warn && vazio;
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`flex min-h-16 min-w-0 items-center gap-2 rounded-xl border px-3 py-1.5 text-left active:scale-[0.98] ${
+        alerta ? 'border-amber-500/40 bg-amber-500/[0.07]' : 'border-white/10 bg-black/30'
+      } ${className}`}
+    >
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-[11px] font-black uppercase tracking-[0.12em] text-[#847e72]">
+          {label}
+        </span>
+        <span
+          className={`block truncate text-base font-bold ${
+            vazio ? (alerta ? 'text-amber-200' : 'text-[#57514a]') : 'text-white'
+          }`}
+        >
+          {value || placeholder}
+        </span>
+      </span>
+      <span aria-hidden className="shrink-0 text-xl font-black text-[#57514a]">
+        ›
+      </span>
+    </button>
+  );
+}
 
 export function PosShell() {
   const brand = useBrand();
@@ -847,6 +897,10 @@ export function PosShell() {
   /** Linha do carrinho a receber nota ("sem jalapeño"). */
   const [noteLine, setNoteLine] = useState<CartLine | null>(null);
   const [noteKeyboard, setNoteKeyboard] = useState(false);
+  /** A nota da linha enquanto se escolhe — só vai para o carrinho no OK. */
+  const [noteDraft, setNoteDraft] = useState('');
+  /** Selector aberto no painel do carrinho (horário ou zona). */
+  const [cartPicker, setCartPicker] = useState<'schedule' | 'zone' | null>(null);
 
   /**
    * A taxa da zona escolhida.
@@ -1652,7 +1706,9 @@ export function PosShell() {
           )}
         </section>
 
-        <aside className="flex min-h-[36rem] flex-col border-t border-white/10 bg-[#111110] lg:min-h-0 lg:border-l lg:border-t-0">
+        {/* Se num ecrã baixo nem assim couber, o painel inteiro rola — nunca
+            corta o botão PAGAR nem um campo por preencher. */}
+        <aside className="flex min-h-[36rem] flex-col border-t border-white/10 bg-[#111110] lg:min-h-0 lg:overflow-y-auto lg:border-l lg:border-t-0">
           <div className="shrink-0 border-b border-white/10 p-3">
             <div className="mb-2 flex items-center justify-between px-1">
               <h2 className="text-xl font-black">Carrinho</h2>
@@ -1686,102 +1742,76 @@ export function PosShell() {
               })}
             </div>
 
-            <div className="mt-2 space-y-2">
-{/* Tocar abre o teclado do POS (`touch-keyboard`). O PC de balcão não tem
-                    teclado físico e o Windows não abre o dele sozinho — um campo
-                    que só aceita escrita não é um campo, é um beco.
-                    Nome e telefone aparecem em qualquer venda, não só entrega:
-                    é o que deixa reconhecer quem compra ao balcão também. */}
-              <button
-                type="button"
+            {/* Os dados do pedido em barras compactas: cada uma diz o que é e o
+                que já tem, e tocar abre o sítio de a preencher (teclado do POS
+                ou selector grande). Empilhados em campos de altura inteira, com
+                horário a rolar de lado e um <select> nativo, a entrega não
+                cabia no ecrã do balcão e o carrinho ficava sem espaço.
+                Nome e telefone aparecem em qualquer venda, não só entrega:
+                é o que deixa reconhecer quem compra ao balcão também. */}
+            <div className="mt-2 grid grid-cols-2 gap-2">
+              <CartField
+                label="Nome"
+                value={customerName.trim()}
+                placeholder="Nome do cliente"
+                warn={fulfillment !== 'counter'}
                 onClick={() => setKeyboardField('name')}
-                className="min-h-14 w-full rounded-xl border border-white/10 bg-black/30 px-3 text-left text-base font-bold text-white active:border-[#e5a93c]"
-              >
-                {customerName.trim() || <span className="text-[#847e72]">Nome do cliente</span>}
-              </button>
-              <button
-                type="button"
+              />
+              <CartField
+                label={
+                  customerLookup
+                    ? customerLookup.orders_count > 0
+                      ? `Telefone · 👋 ${customerLookup.orders_count} pedidos`
+                      : 'Telefone · 🆕 novo'
+                    : 'Telefone'
+                }
+                value={customerPhone.trim()}
+                placeholder={fulfillment === 'counter' ? 'Opcional' : 'Telefone'}
+                warn={fulfillment !== 'counter'}
                 onClick={() => setKeyboardField('phone')}
-                className="min-h-14 w-full rounded-xl border border-white/10 bg-black/30 px-3 text-left text-base font-bold text-white active:border-[#e5a93c]"
-              >
-                {customerPhone.trim() || (
-                  <span className="text-[#847e72]">
-                    {fulfillment === 'counter' ? 'Telefone (opcional)' : 'Telefone'}
-                  </span>
-                )}
-              </button>
-              {customerLookup && (
-                <p className="rounded-xl bg-[#e5a93c]/10 px-3 py-2 text-sm font-bold text-[#e5a93c]">
-                  {customerLookup.orders_count > 0
-                    ? `👋 ${customerLookup.name ?? 'Cliente'} · ${customerLookup.orders_count} pedidos · ${mt(customerLookup.total_spent_cents)}`
-                    : '🆕 Cliente novo'}
-                </p>
+              />
+              {fulfillment === 'delivery' && (
+                <CartField
+                  className="col-span-2"
+                  label="Morada"
+                  value={customerAddress.trim()}
+                  placeholder="Sem isto o entregador liga"
+                  warn
+                  onClick={() => setKeyboardField('address')}
+                />
               )}
-
               {fulfillment !== 'counter' && (
-              <>
-                {fulfillment === 'delivery' && (
-                  <button
-                    type="button"
-                    onClick={() => setKeyboardField('address')}
-                    className={`min-h-14 w-full rounded-xl border px-3 text-left text-base font-bold active:border-[#e5a93c] ${
-                      customerAddress.trim()
-                        ? 'border-white/10 bg-black/30 text-white'
-                        : 'border-amber-500/40 bg-amber-500/[0.07] text-amber-200'
-                    }`}
-                  >
-                    {customerAddress.trim() || 'Morada da entrega — sem isto o entregador liga'}
-                  </button>
-                )}
-                {/* Quem leva mais tarde escolhe a janela aqui. Janelas de 30
-                    minutos ate ao fecho da loja: a hora vem do horario dela,
-                    por isso nunca se promete uma hora a que ja nao ha ninguem. */}
-                <div className="flex gap-2 overflow-x-auto pb-1">
-                  <button
-                    type="button"
-                    onClick={() => setScheduledFor('')}
-                    className={`min-h-14 shrink-0 rounded-xl px-4 text-base font-black ${
-                      scheduledFor === '' ? 'bg-[#e5a93c] text-black' : 'bg-white/[0.07] text-[#c8bfb0]'
-                    }`}
-                  >
-                    Agora
-                  </button>
-                  {buildPickupSlots({ now: new Date(), closesAt: channels.closesAt }).map((slot) => (
-                    <button
-                      key={slot.value}
-                      type="button"
-                      onClick={() => setScheduledFor(slot.value)}
-                      className={`min-h-14 shrink-0 rounded-xl px-4 text-base font-black ${
-                        scheduledFor === slot.value
-                          ? 'bg-[#e5a93c] text-black'
-                          : 'bg-white/[0.07] text-[#c8bfb0]'
-                      }`}
-                    >
-                      {slot.label}
-                    </button>
-                  ))}
-                </div>
-
-                {fulfillment === 'delivery' && (
-                  <select
-                    value={zoneId}
-                    onChange={(event) => setZoneId(event.target.value)}
-                    className="min-h-14 w-full rounded-xl border border-white/10 bg-black/30 px-3 text-base font-bold text-white outline-none focus:border-[#e5a93c]"
-                  >
-                    <option value="">Zona de entrega…</option>
-                    {channels.zones.map((zona) => (
-                      <option key={zona.id} value={zona.id}>
-                        {zona.name} · {mt(zona.fee_cents)}
-                      </option>
-                    ))}
-                  </select>
-                )}
-              </>
+                <CartField
+                  className={fulfillment === 'delivery' ? '' : 'col-span-2'}
+                  label="Horário"
+                  value={formatSlot(scheduledFor || null)}
+                  placeholder="Agora"
+                  onClick={() => setCartPicker('schedule')}
+                />
               )}
+              {fulfillment === 'delivery' && (
+                <CartField
+                  label="Zona"
+                  value={(() => {
+                    const zona = channels.zones.find((z) => z.id === zoneId);
+                    return zona ? `${zona.name} · ${mt(zona.fee_cents)}` : '';
+                  })()}
+                  placeholder="Escolher zona"
+                  warn
+                  onClick={() => setCartPicker('zone')}
+                />
+              )}
+              <CartField
+                className="col-span-2"
+                label="Observações"
+                value={orderNote.trim()}
+                placeholder="+ Nota do pedido"
+                onClick={() => setKeyboardField('orderNote')}
+              />
             </div>
           </div>
 
-          <div className="min-h-0 flex-1 space-y-2 overflow-y-auto p-3">
+          <div className="min-h-[8rem] flex-1 space-y-2 overflow-y-auto p-3">
             {lines.length === 0 ? (
               <p className="grid h-full min-h-28 place-items-center text-sm text-[#847e72]">
                 Toca num produto para começar.
@@ -1798,7 +1828,10 @@ export function PosShell() {
                           um sem jalapeño e um normal não são `2x Classic`. */}
                       <button
                         type="button"
-                        onClick={() => setNoteLine(line)}
+                        onClick={() => {
+                          setNoteDraft(line.notes ?? '');
+                          setNoteLine(line);
+                        }}
                         className={`mt-1 min-h-12 max-w-full truncate rounded-lg px-2 text-left text-xs font-black uppercase ${
                           line.notes
                             ? 'bg-[#e5a93c] text-black'
@@ -1834,15 +1867,6 @@ export function PosShell() {
           </div>
 
           <section className="shrink-0 border-t border-white/10 p-3">
-            <button
-              type="button"
-              onClick={() => setKeyboardField('orderNote')}
-              className={`mb-2 min-h-14 w-full rounded-xl px-3 text-left text-sm font-bold active:scale-[0.98] ${
-                orderNote.trim() ? 'bg-white/[0.12] text-[#f6f1e6]' : 'bg-white/[0.05] text-[#847e72]'
-              }`}
-            >
-              {orderNote.trim() ? `Nota: ${orderNote.trim()}` : '+ Nota do pedido'}
-            </button>
             <div className="mb-3 flex items-center justify-between">
               <span className="text-sm font-bold text-[#c8bfb0]">TOTAL</span>
               <strong className="text-3xl text-[#e5a93c]">{mt(totalCents)}</strong>
@@ -1878,6 +1902,85 @@ export function PosShell() {
             void refreshMenu();
           }}
         />
+      )}
+
+      {/* Horário e zona: um toque na barra abre a escolha em alvos grandes,
+          em vez de uma fila a rolar de lado e de um <select> nativo que num
+          ecrã táctil abre pequeno. Escolher fecha logo. */}
+      {cartPicker && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 p-4 sm:items-center">
+          <div className="flex max-h-full w-full max-w-2xl flex-col rounded-3xl border border-white/10 bg-[#141210] p-5 shadow-2xl">
+            <p className="text-xs font-black tracking-[0.25em] text-[#847e72]">
+              {cartPicker === 'schedule' ? 'PARA QUANDO?' : 'PARA ONDE?'}
+            </p>
+            <h2 className="mb-4 text-3xl font-black text-[#f6f1e6]">
+              {cartPicker === 'schedule' ? 'Horário' : 'Zona de entrega'}
+            </h2>
+
+            <div className="min-h-0 flex-1 overflow-y-auto">
+              {cartPicker === 'schedule' ? (
+                // Janelas de 30 minutos até ao fecho da loja: a hora vem do
+                // horário dela, por isso nunca se promete uma hora a que já não
+                // há ninguém.
+                <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+                  {[
+                    { value: '', label: 'Agora' },
+                    ...buildPickupSlots({ now: new Date(), closesAt: channels.closesAt }),
+                  ].map((slot) => (
+                    <button
+                      key={slot.value || 'agora'}
+                      type="button"
+                      onClick={() => {
+                        setScheduledFor(slot.value);
+                        setCartPicker(null);
+                      }}
+                      className={`min-h-16 rounded-xl text-xl font-black active:scale-[0.98] ${
+                        scheduledFor === slot.value
+                          ? 'bg-[#e5a93c] text-black'
+                          : 'bg-white/[0.08] text-[#f6f1e6]'
+                      }`}
+                    >
+                      {slot.label}
+                    </button>
+                  ))}
+                </div>
+              ) : channels.zones.length === 0 ? (
+                <p className="rounded-2xl bg-amber-500/10 px-4 py-4 text-base font-bold text-amber-200">
+                  Esta loja ainda não tem zonas de entrega configuradas no painel.
+                </p>
+              ) : (
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {channels.zones.map((zona) => (
+                    <button
+                      key={zona.id}
+                      type="button"
+                      onClick={() => {
+                        setZoneId(zona.id);
+                        setCartPicker(null);
+                      }}
+                      className={`flex min-h-16 items-center justify-between gap-3 rounded-xl px-4 text-left active:scale-[0.98] ${
+                        zoneId === zona.id
+                          ? 'bg-[#e5a93c] text-black'
+                          : 'bg-white/[0.08] text-[#f6f1e6]'
+                      }`}
+                    >
+                      <span className="text-lg font-black">{zona.name}</span>
+                      <span className="shrink-0 text-lg font-black">{mt(zona.fee_cents)}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setCartPicker(null)}
+              className="mt-4 min-h-16 w-full shrink-0 rounded-2xl bg-white/10 text-lg font-black text-[#f6f1e6] active:bg-white/20"
+            >
+              Fechar
+            </button>
+          </div>
+        </div>
       )}
 
       {variantPick && (
@@ -2362,52 +2465,65 @@ export function PosShell() {
           <section className="w-full max-w-2xl rounded-3xl border border-white/10 bg-[#1a1816] p-6">
             <p className="text-xs font-black tracking-[0.25em] text-[#847e72]">NOTA DO ARTIGO</p>
             <h2 className="mt-1 text-3xl font-black">{noteLine.name}</h2>
-            {noteLine.notes && (
-              <p className="mt-2 rounded-xl bg-[#e5a93c]/15 px-4 py-3 text-lg font-black text-[#e5a93c]">
-                {noteLine.notes}
-              </p>
-            )}
+            <p
+              className={`mt-2 min-h-14 rounded-xl px-4 py-3 text-lg font-black ${
+                noteDraft ? 'bg-[#e5a93c]/15 text-[#e5a93c]' : 'bg-white/[0.05] text-[#57514a]'
+              }`}
+            >
+              {noteDraft || 'Toca nos atalhos — somam-se'}
+            </p>
 
+            {/* Os atalhos somam-se ("SEM CEBOLA, SEM MOLHO") e um segundo toque
+                tira-os. Nada vai para o carrinho até ao OK. */}
             <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3">
-              {NOTAS_RAPIDAS.map((nota) => (
-                <button
-                  key={nota}
-                  type="button"
-                  onClick={() => {
-                    setCart((actual) => setLineNotes(actual, noteLine, nota));
-                    setNoteLine(null);
-                  }}
-                  className="min-h-16 rounded-xl bg-white/[0.09] px-2 text-base font-black active:bg-white/25"
-                >
-                  {nota}
-                </button>
-              ))}
+              {NOTAS_RAPIDAS.map((nota) => {
+                const escolhida = noteHasChip(noteDraft, nota);
+                return (
+                  <button
+                    key={nota}
+                    type="button"
+                    onClick={() => setNoteDraft((actual) => toggleNoteChip(actual, nota))}
+                    className={`min-h-16 rounded-xl px-2 text-base font-black active:scale-[0.98] ${
+                      escolhida ? 'bg-[#e5a93c] text-black' : 'bg-white/[0.09] text-white'
+                    }`}
+                  >
+                    {escolhida ? `✓ ${nota}` : nota}
+                  </button>
+                );
+              })}
             </div>
 
-            <div className="mt-4 grid grid-cols-3 gap-2">
-              <button
-                type="button"
-                onClick={() => {
-                  setCart((actual) => setLineNotes(actual, noteLine, null));
-                  setNoteLine(null);
-                }}
-                className="min-h-16 rounded-2xl bg-white/10 font-black active:bg-white/20"
-              >
-                Sem nota
-              </button>
+            <div className="mt-4 grid grid-cols-4 gap-2">
               <button
                 type="button"
                 onClick={() => setNoteLine(null)}
                 className="min-h-16 rounded-2xl bg-white/10 font-black active:bg-white/20"
               >
-                Fechar
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={() => setNoteDraft('')}
+                className="min-h-16 rounded-2xl bg-white/10 font-black active:bg-white/20"
+              >
+                Limpar
               </button>
               <button
                 type="button"
                 onClick={() => setNoteKeyboard(true)}
-                className="min-h-16 rounded-2xl bg-[#e5a93c] font-black text-black active:scale-[0.98]"
+                className="min-h-16 rounded-2xl bg-white/10 font-black active:bg-white/20"
               >
                 Escrever
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setCart((actual) => setLineNotes(actual, noteLine, noteDraft || null));
+                  setNoteLine(null);
+                }}
+                className="min-h-16 rounded-2xl bg-[#e5a93c] text-lg font-black text-black active:scale-[0.98]"
+              >
+                OK
               </button>
             </div>
           </section>
@@ -2417,7 +2533,7 @@ export function PosShell() {
       {noteLine && noteKeyboard && (
         <TouchKeyboard
           label={`Nota · ${noteLine.name}`}
-          value={noteLine.notes ?? ''}
+          value={noteDraft}
           maxLength={120}
           suggestions={[...NOTAS_RAPIDAS]}
           onCancel={() => setNoteKeyboard(false)}
