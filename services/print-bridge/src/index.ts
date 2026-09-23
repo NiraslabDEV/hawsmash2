@@ -7,6 +7,7 @@ import { FileRequestLedger } from './request-ledger';
 import { sendToPrinter } from './printer-client';
 import { sendDrawerPulse } from './drawer';
 import { startOperationalLoops } from './operations';
+import { startPrintLayoutSync } from './print-layout';
 import { CustomerDisplay } from './customer-display';
 import { describeTarget } from './printer-target';
 import { initObservability, observabilityEnabled, reportError } from './observability';
@@ -125,11 +126,15 @@ async function main(): Promise<void> {
 
   const supabase = createBridgeClient(config);
   const stopOperationalLoops = startOperationalLoops(supabase, config);
+  // O talão como a loja o quer (aba POS). Lido agora e de minuto a minuto, com
+  // cópia em disco para quando não houver rede — nunca atrasa uma impressão.
+  const stopPrintLayoutSync = startPrintLayoutSync(supabase, config.storeId, config.printLayoutFile);
 
   process.once('SIGINT', () => {
     console.log('\n[Shutdown] A terminar print-bridge');
     display.stop();
     stopOperationalLoops();
+    stopPrintLayoutSync();
     localServer.close(() => process.exit(0));
   });
 

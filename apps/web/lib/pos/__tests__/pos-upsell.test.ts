@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { buildPosUpsellFunnel, hasMainItem, type PosUpsellCategory } from '../pos-upsell';
+import {
+  buildPosUpsellFunnel,
+  cardapioStepProducts,
+  hasMainItem,
+  type PosUpsellCategory,
+} from '../pos-upsell';
 import { upsellScript, upsellScripts } from '../upsell-scripts';
 
 const burger = { id: 'b1', name: 'Classic Smash', price_cents: 30000 };
@@ -73,13 +78,76 @@ describe('funil do balcão', () => {
       cart: [{ menuItemId: 'b1', qty: 1 }],
       seed: 0,
       steps: {
-        companion: { enabled: true, title: 'Com batata?', scripts: ['Leva batata?'] },
-        dessert: { enabled: false, title: 'Doce?', scripts: ['Um doce?'] },
+        companion: { enabled: true, title: 'Com batata?', scripts: ['Leva batata?'], productIds: [] },
+        dessert: { enabled: false, title: 'Doce?', scripts: ['Um doce?'], productIds: [] },
       },
     });
     expect(passos.map((p) => p.kind)).toEqual(['companion']);
     expect(passos[0].title).toBe('Com batata?');
     expect(passos[0].script).toBe('Leva batata?');
+  });
+
+  it('mostra ao painel o que o Cardápio oferece em cada passo', () => {
+    expect(cardapioStepProducts(categorias, 'companion').map((i) => i.id)).toEqual(['c1', 'd1']);
+    expect(cardapioStepProducts(categorias, 'dessert').map((i) => i.id)).toEqual(['s1']);
+  });
+
+  describe('produtos escolhidos pela loja', () => {
+    const passo = (productIds: string[]) => ({
+      enabled: true,
+      title: 'T',
+      scripts: [],
+      productIds,
+    });
+    const comLista = (
+      cart: Array<{ menuItemId: string; qty: number }>,
+      companion: string[],
+      dessert: string[] = [],
+      categories = categorias,
+    ) =>
+      buildPosUpsellFunnel({
+        enabled: true,
+        categories,
+        cart,
+        seed: 0,
+        steps: { companion: passo(companion), dessert: passo(dessert) },
+      });
+
+    it('oferece exactamente os escolhidos, pela ordem da loja', () => {
+      const passos = comLista([{ menuItemId: 'b1', qty: 1 }], ['d1', 'c1']);
+      expect(passos[0].items.map((i) => i.id)).toEqual(['d1', 'c1']);
+      // A sobremesa sem lista própria continua a vir do Cardápio.
+      expect(passos[1].items.map((i) => i.id)).toEqual(['s1']);
+    });
+
+    it('pode oferecer um produto que não está marcado no Cardápio', () => {
+      const double = { id: 'b2', name: 'Double Smash', price_cents: 40000 };
+      const passos = comLista(
+        [{ menuItemId: 'b1', qty: 1 }],
+        ['b2'],
+        [],
+        [...categorias, { name: 'Burgers 2', items: [double] }],
+      );
+      expect(passos[0].items.map((i) => i.id)).toEqual(['b2']);
+    });
+
+    it('salta o esgotado, o que já está no carrinho e o que já não existe', () => {
+      const semBatata: PosUpsellCategory[] = [
+        { name: 'Burgers', items: [burger] },
+        { name: 'Acompanhamentos', items: [{ ...chips, available: false }] },
+        { name: 'Bebidas', items: [coca] },
+      ];
+      const passos = comLista(
+        [
+          { menuItemId: 'b1', qty: 1 },
+          { menuItemId: 'd1', qty: 1 },
+        ],
+        ['c1', 'd1', 'apagado'],
+        [],
+        semBatata,
+      );
+      expect(passos.map((p) => p.kind)).toEqual([]);
+    });
   });
 
   it('ignora o que está esgotado', () => {

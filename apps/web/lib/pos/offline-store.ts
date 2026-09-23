@@ -12,7 +12,10 @@ const MENU_STORE = 'menu';
 const SALES_STORE = 'sales';
 const COUNTERS_STORE = 'counters';
 
-export const MENU_REFRESH_MS = 120_000;
+// 15 s, o mesmo ritmo do polling que assume quando o realtime cai (CLAUDE
+// §11.3). A 2 min, um produto marcado como esgotado continuava à venda no
+// balcão até ao ciclo seguinte — e o quiosque nunca é recarregado à mão.
+export const MENU_REFRESH_MS = 15_000;
 
 const rawMenuVariantSchema = z.object({
   id: z.string().min(1),

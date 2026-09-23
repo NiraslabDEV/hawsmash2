@@ -16,6 +16,19 @@ function assertCents(value: number): void {
   if (!Number.isInteger(value) || value < 0) throw new Error('invalid_cents');
 }
 
+/**
+ * O plano de pagamento do balcão.
+ *
+ * No misto, o valor escrito em **dinheiro é o que o cliente entregou**, não a
+ * parcela: a parcela em dinheiro é o que falta depois dos meios digitais, e o
+ * que passar dela é troco. Antes pedia-se a parcela e, à parte, o "Recebido" —
+ * dois números para o mesmo dinheiro, o segundo esquecido a 0, e o FINALIZAR
+ * ficava apagado sem dizer porquê. Dar a mais em dinheiro também bloqueava a
+ * venda ("Excede") em vez de dar troco.
+ *
+ * Os meios digitais continuam exactos: M-Pesa, e-Mola e cartão não dão troco,
+ * por isso a soma deles nunca pode passar do total.
+ */
 export function buildPaymentPlan({
   totalCents,
   methods,
@@ -25,10 +38,12 @@ export function buildPaymentPlan({
   complete: boolean;
   remainingCents: number;
   payments: CounterPayment[];
+  /** Só no misto com dinheiro: o que o cliente entregou em notas. */
+  cashReceivedCents: number | null;
 } {
   assertCents(totalCents);
   if (methods.length === 0) {
-    return { complete: false, remainingCents: totalCents, payments: [] };
+    return { complete: false, remainingCents: totalCents, payments: [], cashReceivedCents: null };
   }
 
   if (!mixed) {
@@ -36,21 +51,43 @@ export function buildPaymentPlan({
       complete: true,
       remainingCents: 0,
       payments: [{ method: methods[0], amountCents: totalCents }],
+      cashReceivedCents: null,
     };
   }
 
-  const payments = methods.map((method) => {
+  const amounts = methods.map((method) => {
     const amountCents = allocations[method] ?? 0;
     assertCents(amountCents);
     return { method, amountCents };
   });
-  const allocated = payments.reduce((sum, payment) => sum + payment.amountCents, 0);
-  const remainingCents = totalCents - allocated;
+  const digital = amounts.filter((entry) => entry.method !== 'cash');
+  const digitalCents = digital.reduce((sum, entry) => sum + entry.amountCents, 0);
+  const everyDigitalPaid = digital.every((entry) => entry.amountCents > 0);
+
+  if (!methods.includes('cash')) {
+    const remainingCents = totalCents - digitalCents;
+    return {
+      complete: remainingCents === 0 && everyDigitalPaid,
+      remainingCents,
+      payments: digital.filter((entry) => entry.amountCents > 0),
+      cashReceivedCents: null,
+    };
+  }
+
+  const cashReceivedCents = allocations.cash ?? 0;
+  // O que o dinheiro tem de cobrir; negativo = os digitais já passam do total.
+  const cashDueCents = totalCents - digitalCents;
+  const remainingCents = cashDueCents - cashReceivedCents;
+  const payments = [
+    ...(cashDueCents > 0 ? [{ method: 'cash' as const, amountCents: cashDueCents }] : []),
+    ...digital.filter((entry) => entry.amountCents > 0),
+  ];
 
   return {
-    complete: remainingCents === 0 && payments.every((payment) => payment.amountCents > 0),
+    complete: everyDigitalPaid && cashDueCents > 0 && remainingCents <= 0,
     remainingCents,
-    payments: payments.filter((payment) => payment.amountCents > 0),
+    payments,
+    cashReceivedCents,
   };
 }
 

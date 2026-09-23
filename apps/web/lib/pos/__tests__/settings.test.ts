@@ -66,8 +66,30 @@ describe('definições do POS — leitura tolerante', () => {
     const s = resolvePosSettings({
       upsell: { enabled: true, steps: { dessert: { enabled: false, title: 'Doce?', scripts: ['Um doce?'] } } },
     });
-    expect(s.upsell.steps.dessert).toEqual({ enabled: false, title: 'Doce?', scripts: ['Um doce?'] });
+    expect(s.upsell.steps.dessert).toEqual({
+      enabled: false,
+      title: 'Doce?',
+      scripts: ['Um doce?'],
+      productIds: [],
+    });
     expect(s.upsell.steps.companion).toEqual(FACTORY_POS_SETTINGS.upsell.steps.companion);
+  });
+
+  it('guarda o talão escolhido e cai no de fábrica no que vier estragado', () => {
+    const s = resolvePosSettings({
+      printing: { templates: { cliente: 'cozinha', controlo: 'inventado' }, show: { qr: false } },
+    });
+    expect(s.printing.templates).toEqual({ controlo: 'completo', cliente: 'cozinha', cozinha: 'completo' });
+    expect(s.printing.show.qr).toBe(false);
+    expect(s.printing.show.logo).toBe(true);
+  });
+
+  it('guarda os produtos escolhidos por passo: ordem da loja, sem repetidos nem lixo', () => {
+    const s = resolvePosSettings({
+      upsell: { steps: { companion: { productIds: ['b', 'a', 'b', 7, '  ', null, 'c'] } } },
+    });
+    expect(s.upsell.steps.companion.productIds).toEqual(['b', 'a', 'c']);
+    expect(s.upsell.steps.dessert.productIds).toEqual([]);
   });
 });
 

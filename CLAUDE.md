@@ -101,6 +101,7 @@ instala-se no PC touch como aplicação, mas continua a ser web.
 /packages/core              money, order-machine, schemas (Zod) — domínio puro, testado
 /packages/db                migrations SQL + seed + tipos + testes de RLS
 /packages/paysuite          provider Paysuite + mock
+/packages/receipt           o papel da casa: formatos do talão, modelos, ESC/POS e pré-visualização (bridge + painel)
 /services/print-bridge      poll print_jobs + servidor HTTP local + ESC/POS + gaveta
 /docs/engine/               spec completa do motor herdado (Delivery OS) — consulta
 /docs/legacy/               HAWSMASH 1.0 (CLAUDE, roadmap, edge functions, print-bridge, proposta)
@@ -336,7 +337,7 @@ O POS é uma **PWA** com service worker:
 - **Nunca** um `confirm()` do browser em fluxo de venda — diálogos próprios, grandes.
 
 ### 7.7 Definições do POS por loja (aba **POS**)
-Meios de pagamento (ligados, nome, ordem, misto), upsell do balcão (passos, títulos, frases), notas
+Meios de pagamento (ligados, nome, ordem, misto), upsell do balcão (passos, títulos, frases e produtos), notas
 rápidas, tipo de pedido ao abrir, nome/telefone no balcão, segundos da confirmação e som de pedido
 novo são **dados da loja** em `store_pos_settings` (1067), editados pelo `owner` ou pelo `manager`
 da loja e registados em `event_log`. O POS lê-os com `resolvePosSettings` por cima do valor de
@@ -381,7 +382,15 @@ e rodapé com QR (avaliação no Google, ou Instagram).
 - **VIA DE CONTROLO** sai na impressora do balcão e fica na loja.
 - **VIA DO CLIENTE** sai na da cozinha e depois cola-se no saco que vai para o cliente.
 - **Reimprimir** sai **um** talão completo marcado **REIMPRESSÃO** — nunca passa por original (§7.4).
-- O número de vias é da loja (`stores.kitchen_ticket_copies`, 2 por defeito), não do código.
+- O número de vias é da loja (`stores.kitchen_ticket_copies`, 2 por defeito), não do código — muda-se na
+  aba **POS** (1071).
+- **O modelo de cada via é da loja** (aba POS, `store_pos_settings.config.printing`): **Completo** (o de
+  sempre, com interruptores para logo, morada, agradecimento, QR, rodapé e letra dos artigos), **Compacto**
+  (o dinheiro, com menos papel) ou **Cozinha** (sem preços, artigos a dobrar). Modelos prontos e testados em
+  `@delivery/receipt` — **nunca** um editor livre. O print-bridge lê o layout de minuto a minuto e guarda
+  cópia em disco (`data/print-layout.json`); o de fábrica sai **byte a byte** igual ao de antes
+  (`talao-bytes.test.ts`). A pré-visualização do painel usa as mesmas instruções que a impressora.
+  ADR 0007.
 A comanda curta e o talão curto do cliente ficam só para mesas (`dine_in`) e para o POS sem rede, que ainda
 imprime localmente no formato antigo.
 Formato de referência: `docs/legacy/HAWSMASH-1.0-CLAUDE.md §12.2` e `docs/legacy/hawsmash-print-bridge`

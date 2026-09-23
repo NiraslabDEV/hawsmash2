@@ -31,7 +31,17 @@ LOCAL_HTTP_PORT=7777
 LOCAL_TOKEN=trocar-por-token-aleatorio-com-32-caracteres
 LOCAL_ALLOWED_ORIGINS=https://staging.hawsmash.co.mz,https://hawsmash.co.mz
 LOCAL_STATE_FILE=./data/local-requests.log
+PRINT_LAYOUT_FILE=./data/print-layout.json   # opcional — cópia do modelo do talão (aba POS)
 ```
+
+## Modelo do talão (aba POS)
+
+Os formatos do papel vivem em `packages/receipt` (`@delivery/receipt`), partilhados com a
+pré-visualização do painel. O bridge lê o layout da sua loja (`store_pos_settings.config.printing`)
+ao arrancar e de minuto a minuto, e guarda uma cópia em `PRINT_LAYOUT_FILE`: sem rede — e depois de
+um reinício sem rede — o talão sai como a loja escolheu. Sem cópia e sem rede, sai o de fábrica.
+Um erro a ler nunca pára a impressão. O de fábrica produz os mesmos bytes que antes
+(`src/__tests__/talao-bytes.test.ts`). Ver `docs/POS-DEFINICOES.md` §Impressão e ADR 0007.
 
 ## API HTTP local
 

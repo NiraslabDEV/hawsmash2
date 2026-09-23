@@ -16,15 +16,23 @@
 | Secção | O que muda no balcão | Valor de fábrica |
 |---|---|---|
 | **Meios de pagamento** | Quais aparecem no ecrã de pagamento, o nome do botão e a ordem. Pagamento misto ligado/desligado | Os quatro ligados: Dinheiro, M-Pesa, e-Mola, Cartão · misto permitido |
-| **Upsell** | Liga/desliga o ecrã entre o carrinho e o pagamento; por passo (acompanhar, sobremesa): ligado, título e frases | Ligado, com frases neutras (não falam de nenhum produto) |
+| **Upsell** | Liga/desliga o ecrã entre o carrinho e o pagamento; por passo (acompanhar, sobremesa): ligado, título, frases e **produtos** (os do Cardápio ou uma lista escolhida para a loja, com ordem) | Ligado, com frases neutras (não falam de nenhum produto) e os produtos do Cardápio |
 | **Notas rápidas** | Os atalhos da nota do artigo e da nota do pedido ("SEM CEBOLA"). No POS **somam-se** | 8 atalhos genéricos |
 | **Tipo de pedido ao abrir** | Balcão, Levantamento ou Entrega. Se o canal estiver desligado na loja ou sem rede, abre em Balcão | Balcão |
 | **Nome e telefone no balcão** | Mostra ou esconde as barras de cliente na venda de balcão (entrega e levantamento pedem sempre) | Mostra |
 | **Segundos da confirmação** | Quanto tempo fica o ecrã "venda registada" (1–15 s) | 3 s |
 | **Som de pedido novo** | Toca quando chega um pedido online. Desligado, o botão Pedidos continua a piscar | Ligado |
+| **Impressão** | Vias por pedido (1–3), o modelo de cada via (Completo, Compacto, Cozinha) e os blocos do Completo. Aplica-o o **mini-PC** — ver §11 | 2 vias, Completo em todas, tudo ligado (o papel de sempre) |
 
-Os **produtos** que o upsell oferece continuam a ser os marcados como upsell no **Cardápio**. Os
-**números** de M-Pesa/e-Mola continuam na aba **Lojas**. Aqui só se decide o ecrã.
+**Produtos do upsell.** Sem lista escolhida (`productIds` vazio), um passo oferece os marcados como
+upsell no **Cardápio**, no passo da sua categoria (`cardapioStepProducts`: sobremesa no fim,
+acompanhamentos antes das bebidas). Com lista, oferece exactamente esses, pela ordem da loja — mesmo
+que não estejam marcados no Cardápio. Nos dois casos o POS salta o que está esgotado ou já no carrinho,
+e um id de produto apagado cai sem barulho. O painel não deixa o mesmo produto em dois passos, e
+"Escolher para esta loja" arranca da lista do Cardápio. Os ids são do catálogo, partilhado entre lojas,
+por isso *Copiar para outra loja* leva a lista tal como está.
+
+Os **números** de M-Pesa/e-Mola continuam na aba **Lojas**. Aqui só se decide o ecrã.
 
 ---
 
@@ -77,10 +85,16 @@ POS da loja ◀──get_pos_settings()── ao arrancar e a cada 2 min (junto 
 |---|---|---|
 | `supabase/migrations/…_1067_definicoes_do_pos.sql` | Tabela, RLS, grants, `get_pos_settings`, `save_pos_settings` | **Copiar** (renumerar) |
 | `supabase/migrations/…_1068_definicoes_do_pos_desta_instalacao.sql` | Dados **desta** casa (frases e notas que estavam no código) | **Não copiar** |
-| `apps/web/lib/pos/settings.ts` | Contrato: tipos, fábrica, resolver, limites, leitura (`fetchPosSettings`) e cache offline. Não importa nada do resto do projecto | **Copiar** |
+| `apps/web/lib/pos/settings.ts` | Contrato: tipos, fábrica, resolver, limites, leitura (`fetchPosSettings`) e cache offline. Só depende de `@delivery/receipt` (o `printing`) | **Copiar** |
+| `packages/receipt/` (`@delivery/receipt`) | O papel da casa: formatos do talão, modelos (`layout.ts`), ESC/POS (`encode.ts`), pré-visualização (`preview.ts`). Só depende de `@delivery/core` | **Copiar** o pacote inteiro |
+| `supabase/migrations/…_1071_vias_do_talao_no_painel.sql` | RPC `set_store_ticket_copies` (vias por pedido) | **Copiar** (renumerar) |
+| `apps/web/app/(admin)/definicoes-pos/print-section.tsx`, `ticket-preview.tsx` | Secção Impressão e o talão desenhado no ecrã | **Copiar** |
+| `services/print-bridge/src/print-layout.ts` | O bridge lê o layout, aplica-o e guarda cópia em disco | **Copiar** |
+| `services/print-bridge/src/escpos.ts`, `types.ts`, `config.ts`, `index.ts` | Adaptador para o pacote, re-export dos tipos, `printLayoutFile`, arranque da sincronização | Adaptar — ver §11.5 |
+| `services/print-bridge/src/__tests__/talao-bytes.test.ts`, `print-layout.test.ts` | O papel byte a byte e a sincronização | **Copiar** — o retrato grava-se **antes** de trocar o formatador |
 | `apps/web/lib/pos/notes.ts` | Atalhos de nota que somam (e tiram com segundo toque) | **Copiar** |
 | `apps/web/lib/pos/__tests__/settings.test.ts`, `notes.test.ts` | Testes do contrato | **Copiar** |
-| `apps/web/app/(admin)/definicoes-pos/page.tsx` | A aba do painel | **Copiar** (ajustar cores se o painel for outro) |
+| `apps/web/app/(admin)/definicoes-pos/page.tsx`, `step-products.tsx` | A aba do painel e o selector de produtos do upsell | **Copiar** (ajustar cores se o painel for outro) |
 | `packages/db/tests/pos-settings.test.ts` | Isolamento entre lojas, perfis, auditoria | **Copiar** |
 | `e2e/definicoes-pos.spec.ts` | Dono grava pelo painel e a BD fica certa | **Copiar** |
 | `apps/web/app/(admin)/layout.tsx` | Entrada `POS` no menu + ícone | Adaptar (2 linhas) |
@@ -105,6 +119,8 @@ Confirmar antes de copiar (todos os projectos copiados do HAWSMASH já os têm):
 - [ ] Tabela `public.event_log (store_id, actor_user_id, type, payload)`.
 - [ ] Perfis `owner` / `manager` / `cashier` em `staff_profiles`.
 - [ ] Cliente Supabase em `@/utils/supabase/client` e alias `@/lib/...`.
+- [ ] **Para a Impressão:** o talão completo em vias (migrations 1062–1064, `stores.kitchen_ticket_copies`)
+      e o print-bridge deste repositório. Sem isso, copiar só a parte do ecrã do POS e deixar a §11 de fora.
 
 ### 5.2 Passos
 1. **Copiar** os ficheiros marcados "Copiar" na §4.
@@ -123,6 +139,9 @@ Confirmar antes de copiar (todos os projectos copiados do HAWSMASH já os têm):
 7. **Staging primeiro** (§2 do CLAUDE.md): aplicar a migration no staging, correr os testes (§8) e o e2e.
 8. **Verificar no terminal real:** mudar uma frase na aba POS, esperar até 2 min (ou bloquear e
    desbloquear o POS) e confirmar no ecrã do balcão.
+9. **Impressão (§11.5):** gravar o retrato de bytes do bridge do destino **antes** de trocar o
+   formatador, trocar, confirmar que o retrato não mudou, gerar o `.exe` e instalá-lo em cada loja fora
+   do horário. Por fim, imprimir um talão de cada modelo em papel.
 
 ---
 
@@ -207,14 +226,24 @@ Exemplo de `store_pos_settings.config` (todas as chaves são opcionais):
   "upsell": {
     "enabled": true,
     "steps": {
-      "companion": { "enabled": true, "title": "Falta acompanhar?", "scripts": ["Qual bebida vai levar?"] },
-      "dessert": { "enabled": false, "title": "E para fechar?", "scripts": [] }
+      "companion": {
+        "enabled": true,
+        "title": "Falta acompanhar?",
+        "scripts": ["Qual bebida vai levar?"],
+        "productIds": ["<id do menu_item>", "<id do menu_item>"]
+      },
+      "dessert": { "enabled": false, "title": "E para fechar?", "scripts": [], "productIds": [] }
     }
   },
   "quickNotes": ["SEM CEBOLA", "SEM MOLHO", "PARA LEVAR"],
   "cart": { "defaultFulfillment": "counter", "askCustomerOnCounter": true },
   "sale": { "confirmationSeconds": 3 },
-  "alerts": { "newOrderChime": true }
+  "alerts": { "newOrderChime": true },
+  "printing": {
+    "templates": { "controlo": "completo", "cliente": "cozinha", "cozinha": "completo" },
+    "show": { "logo": true, "storeContacts": true, "thanks": true, "qr": true, "footer": true },
+    "bigItems": true
+  }
 }
 ```
 
@@ -232,3 +261,71 @@ Os `id` de pagamento são fechados (`cash`, `mpesa`, `emola`, `credit_card`) —
 | `permission denied for table store_pos_settings` | Faltam os grants | Ver §5.2 passo 3 |
 | `pos_settings_denied` | Quem tenta não é dono nem gerente **dessa** loja | Aba Equipa |
 | "Quem tirou o cartão do POS?" | — | `event_log` onde `type = 'store.pos_settings_changed'` |
+| Mudei o modelo do talão e o papel não mudou | O mini-PC lê a cada minuto, ou tem o programa antigo | Esperar 1 min; ver no log do bridge `[Layout] Talão actualizado`; se nunca aparecer, actualizar o `.exe` (§11.5) |
+| O talão saiu no modelo errado depois de um corte de rede | Sem rede o bridge usa a última cópia (`data/print-layout.json`) | Normal; corrige-se sozinho quando a rede volta |
+| "Quem mudou as vias?" | — | `event_log` onde `type = 'store.ticket_copies_changed'` |
+
+---
+
+## 11. Impressão (talão)
+
+Decisão: [ADR 0007](decisions/0007-modelos-do-talao.md). Contrato: `packages/receipt`.
+
+### 11.1 O que se escolhe
+
+| | Onde vive | Quem aplica |
+|---|---|---|
+| **Vias por pedido** (1, 2 ou 3) | `stores.kitchen_ticket_copies` — RPC `set_store_ticket_copies` (1071) | A base de dados, ao criar os trabalhos de impressão |
+| **Modelo de cada via** e **blocos do Completo** | `store_pos_settings.config.printing` | O print-bridge, ao montar o papel |
+
+| Modelo | Leva | Para quê |
+|---|---|---|
+| **Completo** | Tudo, como sempre: logo, morada, senha, cliente, tipo, horário, artigos com preço, nota, totais, pagamento, agradecimento, QR, rodapé | O papel da casa (valor de fábrica) |
+| **Compacto** | Senha, cliente, tipo, horário, artigos com preço em letra normal, totais, pagamento, rodapé. Sem logo, morada, agradecimento nem QR | Menos papel, o dinheiro todo |
+| **Cozinha** | Senha, cliente, tipo, entrega, horário, artigos e notas a dobrar, nota do pedido. **Sem preços nem pagamento** | A via que fica na cozinha |
+
+- Com **1 via**, sai um talão sem rótulo; com **2**, controlo (balcão) + cliente (cozinha); com **3**,
+  mais a via da cozinha. A via única e a **reimpressão** usam o modelo da via de controlo.
+- Os interruptores (logo, morada e telefone, agradecimento, QR, rodapé, artigos em letra alta) afinam
+  **só o Completo**. O Compacto e o Cozinha são fixos — é o que os mantém testados.
+- **Não mudam:** a comanda curta e o talão curto (mesa e POS sem rede), o fecho de caixa e a gaveta.
+
+### 11.2 Como chega ao papel
+
+```
+Aba POS ──save_pos_settings──▶ store_pos_settings.config.printing
+                                            │
+print-bridge (mini-PC) ◀── lê ao arrancar e a cada 60 s ──┘
+     ├─ guarda cópia em data/print-layout.json (sem rede, e depois de reiniciar sem rede)
+     └─ buildFullTicket(payload, layout) → encodeEscPos → impressora
+Painel: buildFullTicket(exemplo, layout) → renderPreview → o talão desenhado no ecrã
+```
+
+O mesmo código (`buildFullTicket`) desenha o papel e a pré-visualização: o que o dono vê é o que sai.
+Um erro a ler o layout nunca pára a impressão — fica o que estava; sem nada, o de fábrica.
+
+### 11.3 A garantia do papel de sempre
+
+`services/print-bridge/src/__tests__/talao-bytes.test.ts` guarda os **bytes** de 9 formatos, gravados
+antes de os modelos existirem. Com o layout de fábrica têm de sair iguais — no CI e em qualquer cópia
+deste módulo. Se um mudar de propósito, actualiza-se o retrato **e** imprime-se em papel.
+
+### 11.4 Acrescentar um modelo novo
+
+1. `packages/receipt/src/layout.ts`: o nome em `TicketTemplate`, a descrição em `TICKET_TEMPLATES` e o
+   valor aceite em `resolvePrintLayout`.
+2. `packages/receipt/src/tickets.ts`: o que leva, em `optionsFor` (ou um ramo próprio em `buildFullTicket`).
+3. Testes em `packages/receipt/src/__tests__/layout.test.ts` — o que sai e o que **não** sai.
+4. Imprimir em papel antes de o oferecer às lojas. O painel mostra-o sozinho (lê `TICKET_TEMPLATES`).
+
+### 11.5 Levar o mini-PC para esta versão
+
+1. No repositório: `BRAND_LOGO_FILE=/nao/existe.b64 npx vitest run services/print-bridge` verde
+   (o logo local muda os bytes; o CI não o tem).
+2. Gerar o `.exe` (`services/print-bridge/README.md`) e trocá-lo **fora do horário** (Qui–Sáb as lojas
+   estão abertas), como em `docs/INSTRUCOES-POS-MAPUTO.md`. O `.env` e o `brand-logo.b64` ficam.
+3. No arranque, o log mostra a leitura do layout; `data/print-layout.json` aparece ao lado do `.env`.
+4. Imprimir um pedido de teste e comparar com a pré-visualização da aba POS.
+
+Um mini-PC que ainda não foi actualizado ignora o layout e imprime o Completo — dá para actualizar
+loja a loja, sem pressa de fazer as duas no mesmo dia.

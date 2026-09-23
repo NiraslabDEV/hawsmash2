@@ -64,8 +64,8 @@ describe('cache offline do cardápio do POS', () => {
     expect(offlineFetch).toHaveBeenCalledOnce();
   });
 
-  it('fixa o intervalo de atualização em dois minutos e falha sem cache inicial', async () => {
-    expect(MENU_REFRESH_MS).toBe(120_000);
+  it('fixa o intervalo de atualização em 15 segundos e falha sem cache inicial', async () => {
+    expect(MENU_REFRESH_MS).toBe(15_000);
     await expect(
       loadMenuWithFallback('maputo', async () => {
         throw new TypeError('offline');

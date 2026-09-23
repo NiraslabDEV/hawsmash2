@@ -401,3 +401,16 @@ Contrato e checklist para levar a outros projectos: [`docs/POS-DEFINICOES.md`](d
 - [x] 1067/1068 aplicadas no staging (`db push --include-all`, versões canónicas); anon recusado.
 - [ ] Correr `e2e/definicoes-pos.spec.ts` contra o staging.
 - [ ] Aplicar 1067/1068 no LIVE, na próxima janela (nunca em horário de loja).
+
+## Upsell por loja e modelos do talão — 2026-09-23
+
+Aba **POS**: o dono escolhe os produtos de cada passo do upsell e como sai o papel, loja a loja.
+Contrato em [`docs/POS-DEFINICOES.md`](docs/POS-DEFINICOES.md) §1 e §11 · [ADR 0007](docs/decisions/0007-modelos-do-talao.md).
+
+- [x] Produtos por passo do upsell (lista da loja, com ordem; vazio = os do Cardápio); POS e painel.
+- [x] `packages/receipt`: os formatos saem do bridge para um pacote partilhado; o de fábrica sai byte a byte igual (`talao-bytes.test.ts`, 9 formatos).
+- [x] Modelos Completo / Compacto / Cozinha por via + blocos do Completo; pré-visualização no painel com o mesmo código.
+- [x] Bridge lê o layout de minuto a minuto, com cópia em disco para sem rede (`print-layout.ts`).
+- [x] Vias por pedido no painel (1071, dono e gerente da loja, registado).
+- [x] Guarda do painel: o URL escrito à mão respeita o perfil (`lib/admin/nav.ts`).
+- [ ] Aplicar 1071 no staging; gerar o `.exe` do bridge e trocá-lo nas lojas **fora do horário**; imprimir um talão de cada modelo em papel.

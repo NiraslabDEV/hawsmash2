@@ -25,6 +25,8 @@
  * Portável: não importa nada do resto do POS. Ver `docs/POS-DEFINICOES.md`.
  */
 
+import { FACTORY_PRINT_LAYOUT, resolvePrintLayout, type PrintLayout } from '@delivery/receipt';
+
 export type PosPaymentMethodId = 'cash' | 'mpesa' | 'emola' | 'credit_card';
 export type PosFulfillment = 'counter' | 'pickup' | 'delivery';
 export type PosUpsellStepId = 'companion' | 'dessert';
@@ -42,6 +44,11 @@ export type PosUpsellStepSetting = {
   title: string;
   /** Frases que o operador diz ao cliente. Roda uma por venda. */
   scripts: string[];
+  /**
+   * Os produtos deste passo, por ordem, escolhidos para esta loja.
+   * Vazio = os marcados como upsell no Cardápio (o comportamento de sempre).
+   */
+  productIds: string[];
 };
 
 export type PosSettings = {
@@ -71,6 +78,12 @@ export type PosSettings = {
     /** Toca quando chega um pedido online. */
     newOrderChime: boolean;
   };
+  /**
+   * Como sai o talão (modelo por via e blocos). Quem o aplica é o print-bridge
+   * do mini-PC, que o lê desta mesma linha; o contrato é `@delivery/receipt`.
+   * O número de vias é outra coisa: `stores.kitchen_ticket_copies` (1071).
+   */
+  printing: PrintLayout;
 };
 
 export const POS_PAYMENT_METHOD_IDS: readonly PosPaymentMethodId[] = [
@@ -104,6 +117,7 @@ export const POS_LIMITS = {
   titleMax: 60,
   scriptMax: 160,
   scriptsPerStep: 12,
+  productsPerStep: 24,
   quickNoteMax: 40,
   quickNotes: 24,
   confirmationMin: 1,
@@ -131,11 +145,13 @@ export const FACTORY_POS_SETTINGS: PosSettings = {
           'Junto um acompanhamento? Fica completo.',
           'Uma bebida gelada para acompanhar?',
         ],
+        productIds: [],
       },
       dessert: {
         enabled: true,
         title: 'E para fechar?',
         scripts: ['Uma sobremesa para fechar?', 'Leva uma sobremesa para depois?'],
+        productIds: [],
       },
     },
   },
@@ -159,6 +175,7 @@ export const FACTORY_POS_SETTINGS: PosSettings = {
   alerts: {
     newOrderChime: true,
   },
+  printing: FACTORY_PRINT_LAYOUT,
 };
 
 // ─── leitura tolerante ───────────────────────────────────────────────────────
@@ -228,15 +245,32 @@ function resolveMethods(value: unknown): PosPaymentMethodSetting[] {
   return lidos;
 }
 
+/** Ids de produto: só textos, sem repetidos, com tecto. A ordem é a da loja. */
+function idList(value: unknown, max: number): string[] {
+  if (!Array.isArray(value)) return [];
+  const vistos = new Set<string>();
+  const lista: string[] = [];
+  for (const entry of value) {
+    if (typeof entry !== 'string') continue;
+    const id = entry.trim().slice(0, 64);
+    if (!id || vistos.has(id)) continue;
+    vistos.add(id);
+    lista.push(id);
+    if (lista.length >= max) break;
+  }
+  return lista;
+}
+
 function resolveStep(value: unknown, fallback: PosUpsellStepSetting): PosUpsellStepSetting {
   const s = obj(value);
-  if (!s) return { ...fallback, scripts: [...fallback.scripts] };
+  if (!s) return { ...fallback, scripts: [...fallback.scripts], productIds: [...fallback.productIds] };
   const scripts = textList(s.scripts, fallback.scripts, POS_LIMITS.scriptsPerStep, POS_LIMITS.scriptMax);
   return {
     enabled: bool(s.enabled, fallback.enabled),
     title: text(s.title, fallback.title, POS_LIMITS.titleMax),
     // Um passo sem frases continua a oferecer — só não sugere o que dizer.
     scripts,
+    productIds: idList(s.productIds, POS_LIMITS.productsPerStep),
   };
 }
 
@@ -285,6 +319,7 @@ export function resolvePosSettings(raw: unknown): PosSettings {
     alerts: {
       newOrderChime: bool(alerts.newOrderChime, f.alerts.newOrderChime),
     },
+    printing: resolvePrintLayout(r.printing),
   };
 }
 

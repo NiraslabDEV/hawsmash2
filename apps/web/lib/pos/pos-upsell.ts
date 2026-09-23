@@ -67,6 +67,29 @@ export function hasMainItem(cart: UpsellCartLine[], items: UpsellItem[]): boolea
 }
 
 /**
+ * O que um passo oferece quando a loja não escolheu produtos: os marcados como
+ * upsell no Cardápio, no passo da sua categoria (sobremesa no fim), com os
+ * acompanhamentos antes das bebidas. Sem filtrar carrinho nem esgotados — é
+ * também o que o painel mostra como "o que o Cardápio oferece hoje".
+ */
+export function cardapioStepProducts(
+  categories: PosUpsellCategory[],
+  step: PosUpsellStepId,
+): UpsellItem[] {
+  const sobremesa = step === 'dessert';
+  return categories
+    .filter((category) => CATEGORIA_SOBREMESA.test(category.name) === sobremesa)
+    // Acompanhamentos primeiro; o resto (bebidas) a seguir.
+    .sort((a, b) => {
+      const pa = CATEGORIA_ACOMPANHAMENTO.test(a.name) ? 0 : 1;
+      const pb = CATEGORIA_ACOMPANHAMENTO.test(b.name) ? 0 : 1;
+      return pa - pb;
+    })
+    .flatMap((category) => category.items)
+    .filter((item) => item.is_upsell === true);
+}
+
+/**
  * Os passos a mostrar entre o carrinho e o pagamento, por ordem.
  *
  * Lista vazia significa "vai directo ao pagamento" — sem funil, sem atraso.
@@ -96,20 +119,25 @@ export function buildPosUpsellFunnel(input: {
   const disponiveis = new Set(companionOffers(cart, todos, Number.MAX_SAFE_INTEGER).map((i) => i.id));
 
   const doPasso = (sobremesa: boolean): UpsellItem[] =>
-    categories
-      .filter((category) => CATEGORIA_SOBREMESA.test(category.name) === sobremesa)
-      // Acompanhamentos primeiro; o resto (bebidas) a seguir.
-      .sort((a, b) => {
-        const pa = CATEGORIA_ACOMPANHAMENTO.test(a.name) ? 0 : 1;
-        const pb = CATEGORIA_ACOMPANHAMENTO.test(b.name) ? 0 : 1;
-        return pa - pb;
-      })
-      .flatMap((category) => category.items)
+    cardapioStepProducts(categories, sobremesa ? 'dessert' : 'companion')
       .filter((item) => disponiveis.has(item.id));
 
   const passos: PosUpsellStep[] = [];
 
-  const acompanhar = steps.companion.enabled ? doPasso(false) : [];
+  // A loja escolheu os produtos deste passo na aba POS: são esses, por essa
+  // ordem — mesmo que não estejam marcados no Cardápio. Continua a valer o
+  // resto da regra: disponível e ainda não no carrinho. Um id que já não existe
+  // (produto apagado) cai sem barulho.
+  const porId = new Map(todos.map((item) => [item.id, item]));
+  const noCarrinho = new Set(cart.map((line) => line.menuItemId));
+  const escolhidos = (ids: string[]): UpsellItem[] =>
+    ids
+      .map((id) => porId.get(id))
+      .filter((item): item is UpsellItem => !!item && item.available !== false && !noCarrinho.has(item.id));
+  const doPassoDaLoja = (step: PosUpsellStepSetting, sobremesa: boolean): UpsellItem[] =>
+    step.productIds.length > 0 ? escolhidos(step.productIds) : doPasso(sobremesa);
+
+  const acompanhar = steps.companion.enabled ? doPassoDaLoja(steps.companion, false) : [];
   if (acompanhar.length > 0) {
     passos.push({
       kind: 'companion',
@@ -119,7 +147,7 @@ export function buildPosUpsellFunnel(input: {
     });
   }
 
-  const sobremesas = steps.dessert.enabled ? doPasso(true) : [];
+  const sobremesas = steps.dessert.enabled ? doPassoDaLoja(steps.dessert, true) : [];
   if (sobremesas.length > 0) {
     passos.push({
       kind: 'dessert',

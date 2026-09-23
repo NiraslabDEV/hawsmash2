@@ -1,6 +1,6 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  transpilePackages: ["@delivery/core", "@delivery/payments"],
+  transpilePackages: ["@delivery/core", "@delivery/payments", "@delivery/receipt"],
   images: {
     // Fotos de produto vêm do Storage do Supabase do cliente (whitelabel);
     // o demo usa também assets locais (/assets/*) e, no protótipo, Unsplash.

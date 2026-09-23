@@ -26,9 +26,29 @@ import {
   type PosSettings,
   type PosUpsellStepId,
 } from '@/lib/pos/settings';
+import { cardapioStepProducts, type PosUpsellCategory } from '@/lib/pos/pos-upsell';
 import { createClient } from '@/utils/supabase/client';
 
-type StoreRow = { id: string; short_name: string; slug: string };
+import { useBrand } from '@/lib/brand/context';
+
+import { PrintSection } from './print-section';
+import { StepProducts } from './step-products';
+
+type StoreRow = {
+  id: string;
+  short_name: string;
+  slug: string;
+  address: string | null;
+  phone: string | null;
+  receipt_footer: string | null;
+  /** Vias do talão por pedido (1062/1071). */
+  kitchen_ticket_copies: number;
+};
+
+/** A marca como o talão a usa (1064): avaliação e Instagram vêm de `brand_settings`. */
+type BrandRow = { social?: Record<string, unknown> | null; contact?: Record<string, unknown> | null } | null;
+
+const textoOuNulo = (valor: unknown) => (typeof valor === 'string' && valor.trim() ? valor.trim() : null);
 type Message = { tone: 'ok' | 'error'; text: string } | null;
 
 const INPUT =
@@ -78,9 +98,22 @@ export default function DefinicoesPosPage() {
   const [message, setMessage] = useState<Message>(null);
   const [newNote, setNewNote] = useState('');
   const [copyTarget, setCopyTarget] = useState('');
+  /** Cardápio da loja escolhida (com esgotados), para escolher o upsell. */
+  const [menu, setMenu] = useState<{ storeId: string; categories: PosUpsellCategory[] } | null>(null);
+  /** Vias do talão por gravar. Vive em `stores`, não no `config` — por isso à parte. */
+  const [copiesDraft, setCopiesDraft] = useState<number | null>(null);
+  const [brandRow, setBrandRow] = useState<BrandRow>(null);
+  const brand = useBrand();
+
+  useEffect(() => {
+    void supabase.rpc('get_brand').then(({ data }) => setBrandRow((data as BrandRow) ?? null));
+  }, [supabase]);
 
   const loadStores = useCallback(async () => {
-    const { data, error } = await supabase.from('stores').select('id,slug,short_name').order('sort');
+    const { data, error } = await supabase
+      .from('stores')
+      .select('id,slug,short_name,address,phone,receipt_footer,kitchen_ticket_copies')
+      .order('sort');
     if (error) {
       setMessage({ tone: 'error', text: `Não foi possível listar as lojas: ${error.message}` });
       return;
@@ -114,12 +147,39 @@ export default function DefinicoesPosPage() {
     void loadSettings();
   }, [loadSettings]);
 
+  // O mesmo `get_menu` que o POS lê: os produtos e os preços são os da loja.
+  const selectedSlug = stores.find((s) => s.id === selectedId)?.slug ?? null;
+  useEffect(() => {
+    if (!selectedId || !selectedSlug) return;
+    let activo = true;
+    void supabase
+      .rpc('get_menu', { p_store_slug: selectedSlug, p_include_unavailable: true })
+      .then(({ data, error }) => {
+        if (!activo || error || !data) return;
+        const categorias = ((data as { categories?: PosUpsellCategory[] }).categories ?? []).filter(
+          (categoria) => (categoria.items ?? []).length > 0,
+        );
+        setMenu({ storeId: selectedId, categories: categorias });
+      });
+    return () => {
+      activo = false;
+    };
+  }, [selectedId, selectedSlug, supabase]);
+
   // Entre clicar noutra loja e a resposta chegar, o rascunho ainda é o da loja
   // anterior. Guardar nesse intervalo gravava as definições de uma loja na
   // outra — o mesmo erro que a aba Lojas já apanhou (F10).
   const stale = !draft || loadedFor !== selectedId;
-  const dirty = !!draft && !!saved && JSON.stringify(draft) !== JSON.stringify(saved);
   const store = stores.find((s) => s.id === selectedId);
+  const settingsDirty = !!draft && !!saved && JSON.stringify(draft) !== JSON.stringify(saved);
+  const copiesDirty = !!store && copiesDraft !== null && copiesDraft !== store.kitchen_ticket_copies;
+  const dirty = settingsDirty || copiesDirty;
+
+  // O rascunho das vias acompanha a loja escolhida (e o que ficou gravado).
+  const copiasGravadas = store?.kitchen_ticket_copies ?? null;
+  useEffect(() => {
+    setCopiesDraft(copiasGravadas);
+  }, [selectedId, copiasGravadas]);
 
   function patch(update: (current: PosSettings) => PosSettings) {
     setDraft((current) => (current ? update(current) : current));
@@ -147,25 +207,43 @@ export default function DefinicoesPosPage() {
     return true;
   }
 
+  /** As vias vivem em `stores` (1071): gravam-se por RPC própria, com registo. */
+  async function saveCopies(target: string, copies: number): Promise<boolean> {
+    const { error } = await supabase.rpc('set_store_ticket_copies', { p_store_id: target, p_copies: copies });
+    if (error) {
+      setMessage({
+        tone: 'error',
+        text: error.message.includes('pos_settings_denied')
+          ? 'Só o dono ou o gerente desta loja mudam as vias do talão.'
+          : `Não foi possível guardar as vias: ${error.message}`,
+      });
+      return false;
+    }
+    return true;
+  }
+
   async function saveCurrent() {
     if (!draft || !selectedId || stale) return;
-    const ok = await save(
-      selectedId,
-      draft,
-      `Guardado. O POS de ${store?.short_name ?? 'loja'} actualiza sozinho em até 2 minutos.`,
-    );
-    if (ok) await loadSettings();
+    const okText = `Guardado. O POS de ${store?.short_name ?? 'loja'} actualiza em até 2 minutos; o talão, em até 1.`;
+    if (settingsDirty && !(await save(selectedId, draft, okText))) return;
+    if (copiesDirty && copiesDraft !== null) {
+      setBusy(true);
+      const ok = await saveCopies(selectedId, copiesDraft);
+      setBusy(false);
+      if (!ok) return;
+      setMessage({ tone: 'ok', text: okText });
+    }
+    await Promise.all([loadSettings(), loadStores()]);
   }
 
   async function copyTo() {
     if (!draft || stale || !copyTarget) return;
     const destino = stores.find((s) => s.id === copyTarget);
-    await save(
-      copyTarget,
-      draft,
-      `Definições copiadas para ${destino?.short_name ?? 'a outra loja'}.`,
-    );
+    const ok = await save(copyTarget, draft, `Definições copiadas para ${destino?.short_name ?? 'a outra loja'}.`);
+    // As vias também são do que está neste ecrã.
+    if (ok && copiesDraft !== null) await saveCopies(copyTarget, copiesDraft);
     setCopyTarget('');
+    await loadStores();
   }
 
   function moveMethod(index: number, delta: -1 | 1) {
@@ -357,9 +435,9 @@ export default function DefinicoesPosPage() {
           <section className={CARD}>
             <h2 className="text-lg font-black text-white">Upsell no balcão</h2>
             <p className="text-xs text-[#8b8378]">
-              O ecrã entre o carrinho e o pagamento. Os produtos oferecidos são os marcados como upsell
-              no Cardápio; aqui escolhes os passos e o que o operador diz. Uma frase por linha — roda
-              uma por venda. Curtas, com pergunta aberta, sem pressão.
+              O ecrã entre o carrinho e o pagamento. Cada passo oferece os produtos marcados como upsell
+              no Cardápio, ou os que escolheres aqui para esta loja. Frases: uma por linha — roda uma
+              por venda. Curtas, com pergunta aberta, sem pressão.
             </p>
             <div className="mt-4 space-y-3">
               <Toggle
@@ -401,6 +479,31 @@ export default function DefinicoesPosPage() {
                         className={`${INPUT} font-normal normal-case tracking-normal`}
                       />
                     </label>
+                    {menu?.storeId === selectedId ? (
+                      (() => {
+                        const outro: PosUpsellStepId = stepId === 'companion' ? 'dessert' : 'companion';
+                        const passoOutro = draft.upsell.steps[outro];
+                        // O que o outro passo oferece de facto: a lista dele ou,
+                        // sem lista, a do Cardápio — nunca o mesmo produto duas vezes.
+                        const idsDoOutro =
+                          passoOutro.productIds.length > 0
+                            ? passoOutro.productIds
+                            : cardapioStepProducts(menu.categories, outro).map((item) => item.id);
+                        return (
+                          <StepProducts
+                            key={`${selectedId}-${stepId}`}
+                            productIds={step.productIds}
+                            cardapioIds={cardapioStepProducts(menu.categories, stepId).map((item) => item.id)}
+                            otherStepIds={idsDoOutro}
+                            otherStepName={outro === 'dessert' ? 'Sobremesa' : 'Acompanhar'}
+                            categories={menu.categories}
+                            onChange={(ids) => patchStep(stepId, { productIds: ids })}
+                          />
+                        );
+                      })()
+                    ) : (
+                      <p className="mt-3 text-xs text-[#8b8378]">A carregar os produtos da loja…</p>
+                    )}
                   </div>
                 );
               })}
@@ -523,13 +626,47 @@ export default function DefinicoesPosPage() {
             </div>
           </section>
 
+          {/* ── Impressão ──────────────────────────────────────────────── */}
+          {store && copiesDraft !== null && (
+            <section className={CARD}>
+              <h2 className="text-lg font-black text-white">Impressão</h2>
+              <p className="text-xs text-[#8b8378]">
+                Como sai o talão de cada pedido nesta loja: quantas vias e o modelo de cada uma. Modelos
+                prontos e testados — não se desenha à mão, para a cozinha nunca ficar sem papel legível.
+              </p>
+              <PrintSection
+                printing={draft.printing}
+                onChange={(printing) => patch((current) => ({ ...current, printing }))}
+                copies={copiesDraft}
+                onCopiesChange={(copies) => {
+                  setCopiesDraft(copies);
+                  setMessage(null);
+                }}
+                store={{
+                  short_name: store.short_name,
+                  address: store.address,
+                  phone: store.phone,
+                  receipt_footer: store.receipt_footer,
+                }}
+                brand={{
+                  name: brand.name,
+                  logoUrl: brand.storefront.logoImage ?? null,
+                  reviewUrl: textoOuNulo(brandRow?.social?.google_review),
+                  instagram: textoOuNulo(brandRow?.contact?.instagram),
+                  instagramUrl: textoOuNulo(brandRow?.social?.instagram),
+                }}
+                categories={menu?.storeId === selectedId ? menu.categories : null}
+              />
+            </section>
+          )}
+
           {/* ── Copiar ─────────────────────────────────────────────────── */}
           {stores.length > 1 && (
             <section className={CARD}>
               <h2 className="text-lg font-black text-white">Copiar para outra loja</h2>
               <p className="text-xs text-[#8b8378]">
-                Grava na outra loja o que está neste ecrã (incluindo alterações ainda por guardar aqui).
-                Substitui as definições do POS dessa loja.
+                Grava na outra loja o que está neste ecrã (incluindo alterações ainda por guardar aqui),
+                com as vias e os modelos do talão. Substitui as definições do POS dessa loja.
               </p>
               <div className="mt-3 flex flex-wrap gap-2">
                 <select
@@ -574,6 +711,7 @@ export default function DefinicoesPosPage() {
                   onClick={() => {
                     if (window.confirm('Repor os valores de fábrica neste ecrã? Só grava quando carregares em Guardar.')) {
                       setDraft(resolvePosSettings(FACTORY_POS_SETTINGS));
+                      setCopiesDraft(2); // o de fábrica da coluna (1062)
                     }
                   }}
                   className="rounded-xl border border-white/10 px-4 py-2.5 text-sm font-bold text-[#C9BCAC] disabled:opacity-40"
@@ -583,7 +721,10 @@ export default function DefinicoesPosPage() {
                 <button
                   type="button"
                   disabled={busy || !dirty}
-                  onClick={() => setDraft(saved)}
+                  onClick={() => {
+                    setDraft(saved);
+                    setCopiesDraft(store?.kitchen_ticket_copies ?? null);
+                  }}
                   className="rounded-xl border border-white/10 px-4 py-2.5 text-sm font-bold text-[#C9BCAC] disabled:opacity-40"
                 >
                   Descartar

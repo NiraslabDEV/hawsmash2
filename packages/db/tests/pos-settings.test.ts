@@ -26,6 +26,7 @@ let cashierMaputo: SupabaseClient;
 let maputoId: string;
 let matolaId: string;
 let before: Array<{ store_id: string; config: unknown }> = [];
+let copiesBefore: Array<{ id: string; kitchen_ticket_copies: number }> = [];
 
 const createdUserIds: string[] = [];
 const suffix = `${Date.now()}-${Math.random().toString(16).slice(2)}`;
@@ -94,6 +95,13 @@ beforeAll(async () => {
   if (readError) throw new Error(`Setup POS: ler definições — ${readError.message}`);
   before = atuais ?? [];
 
+  const { data: vias, error: viasError } = await admin
+    .from("stores")
+    .select("id,kitchen_ticket_copies")
+    .in("id", [maputoId, matolaId]);
+  if (viasError) throw new Error(`Setup POS: vias — ${viasError.message}`);
+  copiesBefore = vias ?? [];
+
   owner = await createUser("dono", "owner", []);
   managerMatola = await createUser("gerente-matola", "manager", [matolaId]);
   cashierMaputo = await createUser("caixa-maputo", "cashier", [maputoId]);
@@ -110,10 +118,17 @@ afterAll(async () => {
     const { error: restoreError } = await admin.from("store_pos_settings").insert(before);
     if (restoreError) throw new Error(`Limpeza POS: repor — ${restoreError.message}`);
   }
+  for (const loja of copiesBefore) {
+    const { error: copiesError } = await admin
+      .from("stores")
+      .update({ kitchen_ticket_copies: loja.kitchen_ticket_copies })
+      .eq("id", loja.id);
+    if (copiesError) throw new Error(`Limpeza POS: vias — ${copiesError.message}`);
+  }
   await admin
     .from("event_log")
     .delete()
-    .eq("type", "store.pos_settings_changed")
+    .in("type", ["store.pos_settings_changed", "store.ticket_copies_changed"])
     .in("actor_user_id", createdUserIds);
   for (const userId of createdUserIds) {
     await admin.auth.admin.deleteUser(userId);
@@ -190,6 +205,34 @@ describe("1067 — definições do POS por loja", () => {
       .from("store_pos_settings")
       .upsert({ store_id: maputoId, config: {} });
     expect(direct.error).not.toBeNull();
+  });
+
+  it("o gerente muda as vias do talão da sua loja, não da outra, e fica registado (1071)", async () => {
+    const ok = await managerMatola.rpc("set_store_ticket_copies", { p_store_id: matolaId, p_copies: 3 });
+    expect(ok.error).toBeNull();
+    const { data: loja } = await admin.from("stores").select("kitchen_ticket_copies").eq("id", matolaId).single();
+    expect(loja?.kitchen_ticket_copies).toBe(3);
+
+    const { data: log } = await admin
+      .from("event_log")
+      .select("store_id,payload")
+      .eq("type", "store.ticket_copies_changed")
+      .in("actor_user_id", createdUserIds)
+      .order("created_at", { ascending: false })
+      .limit(1);
+    expect(log?.[0]?.store_id).toBe(matolaId);
+    expect((log?.[0]?.payload as { to: number }).to).toBe(3);
+
+    const outra = await managerMatola.rpc("set_store_ticket_copies", { p_store_id: maputoId, p_copies: 1 });
+    expect(outra.error?.message ?? "").toContain("pos_settings_denied");
+
+    const caixa = await cashierMaputo.rpc("set_store_ticket_copies", { p_store_id: maputoId, p_copies: 1 });
+    expect(caixa.error?.message ?? "").toContain("pos_settings_denied");
+
+    for (const invalido of [0, 4]) {
+      const r = await owner.rpc("set_store_ticket_copies", { p_store_id: maputoId, p_copies: invalido });
+      expect(r.error?.message ?? "").toContain("ticket_copies_invalid");
+    }
   });
 
   it("o dono grava em qualquer loja e o payload tem de ser um objecto", async () => {

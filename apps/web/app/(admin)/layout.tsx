@@ -6,6 +6,13 @@ import Link from 'next/link';
 import Image from 'next/image';
 import type { User } from '@supabase/supabase-js';
 import { useBrand } from '@/lib/brand/context';
+import {
+  ADMIN_NAV,
+  ROLE_LABEL,
+  canAccessAdminPath,
+  firstAllowedHref,
+  type StaffRole,
+} from '@/lib/admin/nav';
 import { createClient } from '@/utils/supabase/client';
 
 // ─── Ícones (SVG inline, leves) ───────────────────────────────────────────────
@@ -34,49 +41,7 @@ function Icon({ name }: { name: string }) {
   );
 }
 
-/**
- * Perfis e o que cada um vê no painel.
- *
- * A base de dados já recusa o que estes perfis não podem escrever — isto não é
- * a fechadura, é a porta. Mostrar treze separadores a quem só usa dois ensina a
- * equipa a clicar em coisas que não guardam, e a desconfiar do sistema.
- *
- * `kitchen` não entra de todo: tem o ecrã dela.
- */
-type StaffRole = 'owner' | 'manager' | 'cashier' | 'kitchen';
-
-const ROLE_LABEL: Record<StaffRole, string> = {
-  owner: 'Dono',
-  manager: 'Gerente',
-  cashier: 'Balcão',
-  kitchen: 'Cozinha',
-};
-
-type NavItem = {
-  href: string;
-  label: string;
-  icon: string;
-  badge?: boolean;
-  roles: StaffRole[];
-};
-
-const NAV: NavItem[] = [
-  { href: '/pedidos', label: 'Pedidos', icon: 'pedidos', badge: true, roles: ['owner', 'manager', 'cashier'] },
-  { href: '/cardapio', label: 'Cardápio', icon: 'cardapio', roles: ['owner', 'manager'] },
-  { href: '/mesas', label: 'Mesas', icon: 'mesas', roles: ['owner', 'manager'] },
-  { href: '/caixa', label: 'Caixa', icon: 'caixa', roles: ['owner', 'manager', 'cashier'] },
-  { href: '/estoque', label: 'Estoque', icon: 'estoque', roles: ['owner', 'manager'] },
-  { href: '/analise', label: 'Análise', icon: 'analise', roles: ['owner', 'manager'] },
-  { href: '/feedback', label: 'Avaliações', icon: 'feedback', roles: ['owner', 'manager'] },
-  { href: '/lista-espera', label: 'Clientes', icon: 'clientes', roles: ['owner', 'manager'] },
-  { href: '/marketing', label: 'Marketing', icon: 'marketing', roles: ['owner', 'manager'] },
-  { href: '/lojas', label: 'Lojas', icon: 'lojas', roles: ['owner', 'manager'] },
-  { href: '/definicoes-pos', label: 'POS', icon: 'pos', roles: ['owner', 'manager'] },
-  { href: '/equipa', label: 'Equipa', icon: 'equipa', roles: ['owner'] },
-  { href: '/aparencia', label: 'Aparência', icon: 'aparencia', roles: ['owner'] },
-  { href: '/sistema', label: 'Sistema', icon: 'sistema', roles: ['owner', 'manager'] },
-  { href: '/definicoes', label: 'Definições', icon: 'definicoes', roles: ['owner'] },
-];
+// Perfis, menu e onde cada perfil pode entrar: `lib/admin/nav.ts` (testado).
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const brand = useBrand();
@@ -122,6 +87,14 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   useEffect(() => { setDrawerOpen(false); }, [pathname]);
 
+  // A porta: o menu esconde a aba, e o URL escrito à mão também não abre.
+  // A RLS continua a ser a fechadura — isto só evita mostrar um ecrã que não
+  // lê nem grava nada, com ar de funcionar.
+  const podeEntrar = role ? canAccessAdminPath(role, pathname) : false;
+  useEffect(() => {
+    if (role && !canAccessAdminPath(role, pathname)) router.replace(firstAllowedHref(role));
+  }, [role, pathname, router]);
+
   if (loading) {
     return (
       <div className="min-h-screen bg-[#150D08] flex items-center justify-center">
@@ -159,7 +132,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
       {/* Nav */}
       <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-1">
-        {NAV.filter((item) => !role || item.roles.includes(role)).map((item) => {
+        {ADMIN_NAV.filter((item) => !role || item.roles.includes(role)).map((item) => {
           const active = pathname === item.href;
           return (
             <Link
@@ -249,7 +222,17 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
           </div>
         </header>
 
-        <main className="p-4 lg:p-6 max-w-[1400px] mx-auto">{children}</main>
+        <main className="p-4 lg:p-6 max-w-[1400px] mx-auto">
+          {/* A página proibida nem chega a montar: assim não corre as leituras
+              nem mostra um botão Guardar que a base de dados vai recusar. */}
+          {podeEntrar ? (
+            children
+          ) : (
+            <p className="rounded-2xl border border-white/[0.08] p-6 text-center text-sm text-[#8A7A69]">
+              Esta página não está disponível para o perfil {role ? ROLE_LABEL[role] : ''}. A voltar…
+            </p>
+          )}
+        </main>
       </div>
     </div>
   );

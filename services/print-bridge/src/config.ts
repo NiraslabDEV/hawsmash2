@@ -19,6 +19,8 @@ export interface BridgeConfig {
   localToken: string;
   localAllowedOrigins: string[];
   localStateFile: string;
+  /** Cópia local do layout do talão (aba POS), para imprimir como a loja quer mesmo sem rede. */
+  printLayoutFile: string;
   customerDisplay: CustomerDisplayConfig;
 }
 
@@ -106,6 +108,7 @@ export function loadBridgeConfig(env: Environment): BridgeConfig {
     localToken,
     localAllowedOrigins,
     localStateFile: env.LOCAL_STATE_FILE?.trim() || './data/printed-requests.log',
+    printLayoutFile: env.PRINT_LAYOUT_FILE?.trim() || './data/print-layout.json',
     customerDisplay: loadCustomerDisplayConfig(env),
   };
 }
