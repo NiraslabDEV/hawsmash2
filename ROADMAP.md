@@ -378,3 +378,10 @@ O HAWSMASH 2.0 é a **primeira instância multi-unidade** do Restaurant OS. O ca
 1. Consolidar este motor (uma empresa, N lojas) — é o que esta fase entrega.
 2. Extrair a instanciação (`config/brand.ts` + seed + `stores`) num onboarding self-service.
 3. Só depois discutir multi-tenant real (`tenant_id` + RLS por inquilino) — **com ADR** e sem tocar neste cliente.
+
+## Campanhas automáticas por loja — 2026-09-23
+
+- [x] Reajuste auditado e idempotente por loja; desconto por unidade com data final; banner e preços de tabela/campanha.
+- [x] Ensaio SQL local transaccional: arredondamento, retry, isolamento, expiração e total do pedido.
+- [x] ⏳ Validar checkout público completo e activar apenas depois de staging (ver docs/CAMPANHAS.md).
+

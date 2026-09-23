@@ -826,3 +826,8 @@ real no telemóvel depende da conta e do ambiente de ensaio disponibilizados pel
 |---|---|---|
 | 1 | B-108 | o código novo não deve ser publicado contra uma BD sem migrations validadas |
 | 2 | B-109 | e-Mola directo permanece em preparação; a loja pode receber comprovativos |
+
+## Campanhas automáticas — validação de instalação
+
+Código preparado e ensaiado em transacção SQL local. A activação exige dono autenticado e staging da instalação; nenhuma campanha foi activada no motor. Ver docs/CAMPANHAS.md.
+
