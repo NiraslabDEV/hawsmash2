@@ -1,11 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import {
+  BOARD_LIMIT,
+  BOARD_ORDER,
   buildBoard,
   columnOf,
   fulfillmentLabel,
   isLate,
   isScheduled,
+  needsProofCheck,
   nextStep,
+  paymentLabel,
   type BoardOrder,
 } from '../orders-board';
 
@@ -22,9 +26,49 @@ function order(over: Partial<BoardOrder> = {}): BoardOrder {
     total_cents: 30_000,
     scheduled_for: null,
     created_at: '2026-08-24T12:00:00.000Z',
+    payment_method: 'cash',
+    payment_proof_path: null,
+    flow: 'manual',
     ...over,
   };
 }
+
+describe('quadro de pedidos · o que chega ao ecrã', () => {
+  it('lê os mais recentes primeiro, para o tecto cortar os velhos e não os novos', () => {
+    // Por ordem crescente, uma loja com 355 pedidos activos mostrava os 120
+    // mais antigos e escondia o que acabara de entrar da internet.
+    expect(BOARD_ORDER).toEqual({ column: 'created_at', ascending: false });
+    expect(BOARD_LIMIT).toBeGreaterThan(0);
+  });
+
+  it('mesmo lidos ao contrário, o quadro mostra-os por ordem de entrada', () => {
+    const cedo = order({ id: 'cedo', created_at: '2026-09-23T10:00:00.000Z' });
+    const tarde = order({ id: 'tarde', created_at: '2026-09-23T12:00:00.000Z' });
+
+    const [aFazer] = buildBoard([tarde, cedo]);
+    expect(aFazer.orders.map((o) => o.id)).toEqual(['cedo', 'tarde']);
+  });
+});
+
+describe('quadro de pedidos · conferir o pagamento', () => {
+  it('pede para conferir o comprovativo num pedido manual por aprovar', () => {
+    expect(needsProofCheck(order({ status: 'awaiting_approval', flow: 'manual' }))).toBe(true);
+  });
+
+  it('não pede comprovativo a um pedido que o gateway já confirmou', () => {
+    expect(needsProofCheck(order({ status: 'awaiting_approval', flow: 'digital' }))).toBe(false);
+  });
+
+  it('não pede comprovativo depois de aprovado', () => {
+    expect(needsProofCheck(order({ status: 'approved', flow: 'manual' }))).toBe(false);
+  });
+
+  it('diz a forma de pagamento como o caixa a lê', () => {
+    expect(paymentLabel(order({ payment_method: 'mpesa' }))).toBe('M-PESA');
+    expect(paymentLabel(order({ payment_method: 'emola' }))).toBe('E-MOLA');
+    expect(paymentLabel(order({ payment_method: null }))).toBe('—');
+  });
+});
 
 describe('quadro de pedidos do balcão', () => {
   it('põe cada estado na coluna certa', () => {

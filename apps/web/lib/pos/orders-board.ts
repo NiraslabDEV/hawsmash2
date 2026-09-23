@@ -40,7 +40,42 @@ export type BoardOrder = {
   total_cents: number;
   scheduled_for: string | null;
   created_at: string;
+  /** Como o cliente disse que paga — o caixa precisa disto para conferir. */
+  payment_method: string | null;
+  /** Caminho no bucket privado. Nunca é um url: abre-se assinado, à parte. */
+  payment_proof_path: string | null;
+  flow: string | null;
 };
+
+/** As colunas que o quadro lê. Uma só definição, para o teste medir o mesmo. */
+export const BOARD_SELECT =
+  'id,daily_number,order_number,status,channel,fulfillment_type,' +
+  'customer_name,customer_phone,total_cents,scheduled_for,created_at,' +
+  'payment_method,payment_proof_path,flow';
+
+export const BOARD_STATUSES: OrderStatus[] = [
+  'awaiting_approval',
+  'awaiting_payment',
+  'approved',
+  'paid',
+  'in_preparation',
+  'ready',
+];
+
+export const BOARD_LIMIT = 120;
+
+/**
+ * **Os mais recentes primeiro — e isto não é detalhe.**
+ *
+ * O quadro mostra por ordem de entrada (o `buildBoard` trata disso, em
+ * memória), mas o tecto de linhas tem de cortar pelo lado certo. Lido por
+ * ordem crescente, o tecto ficava com os mais ANTIGOS: com 355 pedidos activos
+ * numa loja, a encomenda que acabou de entrar não chegava ao ecrã — sem erro e
+ * sem aviso, só um quadro cheio de pedidos velhos e o cliente à espera.
+ *
+ * Lido por ordem decrescente, o que cabe é sempre o que interessa.
+ */
+export const BOARD_ORDER = { column: 'created_at', ascending: false } as const;
 
 export type BoardColumn = {
   id: BoardColumnId;
@@ -150,4 +185,28 @@ const FULFILLMENT_LABEL: Record<string, string> = {
 export function fulfillmentLabel(order: BoardOrder): string {
   if (order.channel === 'counter' && order.fulfillment_type !== 'delivery') return 'BALCÃO';
   return FULFILLMENT_LABEL[order.fulfillment_type] ?? order.fulfillment_type.toUpperCase();
+}
+
+const PAYMENT_LABEL: Record<string, string> = {
+  mpesa: 'M-PESA',
+  emola: 'E-MOLA',
+  cash: 'DINHEIRO',
+  card: 'CARTÃO',
+  credit_card: 'CARTÃO',
+};
+
+export function paymentLabel(order: BoardOrder): string {
+  if (!order.payment_method) return '—';
+  return PAYMENT_LABEL[order.payment_method] ?? order.payment_method.toUpperCase();
+}
+
+/**
+ * Este pedido espera que alguém confira um comprovativo antes de aprovar?
+ *
+ * É o caso do fluxo manual (§11.9): o cliente transferiu e anexou o recibo, e
+ * quem está ao balcão tem de o ver antes de mandar fazer a comida. Um pedido
+ * digital já vem pago pelo gateway — aprovar esse é só carimbar.
+ */
+export function needsProofCheck(order: BoardOrder): boolean {
+  return order.status === 'awaiting_approval' && order.flow !== 'digital';
 }
