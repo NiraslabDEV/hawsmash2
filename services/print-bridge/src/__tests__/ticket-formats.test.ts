@@ -278,3 +278,56 @@ describe('talão do pedido online (o do 1.0, em vias)', () => {
     expect(texto).not.toContain('TOTAL');
   });
 });
+
+describe('talão da casa no balcão (1064)', () => {
+  const balcao: KitchenTicketPayload = {
+    ...online,
+    via: 'cliente',
+    channel: 'counter',
+    fulfillment_type: 'counter',
+    customer_name: null,
+    customer_phone: null,
+    notes: null,
+    payment_method: 'cash',
+    payments: [{ method: 'cash', amount_cents: 60000 }],
+    cash_received_cents: 100000,
+    change_cents: 40000,
+  };
+
+  it('uma venda sem nome não imprime CLIENTE, e o carimbo é BALCÃO', () => {
+    const texto = decodeReceipt(createKitchenTicket(balcao));
+    expect(texto).toContain('** BALCÃO **');
+    expect(texto).not.toContain('CLIENTE:');
+    expect(texto).not.toContain('LEVANTAMENTO');
+    expect(texto).toContain('Obrigado! Bom apetite!');
+  });
+
+  it('em dinheiro sai o recebido e o troco — o fecho de caixa depende disto (§7.3)', () => {
+    const texto = decodeReceipt(createKitchenTicket(balcao));
+    expect(texto).toContain('Recebido');
+    expect(texto).toContain('Troco');
+    expect(texto).toContain('[ PAGO VIA DINHEIRO ]');
+  });
+
+  it('pagamento misto mostra cada método e junta-os no selo', () => {
+    const texto = decodeReceipt(
+      createKitchenTicket({
+        ...balcao,
+        payments: [
+          { method: 'cash', amount_cents: 20000 },
+          { method: 'mpesa', amount_cents: 40000 },
+        ],
+        cash_received_cents: 20000,
+        change_cents: 0,
+      }),
+    );
+    expect(texto).toContain('[ PAGO: DINHEIRO + M-PESA ]');
+    expect(texto).not.toContain('Troco');
+  });
+
+  it('uma reimpressão diz que o é — não passa por original (§7.4)', () => {
+    const texto = decodeReceipt(createKitchenTicket({ ...balcao, via: 'reimpressao' }));
+    expect(texto).toContain('*** REIMPRESSÃO ***');
+    expect(texto).not.toContain('VIA DO CLIENTE');
+  });
+});

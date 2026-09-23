@@ -290,7 +290,7 @@ proposta (§6 "Registo de auditoria").
 4. Tipo: **Balcão (comer/levar)** · **Delivery no balcão** (pede nome/telefone/zona) · **Levantamento**.
 5. Pagamento: **Dinheiro** (teclado numérico → troco em ecrã grande) · **M-Pesa** · **e-Mola** · **Cartão**.
    Pagamento misto (dinheiro + móvel) é suportado no schema (`payments` N linhas por pedido).
-6. **Finalizar** → grava, **imprime talão do cliente + comanda da cozinha**, **abre a gaveta** (se dinheiro),
+6. **Finalizar** → grava, **imprime os dois talões completos** (VIA DE CONTROLO + VIA DO CLIENTE, §8.3), **abre a gaveta** (se dinheiro),
    mostra ecrã de confirmação com o **número do dia** e volta ao início em 3 s.
 
 ### 7.2 Servidor: `create_counter_sale(p_payload jsonb)`
@@ -363,17 +363,17 @@ print_jobs (id, store_id, order_id null, station text, kind text, reprint_seq in
 - **Simulador** (`pnpm bridge:dev`) para desenvolver sem hardware.
 
 ### 8.3 Talão (80 mm · 48 colunas · CP1252)
-Três formatos, todos com **`short_name` da loja no cabeçalho**:
-- **Comanda de cozinha** (venda de balcão): número do dia GRANDE, canal (BALCÃO/DELIVERY/LEVANTAMENTO),
-  itens + qty + notas, hora, **sem preços**. Uma só.
-- **Talão do cliente** (venda de balcão): loja, morada, número do pedido, itens com preço, subtotal, taxa de
-  entrega (se houver), **TOTAL a dupla altura**, forma de pagamento, **troco** se dinheiro, rodapé
-  (`stores.receipt_footer`).
-- **Talão do pedido online** (aprovação manual ou pagamento digital, 1063): o talão do HAWSMASH 1.0 num só
-  papel — senha, cliente, entrega/levantamento, **HORÁRIO a dobrar**, itens em altura dupla com preço, nota,
-  totais, **TOTAL** grande, `[ PAGO VIA … ]` e rodapé com QR (avaliação no Google, ou Instagram). Sai em
-  **vias** (`stores.kitchen_ticket_copies`, 2 por defeito): **VIA DE CONTROLO** fica na loja, **VIA DO
-  CLIENTE** vai para a cozinha e depois cola-se no saco. Decisão do dono, 23 Set.
+**Um só papel para todos os pedidos — o talão completo, em vias** (decisão do dono, 23 Set; 1064):
+balcão, levantamento ou entrega saem sempre em **dois talões completos**, o do HAWSMASH 1.0 — logo, loja,
+senha, cliente (se tiver nome), BALCÃO/ENTREGA/LEVANTAMENTO, **HORÁRIO a dobrar**, itens em altura dupla com
+preço, nota, totais, **TOTAL** grande, pagamento (misto, recebido e **troco** no balcão, §7.3), `[ PAGO VIA … ]`
+e rodapé com QR (avaliação no Google, ou Instagram).
+- **VIA DE CONTROLO** sai na impressora do balcão e fica na loja.
+- **VIA DO CLIENTE** sai na da cozinha e depois cola-se no saco que vai para o cliente.
+- **Reimprimir** sai **um** talão completo marcado **REIMPRESSÃO** — nunca passa por original (§7.4).
+- O número de vias é da loja (`stores.kitchen_ticket_copies`, 2 por defeito), não do código.
+A comanda curta e o talão curto do cliente ficam só para mesas (`dine_in`) e para o POS sem rede, que ainda
+imprime localmente no formato antigo.
 Formato de referência: `docs/legacy/HAWSMASH-1.0-CLAUDE.md §12.2` e `docs/legacy/hawsmash-print-bridge`
 (já validados em papel). Morada, telefone, Instagram e link de avaliação vêm da base de dados, nunca do código.
 

@@ -274,25 +274,28 @@ const VIA_LABEL: Record<string, string> = {
   controlo: '*** VIA DE CONTROLO ***',
   cliente: '*** VIA DO CLIENTE ***',
   cozinha: '*** VIA DA COZINHA ***',
+  reimpressao: '*** REIMPRESSÃO ***',
 };
 
 /**
- * O talao de um pedido online — o do HAWSMASH 1.0, em vias.
+ * O talao da casa — o do HAWSMASH 1.0, em vias, para todos os pedidos.
  *
- * E o papel que a loja ja conhecia e que o dono pediu de volta (23 Set): tudo
- * num so talao — cliente, entrega ou levantamento, o HORARIO a dobrar, os
- * artigos em letra alta com o preco, a nota, os totais, o TOTAL grande, a
- * forma de pagamento e o rodape que agradece pelo nome.
+ * E o papel que a loja ja conhecia e que o dono pediu de volta (23 Set), e
+ * depois pediu para tudo: balcao, levantamento e entrega. Tudo num so talao —
+ * cliente, o HORARIO a dobrar, os artigos em letra alta com o preco, a nota,
+ * os totais, o TOTAL grande, a forma de pagamento (e o troco, no balcao) e o
+ * rodape que agradece pelo nome.
  *
  * Sai em duas vias com o mesmo conteudo e um rotulo diferente, como no SLICE:
  * a VIA DE CONTROLO fica na loja, a VIA DO CLIENTE vai para a cozinha e depois
- * cola-se no saco. O rotulo e o que impede que alguem entregue a errada.
+ * cola-se no saco. O rotulo e o que impede que alguem entregue a errada — e o
+ * que marca uma REIMPRESSAO, para nao passar por original (§7.4).
  *
  * Do 2.0 fica a SENHA — o numero do dia que a TV chama (CLAUDE §5.4). Tudo o
  * que era da marca e no 1.0 estava escrito aqui (morada, telefone, Instagram,
  * link de avaliacao) chega agora no payload, da base de dados (§18.2).
  */
-export function createOnlineTicket(payload: KitchenTicketPayload): Buffer {
+export function createFullTicket(payload: KitchenTicketPayload): Buffer {
   const chunks: Buffer[] = brandHeader(payload.store_short_name);
   if (payload.store_address) {
     for (const moradaLinha of wrap(payload.store_address)) chunks.push(line(moradaLinha));
@@ -310,15 +313,23 @@ export function createOnlineTicket(payload: KitchenTicketPayload): Buffer {
   chunks.push(SIZE_TRIPLE, BOLD_ON, line(`${payload.daily_number}`), BOLD_OFF, SIZE_NORMAL);
   chunks.push(ALIGN_LEFT, line(rule('=')));
 
-  chunks.push(BOLD_ON);
-  for (const nomeLinha of wrap(`CLIENTE: ${payload.customer_name.toUpperCase()}`)) {
-    chunks.push(line(nomeLinha));
+  // Uma venda de balcao sem nome nao tem bloco de cliente: nao se imprime
+  // "CLIENTE:" vazio, nem o nome de ninguem inventado.
+  if (payload.customer_name || payload.customer_phone) {
+    if (payload.customer_name) {
+      chunks.push(BOLD_ON);
+      for (const nomeLinha of wrap(`CLIENTE: ${payload.customer_name.toUpperCase()}`)) {
+        chunks.push(line(nomeLinha));
+      }
+      chunks.push(BOLD_OFF);
+    }
+    if (payload.customer_phone) chunks.push(line(`TEL: ${payload.customer_phone}`));
+    chunks.push(line(rule('=')));
   }
-  chunks.push(BOLD_OFF);
-  if (payload.customer_phone) chunks.push(line(`TEL: ${payload.customer_phone}`));
-  chunks.push(line(rule('=')));
 
-  if (payload.fulfillment_type === 'delivery') {
+  if (payload.fulfillment_type === 'counter') {
+    chunks.push(BOLD_ON, line('** BALCÃO **'), BOLD_OFF);
+  } else if (payload.fulfillment_type === 'delivery') {
     chunks.push(BOLD_ON, line('** ENTREGA **'), BOLD_OFF);
     if (payload.delivery_zone) chunks.push(line(`Zona: ${payload.delivery_zone}`));
     if (payload.address) {
@@ -382,15 +393,30 @@ export function createOnlineTicket(payload: KitchenTicketPayload): Buffer {
   }
   chunks.push(line(rule('=')));
 
-  if (payload.payment_method) {
-    chunks.push(
-      ALIGN_CENTER,
-      BOLD_ON,
-      line(`[ PAGO VIA ${formatPaymentMethod(payload.payment_method).toUpperCase()} ]`),
-      BOLD_OFF,
-      ALIGN_LEFT,
-      line(rule('=')),
-    );
+  // Pagamento. No balcao pode ser misto e em dinheiro ha troco: as linhas
+  // saem como no talao do cliente de antes, e o selo junta os metodos.
+  const pagamentos = (payload.payments ?? []).filter((p) => p.amount_cents > 0);
+  if (pagamentos.length > 1) {
+    for (const pagamento of pagamentos) {
+      chunks.push(line(twoColumns(formatPaymentMethod(pagamento.method), formatMT(cents(pagamento.amount_cents)))));
+    }
+  }
+  if (payload.cash_received_cents != null) {
+    chunks.push(line(twoColumns('Recebido', formatMT(cents(payload.cash_received_cents)))));
+  }
+  if (payload.change_cents != null && payload.change_cents > 0) {
+    chunks.push(BOLD_ON, line(twoColumns('Troco', formatMT(cents(payload.change_cents)))), BOLD_OFF);
+  }
+  const metodos = pagamentos.length > 0
+    ? pagamentos.map((p) => formatPaymentMethod(p.method).toUpperCase())
+    : payload.payment_method
+      ? [formatPaymentMethod(payload.payment_method).toUpperCase()]
+      : [];
+  if (metodos.length > 0) {
+    const selo = metodos.length > 1 ? `[ PAGO: ${metodos.join(' + ')} ]` : `[ PAGO VIA ${metodos[0]} ]`;
+    chunks.push(ALIGN_CENTER, BOLD_ON);
+    for (const seloLinha of wrap(selo)) chunks.push(line(seloLinha));
+    chunks.push(BOLD_OFF, ALIGN_LEFT, line(rule('=')));
   }
 
   const nome = firstName(payload.customer_name);
@@ -432,8 +458,8 @@ export function createOnlineTicket(payload: KitchenTicketPayload): Buffer {
  * notas a dobrar. A dobrar so cabem 24 colunas, dai o wrap por WIDTH_DOUBLE.
  */
 export function createKitchenTicket(payload: KitchenTicketPayload): Buffer {
-  // Pedido online (1063): sai o talao completo do 1.0, na via que vier.
-  if (payload.formato === 'talao_completo') return createOnlineTicket(payload);
+  // O talao da casa (1063/1064): sai o talao completo do 1.0, na via que vier.
+  if (payload.formato === 'talao_completo') return createFullTicket(payload);
 
   const chunks: Buffer[] = brandHeader(payload.store_short_name);
   chunks.push(SIZE_TRIPLE, BOLD_ON, line(`Nº ${payload.daily_number}`), BOLD_OFF, SIZE_NORMAL);

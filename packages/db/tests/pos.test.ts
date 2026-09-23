@@ -868,7 +868,7 @@ describe("F3 — gaveta", () => {
 });
 
 describe("F3 — talões da venda", () => {
-  it("enfileira uma comanda sem preços e um talão com troco uma só vez", async () => {
+  it("enfileira os dois talões completos, com troco, uma só vez", async () => {
     const { error: stockSetupError } = await admin
       .from("store_items")
       .update({ available: true, track_stock: true, stock_qty: 5 })
@@ -899,49 +899,36 @@ describe("F3 — talões da venda", () => {
       .order("kind");
 
     expect(error).toBeNull();
-    // No balcão: o talão do cliente e uma comanda. As vias são só do pedido
-    // online (1063) — aqui o cliente leva o talão na mão.
+    // Um só papel para tudo (1064): dois talões completos — VIA DE CONTROLO ao
+    // balcão, VIA DO CLIENTE na cozinha — e nenhum talão curto. O retry não
+    // duplica nada.
     expect(jobs).toHaveLength(2);
+    expect(jobs?.every((job) => job.kind === "order")).toBe(true);
 
-    const kitchen = jobs?.find((job) => job.kind === "order");
-    const receipt = jobs?.find((job) => job.kind === "receipt");
-    expect(kitchen).toMatchObject({
-      store_id: maputoStoreId,
-      station: "kitchen",
-      reprint_seq: 0,
-      payload: {
-        template: "kitchen",
-        daily_number: first.data.daily_number,
-        order_number: first.data.order_number,
-        channel: "counter",
-        items: [{ name: "Classic Smash", quantity: 2, notes: "Sem cebola" }],
-      },
-    });
-    expect(kitchen?.payload).not.toHaveProperty("total_cents");
-    expect(kitchen?.payload.items[0]).not.toHaveProperty("unit_price_cents");
-
-    expect(receipt).toMatchObject({
+    const controlo = jobs?.find((job) => job.reprint_seq === 0);
+    const cliente = jobs?.find((job) => job.reprint_seq === 1);
+    const talao = {
+      template: "kitchen",
+      formato: "talao_completo",
+      daily_number: first.data.daily_number,
+      order_number: first.data.order_number,
+      channel: "counter",
+      subtotal_cents: 60000,
+      total_cents: 60000,
+      cash_received_cents: 100000,
+      change_cents: 40000,
+      items: [{ name: "Classic Smash", quantity: 2, notes: "Sem cebola", line_total_cents: 60000 }],
+      payments: [{ method: "cash", amount_cents: 60000 }],
+    };
+    expect(controlo).toMatchObject({
       store_id: maputoStoreId,
       station: "counter",
-      reprint_seq: 0,
-      payload: {
-        template: "receipt",
-        daily_number: first.data.daily_number,
-        order_number: first.data.order_number,
-        subtotal_cents: 60000,
-        total_cents: 60000,
-        cash_received_cents: 100000,
-        change_cents: 40000,
-        items: [
-          {
-            name: "Classic Smash",
-            quantity: 2,
-            unit_price_cents: 30000,
-            line_total_cents: 60000,
-          },
-        ],
-        payments: [{ method: "cash", amount_cents: 60000 }],
-      },
+      payload: { ...talao, via: "controlo" },
+    });
+    expect(cliente).toMatchObject({
+      store_id: maputoStoreId,
+      station: "kitchen",
+      payload: { ...talao, via: "cliente" },
     });
   });
 });
@@ -1015,7 +1002,12 @@ describe("F3 — reimpressão auditada", () => {
       kind: "receipt",
       station: "counter",
       request_id: requestId,
-      payload: { template: "receipt", order_number: sale.data.order_number },
+      // A 2.ª via é o talão completo, marcado REIMPRESSÃO (1064).
+      payload: {
+        formato: "talao_completo",
+        via: "reimpressao",
+        order_number: sale.data.order_number,
+      },
     });
     expect(events).toHaveLength(2);
     expect(events?.every((event) => Boolean(event.actor_user_id))).toBe(true);

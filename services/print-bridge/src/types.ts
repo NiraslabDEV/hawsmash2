@@ -61,7 +61,8 @@ export interface KitchenTicketPayload {
    * entregador leem: uma entrega vendida ao balcão tem channel='counter'.
    */
   fulfillment_type?: 'counter' | 'delivery' | 'pickup' | 'dine_in' | null;
-  customer_name: string;
+  /** null numa venda de balcão sem nome: 'Balcão' não é o nome de ninguém. */
+  customer_name: string | null;
   customer_phone?: string | null;
   address?: string | null;
   delivery_zone?: string | null;
@@ -83,8 +84,15 @@ export interface KitchenTicketPayload {
   // bridges das lojas por qualquer ordem.
   /** Presente = pedido online: sai o talão completo em vez da comanda curta. */
   formato?: 'talao_completo';
-  /** 'controlo' fica na loja; 'cliente' vai com o pedido; 'cozinha' é a 3.ª via. */
-  via?: 'controlo' | 'cliente' | 'cozinha' | null;
+  /**
+   * 'controlo' fica na loja; 'cliente' vai com o pedido; 'cozinha' é a 3.ª via;
+   * 'reimpressao' é uma cópia pedida depois e tem de se ver que o é (§7.4).
+   */
+  via?: 'controlo' | 'cliente' | 'cozinha' | 'reimpressao' | null;
+  /** Venda de balcão (1064): pagamento misto, dinheiro recebido e troco. */
+  payments?: Array<{ method: string; amount_cents: number }> | null;
+  cash_received_cents?: number | null;
+  change_cents?: number | null;
   store_address?: string | null;
   store_phone?: string | null;
   subtotal_cents?: number | null;
