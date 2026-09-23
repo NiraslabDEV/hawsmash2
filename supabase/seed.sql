@@ -189,6 +189,44 @@ begin
   set is_upsell = true
   where name in ('Joe''s Chips', 'Pastéis de Nata');
 
+  -- Ficha técnica — espelho da 1027. A 1027 liga os ingredientes aos produtos
+  -- pelo nome e corre ANTES deste seed; num `db reset` o cardápio ainda não
+  -- existe e a ficha ficava vazia. Em produção o cardápio já lá estava, por
+  -- isso lá funcionou — mas aqui, e na CI, nenhuma venda descontava
+  -- matéria-prima e o gate `recipes.test.ts` estava vermelho desde a 1027.
+  -- Mexer na ficha da 1027 obriga a mexer nesta.
+  insert into public.recipe_items (menu_item_id, variant_id, ingredient_id, qty)
+  select r.menu_item_id, r.variant_id, i.id, r.qty
+  from (
+    -- carne por variante: Classic 1, Double 2, Brisket 1
+    select mv.menu_item_id, mv.id as variant_id,
+           case mv.name when 'WAGYU' then 'Carne WAGYU' else 'Carne RAW' end as ingredient,
+           case mi.name when 'Double Smash' then 2 else 1 end as qty
+    from public.menu_item_variants mv
+    join public.menu_items mi on mi.id = mv.menu_item_id
+    where mi.name in ('Classic Smash', 'Double Smash', 'Smoked Brisket')
+      and mv.name in ('HAW', 'WAGYU')
+    union all
+    -- cheddar no Classic e no Double; brisket no Smoked Brisket
+    select mi.id, null::uuid,
+           case mi.name when 'Smoked Brisket' then 'Brisket (porção)' else 'Queijo cheddar (fatia)' end,
+           1
+    from public.menu_items mi
+    where mi.name in ('Classic Smash', 'Double Smash', 'Smoked Brisket')
+    union all
+    -- Signature: uma carne de cada, brisket e cheddar
+    select mi.id, null::uuid, x.ingredient, 1
+    from public.menu_items mi
+    cross join (values ('Carne RAW'), ('Carne WAGYU'), ('Brisket (porção)'), ('Queijo cheddar (fatia)'))
+      as x(ingredient)
+    where mi.name = 'Hawsmash Signature'
+  ) r
+  join public.ingredients i on i.name = r.ingredient
+  on conflict (
+    menu_item_id, ingredient_id,
+    coalesce(variant_id, '00000000-0000-0000-0000-000000000000'::uuid)
+  ) do nothing;
+
   -- DECISÃO confirmada: preços iguais nas duas lojas via override NULL.
   update public.store_items set price_cents_override = null;
 
