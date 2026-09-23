@@ -346,8 +346,18 @@ export function classifyChannel(input: ClassifyInput): Channel {
 export interface BuildTouchInput {
   url: URL;
   referrer?: string | null;
-  selfHost?: string;
+  /**
+   * Host(s) do proprio site. Atras do proxy do Railway o `nextUrl.hostname`
+   * nao e o dominio publico — por isso o middleware passa tambem o
+   * `x-forwarded-host`, o `host` e o dominio configurado. Referrer igual a
+   * qualquer um deles e navegacao interna.
+   */
+  selfHost?: string | Array<string | null | undefined>;
   now?: number;
+}
+
+function normalizeHost(host: string | null | undefined): string {
+  return (host ?? '').trim().toLowerCase().split(':')[0].replace(/^www\./, '');
 }
 
 export function buildTouch({ url, referrer, selfHost, now }: BuildTouchInput): Touch {
@@ -359,9 +369,11 @@ export function buildTouch({ url, referrer, selfHost, now }: BuildTouchInput): T
     if (v) clickIds[key] = v.slice(0, 200);
   }
 
-  const self = (selfHost ?? '').toLowerCase().replace(/^www\./, '');
+  const selves = (Array.isArray(selfHost) ? selfHost : [selfHost]).map(normalizeHost).filter(Boolean);
   const referrerHost = hostOf(referrer);
-  const internal = Boolean(self) && (referrerHost === self || referrerHost.endsWith('.' + self));
+  const self =
+    selves.find((h) => referrerHost === h || referrerHost.endsWith('.' + h)) ?? selves[0] ?? '';
+  const internal = Boolean(referrerHost) && selves.some((h) => referrerHost === h || referrerHost.endsWith('.' + h));
 
   const rawSource = clean(q.get('utm_source') ?? q.get('source') ?? q.get('ref'));
   const rawMedium = clean(q.get('utm_medium'));

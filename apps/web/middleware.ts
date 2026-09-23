@@ -27,8 +27,26 @@ import {
  * origem de trafego. O consentimento continua a mandar nos scripts de
  * terceiros (`dl_consent`), como antes.
  */
+/** Dominio publico configurado, quando existe (fica no build). */
+const CONFIGURED_HOST = (() => {
+  try {
+    return process.env.NEXT_PUBLIC_APP_BASE_URL ? new URL(process.env.NEXT_PUBLIC_APP_BASE_URL).hostname : null;
+  } catch {
+    return null;
+  }
+})();
+
 export function middleware(req: NextRequest) {
-  const selfHost = req.nextUrl.hostname;
+  // Atras do proxy do Railway o `nextUrl.hostname` nao e o dominio publico.
+  // Sem os outros tres, cada clique dentro do site contava como referral
+  // vindo do proprio site e apagava a campanha que trouxe o cliente (visto no
+  // staging: 21 de 29 sessoes com origem "hawsmash2-staging.up.railway.app").
+  const selfHost = [
+    req.headers.get('x-forwarded-host'),
+    req.headers.get('host'),
+    req.nextUrl.hostname,
+    CONFIGURED_HOST,
+  ];
 
   // ── sessao (30 min deslizantes) ───────────────────────────────────────────
   // 'unknown', vazio ou lixo nunca passam: um id invalido colapsava o site

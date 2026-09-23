@@ -278,3 +278,37 @@ describe('referrer de app Android', () => {
     expect(touch('https://hawsmash.com/', 'android-app://com.google.android.googlequicksearchbox/').ch).toBe('organic_search');
   });
 });
+
+describe('site atrás de proxy (Railway)', () => {
+  // O container vê `localhost`; o browser manda o referer com o domínio público.
+  const hosts = ['hawsmash2-staging.up.railway.app', 'localhost:8080', 'localhost', null];
+
+  it('clique dentro do site é navegação interna, mesmo com o nextUrl a dizer localhost', () => {
+    const t = buildTouch({
+      url: new URL('http://localhost:8080/checkout'),
+      referrer: 'https://hawsmash2-staging.up.railway.app/l/maputo',
+      selfHost: hosts,
+    });
+    expect(t.ch).toBe('internal');
+    expect(isMeaningfulTouch(t)).toBe(false);
+    expect(t.r).toBeUndefined();
+  });
+
+  it('o próprio domínio nunca aparece como fonte', () => {
+    const t = buildTouch({
+      url: new URL('http://localhost:8080/'),
+      referrer: 'https://www.hawsmash2-staging.up.railway.app/',
+      selfHost: hosts,
+    });
+    expect(t.s).not.toContain('railway.app');
+  });
+
+  it('um referrer externo continua externo', () => {
+    const t = buildTouch({
+      url: new URL('http://localhost:8080/'),
+      referrer: 'https://l.instagram.com/',
+      selfHost: hosts,
+    });
+    expect(t.ch).toBe('organic_social');
+  });
+});
