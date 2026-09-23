@@ -855,3 +855,28 @@ Código preparado e ensaiado em transacção SQL local. A activação exige dono
 | Melhoria de gestão; não altera a venda no balcão | B-111 | a nova interface não está validada com os dados reais para promoção; o POS e o fluxo de venda mantêm-se |
 
 Validação final desta etapa: `pnpm lint`, `pnpm test` (942), build de produção com configuração local e 8 testes Playwright passaram. Capturas revistas em `output/playwright/analysis-*.png`. Limites: dados simulados, auditoria automática restrita à nova área; B-111 não está fechado.
+
+### B-112 · [Exportação] Formato de importação no software certificado
+
+- Estado: **aberto**. Categoria: **fornecedor/integração**. Desbloqueia: Gabriel + contabilista/parceiro WinREST.
+- Falta: software, versão, módulo de importação/API e ficheiro-modelo oficial. Também o mapeamento fiscal da instalação (artigos, impostos, NUIT, séries e referências externas).
+- Contorno entregue: CSV documentado padrão/Excel, por pagamento ou por pedido, sem duplicar totais de pagamentos mistos; não se inventou SAF-T, IVA, NUIT ou números de factura.
+- Para fechar: implementar adaptador a partir do contrato real e validar numa empresa de ensaio, incluindo reimportação sem duplicados, pagamentos mistos, descontos e devoluções. Não foi emitida qualquer factura externa.
+- Pesquisa, contrato do CSV e limites: `docs/EXPORTACAO-CONTABILIDADE.md`.
+
+## PACOTE FINAL — correcção da exportação · 2026-09-24
+
+- **Funciona em ensaio local:** download autenticado atravessando a rota da aplicação, CSV e resumo por pedido conferidos; testes de volume >1000 linhas e de erros sem ficheiro parcial. O primeiro teste reproduziu o 401 com Bearer válido antes da correcção.
+- **Por validar:** B-111 mantém o ensaio de staging com sessões/dados reais. B-112 cobre a compatibilidade efectiva com o programa de facturação. Nenhuma promoção para produção nesta corrida.
+- **Para o cliente/contabilista — mensagem pronta:** 1. Qual é o programa e a versão usados para emitir as facturas? 2. O fornecedor pode facultar o ficheiro-modelo de importação de vendas ou a documentação da API, incluindo artigos, impostos e referência do pedido?
+- **Para Gabriel:** obter o contrato com o parceiro, confirmar os dados fiscais com o contabilista e implementar/ensaiar o adaptador. Eventuais licenças de integração são a confirmar com o fornecedor, sem subscrição feita nesta etapa.
+- **Hardware:** 0 bloqueios, 0 horas de validação física.
+- **Segunda passagem:** autenticação, paginação e totais resolvidos localmente; falta de contrato de importação não foi resolvida pelos testes e B-112 continua aberto.
+- **Contagem desta continuação:** 1 bloqueio novo de fornecedor/integração; 1 pendência anterior de infraestrutura/validação (B-111); 0 de hardware.
+
+| Impacto na abertura | ID | Sem isto… |
+|---|---|---|
+| Importação/facturação no destino | B-112 | não é possível garantir importação directa no WinREST nem emissão automática; continua disponível o CSV para conferência/mapeamento |
+| Promoção da melhoria | B-111 | falta validar o fluxo com as sessões e os dados reais antes de publicar |
+
+Verificação final desta continuação: 963 testes de domínio/integração local, 9 ensaios Playwright, lint/typecheck e build aprovados. Zero violações automáticas A/AA na área nova, incluindo os selectores de exportação. B-111 e B-112 permanecem abertos.

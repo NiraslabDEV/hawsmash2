@@ -1,6 +1,8 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { fetchAccountingExport } from '@/lib/admin/export-client';
+import type { AccountingLayout, CsvFormat } from '@/lib/admin/accounting-export';
 import { cents, formatMT } from '@delivery/core';
 import { analysisPeriodStart, maputoDate, nextMaputoDay } from '@/lib/admin/analysis-period';
 import { InsightIcon, InsightPanel, InsightEmpty, MetricCard } from '@/components/admin/insights-ui';
@@ -178,6 +180,8 @@ const card = 'insight-panel';
 
 function ExportContabilidadeCard({ stores, isOwner, selectedStore }: { stores: Store[]; isOwner: boolean; selectedStore: string | null }) {
   const [storeId, setStoreId] = useState(selectedStore ?? 'all');
+  const [layout, setLayout] = useState<AccountingLayout>('payments');
+  const [format, setFormat] = useState<CsvFormat>('excel');
   const [from, setFrom] = useState(() => `${maputoDate().slice(0, 7)}-01`);
   const [to, setTo] = useState(() => maputoDate());
   const ready = isOwner || stores.length > 0;
@@ -191,11 +195,11 @@ function ExportContabilidadeCard({ stores, isOwner, selectedStore }: { stores: S
       // até é exclusivo na RPC (created_at < p_to) — soma-se um dia para incluir o próprio dia "até"
       const toExclusive = nextMaputoDay(to);
       const params = new URLSearchParams({
-        store_id: storeId,
+        store_id: storeId, layout, format,
         from: new Date(`${from}T00:00:00+02:00`).toISOString(),
         to: toExclusive,
       });
-      const res = await fetch(`/api/reports/export-sales?${params.toString()}`);
+      const res = await fetchAccountingExport(params);
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
         throw new Error(body.error ?? 'Não foi possível gerar o ficheiro.');
@@ -203,9 +207,11 @@ function ExportContabilidadeCard({ stores, isOwner, selectedStore }: { stores: S
       const blob = await res.blob();
       const link = document.createElement('a');
       link.href = URL.createObjectURL(blob);
-      link.download = `vendas-${from}-a-${to}.csv`;
+      link.download = `${layout === 'orders' ? 'pedidos' : 'pagamentos'}-${from}-a-${to}.csv`;
+      document.body.appendChild(link);
       link.click();
-      URL.revokeObjectURL(link.href);
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(link.href), 1000);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Erro ao exportar.');
     } finally {
@@ -215,20 +221,29 @@ function ExportContabilidadeCard({ stores, isOwner, selectedStore }: { stores: S
 
   return (
     <div id="exportar" className="insight-export">
-      <InsightPanel title="Pronto para a contabilidade" description="Exporte os pagamentos confirmados, com data, loja, pedido, método e valor.">
+      <InsightPanel title="Pronto para a contabilidade" description="Exporte os dados para conferir e mapear no software do contabilista.">
         <form onSubmit={(event) => { event.preventDefault(); void handleExport(); }}>
-          <label>Loja<select value={storeId} onChange={(e) => setStoreId(e.target.value)} disabled={!ready}>
+          <label><span id="export-store-label">Loja</span><select aria-labelledby="export-store-label" value={storeId} onChange={(e) => setStoreId(e.target.value)} disabled={!ready}>
             {isOwner && <option value="all">Todas as lojas</option>}
             {!ready && <option value="all">A carregar lojas…</option>}
             {stores.map((s) => <option key={s.id} value={s.id}>{s.short_name}</option>)}
           </select></label>
           <label>De<input type="date" required value={from} max={to} onChange={(e) => setFrom(e.target.value)} /></label>
           <label>Até<input type="date" required value={to} min={from} onChange={(e) => setTo(e.target.value)} /></label>
+          <label><span id="export-content-label">Conteúdo</span><select aria-labelledby="export-content-label" value={layout} onChange={(e) => setLayout(e.target.value as AccountingLayout)}>
+            <option value="payments">Pagamentos detalhados</option><option value="orders">Resumo por pedido</option>
+          </select></label>
+          <label><span id="export-format-label">Formato</span><select aria-labelledby="export-format-label" value={format} onChange={(e) => setFormat(e.target.value as CsvFormat)}>
+            <option value="excel">CSV para Excel (; / 123,45)</option><option value="standard">CSV padrão (, / 123.45)</option>
+          </select></label>
           <button className="insight-button insight-button-primary" disabled={busy || !ready || !from || !to || from > to}>
             <InsightIcon name="download" />{busy ? 'A gerar…' : 'Descarregar CSV'}
           </button>
         </form>
-        <p className="insight-subtitle">Um pagamento por linha. A facturação fiscal é emitida no software certificado do contabilista.</p>
+        <p className="insight-subtitle">{layout === 'payments' ? 'Uma linha por pagamento confirmado ou devolvido. O total do pedido repete-se nos pagamentos mistos; some a coluna de pagamentos.' : 'Uma linha por pedido, com o total da venda e os pagamentos confirmados e devolvidos em colunas separadas.'} Datas pela criação do pedido, em Maputo.</p>
+        <details><summary>Importar para WinREST ou outro software</summary>
+          <p className="insight-subtitle">Estes CSV servem para conferência e mapeamento. A importação directa depende da versão e do modelo aceite pelo software de destino. O formato WinREST ainda não está validado. A emissão fiscal é feita no software certificado, com os artigos, impostos e dados fiscais confirmados pelo contabilista.</p>
+        </details>
         {error && <p role="alert" className="mt-3 text-[#ffb099]">{error}</p>}
       </InsightPanel>
     </div>

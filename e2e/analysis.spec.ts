@@ -1,3 +1,4 @@
+import { readFile } from 'node:fs/promises';
 import { expect, test, type Page } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 
@@ -128,7 +129,7 @@ test('gerente só dispõe da sua loja e exportação usa Maputo', async ({ page 
   await page.route('**/api/reports/export-sales?**', async (route) => { url = route.request().url(); await route.fulfill({ contentType: 'text/csv', body: 'data,valor\n2026-09-01,100' }); });
   const download = page.waitForEvent('download');
   await page.getByRole('button', { name: 'Descarregar CSV' }).click();
-  expect((await download).suggestedFilename()).toBe('vendas-2026-09-01-a-2026-09-24.csv');
+  expect((await download).suggestedFilename()).toBe('pagamentos-2026-09-01-a-2026-09-24.csv');
   const params = new URL(url).searchParams;
   expect(params.get('from')).toBe('2026-08-31T22:00:00.000Z');
   expect(params.get('to')).toBe('2026-09-24T22:00:00.000Z');
@@ -166,4 +167,30 @@ test('reflow a 320px, tabelas por teclado e falha de exportação recuperável',
   await expect(page.getByRole('button', { name: 'Descarregar CSV' })).toBeEnabled();
   await page.getByRole('button', { name: 'Aquisição', exact: true }).click();
   await audit(page);
+});
+
+
+test('download atravessa a API real com sessão do navegador sem cookies de autenticação', async ({ page }) => {
+  await setup(page);
+  expect((await page.context().cookies()).filter((cookie) => cookie.name.startsWith('sb-'))).toHaveLength(0);
+  await page.getByLabel('De', { exact: true }).fill('2026-09-01');
+  await page.getByLabel('Até', { exact: true }).fill('2026-09-24');
+  await page.getByLabel('Conteúdo').selectOption('orders');
+  await page.getByLabel('Formato', { exact: true }).selectOption('standard');
+  const [download, response] = await Promise.all([
+    page.waitForEvent('download'),
+    page.waitForResponse((response) => response.url().includes('/api/reports/export-sales?')),
+    page.getByRole('button', { name: 'Descarregar CSV' }).click(),
+  ]);
+  expect(response.status()).toBe(200);
+  expect(response.request().headers().authorization).toMatch(/^Bearer /);
+  expect(response.headers()['x-export-payment-count']).toBe('2');
+  const csv = await readFile((await download.path())!, 'utf8');
+  expect(csv.split('\r\n').filter(Boolean)).toHaveLength(2);
+  expect(csv).toContain('TESTE-CSV-001');
+  expect(csv).toContain(',436.92,436.92,0.00,cash + mpesa,MZN,1');
+  await page.getByText('Importar para WinREST ou outro software', { exact: true }).click();
+  await expect(page.getByText(/O formato WinREST ainda não está validado/)).toBeVisible();
+  await audit(page);
+  await page.locator('.insight-export').screenshot({ path: 'output/playwright/analysis-exportacao.png' });
 });

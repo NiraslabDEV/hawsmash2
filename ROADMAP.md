@@ -434,3 +434,11 @@ detalhe do pedido no quadro do POS (1072, `update_order_details`).
 - [x] Corrigir períodos móveis de Aquisição, exportação no fuso de Maputo, formatação `formatMT`, respostas atrasadas e lojas autorizadas na exportação.
 - [x] Documentar a base em `docs/ANALISE-DESIGN.md` para migrar as restantes páginas numa próxima etapa.
 - [~] B-111 — validar em staging com sessões e dados reais antes de promover. Não foi publicado em produção nesta corrida.
+
+## Exportação autenticada e CSV para integração · 2026-09-24
+
+- [x] Corrigir a sessão do download: Bearer do painel, validação Auth no servidor, mesma identidade na RPC e renovação única após 401.
+- [x] Paginar pagamentos com contagem exacta; recusar ficheiro parcial, parâmetros inválidos ou exportação acima dos limites explícitos.
+- [x] CSV padrão/Excel, detalhe por pagamento ou resumo por pedido sem duplicar totais de pagamentos mistos; estados de devolução separados.
+- [x] Testes antes da correcção para autenticação e valores; download pelo route handler real com Auth/RPC simulados, ficheiro conferido e auditoria de acessibilidade repetida.
+- [~] B-112 — adaptador específico WinREST/software certificado: falta contrato de importação/API e ensaio no destino. CSV genérico pronto, compatibilidade directa não declarada.
