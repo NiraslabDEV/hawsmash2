@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   BOARD_LIMIT,
   BOARD_ORDER,
+  advanceErrorMessage,
   buildBoard,
   columnOf,
   fulfillmentLabel,
@@ -47,6 +48,30 @@ describe('quadro de pedidos · o que chega ao ecrã', () => {
 
     const [aFazer] = buildBoard([tarde, cedo]);
     expect(aFazer.orders.map((o) => o.id)).toEqual(['cedo', 'tarde']);
+  });
+});
+
+describe('quadro de pedidos · quando não avança', () => {
+  it('diz que ingrediente falta, e que o pedido ficou onde estava', () => {
+    expect(advanceErrorMessage('out_of_ingredient:Queijo cheddar (fatia)')).toEqual({
+      texto:
+        'Falta Queijo cheddar (fatia) na loja — o pedido não foi aprovado. Repõe no Estoque ou marca o produto como esgotado.',
+      mudouDeEstado: false,
+    });
+  });
+
+  it('não confunde falta de stock com o pedido ter mudado de estado', () => {
+    const r = advanceErrorMessage('out_of_stock:e086dd3d-59d7-4490-b54e-d7e8d0fb9bbb.');
+    expect(r.mudouDeEstado).toBe(false);
+    expect(r.texto).toContain('esgotado');
+  });
+
+  it('só diz "mudou de estado" quando mudou mesmo', () => {
+    expect(advanceErrorMessage('invalid_transition: cannot approve from status approved').mudouDeEstado).toBe(true);
+  });
+
+  it('um erro desconhecido mostra o código, para se poder ler ao suporte', () => {
+    expect(advanceErrorMessage('qualquer_coisa_nova').texto).toContain('qualquer_coisa_nova');
   });
 });
 

@@ -201,6 +201,51 @@ export function paymentLabel(order: BoardOrder): string {
 }
 
 /**
+ * O que dizer ao caixa quando um pedido não avança.
+ *
+ * Até aqui o quadro dizia sempre "esse pedido já mudou de estado" — e a 23 Set
+ * isso mentiu: o pedido não tinha mudado nada, faltava cheddar na loja, e a
+ * aprovação (que desconta a ficha técnica na mesma transacção, §10.1)
+ * reverteu. O caixa carregou em Aprovar, nada aconteceu, e o ecrã deu-lhe a
+ * razão errada.
+ *
+ * `mudouDeEstado` diz se o pedido foi mexido noutro sítio (e a conferência
+ * aberta já não serve) ou se continua onde estava e o problema é outro.
+ */
+export function advanceErrorMessage(raw: string | undefined | null): {
+  texto: string;
+  mudouDeEstado: boolean;
+} {
+  const mensagem = raw ?? '';
+
+  const ingrediente = /out_of_ingredient:\s*([^.]+?)\.?$/.exec(mensagem)?.[1]?.trim();
+  if (ingrediente) {
+    return {
+      texto: `Falta ${ingrediente} na loja — o pedido não foi aprovado. Repõe no Estoque ou marca o produto como esgotado.`,
+      mudouDeEstado: false,
+    };
+  }
+  if (mensagem.includes('out_of_stock') || mensagem.includes('item_unavailable')) {
+    return {
+      texto: 'Um dos produtos deste pedido está esgotado — o pedido não foi aprovado.',
+      mudouDeEstado: false,
+    };
+  }
+  if (mensagem.includes('invalid_transition')) {
+    return { texto: 'Esse pedido já mudou de estado noutro sítio. Actualizei o quadro.', mudouDeEstado: true };
+  }
+  if (mensagem.includes('store_access_denied')) {
+    return { texto: 'Este terminal não tem acesso a esse pedido.', mudouDeEstado: false };
+  }
+  // O resto mostra-se tal como vem: um código lido ao telefone resolve mais
+  // depressa do que um "tenta outra vez" que não diz nada.
+  return {
+    texto: `Não foi possível avançar o pedido${mensagem ? ` (${mensagem.slice(0, 80)})` : ''}.`,
+    mudouDeEstado: false,
+  };
+}
+
+/**
  * Este pedido espera que alguém confira um comprovativo antes de aprovar?
  *
  * É o caso do fluxo manual (§11.9): o cliente transferiu e anexou o recibo, e

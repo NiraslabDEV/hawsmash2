@@ -8,6 +8,7 @@ import {
   BOARD_ORDER,
   BOARD_SELECT,
   BOARD_STATUSES,
+  advanceErrorMessage,
   buildBoard,
   fulfillmentLabel,
   isLate,
@@ -131,10 +132,12 @@ export function OrdersBoard({ storeId, onClose }: { storeId: string; onClose: ()
     });
 
     if (advanceError) {
-      // Pode ter sido a cozinha a avançar o mesmo pedido primeiro. Recarregar
-      // diz a verdade melhor do que qualquer mensagem que eu invente aqui.
-      setError('Esse pedido já mudou de estado. Actualizei o quadro.');
-      setAberto(null);
+      // Recarregar diz a verdade sobre o estado; a mensagem diz o porquê. Se
+      // o pedido não mudou (faltou matéria-prima, por exemplo), a conferência
+      // fica aberta com o motivo — é aí que o caixa está a olhar.
+      const { texto, mudouDeEstado } = advanceErrorMessage(advanceError.message);
+      setError(texto);
+      if (mudouDeEstado) setAberto(null);
       void load();
       return;
     }
@@ -149,8 +152,14 @@ export function OrdersBoard({ storeId, onClose }: { storeId: string; onClose: ()
    * que pode não estar paga — e o botão de aprovar vive dentro da conferência.
    */
   function tocarSeta(order: BoardOrder) {
-    if (needsProofCheck(order)) setAberto(order);
+    if (needsProofCheck(order)) abrir(order);
     else void advance(order);
+  }
+
+  /** Abrir a conferência limpa o erro do pedido anterior. */
+  function abrir(order: BoardOrder) {
+    setError(null);
+    setAberto(order);
   }
 
   const board = buildBoard(orders);
@@ -208,7 +217,7 @@ export function OrdersBoard({ storeId, onClose }: { storeId: string; onClose: ()
                   >
                     <button
                       type="button"
-                      onClick={() => setAberto(order)}
+                      onClick={() => abrir(order)}
                       aria-label={`Ver detalhe do pedido ${order.daily_number ?? order.order_number}`}
                       className="block w-full text-left"
                     >
@@ -282,7 +291,11 @@ export function OrdersBoard({ storeId, onClose }: { storeId: string; onClose: ()
         <DetalhePedido
           order={aberto}
           aMexer={moving.has(aberto.id)}
-          onFechar={() => setAberto(null)}
+          erro={error}
+          onFechar={() => {
+            setError(null);
+            setAberto(null);
+          }}
           onAvancar={() => void advance(aberto)}
         />
       )}
@@ -301,11 +314,14 @@ export function OrdersBoard({ storeId, onClose }: { storeId: string; onClose: ()
 function DetalhePedido({
   order,
   aMexer,
+  erro,
   onFechar,
   onAvancar,
 }: {
   order: BoardOrder;
   aMexer: boolean;
+  /** Porque é que o último toque não avançou este pedido, se não avançou. */
+  erro: string | null;
   onFechar: () => void;
   onAvancar: () => void;
 }) {
@@ -434,6 +450,15 @@ function DetalhePedido({
           </div>
         </section>
       </div>
+
+      {erro && (
+        <p
+          role="alert"
+          className="shrink-0 border-t border-red-500/40 bg-red-500/15 px-6 py-4 text-lg font-bold text-red-100"
+        >
+          {erro}
+        </p>
+      )}
 
       {passo && (
         <footer className="shrink-0 border-t border-white/10 p-4">
