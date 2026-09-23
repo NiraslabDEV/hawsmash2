@@ -261,7 +261,7 @@ create table staff_stores (
 |---|---|---|
 | `owner` | **todas** as lojas | tudo, incluindo definições, preços, equipa, anulações, consolidado |
 | `manager` | as suas lojas | operação completa da loja: aprovar, anular, abrir/fechar caixa, sangria, estoque, cardápio |
-| `cashier` | a sua loja | vender no POS, imprimir, receber, abrir gaveta **em venda**, abrir/fechar a sua caixa |
+| `cashier` | a sua loja | vender no POS, imprimir, receber, abrir gaveta **em venda**, abrir/fechar a sua caixa; **aprovar pedidos online depois de conferir o comprovativo no POS** e **marcar produtos esgotados/disponíveis** (só a disponibilidade — quantidades, contagens e quebras continuam do `manager`). Decisão do dono, 23 Set |
 | `kitchen` | a sua loja | ver pedidos e avançar estado (em preparo → pronto). Não vê dinheiro |
 
 ### Helpers de RLS (SECURITY DEFINER, `search_path = ''`, `stable`)

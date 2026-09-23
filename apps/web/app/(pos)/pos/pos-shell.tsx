@@ -34,6 +34,7 @@ import { connectionStatus } from '@/lib/pos/connection-status';
 import { buildPosUpsellFunnel, type PosUpsellStep } from '@/lib/pos/pos-upsell';
 import { isPosPin, POS_IDLE_TIMEOUT_MS } from '@/lib/pos/session';
 import { OrdersBoard } from './orders-board';
+import { AvailabilityPanel } from './availability-panel';
 import { PosLogin } from './pos-login';
 import { loadActiveDeliveryOrders } from '@/lib/pos/delivery-orders';
 import { TouchKeyboard } from './touch-keyboard';
@@ -261,6 +262,7 @@ export function PosShell() {
   const [lastSale, setLastSale] = useState<{ orderId: string; dailyNumber: number } | null>(null);
   const [paying, setPaying] = useState(false);
   const [boardOpen, setBoardOpen] = useState(false);
+  const [availabilityOpen, setAvailabilityOpen] = useState(false);
   const [voidOpen, setVoidOpen] = useState(false);
   const [voidReason, setVoidReason] = useState('');
   const [reprintPending, setReprintPending] = useState(false);
@@ -456,26 +458,28 @@ export function PosShell() {
     };
   }, []);
 
+  const refreshMenu = useCallback(async () => {
+    if (!context) return;
+    try {
+      const menu = await loadMenuWithFallback(context.storeSlug, () =>
+        fetchMenu(supabase, context.storeSlug),
+      );
+      setCategories(menu.categories);
+      setActiveCategory((current) =>
+        menu.categories.some((category) => category.id === current)
+          ? current
+          : (menu.categories[0]?.id ?? null),
+      );
+    } catch {
+      // A última cache válida continua visível; a venda não pára por uma atualização falhada.
+    }
+  }, [context, supabase]);
+
   useEffect(() => {
     if (!context) return;
-    const refresh = async () => {
-      try {
-        const menu = await loadMenuWithFallback(context.storeSlug, () =>
-          fetchMenu(supabase, context.storeSlug),
-        );
-        setCategories(menu.categories);
-        setActiveCategory((current) =>
-          menu.categories.some((category) => category.id === current)
-            ? current
-            : (menu.categories[0]?.id ?? null),
-        );
-      } catch {
-        // A última cache válida continua visível; a venda não pára por uma atualização falhada.
-      }
-    };
-    const timer = window.setInterval(() => void refresh(), MENU_REFRESH_MS);
+    const timer = window.setInterval(() => void refreshMenu(), MENU_REFRESH_MS);
     return () => window.clearInterval(timer);
-  }, [context]);
+  }, [context, refreshMenu]);
 
   const fetchDeliveryOrders = useCallback(async () => {
     if (!context) return;
@@ -1440,6 +1444,14 @@ export function PosShell() {
         >
           Pedidos
         </button>
+        {/* "Acabou o Double" — tira o produto do site e do balcão num toque. */}
+        <button
+          type="button"
+          onClick={() => setAvailabilityOpen(true)}
+          className="min-h-14 shrink-0 rounded-xl bg-white/[0.08] px-5 text-base font-black active:bg-white/20"
+        >
+          Esgotados
+        </button>
         {lastSale && (
           <>
             <button
@@ -1841,6 +1853,17 @@ export function PosShell() {
           segundos que ao balcão não existem. */}
       {boardOpen && (
         <OrdersBoard storeId={context.storeId} onClose={() => setBoardOpen(false)} />
+      )}
+      {availabilityOpen && (
+        <AvailabilityPanel
+          storeId={context.storeId}
+          storeSlug={context.storeSlug}
+          onClose={() => {
+            setAvailabilityOpen(false);
+            // O balcão tem de ficar a cinzento já, não daqui a dois minutos.
+            void refreshMenu();
+          }}
+        />
       )}
 
       {variantPick && (
