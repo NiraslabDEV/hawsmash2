@@ -41,7 +41,7 @@ export interface TestPrintPayload {
   message?: string;
 }
 
-export type TicketViaLabel = 'controlo' | 'cliente' | 'cozinha' | 'reimpressao';
+export type TicketViaLabel = 'controlo' | 'cliente' | 'cozinha' | 'reimpressao' | 'alteracao';
 
 export interface KitchenTicketPayload {
   template: 'kitchen';
@@ -79,9 +79,13 @@ export interface KitchenTicketPayload {
   formato?: 'talao_completo';
   /**
    * 'controlo' fica na loja; 'cliente' vai com o pedido; 'cozinha' é a 3.ª via;
-   * 'reimpressao' é uma cópia pedida depois e tem de se ver que o é (§7.4).
+   * 'reimpressao' é uma cópia pedida depois e tem de se ver que o é (§7.4);
+   * 'alteracao' sai quando o balcão muda a morada ou a hora depois de a
+   * comanda ter saído (1072) — substitui a via do saco.
    */
   via?: TicketViaLabel | null;
+  /** Só na via 'alteracao': o que mudou ('address' | 'scheduled_for'). */
+  alteracoes?: string[] | null;
   /** Venda de balcão (1064): pagamento misto, dinheiro recebido e troco. */
   payments?: Array<{ method: string; amount_cents: number }> | null;
   cash_received_cents?: number | null;

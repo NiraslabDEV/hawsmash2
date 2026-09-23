@@ -105,8 +105,12 @@ export function resolvePrintLayout(raw: unknown): PrintLayout {
   };
 }
 
-/** O modelo com que sai uma via. Sem rótulo (1 cópia) e reimpressão: o da via de controlo. */
+/**
+ * O modelo com que sai uma via. Sem rótulo (1 cópia) e reimpressão: o da via
+ * de controlo. A via alterada substitui a do saco, por isso sai como a do cliente.
+ */
 export function templateForVia(layout: PrintLayout, via: TicketViaLabel | null | undefined): TicketTemplate {
   if (via === 'cliente' || via === 'cozinha') return layout.templates[via];
+  if (via === 'alteracao') return layout.templates.cliente;
   return layout.templates.controlo;
 }

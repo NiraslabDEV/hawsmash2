@@ -330,4 +330,19 @@ describe('talão da casa no balcão (1064)', () => {
     expect(texto).toContain('*** REIMPRESSÃO ***');
     expect(texto).not.toContain('VIA DO CLIENTE');
   });
+
+  it('uma via alterada diz que o é, e o que mudou — é a do saco que o entregador lê (1072)', () => {
+    const texto = decodeReceipt(
+      createKitchenTicket({ ...balcao, via: 'alteracao', alteracoes: ['address', 'scheduled_for'] }),
+    );
+    expect(texto).toContain('*** PEDIDO ALTERADO ***');
+    expect(texto).toContain('MUDOU: MORADA + HORA');
+    expect(texto).not.toContain('VIA DO CLIENTE');
+  });
+
+  it('uma via alterada sem lista do que mudou continua a dizer ALTERADO', () => {
+    const texto = decodeReceipt(createKitchenTicket({ ...balcao, via: 'alteracao' }));
+    expect(texto).toContain('*** PEDIDO ALTERADO ***');
+    expect(texto).not.toContain('MUDOU:');
+  });
 });

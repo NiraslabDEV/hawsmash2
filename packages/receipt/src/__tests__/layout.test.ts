@@ -61,6 +61,11 @@ describe('layout do talão — leitura tolerante', () => {
     expect(templateForVia(l, 'reimpressao')).toBe('compacto');
     expect(templateForVia(l, 'cliente')).toBe('cozinha');
   });
+
+  it('a via alterada usa o modelo da via do cliente — é a que substitui a do saco', () => {
+    const l = layout({ templates: { controlo: 'compacto', cliente: 'cozinha', cozinha: 'completo' } });
+    expect(templateForVia(l, 'alteracao')).toBe('cozinha');
+  });
 });
 
 describe('modelos do talão', () => {

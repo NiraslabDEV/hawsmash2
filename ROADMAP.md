@@ -414,3 +414,15 @@ Contrato em [`docs/POS-DEFINICOES.md`](docs/POS-DEFINICOES.md) §1 e §11 · [AD
 - [x] Vias por pedido no painel (1071, dono e gerente da loja, registado).
 - [x] Guarda do painel: o URL escrito à mão respeita o perfil (`lib/admin/nav.ts`).
 - [ ] Aplicar 1071 no staging; gerar o `.exe` do bridge e trocá-lo nas lojas **fora do horário**; imprimir um talão de cada modelo em papel.
+
+## Alterar morada e hora pelo balcão — 2026-09-24
+
+Pergunta do caixa: "se o cliente quiser mudar o endereço ou o horário, eu posso?" Passa a poder, no
+detalhe do pedido no quadro do POS (1072, `update_order_details`).
+
+- [x] Morada até o pedido sair (pronto incluído), só em entregas; hora até estar pronto.
+- [x] Zona só com a mesma taxa — o total não se mexe (regra 2); taxa diferente = anular e refazer com gerente.
+- [x] `event_log` com antes/depois e autor (`order.address_changed`, `order.schedule_changed`).
+- [x] Comanda já impressa → via **PEDIDO ALTERADO** na cozinha, com o que mudou; idempotente por `p_request_id`.
+- [x] Gate `packages/db/tests/alterar-pedido.test.ts` (15): dinheiro, papel, repetição, perfis e isolamento de loja.
+- [ ] Aplicar 1072 no staging; gerar o `.exe` do bridge (sem ele a via sai sem o rótulo ALTERADO).

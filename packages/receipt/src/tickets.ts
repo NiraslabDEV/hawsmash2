@@ -137,6 +137,13 @@ const VIA_LABEL: Record<string, string> = {
   cliente: '*** VIA DO CLIENTE ***',
   cozinha: '*** VIA DA COZINHA ***',
   reimpressao: '*** REIMPRESSÃO ***',
+  alteracao: '*** PEDIDO ALTERADO ***',
+};
+
+// O que mudou, como o entregador o lê: "MUDOU: MORADA + HORA".
+const ALTERACAO_LABEL: Record<string, string> = {
+  address: 'MORADA',
+  scheduled_for: 'HORA',
 };
 
 export function formatPaymentMethod(method: string): string {
@@ -214,7 +221,14 @@ export function buildFullTicket(payload: KitchenTicketPayload, layout: PrintLayo
 
   const via = payload.via ? VIA_LABEL[payload.via] : undefined;
   if (via) {
-    ops.push(ALIGN_CENTER, BOLD_ON, line(via), BOLD_OFF, ALIGN_LEFT, line(rule('=')));
+    ops.push(ALIGN_CENTER, BOLD_ON, line(via), BOLD_OFF);
+    const mudou = (payload.alteracoes ?? [])
+      .map((campo) => ALTERACAO_LABEL[campo])
+      .filter(Boolean);
+    if (payload.via === 'alteracao' && mudou.length > 0) {
+      ops.push(line(`MUDOU: ${mudou.join(' + ')}`));
+    }
+    ops.push(ALIGN_LEFT, line(rule('=')));
   }
 
   ops.push(line(twoColumns(`PEDIDO: ${payload.order_number}`, maputoTime(payload.created_at))));
