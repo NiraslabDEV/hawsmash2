@@ -608,6 +608,9 @@ export default function DefinicoesPosPage() {
                   }
                   className={INPUT}
                 />
+                <span className="mt-1 block font-normal normal-case tracking-normal">
+                  Só em vendas sem dinheiro. Com dinheiro, o ecrã mostra o troco e fica até o caixa tocar em OK.
+                </span>
               </label>
             </div>
             <div className="mt-3 space-y-2">

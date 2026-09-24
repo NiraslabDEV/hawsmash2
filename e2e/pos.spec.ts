@@ -185,6 +185,12 @@ test('vende em dinheiro com troco e anula com motivo', async ({ page }) => {
     return orderId;
   }).not.toBeNull();
 
+  // Com dinheiro o ecrã não sai sozinho: mostra o troco gravado e espera o OK.
+  await expect(page.getByText('TROCO A DAR')).toBeVisible();
+  await expect(page.getByText('200 MT', { exact: true }).last()).toBeVisible();
+  await page.waitForTimeout(3500);
+  await expect(page.getByText('VENDA REGISTADA')).toBeVisible();
+  await page.getByRole('button', { name: 'Troco entregue · OK' }).click();
   await expect(page.getByText('VENDA REGISTADA')).toBeHidden();
   await page.getByRole('button', { name: /Reimprimir talão #/ }).click();
   await expect(page.getByText(/Talão em fila · via 1/)).toBeVisible();

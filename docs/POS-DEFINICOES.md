@@ -172,7 +172,7 @@ if (lidas) { setPosSettings(lidas); writeCachedPosSettings(localStorage, storeSl
 | Funil de upsell | `settings.upsell_enabled` global + frases no código | `buildPosUpsellFunnel({ enabled: posSettings.upsell.enabled, steps: posSettings.upsell.steps, … })` |
 | Tipo de pedido | `'counter'` fixo | `posSettings.cart.defaultFulfillment`, só se o canal estiver disponível (`canalPermitido`) |
 | Nome/telefone no balcão | sempre | `posSettings.cart.askCustomerOnCounter` |
-| Ecrã "venda registada" | `3000` ms | `posSettings.sale.confirmationSeconds * 1000` |
+| Ecrã "venda registada" | `3000` ms | `posSettings.sale.confirmationSeconds * 1000` — **só em vendas sem dinheiro**. Com dinheiro o ecrã mostra o troco gravado pelo servidor e só sai com OK (`lib/pos/sale-confirmation.ts`) |
 | Alarme de pedido novo | sempre | `useNewOrderAlert(storeId, boardOpen, posSettings.alerts.newOrderChime)` |
 
 ---

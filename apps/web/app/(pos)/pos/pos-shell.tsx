@@ -41,6 +41,7 @@ import { useNewOrderAlert } from './use-new-order-alert';
 import { PosLogin } from './pos-login';
 import { loadActiveOnlineOrders } from '@/lib/pos/delivery-orders';
 import { OnlineOrdersTab, type OnlineOrder } from './online-orders-tab';
+import { buildSaleClosing, type SaleClosing } from '@/lib/pos/sale-confirmation';
 import { TouchKeyboard } from './touch-keyboard';
 import { buildPickupSlots, formatSlot } from '@/lib/pos/schedule';
 import { noteHasChip, toggleNoteChip } from '@/lib/pos/notes';
@@ -286,7 +287,11 @@ export function PosShell() {
     dailyNumber: number;
     totalCents: number;
     offline?: boolean;
+    closing: SaleClosing;
   } | null>(null);
+  /** Um só temporizador de confirmação: o da venda anterior nunca fecha a seguinte. */
+  const confirmationTimer = useRef<number | undefined>(undefined);
+  useEffect(() => () => window.clearTimeout(confirmationTimer.current), []);
   const [lastSale, setLastSale] = useState<{ orderId: string; dailyNumber: number } | null>(null);
   const [paying, setPaying] = useState(false);
   const [boardOpen, setBoardOpen] = useState(false);
@@ -1276,12 +1281,39 @@ export function PosShell() {
     }));
   }
 
+  /**
+   * Mostra "VENDA REGISTADA". Com dinheiro não há temporizador: o ecrã só sai
+   * com o OK do caixa, depois de entregar o troco (`lib/pos/sale-confirmation`).
+   * Sem dinheiro continua a sair sozinho, nos segundos da aba POS.
+   */
+  function showConfirmation(next: NonNullable<typeof confirmation>) {
+    window.clearTimeout(confirmationTimer.current);
+    setConfirmation(next);
+    if (!next.closing.requiresAck) {
+      confirmationTimer.current = window.setTimeout(
+        () => setConfirmation(null),
+        posSettings.sale.confirmationSeconds * 1000,
+      );
+    }
+  }
+
+  function dismissConfirmation() {
+    window.clearTimeout(confirmationTimer.current);
+    setConfirmation(null);
+  }
+
   async function finalizeSale() {
     if (!context || lines.length === 0 || !paymentPlan.complete) return;
     if (cashPaymentCents > 0 && changeCents === null) {
       setError('O valor recebido em dinheiro é insuficiente.');
       return;
     }
+    // O que o ecrã de confirmação precisa, lido antes de o carrinho limpar.
+    const closingInput = {
+      payments: paymentPlan.payments,
+      cashReceivedCents: cashPaymentCents > 0 ? receivedCents : null,
+      clientChangeCents: changeCents,
+    };
 
     setSubmitting(true);
     setError(null);
@@ -1318,18 +1350,18 @@ export function PosShell() {
 
     const completeOfflineSale = () => {
       setSubmitting(false);
-      setConfirmation({
+      showConfirmation({
         orderId: '',
         dailyNumber: queuedSale.localNumber,
         totalCents: queuedSale.totalCents,
         offline: true,
+        closing: buildSaleClosing(closingInput),
       });
       setCart({});
       setSaleId(crypto.randomUUID());
       setAllocations({});
       setCashReceivedCents(0);
       setPendingSales((current) => current + 1);
-      window.setTimeout(() => setConfirmation(null), posSettings.sale.confirmationSeconds * 1000);
       const bridge = readLocalBridgeConfig(window.localStorage);
       if (bridge) {
         void printOfflineSale(queuedSale, bridge)
@@ -1384,13 +1416,15 @@ export function PosShell() {
       dailyNumber: data.daily_number as number,
       totalCents: data.total_cents as number,
     };
-    setConfirmation(completed);
+    showConfirmation({
+      ...completed,
+      closing: buildSaleClosing({ ...closingInput, serverChangeCents: data.change_cents }),
+    });
     setLastSale(completed);
     setCart({});
     setSaleId(crypto.randomUUID());
     setAllocations({});
     setCashReceivedCents(0);
-    window.setTimeout(() => setConfirmation(null), posSettings.sale.confirmationSeconds * 1000);
   }
 
   async function voidLastSale() {
@@ -2673,9 +2707,54 @@ export function PosShell() {
               {confirmation.dailyNumber}
             </p>
             <p className="pos-num text-3xl font-extrabold text-gold">{mt(confirmation.totalCents)}</p>
-            <p className="mt-4 text-sm text-ink-mute">
-              {confirmation.offline ? 'Será sincronizada quando a ligação voltar.' : 'A preparar a próxima venda…'}
-            </p>
+
+            {/* Com dinheiro, o troco manda no ecrã e o OK é obrigatório: o
+                caixa confirma que o que deu é o que o sistema gravou. */}
+            {confirmation.closing.requiresAck && (
+              <div className="mt-5 rounded-2xl border border-white/10 bg-black/30 p-4">
+                <div className="flex justify-between text-base text-ink-dim">
+                  <span>Em dinheiro</span>
+                  <span className="pos-num font-bold">{mt(confirmation.closing.cashDueCents)}</span>
+                </div>
+                {confirmation.closing.receivedCents !== null && (
+                  <div className="flex justify-between text-base text-ink-dim">
+                    <span>Recebido</span>
+                    <span className="pos-num font-bold">{mt(confirmation.closing.receivedCents)}</span>
+                  </div>
+                )}
+                {confirmation.closing.otherPayments.map((payment) => (
+                  <div key={payment.method} className="flex justify-between text-base text-ink-dim">
+                    <span>{payMethods.find((entry) => entry.id === payment.method)?.label ?? payment.method}</span>
+                    <span className="pos-num font-bold">{mt(payment.amountCents)}</span>
+                  </div>
+                ))}
+                <p className="mt-3 text-sm font-bold tracking-[0.14em] text-ink-mute">TROCO A DAR</p>
+                <p className="pos-num font-display text-6xl leading-none text-emerald-300">
+                  {confirmation.closing.changeCents === null ? '—' : mt(confirmation.closing.changeCents)}
+                </p>
+                {confirmation.closing.changeMismatch && (
+                  <p role="alert" className="mt-3 rounded-xl bg-amber-500/15 px-3 py-2 text-sm font-bold text-amber-200">
+                    Atenção: o sistema gravou este troco, diferente do que apareceu ao cobrar. Dá este.
+                  </p>
+                )}
+              </div>
+            )}
+
+            {confirmation.offline && (
+              <p className="mt-4 text-sm text-ink-mute">Será sincronizada quando a ligação voltar.</p>
+            )}
+            <button
+              type="button"
+              autoFocus
+              onClick={dismissConfirmation}
+              className="pos-btn pos-btn--primary pos-btn--lg mt-5 w-full !text-2xl"
+            >
+              {confirmation.closing.requiresAck
+                ? confirmation.closing.changeCents
+                  ? 'Troco entregue · OK'
+                  : 'Dinheiro conferido · OK'
+                : 'OK · Nova venda'}
+            </button>
           </section>
         </div>
       )}
