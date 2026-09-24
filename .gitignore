@@ -27,3 +27,6 @@ CREDENCIAIS*
 
 # Artefactos de teste (screenshots, resultados do Playwright)
 output/
+
+# versão do build do POS (next.config.mjs)
+apps/web/.app-build-version
