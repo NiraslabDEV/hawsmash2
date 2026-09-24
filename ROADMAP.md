@@ -488,3 +488,14 @@ tudo para a mesma mesa, e a mesa paga no fim, tudo junto. 6 mesas em cada loja (
 - [ ] Aplicar 1081/1082 no staging fora do horário, sem as 1077–1079; ensaiar a mesa 1: lançar, pedir pelo QR, fechar em misto.
 - [x] QR com HAW/WAGYU e extras: entram na folha de escolhas da página da mesa como grupos (a variante já marcada na do costume) e seguem como `variantId`/`addonIds`, a preço do servidor.
 - [ ] Anular uma conta já fechada; avisar no fecho de caixa se houver mesas por fechar.
+
+## Caixa no POS — 2026-09-24
+
+Pedido do dono: abrir e fechar o caixa no POS, sem ir ao painel. Sem migration: as RPCs da F5 (1007) já
+aceitavam o `cashier`, com loja, perfil e `event_log`.
+
+- [x] Aba **Caixa** no POS (por baixo de Mesas): abrir com fundo; sangria, reforço, despesa e troco inicial com motivo; fechar com contagem, esperado e diferença ao vivo.
+- [x] O fecho avisa se há vendas offline por sincronizar (entram no servidor à hora da sincronização e cairiam no turno seguinte) e mesas com conta aberta.
+- [x] Talão de fecho (trigger da F5) e email ao dono, best-effort, como no painel. Manual do balcão actualizado.
+- [x] Gate `apps/web/lib/pos/__tests__/caixa.test.ts` (13): teclado, só a loja do terminal, centavos inteiros, movimento, mesas, mensagens.
+- [ ] Ensaiar no staging com um `cashier`: abrir, sangria, vender, fechar com diferença e ver o talão de fecho sair.

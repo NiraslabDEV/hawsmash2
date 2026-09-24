@@ -11,6 +11,7 @@
 2. Entra com o **teu email e palavra-passe**.
 3. Escreve o teu **PIN de 4 a 6 dígitos** (na primeira vez, defines tu).
 4. Confirma no topo do ecrã que diz a **tua loja** (Maputo ou Matola). Se disser a outra, chama o gerente — não vendas.
+5. **Abre o caixa:** aba **Caixa** (barra da esquerda) → conta o troco da gaveta → escreve o valor → **Abrir caixa**.
 
 O POS **não pergunta a loja**: o computador já sabe qual é. Isso evita mandar pedidos para a cozinha errada.
 
@@ -58,12 +59,24 @@ Se a impressora também estiver em baixo: a venda **grava na mesma**. Escreve o 
 
 ---
 
-## 5. Fechar a caixa
+## 5. Caixa: sangria, despesa e fecho
 
-1. No painel, aba **Caixa**, botão **Fechar caixa**.
+Tudo no POS, aba **Caixa** (barra da esquerda). Precisa de internet — se a rede cair,
+continua a vender e fecha quando voltar.
+
+- **Sangria** (dinheiro para o cofre), **despesa** (pagaste algo com dinheiro da gaveta), **reforço** ou
+  **troco inicial**: toca em **Sangria · reforço · despesa**, escolhe o tipo, escreve o valor e o motivo.
+  Fica registado quem lançou.
+
+### Fechar
+
+1. Aba **Caixa** → **Fechar caixa**.
 2. Conta o dinheiro **físico** da gaveta e escreve o valor contado.
-3. O sistema mostra a **diferença**. Se for maior do que a tolerância, tens de escrever o motivo.
-4. Confirma. Sai o **talão de fecho** e o dono recebe o resumo por email.
+3. O sistema mostra o **esperado** e a **diferença**. Se for maior do que a tolerância, tens de escrever o motivo.
+4. **Confirmar fecho**. Sai o **talão de fecho** e o dono recebe o resumo por email.
+
+Antes de fechar: se o POS avisar que há **vendas offline por sincronizar**, espera pela confirmação verde.
+Se houver **mesas com conta aberta**, cobra-as primeiro — o que não for pago não entra no fecho.
 
 M-Pesa, e-Mola e cartão aparecem **separados** — esse dinheiro não está na gaveta.
 
