@@ -45,6 +45,8 @@ import {
   canReloadNow,
   fetchLatestBuild,
   isNewBuild,
+  markReload,
+  reloadAllowed,
 } from '@/lib/pos/app-update';
 import { PosLogin } from './pos-login';
 import { loadActiveOnlineOrders } from '@/lib/pos/delivery-orders';
@@ -1544,6 +1546,15 @@ export function PosShell() {
   useEffect(() => {
     if (!versaoNova) return;
     if (!canReloadNow({ cartEmpty: lines.length === 0, busy: ocupado, online })) return;
+    // Travão: nunca mais de um recarregar automático em 10 min (sem ciclos).
+    let storage: Storage | null = null;
+    try {
+      storage = window.sessionStorage;
+    } catch {
+      storage = null;
+    }
+    if (!reloadAllowed(storage)) return;
+    markReload(storage);
     window.location.reload();
   }, [versaoNova, lines.length, ocupado, online]);
 

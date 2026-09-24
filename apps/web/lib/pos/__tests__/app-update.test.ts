@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { canReloadNow, fetchLatestBuild, isNewBuild } from '../app-update';
+import {
+  MIN_RELOAD_GAP_MS,
+  canReloadNow,
+  fetchLatestBuild,
+  isNewBuild,
+  markReload,
+  reloadAllowed,
+} from '../app-update';
 
 describe('o POS apanha versões novas sozinho', () => {
   it('só há versão nova quando os dois lados dizem qual é e são diferentes', () => {
@@ -14,6 +21,18 @@ describe('o POS apanha versões novas sozinho', () => {
     expect(canReloadNow({ cartEmpty: false, busy: false, online: true })).toBe(false);
     expect(canReloadNow({ cartEmpty: true, busy: true, online: true })).toBe(false);
     expect(canReloadNow({ cartEmpty: true, busy: false, online: false })).toBe(false);
+  });
+
+  it('nunca entra em ciclo: um recarregar automático por cada 10 minutos', () => {
+    const mem = new Map<string, string>();
+    const storage = { getItem: (k: string) => mem.get(k) ?? null, setItem: (k: string, v: string) => void mem.set(k, v) };
+    const agora = 1_000_000_000;
+    expect(reloadAllowed(storage, agora)).toBe(true);
+    markReload(storage, agora);
+    expect(reloadAllowed(storage, agora + 60_000)).toBe(false);
+    expect(reloadAllowed(storage, agora + MIN_RELOAD_GAP_MS)).toBe(true);
+    // Sem storage não se arrisca.
+    expect(reloadAllowed(null, agora)).toBe(false);
   });
 
   it('lê a versão do servidor e não rebenta quando falha', async () => {
