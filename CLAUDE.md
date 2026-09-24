@@ -589,12 +589,19 @@ Contrato, configuração e ensaios em [`docs/MCP.md`](docs/MCP.md), decisão em
 
 | Ecrã | Rota | Fase |
 |---|---|---|
+| **TV configurada no painel** (senhas + vídeos · só senhas · só vídeos · cardápio) | `/tv/[store]/[tv]` | **1** |
 | **Menu board** (cardápio na parede, preços e esgotados ao vivo) | `/tv/[store]/menu` | **1** |
 | **Senhas** (número do dia chamado quando fica `ready`) | `/tv/[store]/senhas` | **1** (barato, grande impacto no balcão) |
 | **KDS** (ecrã de cozinha com colunas e temporizador) | `/kds/[store]` | **2** |
 
 Regras: sem interacção, auto-refresh resiliente (reconecta sozinho), fullscreen, legível a 4 m, e **funciona
 mesmo que o backend esteja lento** (mostra o último estado conhecido em vez de ecrã em branco).
+
+**Aba TVs (1090).** Cada ecrã é uma linha em `store_tvs` (da loja, Regra 3), com endereço próprio. O modo,
+os títulos e tempos das senhas, a rotação e a **lista de vídeos** configuram-se no painel pelo `owner`/`manager`
+e chegam à TV em até 30 s, com `event_log`. Duas TVs por loja de fábrica; acrescentam-se mais no painel.
+A biblioteca de vídeos (`tv_media`, bucket `tv-media`) é da empresa; a TV guarda cada vídeo em cache e continua
+a passá-lo sem internet. `/menu` e `/senhas` ficam com os valores de fábrica. Detalhe em [`docs/TVS.md`](docs/TVS.md).
 
 ---
 

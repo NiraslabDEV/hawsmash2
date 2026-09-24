@@ -42,6 +42,7 @@ export const ADMIN_NAV: AdminNavItem[] = [
   { href: '/marketing', label: 'Marketing', icon: 'marketing', roles: ['owner', 'manager'] },
   { href: '/lojas', label: 'Lojas', icon: 'lojas', roles: ['owner', 'manager'] },
   { href: '/definicoes-pos', label: 'POS', icon: 'pos', roles: ['owner', 'manager'] },
+  { href: '/tvs', label: 'TVs', icon: 'tvs', roles: ['owner', 'manager'] },
   { href: '/equipa', label: 'Equipa', icon: 'equipa', roles: ['owner'] },
   { href: '/aparencia', label: 'Aparência', icon: 'aparencia', roles: ['owner'] },
   { href: '/sistema', label: 'Sistema', icon: 'sistema', roles: ['owner', 'manager'] },

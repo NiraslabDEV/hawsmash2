@@ -20,6 +20,12 @@ describe('painel — onde cada perfil pode entrar', () => {
     expect(canAccessAdminPath('manager', '/definicoes')).toBe(false);
   });
 
+  it('as TVs são do dono e do gerente; o Balcão não as configura', () => {
+    expect(canAccessAdminPath('owner', '/tvs')).toBe(true);
+    expect(canAccessAdminPath('manager', '/tvs')).toBe(true);
+    expect(canAccessAdminPath('cashier', '/tvs')).toBe(false);
+  });
+
   it('o gerente não entra no que é só do dono', () => {
     expect(canAccessAdminPath('manager', '/marketing')).toBe(true);
     expect(canAccessAdminPath('manager', '/equipa')).toBe(false);

@@ -24,7 +24,27 @@ const mt = (value: number) => formatMT(value as Cents);
  * Cardápio de parede: preços e esgotados ao vivo. Se a rede falhar, continua a
  * mostrar o último cardápio conhecido — nunca um ecrã em branco (CLAUDE §14).
  */
-export function MenuBoard({ storeSlug, storeName }: { storeSlug: string; storeName: string }) {
+const COLUMNS: Record<1 | 2 | 3, string> = {
+  1: 'grid gap-8',
+  2: 'grid gap-8 md:grid-cols-2',
+  3: 'grid gap-8 md:grid-cols-3',
+};
+
+export function MenuBoard({
+  storeSlug,
+  storeName,
+  columns = 2,
+  soldOut = 'show',
+  embedded = false,
+}: {
+  storeSlug: string;
+  storeName: string;
+  columns?: 1 | 2 | 3;
+  /** `hide` tira o esgotado do ecrã em vez de o mostrar a cinzento. */
+  soldOut?: 'show' | 'hide';
+  /** Dentro de uma TV configurada: o cabeçalho é o da TV (aba TVs, 1090). */
+  embedded?: boolean;
+}) {
   const brand = useBrand();
   const supabase = useMemo(() => createClient(), []);
   const [categories, setCategories] = useState<BoardCategory[]>([]);
@@ -48,21 +68,36 @@ export function MenuBoard({ storeSlug, storeName }: { storeSlug: string; storeNa
     return () => window.clearInterval(timer);
   }, [refresh]);
 
+  const visiveis = categories
+    .map((category) => ({
+      ...category,
+      items: soldOut === 'hide' ? category.items.filter((item) => item.available) : category.items,
+    }))
+    .filter((category) => category.items.length > 0);
+
   return (
-    <main className="min-h-screen p-8">
-      <header className="flex items-baseline justify-between">
-        <h1 className="text-4xl font-black uppercase tracking-widest" style={{ color: 'var(--tv-primary)' }}>
-          {brand.name} {storeName}
-        </h1>
-        {stale && (
-          <span className="text-xl font-bold" style={{ color: '#ff9b9b' }}>
+    <main className={embedded ? 'relative h-full overflow-hidden px-8 pb-8' : 'min-h-screen p-8'}>
+      {embedded ? (
+        stale && (
+          <span className="absolute right-8 top-0 text-xl font-bold" style={{ color: '#ff9b9b' }}>
             A reconectar…
           </span>
-        )}
-      </header>
+        )
+      ) : (
+        <header className="flex items-baseline justify-between">
+          <h1 className="text-4xl font-black uppercase tracking-widest" style={{ color: 'var(--tv-primary)' }}>
+            {brand.name} {storeName}
+          </h1>
+          {stale && (
+            <span className="text-xl font-bold" style={{ color: '#ff9b9b' }}>
+              A reconectar…
+            </span>
+          )}
+        </header>
+      )}
 
-      <section className="mt-8 grid gap-8 md:grid-cols-2">
-        {categories.map((category) => (
+      <section className={`mt-8 ${COLUMNS[columns]}`}>
+        {visiveis.map((category) => (
           <article key={category.id}>
             <h2
               className="border-b pb-2 text-3xl font-black uppercase tracking-wide"

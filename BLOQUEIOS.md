@@ -201,6 +201,10 @@
   sozinhas e mantêm o último estado se a rede oscilar.
 - Onde está: `apps/web/app/(tv)/` · RPC `get_store_board` e `get_store_queue`
 - Se a resposta for outra: minutos — é abrir o URL certo em cada ecrã.
+- **Actualização 24 Set (1090):** respondido em parte — **2 TVs por loja, com vídeos e senhas, e espaço para
+  mais**. Já não é preciso decidir no código: cada TV tem o seu endereço (`/tv/maputo/tv1`, `/tv/maputo/tv2`…)
+  e o que mostra escolhe-se na aba **TVs** do painel. Falta: os vídeos em si (o dono carrega-os na aba) e
+  apontar cada box ao seu endereço. `docs/TVS.md`.
 
 ### B-012 · [F7] Domínio de email verificado
 - Estado: aberto
@@ -892,3 +896,15 @@ Verificação final desta continuação: 963 testes de domínio/integração loc
 - Contagem desta entrega: cliente 0, acesso/infraestrutura 0, hardware 0; mantêm-se as duas pendências anteriores de validação/fornecedor.
 
 Verificação adicional desta entrega: 973 testes unitários, 60 testes de base de dados e 12 Playwright aprovados, lint/typecheck e build aprovados. Leitura autenticada de staging com totais reconciliados. Segunda revisão preservou a origem online de pedidos via QR de mesa.
+
+## TVs da loja — 2026-09-24
+
+### B-113 · [TVs] Tecto de upload do projecto Supabase para vídeos
+
+- Estado: **aberto**. Categoria: **acesso/infraestrutura**. Desbloqueia: Gabriel.
+- O bucket `tv-media` (1090) aceita até 200 MB por ficheiro, mas o Supabase tem um tecto **global** por
+  projecto (50 MB por omissão; no Free não passa de 50 MB). Um vídeo acima disso é recusado no upload — o
+  painel explica e pede para exportar em 1080p, mas não passa.
+- Como avancei: limite no bucket e validação no browser; mensagem clara quando o servidor recusa.
+- Para fechar: no projecto `hawsmash2` (Pro), *Settings → Storage → Upload file size limit* = 200 MB (5 min).
+  No staging (Free) fica em 50 MB — chega para ensaiar.

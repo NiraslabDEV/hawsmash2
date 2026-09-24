@@ -247,6 +247,12 @@ O estoque de produto final não descreve a cozinha: o que acaba é a carne, não
 - [x] `scripts/import-hawsmash-1.ts` com **dry-run** e relatório de contagens (CLAUDE §15) — mapeamento testado em `scripts/__tests__/import-mapping.test.ts`
 - [~] B-009 Importação real para staging → conferência dos totais com o 1.0 (falta a chave de leitura do projecto antigo)
 - [x] ⏳ **TVs**: `/tv/[store]/menu` e `/tv/[store]/senhas` — rotas prontas; falta apontar os ecrãs físicos (B-011)
+  - [x] ⏳ **Aba TVs no painel (1090, 24 Set):** 2 TVs por loja + adicionar/duplicar/apagar; modo senhas + vídeos,
+        só senhas, só vídeos ou cardápio; títulos e tempos das senhas, rotação, tamanho, lista de vídeos; biblioteca
+        de vídeos partilhada com cache na TV (toca sem internet); "Ligada / sem sinal" por TV. `docs/TVS.md`.
+        Gates: `apps/web/lib/tv/__tests__` (24) verdes; `packages/db/tests/tvs.test.ts` por correr nesta máquina (sem Docker).
+  - [ ] Aplicar 1090 no staging; carregar um vídeo real e ver a box Android a tocá-lo e a manter com a rede desligada.
+  - [ ] Confirmar o tecto de upload do projecto Supabase (B-113) antes de o dono carregar vídeos grandes.
 - [~] B-006 **Ensaio geral** por loja: 20 vendas de balcão, 5 delivery, 1 fecho de caixa, 1 falha de rede simulada,
       1 falha de impressora simulada
 - [x] ⏳ Manuais PT (`docs/manual-caixa.md`, `docs/manual-cozinha.md`, `docs/manual-dono.md`) — escritos; formação presencial por dar
