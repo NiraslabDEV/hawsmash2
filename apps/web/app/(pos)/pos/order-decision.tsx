@@ -61,7 +61,7 @@ export function OrderDecision({
           disabled={busy}
           onClick={() => void decide('APPROVE')}
           aria-label={`Aprovar pedido ${numero}`}
-          className={`flex items-center justify-center rounded-xl bg-emerald-400 font-black text-black active:scale-[0.98] disabled:opacity-40 ${altura}`}
+          className={`flex items-center justify-center rounded-xl bg-emerald-400 font-bold text-black pos-press disabled:opacity-40 ${altura}`}
         >
           {busy ? '…' : 'Aprovar'}
         </button>
@@ -70,7 +70,7 @@ export function OrderDecision({
           disabled={busy}
           onClick={() => setRecusar(true)}
           aria-label={`Recusar pedido ${numero}`}
-          className={`flex items-center justify-center rounded-xl bg-red-500/20 font-black text-red-200 ring-1 ring-red-500/50 active:scale-[0.98] disabled:opacity-40 ${altura}`}
+          className={`flex items-center justify-center rounded-xl bg-red-500/20 font-bold text-red-200 ring-1 ring-red-500/50 pos-press disabled:opacity-40 ${altura}`}
         >
           Recusar
         </button>
@@ -83,9 +83,9 @@ export function OrderDecision({
           aria-label={`Recusar pedido ${numero}`}
           className="fixed inset-0 z-[60] flex items-center justify-center bg-black/80 p-6"
         >
-          <div className="w-full max-w-xl rounded-3xl border border-white/10 bg-[#141210] p-6 text-[#f6f1e6]">
-            <p className="text-xs font-black tracking-[0.25em] text-[#847e72]">RECUSAR PEDIDO {numero}</p>
-            <h3 className="mt-1 text-2xl font-black">Porquê?</h3>
+          <div className="w-full max-w-xl pos-sheet !p-6 !text-ink">
+            <p className="pos-eyebrow">RECUSAR PEDIDO {numero}</p>
+            <h3 className="mt-1 text-2xl font-bold">Porquê?</h3>
             <div className="mt-4 grid grid-cols-2 gap-3">
               {REJECT_REASONS.map((motivo) => (
                 <button
@@ -93,7 +93,7 @@ export function OrderDecision({
                   type="button"
                   disabled={busy}
                   onClick={() => void decide('CANCEL', motivo)}
-                  className="min-h-16 rounded-2xl bg-white/[0.07] px-3 text-base font-black leading-tight active:bg-red-500/30 disabled:opacity-40"
+                  className="min-h-16 rounded-2xl bg-white/[0.07] px-3 text-base font-bold leading-tight active:bg-red-500/30 disabled:opacity-40"
                 >
                   {motivo}
                 </button>
@@ -103,7 +103,7 @@ export function OrderDecision({
               type="button"
               disabled={busy}
               onClick={() => setRecusar(false)}
-              className="mt-4 min-h-16 w-full rounded-2xl bg-white/10 text-lg font-black active:bg-white/20 disabled:opacity-40"
+              className="mt-4 min-h-16 w-full rounded-2xl bg-white/10 text-lg font-bold active:bg-white/20 disabled:opacity-40"
             >
               {busy ? 'A recusar…' : 'Voltar — não recusar'}
             </button>

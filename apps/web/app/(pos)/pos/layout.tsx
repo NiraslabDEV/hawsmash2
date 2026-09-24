@@ -4,6 +4,7 @@ import type { ReactNode } from 'react';
 import { getBrand } from '@/lib/brand/server';
 
 import { RegisterPosPwa } from './register-pwa';
+import './pos.css';
 
 export async function generateMetadata(): Promise<Metadata> {
   return {
@@ -15,9 +16,9 @@ export async function generateMetadata(): Promise<Metadata> {
 
 export default function PosLayout({ children }: { children: ReactNode }) {
   return (
-    <>
+    <div className="pos-ui min-h-screen">
       <RegisterPosPwa />
       {children}
-    </>
+    </div>
   );
 }

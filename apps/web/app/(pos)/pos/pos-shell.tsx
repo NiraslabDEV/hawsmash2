@@ -35,6 +35,7 @@ import { trackUpsell } from '@/lib/analytics/track';
 import { buildPosUpsellFunnel, type PosUpsellStep } from '@/lib/pos/pos-upsell';
 import { isPosPin, POS_IDLE_TIMEOUT_MS } from '@/lib/pos/session';
 import { OrdersBoard } from './orders-board';
+import { PosIcon, type PosIconName } from './pos-icons';
 import { AvailabilityPanel } from './availability-panel';
 import { useNewOrderAlert } from './use-new-order-alert';
 import { PosLogin } from './pos-login';
@@ -105,6 +106,19 @@ const FULFILLMENT_LABELS: Record<FulfillmentType, string> = {
   counter: 'Balcão',
   pickup: 'Levantamento',
   delivery: 'Entrega',
+};
+
+const FULFILLMENT_ICONS: Record<FulfillmentType, PosIconName> = {
+  counter: 'store',
+  pickup: 'bag',
+  delivery: 'truck',
+};
+
+const METHOD_ICONS: Record<CounterPaymentMethod, PosIconName> = {
+  cash: 'cash',
+  mpesa: 'phone',
+  emola: 'phone',
+  credit_card: 'card',
 };
 
 type PosContext = {
@@ -199,25 +213,26 @@ function CartField({
     <button
       type="button"
       onClick={onClick}
-      className={`flex min-h-16 min-w-0 items-center gap-2 rounded-xl border px-3 py-1.5 text-left active:scale-[0.98] ${
-        alerta ? 'border-amber-500/40 bg-amber-500/[0.07]' : 'border-white/10 bg-black/30'
-      } ${className}`}
+      data-warn={alerta}
+      className={`pos-field ${className}`}
     >
       <span className="min-w-0 flex-1">
-        <span className="block truncate text-[11px] font-black uppercase tracking-[0.12em] text-[#847e72]">
+        <span className={`pos-eyebrow !block truncate ${alerta ? '!text-amber-300/80' : ''}`}>
           {label}
         </span>
         <span
-          className={`block truncate text-base font-bold ${
-            vazio ? (alerta ? 'text-amber-200' : 'text-[#57514a]') : 'text-white'
+          className={`mt-0.5 block truncate text-[0.9375rem] ${
+            vazio
+              ? alerta
+                ? 'font-medium text-amber-100'
+                : 'font-medium text-ink-mute'
+              : 'font-semibold text-ink'
           }`}
         >
           {value || placeholder}
         </span>
       </span>
-      <span aria-hidden className="shrink-0 text-xl font-black text-[#57514a]">
-        ›
-      </span>
+      <PosIcon name="chevron" size={18} className="shrink-0 text-ink-mute" />
     </button>
   );
 }
@@ -1409,7 +1424,7 @@ export function PosShell() {
     <div className="space-y-3">
       <a
         href="/login?next=/pos"
-        className="grid min-h-14 w-full place-items-center rounded-2xl border border-white/15 px-4 text-sm font-bold text-[#847e72] active:bg-white/[0.05]"
+        className="pos-btn pos-btn--quiet !min-h-14 w-full !text-sm"
       >
         Entrar por email · criar o meu PIN
       </a>
@@ -1417,16 +1432,16 @@ export function PosShell() {
         <button
           type="button"
           onClick={() => setUnbindConfirm(true)}
-          className="min-h-14 w-full rounded-2xl border border-white/15 px-4 text-sm font-bold text-[#847e72] active:bg-white/[0.05]"
+          className="pos-btn pos-btn--quiet !min-h-14 w-full !text-sm"
         >
           Sair · desvincular este PC
         </button>
       ) : (
-        <div className="rounded-2xl border border-red-500/40 bg-red-950/30 p-4">
-          <p className="text-sm font-bold text-red-200">
+        <div className="pos-note pos-note--danger !p-4">
+          <p className="text-sm font-semibold">
             Desvincular este PC de <strong>{context?.storeName ?? 'esta loja'}</strong>?
           </p>
-          <p className="mt-1 text-xs text-[#a89f92]">
+          <p className="mt-1 text-xs font-normal text-ink-dim">
             O terminal volta ao ecrã de registo e será preciso escolher a loja
             e o token do bridge outra vez. As vendas já feitas não se perdem.
           </p>
@@ -1434,14 +1449,14 @@ export function PosShell() {
             <button
               type="button"
               onClick={() => setUnbindConfirm(false)}
-              className="min-h-14 flex-1 rounded-xl bg-white/[0.08] px-4 font-bold active:bg-white/15"
+              className="pos-btn !min-h-14 flex-1"
             >
               Cancelar
             </button>
             <button
               type="button"
               onClick={unbindDevice}
-              className="min-h-14 flex-1 rounded-xl bg-red-600 px-4 font-black text-white active:bg-red-700"
+              className="pos-btn pos-btn--danger-solid !min-h-14 flex-1"
             >
               Desvincular
             </button>
@@ -1453,8 +1468,11 @@ export function PosShell() {
 
   if (loading) {
     return (
-      <main className="grid min-h-screen place-items-center bg-[#0a0807] text-[#e5a93c]">
-        <p className="text-xl font-bold">A preparar o POS…</p>
+      <main className="grid min-h-screen place-items-center">
+        <p className="flex items-center gap-3 text-lg font-semibold text-ink-dim">
+          <span className="h-2 w-2 animate-pulse rounded-full bg-gold" />
+          A preparar o POS…
+        </p>
       </main>
     );
   }
@@ -1472,14 +1490,14 @@ export function PosShell() {
   if (!context) {
     if (availableStores.length > 0) {
       return (
-        <main className="grid min-h-screen place-items-center bg-[#0a0807] p-6 text-white">
-          <section className="w-full max-w-xl rounded-3xl border border-[#e5a93c]/30 bg-[#151310] p-8 shadow-2xl">
-            <p className="text-sm font-black tracking-[0.2em] text-[#e5a93c]">CONFIGURAÇÃO INICIAL</p>
-            <h1 className="mt-2 text-3xl font-black">Vincular este PC</h1>
-            <p className="mt-2 text-sm text-[#a89f91]">
+        <main className="grid min-h-screen place-items-center p-6">
+          <section className="pos-sheet w-full max-w-xl !p-8">
+            <p className="pos-eyebrow !text-gold">CONFIGURAÇÃO INICIAL</p>
+            <h1 className="pos-title mt-2 !text-3xl">Vincular este PC</h1>
+            <p className="mt-2 text-sm text-ink-dim">
               Esta acção é feita uma vez por um gerente ou pelo dono e fica auditada.
             </p>
-            <label className="mt-6 block text-sm font-bold text-[#c8bfb0]" htmlFor="pos-store">
+            <label className="mt-6 block text-sm font-semibold text-ink-dim" htmlFor="pos-store">
               Loja
             </label>
             {/* Cards em vez de um dropdown: e um ecra tactil, e escolher a
@@ -1495,26 +1513,22 @@ export function PosShell() {
                     type="button"
                     onClick={() => setSelectedStoreId(store.id)}
                     aria-pressed={escolhida}
-                    className={`min-h-24 rounded-2xl border-2 px-4 text-xl font-black transition active:scale-[0.98] ${
-                      escolhida
-                        ? 'border-[#e5a93c] bg-[#e5a93c] text-black'
-                        : 'border-white/15 bg-black/30 text-white'
-                    }`}
+                    className="pos-choice !min-h-24 !flex-col !gap-1 !text-xl"
                   >
                     {store.short_name}
-                    {escolhida && <span className="mt-1 block text-xs font-bold">seleccionada</span>}
+                    {escolhida && <span className="block text-xs font-semibold">seleccionada</span>}
                   </button>
                 );
               })}
             </div>
             {!selectedStoreId && (
-              <p className="mt-3 rounded-xl border border-amber-500/40 bg-amber-500/[0.08] p-3 text-sm text-amber-200">
+              <p className="pos-note pos-note--warn mt-3 !text-sm !font-normal">
                 Escolhe a loja onde <strong>este computador</strong> está.
                 Se escolheres a errada, as vendas caem na outra loja e não sai
                 papel nenhum aqui.
               </p>
             )}
-            <label className="mt-4 block text-sm font-bold text-[#c8bfb0]" htmlFor="pos-label">
+            <label className="mt-4 block text-sm font-semibold text-ink-dim" htmlFor="pos-label">
               Nome do terminal
             </label>
             <input
@@ -1522,18 +1536,18 @@ export function PosShell() {
               value={deviceLabel}
               onChange={(event) => setDeviceLabel(event.target.value)}
               maxLength={80}
-              className="mt-2 min-h-16 w-full rounded-2xl border border-white/10 bg-black/30 px-4 font-bold outline-none focus:border-[#e5a93c]"
+              className="pos-well mt-2 !min-h-16 w-full !px-4 !font-semibold outline-none focus:shadow-[inset_0_0_0_1.5px_var(--gold)]"
             />
-            <label className="mt-4 block text-sm font-bold text-[#c8bfb0]" htmlFor="bridge-url">
+            <label className="mt-4 block text-sm font-semibold text-ink-dim" htmlFor="bridge-url">
               Endereço local do bridge
             </label>
             <input
               id="bridge-url"
               value={bridgeUrl}
               onChange={(event) => setBridgeUrl(event.target.value)}
-              className="mt-2 min-h-16 w-full rounded-2xl border border-white/10 bg-black/30 px-4 font-mono text-sm outline-none focus:border-[#e5a93c]"
+              className="pos-well mt-2 !min-h-16 w-full !px-4 !font-mono !text-sm outline-none focus:shadow-[inset_0_0_0_1.5px_var(--gold)]"
             />
-            <label className="mt-4 block text-sm font-bold text-[#c8bfb0]" htmlFor="bridge-token">
+            <label className="mt-4 block text-sm font-semibold text-ink-dim" htmlFor="bridge-token">
               Token local do bridge
             </label>
             <input
@@ -1542,9 +1556,9 @@ export function PosShell() {
               value={bridgeToken}
               onChange={(event) => setBridgeToken(event.target.value)}
               autoComplete="off"
-              className="mt-2 min-h-16 w-full rounded-2xl border border-white/10 bg-black/30 px-4 font-mono outline-none focus:border-[#e5a93c]"
+              className="pos-well mt-2 !min-h-16 w-full !px-4 !font-mono outline-none focus:shadow-[inset_0_0_0_1.5px_var(--gold)]"
             />
-            {error && <p role="alert" className="mt-4 rounded-xl bg-red-950/60 p-3 text-red-200">{error}</p>}
+            {error && <p role="alert" className="pos-note pos-note--danger mt-4">{error}</p>}
             <button
               type="button"
               disabled={
@@ -1554,7 +1568,7 @@ export function PosShell() {
                 || bridgeToken.trim().length < 32
               }
               onClick={() => void bindDevice()}
-              className="mt-6 min-h-16 w-full rounded-2xl bg-[#e5a93c] px-6 font-black text-black disabled:opacity-40"
+              className="pos-btn pos-btn--primary mt-6 w-full"
             >
               {binding ? 'A vincular…' : 'Vincular POS'}
             </button>
@@ -1564,14 +1578,14 @@ export function PosShell() {
     }
 
     return (
-      <main className="grid min-h-screen place-items-center bg-[#0a0807] p-8 text-white">
-        <section className="max-w-lg rounded-3xl border border-red-500/40 bg-red-950/30 p-8 text-center">
-          <h1 className="text-2xl font-black">POS indisponível</h1>
-          <p className="mt-3 text-red-100">{error}</p>
+      <main className="grid min-h-screen place-items-center p-8">
+        <section className="pos-sheet max-w-lg !p-8 !text-center">
+          <h1 className="pos-title">POS indisponível</h1>
+          <p className="pos-note pos-note--danger mt-4 !font-normal">{error}</p>
           <button
             type="button"
             onClick={() => void loadPos()}
-            className="mt-6 min-h-16 w-full rounded-2xl bg-[#e5a93c] px-6 font-black text-black active:scale-[0.98]"
+            className="pos-btn pos-btn--primary mt-6 w-full"
           >
             Tentar novamente
           </button>
@@ -1581,11 +1595,20 @@ export function PosShell() {
   }
 
   return (
-    <main className="min-h-screen bg-[#0a0807] text-[#f6f1e6] lg:h-screen lg:overflow-hidden">
-      <header className="flex min-h-16 items-center gap-4 border-b border-white/10 bg-[#111110] px-4">
-        <div className="flex-1">
-          <p className="text-lg font-black tracking-wide text-[#e5a93c]">{brand.name} POS</p>
-          <p className="text-xs text-[#847e72]">{context.storeName} · {context.deviceLabel}</p>
+    <main className="min-h-screen lg:h-screen lg:overflow-hidden">
+      <header className="flex min-h-[4.5rem] items-center gap-2 border-b border-white/[0.07] bg-bg1 px-4">
+        <div className="min-w-0 flex-1">
+          <p className="flex items-center gap-2">
+            <span className="truncate font-display text-[1.65rem] leading-none tracking-[0.04em] text-gold">
+              {brand.name}
+            </span>
+            <span className="rounded-md bg-white/[0.07] px-1.5 py-0.5 text-[0.625rem] font-bold tracking-[0.16em] text-ink-dim">
+              POS
+            </span>
+          </p>
+          <p className="mt-1 truncate text-xs font-medium text-ink-mute">
+            {context.storeName} · {context.deviceLabel}
+          </p>
         </div>
         {/* O caixa gere as entregas sem sair do terminal. E daqui que se ve
             o que ja foi pago e ainda nao saiu pela porta. */}
@@ -1595,15 +1618,12 @@ export function PosShell() {
           type="button"
           onClick={() => setBoardOpen(true)}
           aria-label={alerta.piscar ? `Pedidos — ${alerta.aAtender} à espera` : 'Pedidos'}
-          className={`relative min-h-14 shrink-0 rounded-xl px-5 text-base font-black ${
-            alerta.piscar
-              ? 'animate-pulse bg-red-600 text-white ring-4 ring-red-400/60'
-              : 'bg-white/[0.08] active:bg-white/20'
-          }`}
+          className={`pos-btn relative !min-h-14 shrink-0 ${alerta.piscar ? 'pos-alarm' : ''}`}
         >
+          <PosIcon name="inbox" />
           Pedidos
           {alerta.piscar && (
-            <span className="absolute -right-2 -top-2 flex h-7 min-w-7 items-center justify-center rounded-full bg-[#e5a93c] px-2 text-sm font-black text-black">
+            <span className="pos-qty pos-num absolute -right-2.5 -top-2.5 !h-8 !min-w-8 !text-sm">
               {alerta.aAtender}
             </span>
           )}
@@ -1612,63 +1632,63 @@ export function PosShell() {
         <button
           type="button"
           onClick={() => setAvailabilityOpen(true)}
-          className="min-h-14 shrink-0 rounded-xl bg-white/[0.08] px-5 text-base font-black active:bg-white/20"
+          className="pos-btn !min-h-14 shrink-0"
         >
+          <PosIcon name="ban" />
           Esgotados
         </button>
         {lastSale && (
           <>
+            <span aria-hidden className="mx-1 h-8 w-px shrink-0 bg-white/10" />
             <button
               type="button"
               disabled={reprintPending}
               onClick={() => void reprintLastReceipt()}
-              className="min-h-16 rounded-xl border border-[#e5a93c]/40 px-4 text-sm font-bold text-[#e5a93c] active:bg-[#e5a93c]/10 disabled:opacity-40"
+              className="pos-btn pos-btn--accent-outline !min-h-14 shrink-0 !px-4 !text-sm"
             >
+              <PosIcon name="printer" size={18} />
               {reprintPending ? 'A reimprimir…' : `Reimprimir talão #${lastSale.dailyNumber}`}
             </button>
             <button
               type="button"
               onClick={() => setVoidOpen(true)}
-              className="min-h-16 rounded-xl border border-red-500/40 px-4 text-sm font-bold text-red-300 active:bg-red-950"
+              className="pos-btn pos-btn--danger !min-h-14 shrink-0 !px-4 !text-sm"
             >
+              <PosIcon name="undo" size={18} />
               Anular #{lastSale.dailyNumber}
             </button>
           </>
         )}
+        <span aria-hidden className="mx-1 h-8 w-px shrink-0 bg-white/10" />
         <button
           type="button"
           onClick={() => void lockDevice()}
-          className="min-h-16 rounded-xl bg-white/[0.07] px-4 text-sm font-bold active:bg-white/15"
+          className="pos-btn pos-btn--quiet !min-h-14 shrink-0 !px-4 !text-sm"
         >
+          <PosIcon name="lock" size={18} />
           Bloquear · trocar
         </button>
         <div
           role="status"
-          className={`rounded-full px-3 py-2 text-sm font-bold ${
-            networkStatus.tone === 'offline'
-              ? 'bg-amber-500/15 text-amber-300'
-              : 'bg-emerald-500/15 text-emerald-300'
-          }`}
+          data-tone={networkStatus.tone === 'offline' ? 'offline' : 'online'}
+          className="pos-status shrink-0"
         >
           {reprintFeedback ?? networkStatus.label}
         </div>
       </header>
 
-      <div className="grid lg:h-[calc(100vh-4rem)] lg:grid-cols-[10rem_minmax(0,1fr)_25rem]">
-        <nav className="flex gap-2 overflow-x-auto border-b border-white/10 bg-[#111110] p-2 lg:block lg:overflow-y-auto lg:border-b-0 lg:border-r">
+      <div className="grid lg:h-[calc(100vh-4.5rem)] lg:grid-cols-[10.5rem_minmax(0,1fr)_25rem]">
+        <nav className="flex gap-1.5 overflow-x-auto border-b border-white/[0.07] bg-bg1 p-2 lg:flex-col lg:overflow-y-auto lg:border-b-0 lg:border-r lg:p-2.5">
           {categories.map((category) => (
             <button
               key={category.id}
               type="button"
+              aria-current={posView === 'menu' && activeCategory === category.id ? 'true' : undefined}
               onClick={() => {
                 setPosView('menu');
                 setActiveCategory(category.id);
               }}
-              className={`min-h-16 min-w-28 whitespace-normal rounded-2xl px-2 text-sm font-black leading-tight active:scale-[0.98] lg:mb-2 lg:w-full lg:min-w-0 ${
-                posView === 'menu' && activeCategory === category.id
-                  ? 'bg-[#e5a93c] text-black'
-                  : 'bg-white/[0.06] text-[#c8bfb0]'
-              }`}
+              className="pos-rail-item min-w-28 shrink-0 lg:min-w-0"
             >
               {category.name}
             </button>
@@ -1676,15 +1696,14 @@ export function PosShell() {
           {/* O cashier fecha vendas no balcão, mas também precisa de ver o
               que está a sair pela loja online — sem sair do POS nem
               depender de acesso ao painel admin, que o perfil não tem. */}
+          <span aria-hidden className="mx-2 my-1.5 hidden h-px shrink-0 bg-white/[0.07] lg:block" />
           <button
             type="button"
+            aria-current={posView === 'delivery' ? 'true' : undefined}
             onClick={() => setPosView('delivery')}
-            className={`min-h-16 min-w-28 whitespace-normal rounded-2xl px-2 text-sm font-black leading-tight active:scale-[0.98] lg:mb-2 lg:mt-2 lg:w-full lg:min-w-0 lg:border-t lg:border-white/10 lg:pt-4 ${
-              posView === 'delivery'
-                ? 'bg-[#e5a93c] text-black'
-                : 'bg-white/[0.06] text-[#c8bfb0]'
-            }`}
+            className="pos-rail-item min-w-28 shrink-0 !gap-2 lg:min-w-0"
           >
+            <PosIcon name="truck" size={18} className="shrink-0 opacity-80" />
             Delivery
           </button>
         </nav>
@@ -1711,9 +1730,10 @@ export function PosShell() {
                   type="button"
                   disabled={!availability.sellable}
                   onClick={() => tapItem(item)}
-                  className="flex flex-col overflow-hidden rounded-2xl border border-white/10 bg-[#1a1816] text-left shadow-lg active:scale-[0.98] disabled:opacity-35"
+                  data-in-cart={qty ? 'true' : undefined}
+                  className="pos-product"
                 >
-                  <span className="relative block aspect-[4/3] w-full overflow-hidden bg-black/40">
+                  <span className="pos-product__media aspect-[4/3]">
                     {item.photo_url && (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img
@@ -1728,31 +1748,31 @@ export function PosShell() {
                         // caber inteira lá dentro.
                         className={
                           isDrinksCategory
-                            ? 'h-full w-full object-contain p-3'
+                            ? 'h-full w-full object-contain p-3 drop-shadow-[0_10px_14px_rgba(0,0,0,.45)]'
                             : 'h-full w-full object-cover'
                         }
                       />
                     )}
                     {availability.badge && (
                       <span
-                        className={`absolute left-2 top-2 rounded-full px-2 py-1 text-[11px] font-black uppercase ${
-                          availability.sellable
-                            ? 'bg-black/70 text-[#d8d2c6]'
-                            : 'bg-[#7a2b2b] text-white'
+                        className={`pos-tag absolute left-2.5 top-2.5 ${
+                          availability.sellable ? '' : 'pos-tag--danger'
                         }`}
                       >
                         {availability.badge}
                       </span>
                     )}
                     {qty && (
-                      <span className="absolute right-2 top-2 grid h-11 min-w-11 place-items-center rounded-full bg-[#e5a93c] px-2 text-xl font-black text-black shadow-lg">
+                      <span className="pos-qty absolute right-2.5 top-2.5">
                         {qty}
                       </span>
                     )}
                   </span>
-                  <span className="flex flex-1 flex-col justify-between gap-1 p-3">
-                    <span className="block text-base font-black leading-tight">{item.name}</span>
-                    <span className="block text-xl font-black text-[#e5a93c]">
+                  <span className="flex flex-1 flex-col justify-between gap-1.5 px-3.5 pb-3 pt-2.5">
+                    <span className="block text-[0.9375rem] font-semibold leading-snug text-ink">
+                      {item.name}
+                    </span>
+                    <span className="pos-num block text-lg font-bold text-gold">
                       {mt(item.price_cents)}
                     </span>
                   </span>
@@ -1765,30 +1785,30 @@ export function PosShell() {
 
         {/* Se num ecrã baixo nem assim couber, o painel inteiro rola — nunca
             corta o botão PAGAR nem um campo por preencher. */}
-        <aside className="flex min-h-[36rem] flex-col border-t border-white/10 bg-[#111110] lg:min-h-0 lg:overflow-y-auto lg:border-l lg:border-t-0">
-          <div className="shrink-0 border-b border-white/10 p-3">
-            <div className="mb-2 flex items-center justify-between px-1">
-              <h2 className="text-xl font-black">Carrinho</h2>
-              <span className="text-sm text-[#847e72]">{count} artigos</span>
+        <aside className="flex min-h-[36rem] flex-col border-t border-white/[0.07] bg-bg1 lg:min-h-0 lg:overflow-y-auto lg:border-l lg:border-t-0">
+          <div className="shrink-0 space-y-2 border-b border-white/[0.07] p-3">
+            <div className="flex items-center justify-between px-1">
+              <h2 className="text-lg font-bold tracking-tight">Carrinho</h2>
+              <span className="pos-num rounded-full bg-white/[0.06] px-2.5 py-1 text-xs font-semibold text-ink-dim">
+                {count} artigos
+              </span>
             </div>
 
             {/* Tipo de pedido. Só aparecem os canais que a loja tem ligados —
                 oferecer entrega numa loja sem entrega é prometer o que não se
                 cumpre. Offline fica só o balcão (CLAUDE §7.5). */}
-            <div className="grid grid-cols-3 gap-2">
+            <div className="pos-seg">
               {(['counter', 'pickup', 'delivery'] as FulfillmentType[]).map((tipo) => {
                 if (!canalPermitido(tipo)) return null;
                 return (
                   <button
                     key={tipo}
                     type="button"
+                    aria-pressed={fulfillment === tipo}
                     onClick={() => setFulfillment(tipo)}
-                    className={`min-h-16 rounded-xl px-2 text-sm font-black active:scale-[0.98] ${
-                      fulfillment === tipo
-                        ? 'bg-[#e5a93c] text-black'
-                        : 'bg-white/[0.07] text-[#c8bfb0]'
-                    }`}
+                    className="flex-col !gap-1 !text-[0.8125rem]"
                   >
+                    <PosIcon name={FULFILLMENT_ICONS[tipo]} size={18} />
                     {FULFILLMENT_LABELS[tipo]}
                   </button>
                 );
@@ -1802,7 +1822,7 @@ export function PosShell() {
                 cabia no ecrã do balcão e o carrinho ficava sem espaço.
                 Nome e telefone aparecem em qualquer venda, não só entrega:
                 é o que deixa reconhecer quem compra ao balcão também. */}
-            <div className="mt-2 grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-2 gap-2">
               {/* A loja pode dispensar nome e telefone no balcão (aba POS). */}
               {(fulfillment !== 'counter' || posSettings.cart.askCustomerOnCounter) && (
               <>
@@ -1869,71 +1889,79 @@ export function PosShell() {
             </div>
           </div>
 
-          <div className="min-h-[8rem] flex-1 space-y-2 overflow-y-auto p-3">
+          <div className="min-h-[8rem] flex-1 overflow-y-auto px-3">
             {lines.length === 0 ? (
-              <p className="grid h-full min-h-28 place-items-center text-sm text-[#847e72]">
-                Toca num produto para começar.
-              </p>
+              <div className="grid h-full min-h-28 place-items-center text-center">
+                <div>
+                  <PosIcon name="bag" size={28} strokeWidth={1.5} className="mx-auto text-ink-mute opacity-60" />
+                  <p className="mt-2 text-sm text-ink-mute">Toca num produto para começar.</p>
+                </div>
+              </div>
             ) : (
-              lines.map((line) => (
-                <article key={line.id} className="rounded-2xl bg-white/[0.05] p-3">
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      <h3 className="font-bold">{line.name}</h3>
-                      <p className="text-sm text-[#e5a93c]">{mt(line.price_cents * line.qty)}</p>
-                      {/* "SEM JALAPENO" é meio balcão. Sai na comanda da
-                          cozinha e no talão, e faz da linha uma linha própria:
-                          um sem jalapeño e um normal não são `2x Classic`. */}
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setNoteDraft(line.notes ?? '');
-                          setNoteLine(line);
-                        }}
-                        className={`mt-1 min-h-12 max-w-full truncate rounded-lg px-2 text-left text-xs font-black uppercase ${
-                          line.notes
-                            ? 'bg-[#e5a93c] text-black'
-                            : 'bg-white/[0.07] text-[#847e72]'
-                        }`}
-                      >
-                        {line.notes ?? '+ sem / nota'}
-                      </button>
+              <ul className="divide-y divide-white/[0.06]">
+                {lines.map((line) => (
+                  <li key={line.id} className="flex items-center gap-3 py-2.5">
+                    <div className="min-w-0 flex-1">
+                      <h3 className="truncate text-[0.9375rem] font-semibold leading-tight">{line.name}</h3>
+                      <div className="mt-1 flex min-w-0 items-center gap-2">
+                        <span className="pos-num shrink-0 text-sm font-bold text-gold">
+                          {mt(line.price_cents * line.qty)}
+                        </span>
+                        {/* "SEM JALAPENO" é meio balcão. Sai na comanda da
+                            cozinha e no talão, e faz da linha uma linha própria:
+                            um sem jalapeño e um normal não são `2x Classic`. */}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setNoteDraft(line.notes ?? '');
+                            setNoteLine(line);
+                          }}
+                          className={`pos-press inline-flex min-h-12 min-w-0 items-center gap-1.5 rounded-xl px-3 text-left text-[0.6875rem] font-bold uppercase tracking-wide ${
+                            line.notes
+                              ? 'bg-[color:var(--pos-accent-soft)] text-gold'
+                              : 'bg-white/[0.05] text-ink-mute'
+                          }`}
+                        >
+                          <PosIcon name="pencil" size={13} className="shrink-0" />
+                          <span className="truncate">{line.notes ?? '+ sem / nota'}</span>
+                        </button>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-1">
+                    <div className="pos-well !flex shrink-0 !items-center !p-1">
                       <button
                         type="button"
                         onClick={() => changeLineQty(line, -1)}
-                        className="grid min-h-16 min-w-16 place-items-center rounded-xl bg-white/10 text-xl font-black active:bg-white/20"
+                        className="pos-press grid h-16 w-14 place-items-center rounded-[11px] active:bg-white/10"
                         aria-label={`Retirar ${line.name}`}
                       >
-                        −
+                        <PosIcon name="minus" size={20} />
                       </button>
-                      <span className="min-w-9 text-center text-lg font-black">{line.qty}</span>
+                      <span className="pos-num min-w-8 text-center text-lg font-bold">{line.qty}</span>
                       <button
                         type="button"
                         onClick={() => changeLineQty(line, 1)}
-                        className="grid min-h-16 min-w-16 place-items-center rounded-xl bg-white/10 text-xl font-black active:bg-white/20"
+                        className="pos-press grid h-16 w-14 place-items-center rounded-[11px] active:bg-white/10"
                         aria-label={`Adicionar ${line.name}`}
                       >
-                        +
+                        <PosIcon name="plus" size={20} />
                       </button>
                     </div>
-                  </div>
-                </article>
-              ))
+                  </li>
+                ))}
+              </ul>
             )}
           </div>
 
-          <section className="shrink-0 border-t border-white/10 p-3">
-            <div className="mb-3 flex items-center justify-between">
-              <span className="text-sm font-bold text-[#c8bfb0]">TOTAL</span>
-              <strong className="text-3xl text-[#e5a93c]">{mt(totalCents)}</strong>
+          <section className="shrink-0 border-t border-white/[0.07] p-3">
+            <div className="mb-2.5 flex items-baseline justify-between px-1">
+              <span className="pos-eyebrow">TOTAL</span>
+              <strong className="pos-num text-[2rem] font-extrabold leading-none">{mt(totalCents)}</strong>
             </div>
             <button
               type="button"
               disabled={lines.length === 0}
               onClick={startCheckout}
-              className="min-h-20 w-full rounded-2xl bg-[#e5a93c] px-4 text-2xl font-black text-black shadow-[0_10px_30px_rgba(229,169,60,.22)] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-35"
+              className="pos-btn pos-btn--primary pos-btn--lg w-full !text-2xl !tracking-[0.04em]"
             >
               PAGAR
             </button>
@@ -1971,12 +1999,13 @@ export function PosShell() {
           em vez de uma fila a rolar de lado e de um <select> nativo que num
           ecrã táctil abre pequeno. Escolher fecha logo. */}
       {cartPicker && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 p-4 sm:items-center">
-          <div className="flex max-h-full w-full max-w-2xl flex-col rounded-3xl border border-white/10 bg-[#141210] p-5 shadow-2xl">
-            <p className="text-xs font-black tracking-[0.25em] text-[#847e72]">
+        <div className="fixed inset-0 z-50 flex items-end justify-center p-4 sm:items-center">
+          <div aria-hidden className="pos-scrim" onClick={() => setCartPicker(null)} />
+          <div className="pos-sheet relative !flex max-h-full w-full max-w-2xl !flex-col !p-6">
+            <p className="pos-eyebrow">
               {cartPicker === 'schedule' ? 'PARA QUANDO?' : 'PARA ONDE?'}
             </p>
-            <h2 className="mb-4 text-3xl font-black text-[#f6f1e6]">
+            <h2 className="pos-title mb-5 mt-1">
               {cartPicker === 'schedule' ? 'Horário' : 'Zona de entrega'}
             </h2>
 
@@ -1993,22 +2022,19 @@ export function PosShell() {
                     <button
                       key={slot.value || 'agora'}
                       type="button"
+                      aria-pressed={scheduledFor === slot.value}
                       onClick={() => {
                         setScheduledFor(slot.value);
                         setCartPicker(null);
                       }}
-                      className={`min-h-16 rounded-xl text-xl font-black active:scale-[0.98] ${
-                        scheduledFor === slot.value
-                          ? 'bg-[#e5a93c] text-black'
-                          : 'bg-white/[0.08] text-[#f6f1e6]'
-                      }`}
+                      className="pos-choice pos-num !text-xl !text-ink aria-pressed:!text-[color:var(--pos-on-accent)]"
                     >
                       {slot.label}
                     </button>
                   ))}
                 </div>
               ) : channels.zones.length === 0 ? (
-                <p className="rounded-2xl bg-amber-500/10 px-4 py-4 text-base font-bold text-amber-200">
+                <p className="pos-note pos-note--warn">
                   Esta loja ainda não tem zonas de entrega configuradas no painel.
                 </p>
               ) : (
@@ -2017,18 +2043,15 @@ export function PosShell() {
                     <button
                       key={zona.id}
                       type="button"
+                      aria-pressed={zoneId === zona.id}
                       onClick={() => {
                         setZoneId(zona.id);
                         setCartPicker(null);
                       }}
-                      className={`flex min-h-16 items-center justify-between gap-3 rounded-xl px-4 text-left active:scale-[0.98] ${
-                        zoneId === zona.id
-                          ? 'bg-[#e5a93c] text-black'
-                          : 'bg-white/[0.08] text-[#f6f1e6]'
-                      }`}
+                      className="pos-choice !justify-between !px-4 !text-left !text-ink aria-pressed:!text-[color:var(--pos-on-accent)]"
                     >
-                      <span className="text-lg font-black">{zona.name}</span>
-                      <span className="shrink-0 text-lg font-black">{mt(zona.fee_cents)}</span>
+                      <span className="text-lg font-semibold">{zona.name}</span>
+                      <span className="pos-num shrink-0 text-lg font-bold">{mt(zona.fee_cents)}</span>
                     </button>
                   ))}
                 </div>
@@ -2038,7 +2061,7 @@ export function PosShell() {
             <button
               type="button"
               onClick={() => setCartPicker(null)}
-              className="mt-4 min-h-16 w-full shrink-0 rounded-2xl bg-white/10 text-lg font-black text-[#f6f1e6] active:bg-white/20"
+              className="pos-btn mt-5 w-full shrink-0 !text-lg"
             >
               Fechar
             </button>
@@ -2047,10 +2070,11 @@ export function PosShell() {
       )}
 
       {variantPick && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 p-4 sm:items-center">
-          <div className="w-full max-w-2xl rounded-3xl border border-white/10 bg-[#141210] p-5 shadow-2xl">
-            <p className="text-xs font-black tracking-[0.25em] text-[#847e72]">QUAL?</p>
-            <h2 className="mb-4 text-3xl font-black text-[#f6f1e6]">{variantPick.name}</h2>
+        <div className="fixed inset-0 z-50 flex items-end justify-center p-4 sm:items-center">
+          <div aria-hidden className="pos-scrim" onClick={() => setVariantPick(null)} />
+          <div className="pos-sheet relative w-full max-w-2xl !p-6">
+            <p className="pos-eyebrow">QUAL?</p>
+            <h2 className="pos-title mb-5 mt-1">{variantPick.name}</h2>
 
             <div className="grid gap-3 sm:grid-cols-2">
               {(variantPick.variants ?? []).map((variante) => (
@@ -2061,10 +2085,10 @@ export function PosShell() {
                     changeQty(variantPick, 1, variante);
                     setVariantPick(null);
                   }}
-                  className="flex min-h-24 items-center justify-between gap-3 rounded-2xl border border-white/10 bg-[#1a1816] px-5 text-left active:scale-[0.98]"
+                  className="pos-press flex min-h-24 items-center justify-between gap-3 rounded-[20px] bg-bg2 px-6 text-left shadow-[inset_0_0_0_1px_var(--pos-hair-strong)] active:bg-bg3"
                 >
-                  <span className="text-2xl font-black text-[#f6f1e6]">{variante.name}</span>
-                  <span className="shrink-0 text-2xl font-black text-[#e5a93c]">
+                  <span className="text-2xl font-bold tracking-tight text-ink">{variante.name}</span>
+                  <span className="pos-num shrink-0 text-2xl font-bold text-gold">
                     {mt(variante.price_cents)}
                   </span>
                 </button>
@@ -2074,7 +2098,7 @@ export function PosShell() {
             <button
               type="button"
               onClick={() => setVariantPick(null)}
-              className="mt-4 min-h-16 w-full rounded-2xl bg-white/10 text-lg font-black text-[#f6f1e6] active:bg-white/20"
+              className="pos-btn mt-5 w-full !text-lg"
             >
               Cancelar
             </button>
@@ -2083,14 +2107,21 @@ export function PosShell() {
       )}
 
       {funnelStep && (
-        <div className="fixed inset-0 z-40 flex flex-col bg-[#0a0807] text-[#f6f1e6]">
-          <header className="shrink-0 border-b border-white/10 px-6 py-3">
-            <div className="flex items-start justify-between gap-4">
-              <div className="min-w-0">
-                <p className="text-xs font-black tracking-[0.25em] text-[#847e72]">
-                  PASSO {funnelIndex + 1} DE {funnel.length}
-                </p>
-                <h2 className="text-3xl font-black">{funnelStep.title}</h2>
+        <div className="pos-screen fixed inset-0 z-40 flex flex-col">
+          <header className="shrink-0 border-b border-white/[0.07] bg-bg1 px-6 pb-4 pt-4">
+            <div className="flex items-center justify-between gap-4">
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-3">
+                  <p className="pos-eyebrow shrink-0">
+                    PASSO {funnelIndex + 1} DE {funnel.length}
+                  </p>
+                  <div aria-hidden className="pos-steps max-w-40 flex-1">
+                    {funnel.map((passo, indice) => (
+                      <span key={passo.kind + indice} data-done={indice <= funnelIndex} />
+                    ))}
+                  </div>
+                </div>
+                <h2 className="pos-title mt-1.5 !text-3xl">{funnelStep.title}</h2>
               </div>
               {/* O funil é obrigatório, o caminho de volta não pode ser. Quem
                   precisa de mexer no que já estava no carrinho vai lá, corrige,
@@ -2098,7 +2129,7 @@ export function PosShell() {
               <button
                 type="button"
                 onClick={cancelFunnel}
-                className="min-h-16 shrink-0 rounded-2xl bg-white/10 px-5 text-base font-black active:bg-white/20"
+                className="pos-btn pos-btn--quiet shrink-0"
               >
                 ← Carrinho
               </button>
@@ -2108,13 +2139,13 @@ export function PosShell() {
                 inventa uma boa pergunta de cada vez. As frases são da loja (aba
                 POS); um passo sem frases continua a oferecer, só não sugere. */}
             {funnelStep.script && (
-              <p className="mt-2 rounded-2xl bg-[#e5a93c]/10 px-5 py-3 text-xl font-bold italic text-[#e5a93c]">
-                “{funnelStep.script}”
+              <p className="mt-3 flex items-start gap-3 rounded-2xl bg-[color:var(--pos-accent-soft)] px-5 py-3 text-xl font-semibold text-gold shadow-[inset_3px_0_0_var(--gold)]">
+                <span className="italic">“{funnelStep.script}”</span>
               </p>
             )}
           </header>
 
-          <div className="min-h-0 flex-1 overflow-y-auto p-4">
+          <div className="min-h-0 flex-1 overflow-y-auto p-5">
             <div className="mx-auto flex w-full max-w-5xl flex-wrap justify-center gap-3">
               {funnelStep.items.map((item) => {
                 const posItem = item as (typeof visibleItems)[number];
@@ -2122,14 +2153,15 @@ export function PosShell() {
                 return (
                   <div
                     key={item.id}
-                    className="flex w-60 flex-col overflow-hidden rounded-2xl border border-white/10 bg-[#1a1816] text-left shadow-lg"
+                    data-in-cart={qty > 0 ? 'true' : undefined}
+                    className="pos-product w-60 active:!transform-none"
                   >
                     <button
                       type="button"
                       onClick={() => tapItem(posItem)}
-                      className="flex flex-1 flex-col text-left active:scale-[0.98]"
+                      className="pos-press flex flex-1 flex-col text-left"
                     >
-                      <span className="relative block aspect-[3/2] w-full overflow-hidden bg-black/40">
+                      <span className="pos-product__media aspect-[3/2]">
                         {item.photo_url && (
                           // eslint-disable-next-line @next/next/no-img-element
                           <img
@@ -2140,18 +2172,18 @@ export function PosShell() {
                             // object-contain e nao object-cover: as latas e garrafas
                             // sao altas e o cover cortava-lhes o rotulo — ficavam
                             // sete rectangulos vermelhos indistinguiveis.
-                            className="h-full w-full object-contain p-2"
+                            className="h-full w-full object-contain p-2 drop-shadow-[0_10px_14px_rgba(0,0,0,.45)]"
                           />
                         )}
                         {qty > 0 && (
-                          <span className="absolute right-2 top-2 grid h-11 min-w-11 place-items-center rounded-full bg-[#e5a93c] px-2 text-xl font-black text-black shadow-lg">
+                          <span className="pos-qty absolute right-2.5 top-2.5">
                             {qty}
                           </span>
                         )}
                       </span>
-                      <span className="flex flex-1 flex-col justify-between gap-1 px-3 py-2">
-                        <span className="block text-base font-black leading-tight">{item.name}</span>
-                        <span className="block text-xl font-black text-[#e5a93c]">
+                      <span className="flex flex-1 flex-col justify-between gap-1.5 px-3.5 pb-3 pt-2.5">
+                        <span className="block text-[0.9375rem] font-semibold leading-snug text-ink">{item.name}</span>
+                        <span className="pos-num block text-lg font-bold text-gold">
                           {mt(item.price_cents)}
                         </span>
                       </span>
@@ -2161,25 +2193,25 @@ export function PosShell() {
                         engano não é. Até aqui o item só saía voltando ao carrinho
                         — que daqui nem se via. Tirar tem de estar onde se pôs. */}
                     {qty > 0 && (
-                      <div className="flex items-stretch border-t border-white/10 bg-black/30">
+                      <div className="flex items-stretch border-t border-white/[0.07] bg-black/25">
                         <button
                           type="button"
                           aria-label={`Tirar um ${item.name}`}
                           onClick={() => setCart((atual) => removeOneOfItem(atual, posItem.id))}
-                          className="min-h-16 flex-1 text-3xl font-black text-red-300 active:bg-red-500/20"
+                          className="grid min-h-16 flex-1 place-items-center text-red-300 active:bg-red-500/15"
                         >
-                          −
+                          <PosIcon name="minus" size={24} />
                         </button>
-                        <span className="grid min-h-16 w-14 place-items-center border-x border-white/10 text-2xl font-black">
+                        <span className="pos-num grid min-h-16 w-14 place-items-center text-2xl font-bold">
                           {qty}
                         </span>
                         <button
                           type="button"
                           aria-label={`Juntar um ${item.name}`}
                           onClick={() => tapItem(posItem)}
-                          className="min-h-16 flex-1 text-3xl font-black text-[#e5a93c] active:bg-white/10"
+                          className="grid min-h-16 flex-1 place-items-center text-gold active:bg-white/10"
                         >
-                          +
+                          <PosIcon name="plus" size={24} />
                         </button>
                       </div>
                     )}
@@ -2189,25 +2221,25 @@ export function PosShell() {
             </div>
           </div>
 
-          <footer className="shrink-0 border-t border-white/10 p-4">
+          <footer className="shrink-0 border-t border-white/[0.07] bg-bg1 p-4">
             <div className="mx-auto flex w-full max-w-5xl items-center gap-3">
               {/* Saltar tem de ser fácil: o que se força é a oferta, não a compra.
                   Um cliente que diz que não é um toque, não uma negociação. */}
               <button
                 type="button"
                 onClick={advanceFunnel}
-                className="min-h-20 flex-1 rounded-2xl bg-white/10 px-4 text-xl font-black active:bg-white/20"
+                className="pos-btn pos-btn--lg flex-1"
               >
                 Não quis
               </button>
               <div className="hidden shrink-0 px-4 text-right sm:block">
-                <p className="text-xs font-black tracking-[0.2em] text-[#847e72]">TOTAL</p>
-                <p className="text-2xl font-black text-[#e5a93c]">{mt(totalCents)}</p>
+                <p className="pos-eyebrow">TOTAL</p>
+                <p className="pos-num mt-0.5 text-2xl font-extrabold">{mt(totalCents)}</p>
               </div>
               <button
                 type="button"
                 onClick={advanceFunnel}
-                className="min-h-20 flex-1 rounded-2xl bg-[#e5a93c] px-4 text-xl font-black text-black shadow-[0_10px_30px_rgba(229,169,60,.22)] active:scale-[0.98]"
+                className="pos-btn pos-btn--primary pos-btn--lg flex-1"
               >
                 {funnelIndex + 1 < funnel.length ? 'Continuar →' : 'Ir pagar →'}
               </button>
@@ -2217,76 +2249,76 @@ export function PosShell() {
       )}
 
       {paying && (
-        <div className="fixed inset-0 z-40 flex flex-col bg-[#0a0807] text-[#f6f1e6]">
-          <header className="flex shrink-0 items-center justify-between gap-4 border-b border-white/10 px-6 py-4">
+        <div className="pos-screen fixed inset-0 z-40 flex flex-col">
+          <header className="flex shrink-0 items-center justify-between gap-4 border-b border-white/[0.07] bg-bg1 px-6 py-4">
             <div>
-              <p className="text-xs font-black tracking-[0.25em] text-[#847e72]">TOTAL A PAGAR</p>
-              <p className="text-5xl font-black leading-tight text-[#e5a93c]">{mt(totalCents)}</p>
+              <p className="pos-eyebrow">TOTAL A PAGAR</p>
+              <p className="pos-num mt-1 text-5xl font-extrabold leading-none text-gold">{mt(totalCents)}</p>
             </div>
             <button
               type="button"
               onClick={() => setPaying(false)}
-              className="min-h-16 shrink-0 rounded-2xl bg-white/10 px-6 text-lg font-black active:bg-white/20"
+              className="pos-btn pos-btn--quiet shrink-0 !text-lg"
             >
               ← Voltar ao carrinho
             </button>
           </header>
 
-          <div className="min-h-0 flex-1 overflow-y-auto px-6 py-4">
+          <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
             <div className="mx-auto grid w-full max-w-5xl gap-5 lg:grid-cols-2">
               <div className="space-y-3">
                 {/* O que se está a cobrar, à vista de quem cobra. Sem isto o
                     ecrã pede um valor sem dizer de quê, e conferir obrigava a
                     voltar ao carrinho — e a repetir o funil de oferta. */}
-                <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
+                <div className="pos-card !p-4">
                   <div className="flex items-baseline justify-between gap-3">
-                    <p className="text-xs font-black tracking-[0.25em] text-[#847e72]">
+                    <p className="pos-eyebrow">
                       RESUMO · {count} {count === 1 ? 'ARTIGO' : 'ARTIGOS'}
                     </p>
                     {fulfillment !== 'counter' && (
-                      <p className="text-xs font-black tracking-[0.2em] text-[#e5a93c]">
+                      <p className="pos-eyebrow !text-gold">
                         {FULFILLMENT_LABELS[fulfillment].toUpperCase()}
                         {customerName.trim() ? ` · ${customerName.trim()}` : ''}
                       </p>
                     )}
                   </div>
-                  <ul className="mt-2 max-h-52 space-y-1 overflow-y-auto">
+                  <ul className="mt-3 max-h-52 space-y-1.5 overflow-y-auto">
                     {lines.map((line) => (
                       <li
                         key={line.id}
-                        className="flex items-baseline justify-between gap-3 text-base font-bold"
+                        className="flex items-baseline justify-between gap-3 text-[0.9375rem] font-medium"
                       >
                         <span className="min-w-0">
-                          <span className="text-[#e5a93c]">{line.qty}×</span> {line.name}
+                          <span className="pos-num font-bold text-gold">{line.qty}×</span> {line.name}
                         </span>
-                        <span className="shrink-0 tabular-nums text-[#c8bfb0]">
+                        <span className="pos-num shrink-0 text-ink-dim">
                           {mt(line.price_cents * line.qty)}
                         </span>
                       </li>
                     ))}
                   </ul>
                   {deliveryFeeCents > 0 && (
-                    <p className="mt-2 flex items-baseline justify-between gap-3 border-t border-white/10 pt-2 text-base font-bold text-[#c8bfb0]">
+                    <p className="mt-3 flex items-baseline justify-between gap-3 border-t border-white/[0.07] pt-3 text-[0.9375rem] font-medium text-ink-dim">
                       <span>Taxa de entrega</span>
-                      <span className="tabular-nums">{mt(deliveryFeeCents)}</span>
+                      <span className="pos-num">{mt(deliveryFeeCents)}</span>
                     </p>
                   )}
-                  <p className="mt-2 flex items-baseline justify-between border-t border-white/10 pt-2 text-xl font-black">
+                  <p className="mt-3 flex items-baseline justify-between border-t border-white/[0.07] pt-3 text-lg font-bold">
                     <span>TOTAL</span>
-                    <span className="text-[#e5a93c]">{mt(totalCents)}</span>
+                    <span className="pos-num text-gold">{mt(totalCents)}</span>
                   </p>
                 </div>
 
                 {/* Misto só faz sentido com dois meios ligados e com a loja a
                     deixar dividir a conta (aba POS). */}
                 {mixedAvailable && (
-                <label className="flex min-h-14 items-center justify-between rounded-xl bg-white/[0.05] px-4 text-base font-bold">
+                <label className="pos-card !flex !min-h-16 cursor-pointer !items-center !justify-between !px-4 !text-base !font-semibold">
                   Pagamento misto
                   <input
                     type="checkbox"
                     checked={mixed}
                     onChange={(event) => setMixedMode(event.target.checked)}
-                    className="h-6 w-6 accent-[#e5a93c]"
+                    className="pos-switch"
                   />
                 </label>
                 )}
@@ -2298,15 +2330,19 @@ export function PosShell() {
                       <button
                         key={method.id}
                         type="button"
+                        aria-pressed={selected}
                         onClick={() => selectMethod(method.id)}
-                        className={`min-h-20 rounded-2xl px-3 text-lg font-black active:scale-[0.98] ${
-                          selected ? 'bg-[#e5a93c] text-black' : 'bg-white/[0.07] text-[#c8bfb0]'
-                        }`}
+                        className="pos-choice !min-h-20 !justify-start !gap-3 !px-5 !text-lg"
                       >
-                        {method.label}
-                        {mixed && selected && (
-                          <span className="mt-1 block text-sm">{mt(allocations[method.id] ?? 0)}</span>
-                        )}
+                        <PosIcon name={METHOD_ICONS[method.id]} size={22} className="shrink-0 opacity-90" />
+                        <span className="min-w-0 text-left">
+                          {method.label}
+                          {mixed && selected && (
+                            <span className="pos-num mt-0.5 block text-sm font-semibold opacity-80">
+                              {mt(allocations[method.id] ?? 0)}
+                            </span>
+                          )}
+                        </span>
                       </button>
                     );
                   })}
@@ -2314,10 +2350,8 @@ export function PosShell() {
 
                 {mixed && (
                   <p
-                    className={`rounded-xl py-3 text-center text-base font-bold ${
-                      paymentPlan.complete
-                        ? 'bg-emerald-500/10 text-emerald-300'
-                        : 'bg-amber-500/10 text-amber-300'
+                    className={`pos-note !text-center ${
+                      paymentPlan.complete ? 'pos-note--ok' : 'pos-note--warn'
                     }`}
                   >
                     {paymentPlan.complete
@@ -2331,7 +2365,7 @@ export function PosShell() {
                 )}
 
                 {changeCents !== null && cashPaymentCents > 0 && (
-                  <p className="rounded-2xl bg-emerald-500/15 py-5 text-center text-4xl font-black text-emerald-300">
+                  <p className="pos-pop pos-num rounded-[20px] bg-[color:var(--pos-ok-soft)] py-5 text-center text-4xl font-extrabold text-emerald-300 shadow-[inset_0_0_0_1px_rgba(52,211,153,.3)]">
                     TROCO {mt(changeCents)}
                   </p>
                 )}
@@ -2339,7 +2373,7 @@ export function PosShell() {
                 {/* Loja sem número configurado não pode fingir que tem um.
                     Melhor dizer o que falta do que mostrar um campo vazio. */}
                 {mobileMethod && !mobileInstructions && (
-                  <p className="rounded-2xl bg-amber-500/10 p-4 text-base font-bold text-amber-200">
+                  <p className="pos-note pos-note--warn">
                     Esta loja ainda não tem número de{' '}
                     {mobileMethod === 'mpesa' ? 'M-Pesa' : 'e-Mola'} configurado. Cobra pelo número
                     do costume e avisa o gerente para o preencher em Lojas.
@@ -2347,47 +2381,51 @@ export function PosShell() {
                 )}
 
                 {error && (
-                  <p
-                    role="alert"
-                    className="rounded-xl bg-red-950/60 p-4 text-base font-bold text-red-200"
-                  >
+                  <p role="alert" className="pos-note pos-note--danger">
                     {error}
                   </p>
                 )}
               </div>
 
               {(mixed || methods[0] === 'cash') && (
-                <div className="rounded-2xl border border-white/10 p-4">
+                <div className="pos-card !p-4">
                   {mixed && (
                     <div className="mb-3 flex gap-2 overflow-x-auto">
                       {methods.map((method) => (
                         <button
                           key={method}
                           type="button"
+                          aria-pressed={keypadTarget === method}
                           onClick={() => setKeypadTarget(method)}
-                          className={`min-h-14 min-w-28 rounded-xl px-3 text-sm font-bold ${
-                            keypadTarget === method ? 'bg-white text-black' : 'bg-white/10'
-                          }`}
+                          className="pos-choice !min-h-14 min-w-28 !flex-col !gap-0 !text-sm aria-pressed:!bg-ink aria-pressed:!text-bg0"
                         >
                           {payMethods.find((entry) => entry.id === method)?.label ?? method}
-                          {method === 'cash' && <span className="block text-xs">recebido</span>}
+                          {method === 'cash' && <span className="block text-xs font-medium opacity-70">recebido</span>}
                         </button>
                       ))}
                     </div>
                   )}
 
-                  {!mixed && cashPaymentCents > 0 && (
+                  {/* Sem misto, o dinheiro recebido é o visor: um só número
+                      grande, em vez de um botão e um visor a dizer o mesmo. */}
+                  {!mixed && cashPaymentCents > 0 ? (
                     <button
                       type="button"
                       onClick={() => setKeypadTarget('cash_received')}
-                      className={`mb-3 min-h-16 w-full rounded-xl px-4 text-left text-base font-bold ${
-                        keypadTarget === 'cash_received'
-                          ? 'bg-emerald-400 text-black'
-                          : 'bg-white/10'
-                      }`}
+                      className="pos-well mb-3 !flex !min-h-20 w-full !items-center !justify-between !gap-3 !px-5 !text-left !shadow-[inset_0_0_0_1.5px_rgba(52,211,153,.5)]"
                     >
-                      Recebido: {mt(cashReceivedCents)}
+                      <span className="text-sm font-semibold text-emerald-200/80">Recebido:</span>{' '}
+                      <span className="pos-num text-4xl font-extrabold">{mt(cashReceivedCents)}</span>
                     </button>
+                  ) : (
+                    <div className="pos-well mb-3 !flex !min-h-20 !items-center !justify-between !px-5">
+                      <span className="text-sm font-semibold text-ink-mute">
+                        {keypadTarget === 'cash_received' || keypadTarget === 'cash'
+                          ? 'Valor recebido'
+                          : 'Parcela'}
+                      </span>
+                      <strong className="pos-num text-4xl font-extrabold">{mt(targetValue())}</strong>
+                    </div>
                   )}
 
                   {/* Valores rápidos: é o que a caixa recebe em nove de cada dez
@@ -2400,7 +2438,7 @@ export function PosShell() {
                           key={valor}
                           type="button"
                           onClick={() => setTargetValue(valor)}
-                          className="min-h-16 rounded-xl bg-white/[0.12] text-lg font-black active:bg-white/20"
+                          className="pos-key !text-lg !font-bold"
                         >
                           {valor / 100}
                         </button>
@@ -2408,21 +2446,12 @@ export function PosShell() {
                       <button
                         type="button"
                         onClick={fillRemaining}
-                        className="min-h-16 rounded-xl bg-emerald-500/20 text-base font-black text-emerald-200 active:bg-emerald-500/30"
+                        className="pos-key !bg-[color:var(--pos-ok-soft)] !text-base !font-bold !text-emerald-200"
                       >
                         Exacto
                       </button>
                     </div>
                   )}
-
-                  <div className="mb-3 flex items-center justify-between rounded-xl bg-black/30 px-4 py-3">
-                    <span className="text-sm text-[#847e72]">
-                      {keypadTarget === 'cash_received' || keypadTarget === 'cash'
-                        ? 'Valor recebido'
-                        : 'Parcela'}
-                    </span>
-                    <strong className="text-3xl font-black">{mt(targetValue())}</strong>
-                  </div>
 
                   <div className="grid grid-cols-3 gap-2">
                     {['1', '2', '3', '4', '5', '6', '7', '8', '9', 'C', '0', '⌫'].map((key) => (
@@ -2430,7 +2459,7 @@ export function PosShell() {
                         key={key}
                         type="button"
                         onClick={() => pressKey(key)}
-                        className="min-h-16 rounded-xl bg-white/[0.08] text-2xl font-black active:bg-white/20"
+                        className={`pos-key ${key === 'C' || key === '⌫' ? 'pos-key--muted' : ''}`}
                       >
                         {key}
                       </button>
@@ -2444,7 +2473,7 @@ export function PosShell() {
                     <button
                       type="button"
                       onClick={fillRemaining}
-                      className="mt-3 min-h-16 w-full rounded-xl bg-white/10 text-base font-bold active:bg-white/20"
+                      className="pos-btn mt-3 w-full"
                     >
                       Preencher restante
                     </button>
@@ -2457,30 +2486,30 @@ export function PosShell() {
                   paga por M-Pesa pela primeira vez — e são os mesmos que saem
                   no visor virado para ele. */}
               {mobileInstructions && (
-                <div className="rounded-2xl border border-[#e5a93c]/40 bg-[#e5a93c]/[0.07] p-5">
-                  <p className="text-xs font-black tracking-[0.25em] text-[#847e72]">
+                <div className="rounded-[20px] bg-[color:var(--pos-accent-soft)] p-5 shadow-[inset_0_0_0_1px_var(--pos-accent-line)]">
+                  <p className="pos-eyebrow">
                     {mobileInstructions.label.toUpperCase()} · NÚMERO DA LOJA
                   </p>
-                  <p className="mt-1 select-all text-5xl font-black leading-tight text-[#e5a93c]">
+                  <p className="pos-num mt-1 select-all text-5xl font-extrabold leading-tight text-gold">
                     {mobileInstructions.prettyNumber}
                   </p>
                   {mobileInstructions.holder && (
-                    <p className="text-lg font-bold text-[#c8bfb0]">{mobileInstructions.holder}</p>
+                    <p className="text-lg font-semibold text-ink-dim">{mobileInstructions.holder}</p>
                   )}
-                  <p className="mt-3 rounded-xl bg-black/30 px-4 py-3 text-2xl font-black">
+                  <p className="pos-well pos-num mt-4 !px-4 !py-3 !text-2xl !font-bold">
                     Enviar {mobileInstructions.amount}
                   </p>
-                  <ol className="mt-4 space-y-2">
+                  <ol className="mt-4 space-y-2.5">
                     {mobileInstructions.steps.map((step, index) => (
-                      <li key={step} className="flex gap-3 text-base font-bold text-[#c8bfb0]">
-                        <span className="grid h-7 w-7 shrink-0 place-items-center rounded-full bg-white/10 text-sm font-black text-[#f6f1e6]">
+                      <li key={step} className="flex gap-3 text-base font-medium text-ink-dim">
+                        <span className="pos-num grid h-7 w-7 shrink-0 place-items-center rounded-full bg-white/10 text-sm font-bold text-ink">
                           {index + 1}
                         </span>
                         <span>{step}</span>
                       </li>
                     ))}
                   </ol>
-                  <p className="mt-3 text-sm font-black text-amber-300">
+                  <p className="mt-4 text-sm font-bold text-amber-300">
                     Só finalizar depois de ver a SMS de confirmação.
                   </p>
                 </div>
@@ -2488,7 +2517,7 @@ export function PosShell() {
             </div>
           </div>
 
-          <footer className="shrink-0 border-t border-white/10 p-4">
+          <footer className="shrink-0 border-t border-white/[0.07] bg-bg1 p-4">
             <button
               type="button"
               disabled={
@@ -2498,7 +2527,7 @@ export function PosShell() {
                 (cashPaymentCents > 0 && changeCents === null)
               }
               onClick={() => void finalizeSale()}
-              className="mx-auto block min-h-20 w-full max-w-5xl rounded-2xl bg-[#e5a93c] px-4 text-2xl font-black text-black shadow-[0_10px_30px_rgba(229,169,60,.22)] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-35"
+              className="pos-btn pos-btn--primary pos-btn--lg mx-auto !flex w-full max-w-5xl !text-2xl !tracking-[0.03em]"
             >
               {submitting ? 'A registar…' : 'FINALIZAR VENDA'}
             </button>
@@ -2536,13 +2565,16 @@ export function PosShell() {
       {/* "Sem jalapeño" — a nota do artigo, com os SEM de todos os dias a um
           toque. Escrever à mão fica para o que é fora do comum. */}
       {noteLine && (
-        <div className="fixed inset-0 z-[70] grid place-items-center bg-black/85 p-4">
-          <section className="w-full max-w-2xl rounded-3xl border border-white/10 bg-[#1a1816] p-6">
-            <p className="text-xs font-black tracking-[0.25em] text-[#847e72]">NOTA DO ARTIGO</p>
-            <h2 className="mt-1 text-3xl font-black">{noteLine.name}</h2>
+        <div className="fixed inset-0 z-[70] grid place-items-center p-4">
+          <div aria-hidden className="pos-scrim" />
+          <section className="pos-sheet relative w-full max-w-2xl !p-6">
+            <p className="pos-eyebrow">NOTA DO ARTIGO</p>
+            <h2 className="pos-title mt-1">{noteLine.name}</h2>
             <p
-              className={`mt-2 min-h-14 rounded-xl px-4 py-3 text-lg font-black ${
-                noteDraft ? 'bg-[#e5a93c]/15 text-[#e5a93c]' : 'bg-white/[0.05] text-[#57514a]'
+              className={`mt-4 !min-h-14 !rounded-2xl !px-4 !py-3 !text-lg !font-bold ${
+                noteDraft
+                  ? 'bg-[color:var(--pos-accent-soft)] !text-gold !shadow-[inset_0_0_0_1px_var(--pos-accent-line)]'
+                  : 'pos-well !font-medium !text-ink-mute'
               }`}
             >
               {noteDraft ||
@@ -2558,10 +2590,9 @@ export function PosShell() {
                   <button
                     key={nota}
                     type="button"
+                    aria-pressed={escolhida}
                     onClick={() => setNoteDraft((actual) => toggleNoteChip(actual, nota))}
-                    className={`min-h-16 rounded-xl px-2 text-base font-black active:scale-[0.98] ${
-                      escolhida ? 'bg-[#e5a93c] text-black' : 'bg-white/[0.09] text-white'
-                    }`}
+                    className="pos-choice !px-2 !text-base !text-ink aria-pressed:!text-[color:var(--pos-on-accent)]"
                   >
                     {escolhida ? `✓ ${nota}` : nota}
                   </button>
@@ -2569,26 +2600,27 @@ export function PosShell() {
               })}
             </div>
 
-            <div className="mt-4 grid grid-cols-4 gap-2">
+            <div className="mt-5 grid grid-cols-4 gap-2">
               <button
                 type="button"
                 onClick={() => setNoteLine(null)}
-                className="min-h-16 rounded-2xl bg-white/10 font-black active:bg-white/20"
+                className="pos-btn pos-btn--quiet"
               >
                 Cancelar
               </button>
               <button
                 type="button"
                 onClick={() => setNoteDraft('')}
-                className="min-h-16 rounded-2xl bg-white/10 font-black active:bg-white/20"
+                className="pos-btn"
               >
                 Limpar
               </button>
               <button
                 type="button"
                 onClick={() => setNoteKeyboard(true)}
-                className="min-h-16 rounded-2xl bg-white/10 font-black active:bg-white/20"
+                className="pos-btn"
               >
+                <PosIcon name="pencil" size={18} />
                 Escrever
               </button>
               <button
@@ -2597,7 +2629,7 @@ export function PosShell() {
                   setCart((actual) => setLineNotes(actual, noteLine, noteDraft || null));
                   setNoteLine(null);
                 }}
-                className="min-h-16 rounded-2xl bg-[#e5a93c] text-lg font-black text-black active:scale-[0.98]"
+                className="pos-btn pos-btn--primary !text-lg"
               >
                 OK
               </button>
@@ -2622,14 +2654,26 @@ export function PosShell() {
       )}
 
       {confirmation && (
-        <div className="fixed inset-0 z-50 grid place-items-center bg-black/85 p-6">
-          <section className="w-full max-w-md rounded-[2rem] border border-emerald-400/40 bg-[#111110] p-8 text-center shadow-2xl">
-            <p className="text-lg font-black text-emerald-300">
+        <div className="fixed inset-0 z-50 grid place-items-center p-6">
+          <div aria-hidden className="pos-scrim !bg-black/85" />
+          {/* A única animação com vagar do balcão: é a que diz "ficou feito".
+              Um visto a desenhar-se lê-se de relance, de pé, com fila. */}
+          <section className="pos-sheet pos-pop relative w-full max-w-md !p-8 !text-center">
+            <span className={`pos-mark mx-auto ${confirmation.offline ? 'pos-mark--warn' : ''}`}>
+              <PosIcon name={confirmation.offline ? 'clock' : 'check'} size={34} strokeWidth={2.5} />
+            </span>
+            <p
+              className={`mt-4 text-sm font-bold tracking-[0.14em] ${
+                confirmation.offline ? 'text-amber-300' : 'text-emerald-300'
+              }`}
+            >
               {confirmation.offline ? 'VENDA GUARDADA OFFLINE' : 'VENDA REGISTADA'}
             </p>
-            <p className="my-6 text-8xl font-black text-white">{confirmation.dailyNumber}</p>
-            <p className="text-3xl font-black text-[#e5a93c]">{mt(confirmation.totalCents)}</p>
-            <p className="mt-4 text-sm text-[#847e72]">
+            <p className="pos-num my-3 font-display text-[8.5rem] leading-none tracking-normal text-ink">
+              {confirmation.dailyNumber}
+            </p>
+            <p className="pos-num text-3xl font-extrabold text-gold">{mt(confirmation.totalCents)}</p>
+            <p className="mt-4 text-sm text-ink-mute">
               {confirmation.offline ? 'Será sincronizada quando a ligação voltar.' : 'A preparar a próxima venda…'}
             </p>
           </section>
@@ -2637,21 +2681,25 @@ export function PosShell() {
       )}
 
       {voidOpen && lastSale && (
-        <div className="fixed inset-0 z-50 grid place-items-center bg-black/80 p-4">
-          <section className="w-full max-w-lg rounded-3xl border border-red-500/30 bg-[#1a1816] p-6">
-            <h2 className="text-2xl font-black">Anular venda #{lastSale.dailyNumber}</h2>
-            <p className="mt-2 text-sm text-[#c8bfb0]">A acção exige gerente e fica registada.</p>
+        <div className="fixed inset-0 z-50 grid place-items-center p-4">
+          <div aria-hidden className="pos-scrim" />
+          <section className="pos-sheet relative w-full max-w-lg !p-6">
+            <span className="grid h-12 w-12 place-items-center rounded-2xl bg-[color:var(--pos-danger-soft)] text-red-300">
+              <PosIcon name="undo" size={22} />
+            </span>
+            <h2 className="pos-title mt-4 !text-2xl">Anular venda #{lastSale.dailyNumber}</h2>
+            <p className="mt-1.5 text-sm text-ink-dim">A acção exige gerente e fica registada.</p>
             <textarea
               value={voidReason}
               onChange={(event) => setVoidReason(event.target.value)}
               placeholder="Motivo obrigatório"
-              className="mt-4 min-h-28 w-full rounded-2xl border border-white/10 bg-black/30 p-4 text-white outline-none focus:border-red-400"
+              className="pos-well mt-4 !min-h-28 w-full !p-4 !text-ink outline-none placeholder:text-ink-mute focus:shadow-[inset_0_0_0_1.5px_rgba(248,113,113,.6)]"
             />
             <div className="mt-4 grid grid-cols-2 gap-3">
               <button
                 type="button"
                 onClick={() => setVoidOpen(false)}
-                className="min-h-16 rounded-2xl bg-white/10 font-black active:bg-white/20"
+                className="pos-btn"
               >
                 Voltar
               </button>
@@ -2659,7 +2707,7 @@ export function PosShell() {
                 type="button"
                 disabled={submitting || voidReason.trim().length < 3}
                 onClick={() => void voidLastSale()}
-                className="min-h-16 rounded-2xl bg-red-600 font-black text-white active:bg-red-700 disabled:opacity-35"
+                className="pos-btn pos-btn--danger-solid"
               >
                 Confirmar anulação
               </button>
@@ -2673,7 +2721,7 @@ export function PosShell() {
           no próprio cartão e a sessão passa a ser dele — é o que mantém cada
           venda assinada por quem a fez (§6). */}
       {pinConfigured && locked && (
-        <div className="fixed inset-0 z-[70] overflow-auto bg-[#0a0807]">
+        <div className="fixed inset-0 z-[70] overflow-auto bg-bg0">
           <PosLogin
             deviceId={context.deviceId}
             currentUserId={sessionUserId}
@@ -2685,11 +2733,14 @@ export function PosShell() {
       )}
 
       {!pinConfigured && (
-        <div className="fixed inset-0 z-[70] grid place-items-center bg-black/95 p-4">
-          <section className="w-full max-w-md rounded-3xl border border-[#e5a93c]/30 bg-[#151310] p-7 text-center shadow-2xl">
-            <p className="text-sm font-black tracking-[0.2em] text-[#e5a93c]">CRIAR PIN</p>
-            <h2 className="mt-3 text-3xl font-black">Protege este turno</h2>
-            <p className="mt-2 text-sm text-[#a89f91]">
+        <div className="fixed inset-0 z-[70] grid place-items-center bg-bg0 p-4">
+          <section className="pos-sheet w-full max-w-md !p-7 !text-center">
+            <span className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-[color:var(--pos-accent-soft)] text-gold">
+              <PosIcon name="lock" size={26} />
+            </span>
+            <p className="pos-eyebrow mt-4 !text-gold">CRIAR PIN</p>
+            <h2 className="pos-title mt-1.5 !text-3xl">Protege este turno</h2>
+            <p className="mt-2 text-sm text-ink-dim">
               Escolhe 4 a 6 algarismos. É com este PIN que passas a entrar pelo
               teu cartão neste terminal — o email não volta a ser preciso.
             </p>
@@ -2705,7 +2756,7 @@ export function PosShell() {
               onKeyDown={(event) => {
                 if (event.key === 'Enter') void configurePin();
               }}
-              className="mt-6 min-h-16 w-full rounded-2xl border border-white/15 bg-black/40 px-4 text-center text-3xl font-black tracking-[0.5em] outline-none focus:border-[#e5a93c]"
+              className="pos-well mt-6 !min-h-16 w-full !px-4 !text-center !text-3xl !font-bold !tracking-[0.5em] outline-none focus:shadow-[inset_0_0_0_1.5px_var(--gold)]"
             />
             <input
               type="password"
@@ -2719,10 +2770,10 @@ export function PosShell() {
               onKeyDown={(event) => {
                 if (event.key === 'Enter') void configurePin();
               }}
-              className="mt-3 min-h-16 w-full rounded-2xl border border-white/15 bg-black/40 px-4 text-center text-xl font-black tracking-[0.35em] outline-none focus:border-[#e5a93c]"
+              className="pos-well mt-3 !min-h-16 w-full !px-4 !text-center !text-xl !font-bold !tracking-[0.35em] outline-none placeholder:tracking-normal placeholder:text-ink-mute focus:shadow-[inset_0_0_0_1.5px_var(--gold)]"
             />
             {pinError && (
-              <p role="alert" className="mt-4 rounded-xl bg-red-950/60 p-3 font-bold text-red-200">
+              <p role="alert" className="pos-note pos-note--danger mt-4">
                 {pinError}
               </p>
             )}
@@ -2730,12 +2781,12 @@ export function PosShell() {
               type="button"
               disabled={submitting || !isPosPin(pin) || pin !== pinConfirmation}
               onClick={() => void configurePin()}
-              className="mt-5 min-h-16 w-full rounded-2xl bg-[#e5a93c] px-5 text-lg font-black text-black disabled:opacity-40"
+              className="pos-btn pos-btn--primary mt-5 w-full !text-lg"
             >
               {submitting ? 'A confirmar…' : 'Guardar PIN'}
             </button>
 
-            <div className="mt-8 border-t border-white/10 pt-5 text-left">{terminalFooter}</div>
+            <div className="mt-8 border-t border-white/[0.07] pt-5 text-left">{terminalFooter}</div>
           </section>
         </div>
       )}

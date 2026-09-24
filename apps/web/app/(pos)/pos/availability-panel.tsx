@@ -14,7 +14,7 @@ type MenuCategory = { id: string; name: string; items: Array<{ id: string; name:
 
 const ESTILO: Record<AvailabilityState, { tile: string; badge: string; texto: string }> = {
   disponivel: {
-    tile: 'border-white/10 bg-white/[0.05] active:bg-white/10',
+    tile: 'border-white/[0.07] bg-white/[0.05] active:bg-white/10',
     badge: 'bg-emerald-500/15 text-emerald-200',
     texto: 'À VENDA',
   },
@@ -25,7 +25,7 @@ const ESTILO: Record<AvailabilityState, { tile: string; badge: string; texto: st
   },
   sem_stock: {
     tile: 'border-white/5 bg-white/[0.02] opacity-60',
-    badge: 'bg-white/10 text-[#c8bfb0]',
+    badge: 'bg-white/10 text-ink-dim',
     texto: 'SEM STOCK',
   },
 };
@@ -137,11 +137,11 @@ export function AvailabilityPanel({
     });
 
   return (
-    <div className="fixed inset-0 z-40 flex flex-col bg-[#0a0807] text-[#f6f1e6]">
-      <header className="flex shrink-0 items-center justify-between gap-4 border-b border-white/10 px-6 py-4">
+    <div className="pos-screen fixed inset-0 z-40 flex flex-col">
+      <header className="flex shrink-0 items-center justify-between gap-4 border-b border-white/[0.07] bg-bg1 px-6 py-4">
         <div>
-          <p className="text-xs font-black tracking-[0.25em] text-[#847e72]">DISPONIBILIDADE</p>
-          <h2 className="text-3xl font-black">
+          <p className="pos-eyebrow">DISPONIBILIDADE</p>
+          <h2 className="pos-title !text-3xl">
             {esgotados.length === 0
               ? 'Tudo à venda'
               : `${esgotados.length} fora do cardápio`}
@@ -150,7 +150,7 @@ export function AvailabilityPanel({
         <button
           type="button"
           onClick={onClose}
-          className="min-h-16 shrink-0 rounded-2xl bg-white/10 px-6 text-lg font-black active:bg-white/20"
+          className="pos-btn pos-btn--quiet shrink-0 !text-lg"
         >
           ← Voltar a vender
         </button>
@@ -163,17 +163,17 @@ export function AvailabilityPanel({
       )}
 
       {role !== undefined && !podeMarcar && !loading && (
-        <p className="shrink-0 bg-white/[0.04] px-6 py-4 text-lg font-bold text-[#c8bfb0]">
+        <p className="shrink-0 bg-white/[0.04] px-6 py-4 text-lg font-bold text-ink-dim">
           Este perfil não marca produtos como esgotados. Pede ao balcão ou ao gerente.
         </p>
       )}
 
       <div className="min-h-0 flex-1 space-y-6 overflow-y-auto p-4">
-        {loading && <p className="py-8 text-center text-lg font-bold text-[#847e72]">A carregar…</p>}
+        {loading && <p className="py-8 text-center text-lg font-bold text-ink-mute">A carregar…</p>}
 
         {categories.map((categoria) => (
           <section key={categoria.id}>
-            <h3 className="mb-2 text-sm font-black tracking-[0.2em] text-[#847e72]">
+            <h3 className="mb-2 text-sm font-bold tracking-[0.2em] text-ink-mute">
               {categoria.name.toUpperCase()}
             </h3>
             <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-4">
@@ -195,15 +195,15 @@ export function AvailabilityPanel({
                     }`}
                     className={`flex min-h-24 flex-col justify-between rounded-2xl border p-4 text-left ${ESTILO[estado].tile} disabled:cursor-default`}
                   >
-                    <span className="text-lg font-black leading-tight">{item.name}</span>
+                    <span className="text-lg font-bold leading-tight">{item.name}</span>
                     <span className="mt-2 flex items-center justify-between gap-2">
                       <span
-                        className={`rounded-lg px-2 py-1 text-xs font-black tracking-[0.15em] ${ESTILO[estado].badge}`}
+                        className={`rounded-lg px-2 py-1 text-xs font-bold tracking-[0.15em] ${ESTILO[estado].badge}`}
                       >
                         {aMexer ? '…' : ESTILO[estado].texto}
                       </span>
                       {estado === 'sem_stock' && (
-                        <span className="text-right text-[11px] font-bold text-[#847e72]">
+                        <span className="text-right text-[11px] font-bold text-ink-mute">
                           repor no Estoque
                         </span>
                       )}

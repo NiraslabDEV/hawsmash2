@@ -71,8 +71,8 @@ export function OnlineOrdersTab({
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-3">
       <div className="flex items-center justify-between gap-3">
         <div className="min-w-0">
-          <h2 className="text-xl font-black">Pedidos da internet · {storeName}</h2>
-          <p className="text-sm text-[#847e72]">
+          <h2 className="text-xl font-bold">Pedidos da internet · {storeName}</h2>
+          <p className="text-sm text-ink-mute">
             Entrega e levantamento{porDecidir > 0 ? ` · ${porDecidir} por aprovar` : ''}
           </p>
         </div>
@@ -92,7 +92,7 @@ export function OnlineOrdersTab({
         </p>
       )}
       {orders.length === 0 && !loading && !error && (
-        <p className="rounded-2xl border border-white/10 bg-[#1a1816] p-6 text-center text-[#847e72]">
+        <p className="rounded-2xl border border-white/[0.07] bg-bg2 p-6 text-center text-ink-mute">
           Sem pedidos da internet neste momento.
         </p>
       )}
@@ -105,7 +105,7 @@ export function OnlineOrdersTab({
           <div
             key={order.id}
             className={`rounded-2xl border p-4 ${
-              decidir ? 'border-violet-500/40 bg-violet-500/[0.07]' : 'border-white/10 bg-[#1a1816]'
+              decidir ? 'border-violet-500/40 bg-violet-500/[0.07]' : 'border-white/[0.07] bg-bg2'
             }`}
           >
             <button
@@ -119,28 +119,28 @@ export function OnlineOrdersTab({
             >
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <p className="text-lg font-black">
+                  <p className="text-lg font-bold">
                     #{numero} · {order.customer_name}
                   </p>
-                  <p className="text-[11px] font-black tracking-[0.15em] text-[#c8bfb0]">
+                  <p className="text-[11px] font-bold tracking-[0.15em] text-ink-dim">
                     {fulfillmentLabel(order)} · {paymentLabel(order)}
                   </p>
-                  <p className="truncate text-sm text-[#847e72]">
+                  <p className="truncate text-sm text-ink-mute">
                     {order.customer_phone}
                     {order.fulfillment_type === 'delivery' && order.address ? ` · ${order.address}` : ''}
                   </p>
                 </div>
-                <span className={`shrink-0 rounded-full px-3 py-1 text-xs font-black uppercase ${meta.className}`}>
+                <span className={`shrink-0 rounded-full px-3 py-1 text-xs font-bold uppercase ${meta.className}`}>
                   {meta.label}
                 </span>
               </div>
-              <p className="mt-2 text-sm text-[#c8bfb0]">
+              <p className="mt-2 text-sm text-ink-dim">
                 {order.items.map((it) => `${it.qty}× ${it.name}`).join(', ')}
               </p>
               <div className="mt-2 flex items-center justify-between gap-3">
-                <p className="text-lg font-black text-[#e5a93c]">{mt(order.total_cents)}</p>
+                <p className="text-lg font-bold text-gold">{mt(order.total_cents)}</p>
                 {decidir && order.flow !== 'digital' && (
-                  <p className="text-xs font-black tracking-[0.15em] text-[#e5a93c]">
+                  <p className="text-xs font-bold tracking-[0.15em] text-gold">
                     {order.payment_proof_path ? '📎 VER COMPROVATIVO' : 'SEM COMPROVATIVO'}
                   </p>
                 )}

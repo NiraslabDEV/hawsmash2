@@ -191,42 +191,45 @@ export function PosLogin({
 
   if (estado === 'loading') {
     return (
-      <div className="grid min-h-screen place-items-center bg-[#0a0807] text-[#e5a93c]">
-        <p className="text-xl font-bold">A carregar a equipa…</p>
+      <div className="grid min-h-screen place-items-center">
+        <p className="flex items-center gap-3 text-lg font-semibold text-ink-dim">
+          <span className="h-2 w-2 animate-pulse rounded-full bg-gold" />
+          A carregar a equipa…
+        </p>
       </div>
     );
   }
 
   if (estado === 'unavailable') {
     return (
-      <div className="grid min-h-screen place-items-center bg-[#0a0807] p-6 text-white">
-        <section className="w-full max-w-lg rounded-3xl border border-red-500/40 bg-red-950/30 p-8 text-center">
-          <h1 className="text-2xl font-black">Entrada indisponível</h1>
-          <p className="mt-3 text-red-100">{error}</p>
+      <div className="grid min-h-screen place-items-center p-6">
+        <section className="pos-sheet w-full max-w-lg !p-8 !text-center">
+          <h1 className="pos-title">Entrada indisponível</h1>
+          <p className="pos-note pos-note--danger mt-4 !font-normal">{error}</p>
           <button
             type="button"
             onClick={() => void loadCards()}
-            className="mt-6 min-h-16 w-full rounded-2xl bg-[#e5a93c] px-6 font-black text-black active:scale-[0.98]"
+            className="pos-btn pos-btn--primary mt-6 w-full"
           >
             Tentar novamente
           </button>
-          {footer && <div className="mt-8 border-t border-white/10 pt-5 text-left">{footer}</div>}
+          {footer && <div className="mt-8 border-t border-white/[0.07] pt-5 text-left">{footer}</div>}
         </section>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[#0a0807] p-4 text-[#f6f1e6] sm:p-8">
+    <div className="min-h-screen p-4 sm:p-8">
       <div className="mx-auto w-full max-w-5xl">
         <header className="text-center">
-          <p className="text-sm font-black tracking-[0.2em] text-[#e5a93c]">
+          <p className="pos-eyebrow !text-gold">
             {currentUserId ? 'POS BLOQUEADO' : 'ENTRAR NO POS'}
           </p>
-          <h1 className="mt-2 text-3xl font-black sm:text-4xl">
+          <h1 className="pos-title mt-2 !text-3xl sm:!text-4xl">
             {selected ? selected.full_name : 'Toca no teu cartão'}
           </h1>
-          <p className="mt-2 text-sm text-[#847e72]">
+          <p className="mt-2 text-sm text-ink-mute">
             {[storeName, deviceLabel].filter(Boolean).join(' · ') || 'Terminal de balcão'}
           </p>
         </header>
@@ -234,49 +237,51 @@ export function PosLogin({
         {!selected && (
           <>
             {cards.length === 0 ? (
-              <p className="mx-auto mt-10 max-w-lg rounded-2xl border border-amber-500/40 bg-amber-500/[0.08] p-5 text-center text-amber-200">
+              <p className="pos-note pos-note--warn mx-auto mt-10 max-w-lg !text-center !font-normal">
                 Esta loja ainda não tem ninguém com acesso. O dono cria as contas
                 em <strong>Equipa</strong>, no painel.
               </p>
             ) : (
-              <div className="mt-8 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+              <div className="mt-8 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
                 {cards.map((card) => {
                   const state = cardState(card);
                   const espera = lockCountdown(card.locked_until);
+                  const emTurno = card.user_id === currentUserId;
                   return (
                     <button
                       key={card.user_id}
                       type="button"
                       onClick={() => escolher(card)}
-                      className={`min-h-44 rounded-3xl border-2 p-4 text-left transition active:scale-[0.98] ${
-                        state === 'ready'
-                          ? 'border-white/12 bg-[#151310] hover:border-[#e5a93c]/60'
-                          : 'border-white/[0.06] bg-[#111110] opacity-60'
-                      }`}
+                      data-ready={state === 'ready'}
+                      className={`pos-login-card pos-press flex min-h-44 flex-col items-start rounded-[22px] bg-bg2 p-5 text-left ${
+                        emTurno
+                          ? 'shadow-[inset_0_0_0_2px_var(--pos-accent-line)]'
+                          : 'shadow-[inset_0_0_0_1px_var(--pos-hair)]'
+                      } ${state === 'ready' ? '' : 'opacity-55'}`}
                     >
                       <span
-                        className={`grid h-16 w-16 place-items-center rounded-2xl text-2xl font-black ${
+                        className={`grid h-14 w-14 place-items-center rounded-2xl text-xl font-bold tracking-tight ${
                           state === 'ready'
-                            ? 'bg-[#e5a93c] text-black'
-                            : 'bg-white/10 text-[#847e72]'
+                            ? 'bg-gold text-[color:var(--pos-on-accent)]'
+                            : 'bg-white/10 text-ink-mute'
                         }`}
                       >
                         {cardInitials(card.full_name)}
                       </span>
-                      <span className="mt-4 block text-xl font-black leading-tight">
+                      <span className="mt-auto block pt-4 text-lg font-bold leading-tight">
                         {card.full_name}
                       </span>
-                      <span className="mt-1 block text-sm font-bold text-[#847e72]">
+                      <span className="mt-1 block text-sm font-medium text-ink-mute">
                         {roleLabel(card.role)}
-                        {card.user_id === currentUserId && ' · em turno'}
+                        {emTurno && <span className="text-gold"> · em turno</span>}
                       </span>
                       {state === 'no-pin' && (
-                        <span className="mt-2 block text-xs font-bold text-amber-300">
+                        <span className="mt-2 block text-xs font-semibold text-amber-300">
                           PIN por definir
                         </span>
                       )}
                       {state === 'locked' && (
-                        <span className="mt-2 block text-xs font-bold text-red-300">
+                        <span className="mt-2 block text-xs font-semibold text-red-300">
                           Bloqueado {espera ? `· ${espera}` : ''}
                         </span>
                       )}
@@ -290,13 +295,13 @@ export function PosLogin({
 
         {selected && (
           <section className="mx-auto mt-8 w-full max-w-sm">
-            <div className="flex min-h-16 items-center justify-center gap-3">
+            <div className="flex min-h-16 items-center justify-center gap-3.5">
               {Array.from({ length: POS_PIN_MAX }).map((_, indice) => (
                 <span
                   key={indice}
-                  className={`h-4 w-4 rounded-full ${
+                  className={`h-3.5 w-3.5 rounded-full transition-colors duration-100 ${
                     indice < pin.length
-                      ? 'bg-[#e5a93c]'
+                      ? 'bg-gold'
                       : indice < POS_PIN_MIN
                         ? 'bg-white/25'
                         : 'bg-white/10'
@@ -305,13 +310,13 @@ export function PosLogin({
               ))}
             </div>
 
-            <div className="mt-4 grid grid-cols-3 gap-3">
+            <div className="mt-4 grid grid-cols-3 gap-2.5">
               {['1', '2', '3', '4', '5', '6', '7', '8', '9'].map((digito) => (
                 <button
                   key={digito}
                   type="button"
                   onClick={() => setPin((actual) => appendPinDigit(actual, digito))}
-                  className="min-h-20 rounded-2xl bg-white/[0.08] text-3xl font-black active:bg-white/20"
+                  className="pos-key !min-h-20 !text-3xl"
                 >
                   {digito}
                 </button>
@@ -320,14 +325,14 @@ export function PosLogin({
                 type="button"
                 onClick={() => setPin((actual) => actual.slice(0, -1))}
                 aria-label="Apagar"
-                className="min-h-20 rounded-2xl bg-white/[0.04] text-2xl font-black text-[#847e72] active:bg-white/15"
+                className="pos-key pos-key--muted !min-h-20 !text-2xl"
               >
                 ⌫
               </button>
               <button
                 type="button"
                 onClick={() => setPin((actual) => appendPinDigit(actual, '0'))}
-                className="min-h-20 rounded-2xl bg-white/[0.08] text-3xl font-black active:bg-white/20"
+                className="pos-key !min-h-20 !text-3xl"
               >
                 0
               </button>
@@ -335,7 +340,7 @@ export function PosLogin({
                 type="button"
                 disabled={submitting || pin.length < POS_PIN_MIN}
                 onClick={() => void submit()}
-                className="min-h-20 rounded-2xl bg-emerald-500 text-lg font-black text-black disabled:opacity-30"
+                className="pos-btn pos-btn--ok !min-h-20 !text-lg"
               >
                 {submitting ? '…' : 'Entrar'}
               </button>
@@ -348,7 +353,7 @@ export function PosLogin({
                 setPin('');
                 setError(null);
               }}
-              className="mt-4 min-h-16 w-full rounded-2xl bg-white/[0.06] font-black active:bg-white/15"
+              className="pos-btn pos-btn--quiet mt-4 w-full"
             >
               Voltar aos cartões
             </button>
@@ -356,15 +361,12 @@ export function PosLogin({
         )}
 
         {error && (
-          <p
-            role="alert"
-            className="mx-auto mt-6 max-w-lg rounded-2xl bg-red-950/60 p-4 text-center font-bold text-red-200"
-          >
+          <p role="alert" className="pos-note pos-note--danger mx-auto mt-6 max-w-lg !text-center">
             {error}
           </p>
         )}
 
-        {footer && <div className="mx-auto mt-10 max-w-lg border-t border-white/10 pt-6">{footer}</div>}
+        {footer && <div className="mx-auto mt-10 max-w-lg border-t border-white/[0.07] pt-6">{footer}</div>}
       </div>
     </div>
   );

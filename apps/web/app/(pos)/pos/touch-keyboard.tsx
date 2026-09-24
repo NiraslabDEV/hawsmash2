@@ -78,16 +78,16 @@ export function TouchKeyboard({
   const linhas = mode === 'tel' ? LINHAS_TELEFONE : LINHAS_TEXTO;
 
   return (
-    <div className="fixed inset-0 z-[80] flex flex-col bg-black/90 p-4">
+    <div className="pos-screen fixed inset-0 z-[80] flex flex-col !bg-[rgba(8,7,6,.97)] p-4">
       <div className="mx-auto flex w-full max-w-4xl flex-1 flex-col">
-        <p className="text-sm font-black tracking-[0.2em] text-[#e5a93c]">
+        <p className="pos-eyebrow !text-gold">
           {label.toUpperCase()}
         </p>
 
-        <div className="mt-2 min-h-20 rounded-2xl border border-white/15 bg-[#151310] px-5 py-4">
-          <p className="break-words text-3xl font-black text-white">
-            {draft || <span className="text-[#57514a]">…</span>}
-            <span className="ml-0.5 animate-pulse text-[#e5a93c]">|</span>
+        <div className="pos-well mt-2 !min-h-20 !px-5 !py-4 !shadow-[inset_0_0_0_1.5px_var(--pos-accent-line)]">
+          <p className="break-words text-3xl font-semibold tracking-tight text-ink">
+            {draft || <span className="text-ink-mute">…</span>}
+            <span className="ml-0.5 animate-pulse text-gold">|</span>
           </p>
         </div>
 
@@ -101,13 +101,12 @@ export function TouchKeyboard({
                 <button
                   key={sugestao}
                   type="button"
+                  aria-pressed={escolhida}
                   onClick={() => {
                     setDraft((actual) => toggleNoteChip(actual, sugestao).slice(0, maxLength));
                     setCaps(false);
                   }}
-                  className={`min-h-14 shrink-0 rounded-xl px-4 text-base font-bold active:scale-[0.98] ${
-                    escolhida ? 'bg-[#e5a93c] text-black' : 'bg-white/[0.08] text-[#c8bfb0]'
-                  }`}
+                  className="pos-choice !min-h-14 shrink-0 !rounded-full !px-5 !text-base"
                 >
                   {escolhida ? `✓ ${sugestao}` : sugestao}
                 </button>
@@ -124,7 +123,7 @@ export function TouchKeyboard({
                   key={tecla}
                   type="button"
                   onClick={() => escrever(tecla)}
-                  className="min-h-16 flex-1 rounded-xl bg-white/[0.09] text-2xl font-black text-white active:bg-white/25"
+                  className="pos-key flex-1 !rounded-xl !text-2xl"
                 >
                   {tecla === ' ' ? '␣' : caps && mode === 'text' ? tecla.toUpperCase() : tecla}
                 </button>
@@ -136,10 +135,9 @@ export function TouchKeyboard({
             {mode === 'text' && (
               <button
                 type="button"
+                aria-pressed={caps}
                 onClick={() => setCaps((actual) => !actual)}
-                className={`min-h-16 flex-1 rounded-xl text-lg font-black active:scale-[0.98] ${
-                  caps ? 'bg-[#e5a93c] text-black' : 'bg-white/[0.09] text-white'
-                }`}
+                className="pos-choice flex-1 !rounded-xl !text-base !tracking-wide"
               >
                 MAIÚSC
               </button>
@@ -147,14 +145,14 @@ export function TouchKeyboard({
             <button
               type="button"
               onClick={() => escrever(' ')}
-              className="min-h-16 flex-[3] rounded-xl bg-white/[0.09] text-lg font-black text-white active:bg-white/25"
+              className="pos-key flex-[3] !rounded-xl !text-base !tracking-[0.2em] !text-ink-dim"
             >
               ESPAÇO
             </button>
             <button
               type="button"
               onClick={() => setDraft((actual) => actual.slice(0, -1))}
-              className="min-h-16 flex-1 rounded-xl bg-white/[0.09] text-2xl font-black text-white active:bg-white/25"
+              className="pos-key pos-key--muted flex-1 !rounded-xl !text-2xl"
             >
               ⌫
             </button>
@@ -164,21 +162,21 @@ export function TouchKeyboard({
             <button
               type="button"
               onClick={onCancel}
-              className="min-h-20 flex-1 rounded-2xl bg-white/[0.08] text-xl font-black text-[#c8bfb0] active:bg-white/20"
+              className="pos-btn pos-btn--quiet pos-btn--lg flex-1 !text-lg"
             >
               CANCELAR
             </button>
             <button
               type="button"
               onClick={() => setDraft('')}
-              className="min-h-20 flex-1 rounded-2xl bg-white/[0.08] text-xl font-black text-[#c8bfb0] active:bg-white/20"
+              className="pos-btn pos-btn--lg flex-1 !text-lg"
             >
               LIMPAR
             </button>
             <button
               type="button"
               onClick={() => onConfirm(draft.trim())}
-              className="min-h-20 flex-[2] rounded-2xl bg-[#e5a93c] text-2xl font-black text-black active:scale-[0.98]"
+              className="pos-btn pos-btn--primary pos-btn--lg flex-[2] !text-2xl"
             >
               OK
             </button>

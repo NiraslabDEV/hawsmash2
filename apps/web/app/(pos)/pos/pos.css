@@ -1,0 +1,595 @@
+/* ============================================================
+   POS — o balcão
+   ------------------------------------------------------------
+   Um só vocabulário para o ecrã táctil: superfícies escuras em
+   três níveis, uma cor de acento (a da marca, vinda da BD pelas
+   variáveis --gold / --bg-*, §18.2) e números tabulares.
+
+   Regras que isto cumpre:
+   - Sem hover: é touch (§7.6). O retorno é no toque, scale .97.
+   - Alvos de 64 px ou mais nos botões de trabalho.
+   - Movimento só onde explica alguma coisa. O que se toca
+     centenas de vezes por turno (teclas, categorias, +/−) não
+     anima — responde. Folhas e ecrãs entram rápido (≤ 260 ms).
+   - O mini-PC do balcão é fraco: nada de backdrop-filter nem
+     sombras animadas a ecrã inteiro.
+   ============================================================ */
+
+.pos-ui {
+  --pos-canvas: var(--bg-0);
+  --pos-panel: var(--bg-1);
+  --pos-card: var(--bg-2);
+  --pos-raised: var(--bg-3);
+
+  --pos-hair: rgba(255, 255, 255, 0.07);
+  --pos-hair-strong: rgba(255, 255, 255, 0.13);
+  --pos-fill: rgba(255, 255, 255, 0.06);
+  --pos-fill-press: rgba(255, 255, 255, 0.13);
+  --pos-sunken: rgba(0, 0, 0, 0.28);
+
+  --pos-accent: var(--gold);
+  --pos-on-accent: #17110a;
+  --pos-accent-soft: color-mix(in srgb, var(--gold) 13%, transparent);
+  --pos-accent-line: color-mix(in srgb, var(--gold) 55%, transparent);
+
+  --pos-ok: #34d399;
+  --pos-ok-ink: #a7f3d0;
+  --pos-ok-soft: rgba(52, 211, 153, 0.12);
+  --pos-warn: #fbbf24;
+  --pos-warn-ink: #fde68a;
+  --pos-warn-soft: rgba(251, 191, 36, 0.1);
+  --pos-danger: #f87171;
+  --pos-danger-ink: #fecaca;
+  --pos-danger-soft: rgba(248, 113, 113, 0.12);
+
+  --pos-highlight: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  --pos-ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --pos-ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
+
+  background: var(--pos-canvas);
+  color: var(--ink);
+  -webkit-tap-highlight-color: transparent;
+  /* Um toque longo num ecrã táctil selecciona texto e abre menus. No
+     balcão isso é sempre engano. Campos e o número M-Pesa (select-all)
+     continuam seleccionáveis. */
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.pos-ui input,
+.pos-ui textarea {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+/* Barras de rolagem finas: o Windows táctil mostra-as sempre. */
+.pos-ui ::-webkit-scrollbar { width: 8px; height: 8px; }
+.pos-ui ::-webkit-scrollbar-track { background: transparent; }
+.pos-ui ::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 999px;
+}
+
+/* ---------- Tipografia ---------- */
+
+.pos-num {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+
+.pos-eyebrow {
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-mute);
+}
+
+.pos-title {
+  font-size: 1.75rem;
+  font-weight: 700;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+}
+
+/* ---------- Toque ---------- */
+
+.pos-press {
+  transition:
+    transform 160ms var(--pos-ease-out),
+    background-color 160ms ease,
+    color 160ms ease,
+    box-shadow 160ms ease;
+}
+.pos-press:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+/* ---------- Botões ---------- */
+
+.pos-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  min-height: 4rem;
+  padding: 0 1.25rem;
+  border-radius: 16px;
+  background: var(--pos-fill);
+  color: var(--ink);
+  font-size: 1rem;
+  font-weight: 650;
+  line-height: 1.15;
+  box-shadow: var(--pos-highlight);
+  transition:
+    transform 160ms var(--pos-ease-out),
+    background-color 160ms ease,
+    color 160ms ease,
+    box-shadow 160ms ease;
+}
+.pos-btn:active:not(:disabled) {
+  background: var(--pos-fill-press);
+  transform: scale(0.97);
+}
+.pos-btn:disabled {
+  opacity: 0.38;
+  cursor: not-allowed;
+}
+.pos-btn svg { flex-shrink: 0; }
+
+.pos-btn--primary {
+  background: var(--pos-accent);
+  color: var(--pos-on-accent);
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.3),
+    inset 0 -2px 0 rgba(0, 0, 0, 0.12),
+    0 12px 28px -14px color-mix(in srgb, var(--gold) 80%, transparent);
+}
+.pos-btn--primary:active:not(:disabled) {
+  background: color-mix(in srgb, var(--gold) 86%, #000);
+}
+.pos-btn--primary:disabled { box-shadow: none; }
+
+.pos-btn--quiet {
+  background: transparent;
+  color: var(--ink-dim);
+  box-shadow: inset 0 0 0 1px var(--pos-hair-strong);
+}
+.pos-btn--quiet:active:not(:disabled) { background: var(--pos-fill); }
+
+.pos-btn--accent-outline {
+  background: var(--pos-accent-soft);
+  color: var(--pos-accent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--gold) 35%, transparent);
+}
+
+.pos-btn--danger {
+  background: var(--pos-danger-soft);
+  color: var(--pos-danger-ink);
+  box-shadow: inset 0 0 0 1px rgba(248, 113, 113, 0.28);
+}
+.pos-btn--danger:active:not(:disabled) { background: rgba(248, 113, 113, 0.22); }
+
+.pos-btn--danger-solid {
+  background: #dc2626;
+  color: #fff;
+  font-weight: 750;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18);
+}
+.pos-btn--danger-solid:active:not(:disabled) { background: #b91c1c; }
+
+.pos-btn--ok {
+  background: var(--pos-ok);
+  color: #04130d;
+  font-weight: 800;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+.pos-btn--ok:active:not(:disabled) { background: #10b981; }
+
+.pos-btn--lg {
+  min-height: 5rem;
+  border-radius: 20px;
+  font-size: 1.375rem;
+}
+
+/* ---------- Escolhas ----------
+   Uma opção que muda dinheiro ou o tipo de pedido fica cheia de
+   acento quando escolhida — tem de se ler de longe, com reflexo
+   no ecrã. Navegação (categorias) usa o tom suave. */
+
+.pos-choice {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  min-height: 4rem;
+  padding: 0 0.875rem;
+  border-radius: 16px;
+  background: var(--pos-fill);
+  color: var(--ink-dim);
+  font-weight: 600;
+  line-height: 1.15;
+  box-shadow: var(--pos-highlight);
+  transition:
+    transform 160ms var(--pos-ease-out),
+    background-color 160ms ease,
+    color 160ms ease;
+}
+.pos-choice:active:not(:disabled) { transform: scale(0.97); }
+.pos-choice:disabled { opacity: 0.35; cursor: not-allowed; }
+.pos-choice[aria-pressed='true'] {
+  background: var(--pos-accent);
+  color: var(--pos-on-accent);
+  font-weight: 750;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.28),
+    0 8px 22px -14px color-mix(in srgb, var(--gold) 90%, transparent);
+}
+
+/* Controlo segmentado: tipo de pedido. */
+.pos-seg {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  gap: 3px;
+  padding: 3px;
+  border-radius: 19px;
+  background: var(--pos-sunken);
+  box-shadow: inset 0 0 0 1px var(--pos-hair);
+}
+.pos-seg > button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  min-height: 4rem;
+  padding: 0 0.5rem;
+  border-radius: 16px;
+  color: var(--ink-mute);
+  font-size: 0.9375rem;
+  font-weight: 600;
+  transition:
+    transform 160ms var(--pos-ease-out),
+    background-color 160ms ease,
+    color 160ms ease;
+}
+.pos-seg > button:active { transform: scale(0.97); }
+.pos-seg > button[aria-pressed='true'] {
+  background: var(--pos-accent);
+  color: var(--pos-on-accent);
+  font-weight: 750;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.28),
+    0 6px 16px -8px rgba(0, 0, 0, 0.7);
+}
+
+/* ---------- Categorias ---------- */
+
+.pos-rail-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-height: 4rem;
+  padding: 0.5rem 0.875rem;
+  border-radius: 14px;
+  color: var(--ink-dim);
+  font-size: 0.9375rem;
+  font-weight: 600;
+  line-height: 1.15;
+  text-align: left;
+  transition: transform 160ms var(--pos-ease-out), background-color 120ms ease;
+}
+.pos-rail-item:active { transform: scale(0.97); background: var(--pos-fill); }
+.pos-rail-item[aria-current='true'] {
+  background: var(--pos-accent-soft);
+  color: var(--pos-accent);
+  font-weight: 750;
+}
+.pos-rail-item[aria-current='true']::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 1rem;
+  bottom: 1rem;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: var(--pos-accent);
+}
+
+/* ---------- Produto ---------- */
+
+.pos-product {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: 20px;
+  background: var(--pos-card);
+  text-align: left;
+  box-shadow: inset 0 0 0 1px var(--pos-hair), var(--pos-highlight);
+  transition: transform 160ms var(--pos-ease-out), box-shadow 160ms ease;
+}
+.pos-product:active:not(:disabled) { transform: scale(0.97); }
+.pos-product:disabled { opacity: 0.45; cursor: not-allowed; }
+.pos-product:disabled img { filter: grayscale(1); }
+.pos-product[data-in-cart='true'] {
+  box-shadow: inset 0 0 0 2px var(--pos-accent-line), var(--pos-highlight);
+}
+
+/* As fotos são recortes sobre transparente: uma luz quente por trás
+   dá-lhes chão sem precisar de um fundo fotografado. */
+.pos-product__media {
+  position: relative;
+  display: block;
+  width: 100%;
+  overflow: hidden;
+  background:
+    radial-gradient(110% 85% at 50% 38%,
+      color-mix(in srgb, var(--gold) 12%, var(--bg-3)) 0%,
+      var(--bg-2) 72%);
+}
+
+.pos-qty {
+  display: grid;
+  place-items: center;
+  min-width: 2.5rem;
+  height: 2.5rem;
+  padding: 0 0.625rem;
+  border-radius: 999px;
+  background: var(--pos-accent);
+  color: var(--pos-on-accent);
+  font-size: 1.125rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  box-shadow: 0 0 0 3px var(--pos-card), 0 6px 16px -6px rgba(0, 0, 0, 0.8);
+}
+
+.pos-tag {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 0.25rem 0.625rem;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  background: rgba(0, 0, 0, 0.62);
+  color: var(--ink-dim);
+}
+.pos-tag--danger { background: #7f1d1d; color: #fff; }
+
+/* ---------- Superfícies ---------- */
+
+.pos-card {
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.03);
+  box-shadow: inset 0 0 0 1px var(--pos-hair);
+}
+
+.pos-well {
+  border-radius: 14px;
+  background: var(--pos-sunken);
+  box-shadow: inset 0 0 0 1px var(--pos-hair);
+}
+
+/* Barra de campo do carrinho (nome, telefone, morada…). */
+.pos-field {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+  min-height: 4rem;
+  padding: 0.375rem 0.75rem 0.375rem 0.875rem;
+  border-radius: 14px;
+  background: var(--pos-sunken);
+  text-align: left;
+  box-shadow: inset 0 0 0 1px var(--pos-hair);
+  transition: transform 160ms var(--pos-ease-out), box-shadow 160ms ease;
+}
+.pos-field:active { transform: scale(0.98); }
+.pos-field[data-warn='true'] {
+  background: var(--pos-warn-soft);
+  box-shadow: inset 0 0 0 1px rgba(251, 191, 36, 0.35);
+}
+
+/* Avisos em linha. */
+.pos-note {
+  border-radius: 14px;
+  padding: 0.75rem 1rem;
+  font-weight: 600;
+  line-height: 1.35;
+}
+.pos-note--warn { background: var(--pos-warn-soft); color: var(--pos-warn-ink); box-shadow: inset 0 0 0 1px rgba(251, 191, 36, 0.22); }
+.pos-note--danger { background: var(--pos-danger-soft); color: var(--pos-danger-ink); box-shadow: inset 0 0 0 1px rgba(248, 113, 113, 0.25); }
+.pos-note--ok { background: var(--pos-ok-soft); color: var(--pos-ok-ink); box-shadow: inset 0 0 0 1px rgba(52, 211, 153, 0.22); }
+
+/* ---------- Teclas ---------- */
+
+.pos-key {
+  display: grid;
+  place-items: center;
+  min-height: 4rem;
+  border-radius: 16px;
+  background: var(--pos-fill);
+  color: var(--ink);
+  font-size: 1.625rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  box-shadow: var(--pos-highlight);
+  transition: transform 100ms var(--pos-ease-out), background-color 100ms ease;
+}
+.pos-key:active:not(:disabled) {
+  background: var(--pos-fill-press);
+  transform: scale(0.96);
+}
+.pos-key--muted { background: rgba(255, 255, 255, 0.03); color: var(--ink-mute); }
+
+/* ---------- Estado da ligação ---------- */
+
+.pos-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 2.5rem;
+  padding: 0 0.875rem 0 0.75rem;
+  border-radius: 999px;
+  font-size: 0.8125rem;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  background: var(--pos-ok-soft);
+  color: var(--pos-ok-ink);
+}
+.pos-status::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--pos-ok);
+  box-shadow: 0 0 0 3px rgba(52, 211, 153, 0.2);
+}
+.pos-status[data-tone='offline'] { background: var(--pos-warn-soft); color: var(--pos-warn-ink); }
+.pos-status[data-tone='offline']::before { background: var(--pos-warn); box-shadow: 0 0 0 3px rgba(251, 191, 36, 0.2); }
+
+/* ---------- Pedido à espera ----------
+   Pedido da internet por aprovar: o botão tem de se fazer ver do
+   outro lado do balcão. Um anel que se expande, não o botão todo
+   a piscar — chama a atenção sem tapar o que diz. */
+
+.pos-alarm {
+  position: relative;
+  background: #dc2626;
+  color: #fff;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+.pos-alarm::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  animation: pos-ring 1.4s var(--pos-ease-out) infinite;
+}
+@keyframes pos-ring {
+  0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.75); }
+  100% { box-shadow: 0 0 0 16px rgba(239, 68, 68, 0); }
+}
+
+/* ---------- Folhas, ecrãs e confirmação ---------- */
+
+.pos-scrim {
+  position: fixed;
+  inset: 0;
+  background: rgba(5, 4, 3, 0.74);
+  animation: pos-fade 160ms var(--pos-ease-out) both;
+}
+
+.pos-sheet {
+  border-radius: 28px;
+  background: var(--pos-panel);
+  box-shadow:
+    0 0 0 1px var(--pos-hair-strong),
+    0 32px 80px -24px rgba(0, 0, 0, 0.85),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  animation: pos-sheet-in 220ms var(--pos-ease-drawer) both;
+}
+
+/* Ecrãs inteiros (oferta, pagamento): aparecem a cada venda, por
+   isso só um fade curto — nada que atrase quem tem fila. */
+.pos-screen {
+  background: var(--pos-canvas);
+  color: var(--ink);
+  animation: pos-fade 140ms var(--pos-ease-out) both;
+}
+
+.pos-pop { animation: pos-pop 280ms var(--pos-ease-out) both; }
+
+.pos-mark {
+  display: grid;
+  place-items: center;
+  width: 4.5rem;
+  height: 4.5rem;
+  border-radius: 999px;
+  background: var(--pos-ok-soft);
+  color: var(--pos-ok);
+  box-shadow: inset 0 0 0 1px rgba(52, 211, 153, 0.35);
+}
+.pos-mark--warn {
+  background: var(--pos-warn-soft);
+  color: var(--pos-warn);
+  box-shadow: inset 0 0 0 1px rgba(251, 191, 36, 0.35);
+}
+.pos-mark path {
+  stroke-dasharray: 32;
+  stroke-dashoffset: 32;
+  animation: pos-draw 360ms 120ms var(--pos-ease-out) forwards;
+}
+
+@keyframes pos-fade { from { opacity: 0; } }
+@keyframes pos-sheet-in {
+  from { opacity: 0; transform: translateY(18px) scale(0.985); }
+}
+@keyframes pos-pop {
+  from { opacity: 0; transform: scale(0.94); }
+}
+@keyframes pos-draw { to { stroke-dashoffset: 0; } }
+
+/* Barra de progresso do funil de oferta. */
+.pos-steps { display: flex; gap: 6px; }
+.pos-steps > span {
+  height: 4px;
+  flex: 1;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
+}
+.pos-steps > span[data-done='true'] { background: var(--pos-accent); }
+
+/* Interruptor (pagamento misto). */
+.pos-switch {
+  position: relative;
+  width: 3.25rem;
+  height: 2rem;
+  flex-shrink: 0;
+  appearance: none;
+  -webkit-appearance: none;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.14);
+  transition: background-color 160ms ease;
+  cursor: pointer;
+}
+.pos-switch::after {
+  content: '';
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 1.625rem;
+  height: 1.625rem;
+  border-radius: 999px;
+  background: #fff;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+  transition: transform 200ms var(--pos-ease-out);
+}
+.pos-switch:checked { background: var(--pos-accent); }
+.pos-switch:checked::after { transform: translateX(1.25rem); }
+
+/* Hover só onde existe rato de verdade. */
+@media (hover: hover) and (pointer: fine) {
+  .pos-login-card[data-ready='true']:hover { box-shadow: inset 0 0 0 1px var(--pos-accent-line); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pos-sheet,
+  .pos-pop { animation: pos-fade 160ms ease both; }
+  .pos-mark path { animation: none; stroke-dashoffset: 0; }
+  .pos-alarm::after { animation: pos-blink 1.2s ease-in-out infinite; }
+  .pos-press:active:not(:disabled),
+  .pos-btn:active:not(:disabled),
+  .pos-choice:active:not(:disabled),
+  .pos-product:active:not(:disabled),
+  .pos-key:active:not(:disabled) { transform: none; }
+}
+@keyframes pos-blink {
+  50% { box-shadow: inset 0 0 0 999px rgba(255, 255, 255, 0.12); }
+}
