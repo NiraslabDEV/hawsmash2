@@ -2006,6 +2006,7 @@ export type Database = {
           created_at: string
           id: string
           number: number
+          store_id: string
           token: string
         }
         Insert: {
@@ -2013,6 +2014,7 @@ export type Database = {
           created_at?: string
           id?: string
           number: number
+          store_id: string
           token?: string
         }
         Update: {
@@ -2020,6 +2022,7 @@ export type Database = {
           created_at?: string
           id?: string
           number?: number
+          store_id?: string
           token?: string
         }
         Relationships: []
@@ -2188,6 +2191,7 @@ export type Database = {
         Args: { p_daily_number: number; p_store_id: string }
         Returns: Json
       }
+      close_table_bill: { Args: { p_payload: Json }; Returns: Json }
       claim_conversion_jobs: {
         Args: { p_limit?: number }
         Returns: {
@@ -2308,6 +2312,8 @@ export type Database = {
       get_store_queue: { Args: { p_store_slug: string }; Returns: Json }
       get_system_status: { Args: never; Returns: Json }
       get_table_by_token: { Args: { p_token: string }; Returns: Json }
+      launch_table_order: { Args: { p_payload: Json }; Returns: Json }
+      pos_table_overview: { Args: { p_device_id: string }; Returns: Json }
       identify_customer: {
         Args: { p_name?: string; p_phone: string }
         Returns: Json

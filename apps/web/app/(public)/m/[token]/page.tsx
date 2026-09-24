@@ -65,6 +65,9 @@ export default function TableMenuPage() {
   const [tableStatus, setTableStatus] = useState<'loading' | 'ok' | 'invalid'>('loading');
   const [tableId, setTableId] = useState<string | null>(null);
   const [tableNumber, setTableNumber] = useState<number | null>(null);
+  // A loja da mesa (1081): cardápio, preços e pedido são dessa loja. Sem isto
+  // um QR da Matola mostrava o cardápio de Maputo e o pedido caía lá.
+  const [storeSlug, setStoreSlug] = useState<string | null>(null);
   const [menu, setMenu] = useState<Menu | null>(null);
 
   const [people, setPeople] = useState<string[]>(['Pessoa 1']);
@@ -96,20 +99,22 @@ export default function TableMenuPage() {
       }
       setTableId(data.id);
       setTableNumber(data.number);
+      setStoreSlug(data.store_slug ?? null);
       setTableStatus('ok');
     });
   }, [token, supabase]);
 
   useEffect(() => {
     if (tableStatus !== 'ok') return;
-    fetch('/api/menu?channel=dine_in')
+    const loja = storeSlug ? `&store=${encodeURIComponent(storeSlug)}` : '';
+    fetch(`/api/menu?channel=dine_in${loja}`)
       .then((r) => r.json())
       .then((data: Menu) => {
         setMenu(data);
         const first = data.categories?.find((c) => c.items.length > 0);
         if (first) setActiveCat(first.id);
       });
-  }, [tableStatus]);
+  }, [tableStatus, storeSlug]);
 
   const categories = (menu?.categories ?? []).filter((c) => c.items.some((i) => i.available));
   const currentCat = categories.find((c) => c.id === activeCat) ?? categories[0];
@@ -276,6 +281,8 @@ export default function TableMenuPage() {
       })),
       fulfillmentType: 'dine_in',
       tableId,
+      // O servidor recusa a mesa se não for desta loja (1081).
+      ...(storeSlug ? { storeSlug } : {}),
     };
 
     try {

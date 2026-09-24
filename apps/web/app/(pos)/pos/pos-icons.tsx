@@ -116,6 +116,13 @@ const PATHS = {
       <path d="M9 10h6M9 14h4" />
     </>
   ),
+  table: (
+    <>
+      <path d="M3 9h18" />
+      <path d="M5 9 4 20M19 9l1 11" />
+      <path d="M8 9v5h8V9" />
+    </>
+  ),
   pencil: (
     <>
       <path d="M12 20h9" />

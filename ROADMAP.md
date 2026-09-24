@@ -473,3 +473,18 @@ revertia — sem pedido, sem pagamento registado, sem talão — e uma destas fe
 - [x] ⏳ Gate `packages/db/tests/mesmo-produto-varias-linhas.test.ts` (5): o pedido real pago por e-Mola, talão, nota, stock e venda offline. Não correu nesta máquina (sem Docker) — corre no CI.
 - [ ] Aplicar 1080 no staging **sem** as 1077–1079, que ainda estão em curso (`db push` a partir de uma árvore limpa), e depois no LIVE.
 - [ ] Antes de sair a 1077: o talão dela manda a variante num campo à parte, que o bridge actual ignora. Sai com o `.exe` novo, ou o WAGYU volta a sair no papel como "Classic Smash".
+
+## Mesas: balcão e QR na mesma conta — 2026-09-24
+
+Pedido do dono: aba MESAS no POS, por baixo de Senhas. Quem está na mesa 2 pede pelo QR ou ao balcão, vai
+tudo para a mesma mesa, e a mesa paga no fim, tudo junto. 6 mesas em cada loja (1081, dados na 1082).
+
+- [x] Mesas por loja (Regra 3): o QR diz a loja da mesa, o anon deixa de ler a tabela, o painel cria mesas por loja.
+- [x] Lançar na mesa pelo POS (`launch_table_order`): preço da loja, variante e extras no servidor, stock e ficha técnica na mesma transacção, idempotente; comanda da mesa (MESA em grande) com o bridge actual.
+- [x] Conta da mesa (`close_table_bill`): cobra só o que o caixa viu, misto/troco/gaveta, pagamentos repartidos pelos pedidos (o fecho de caixa conta-os), talão completo da conta; duas caixas não fecham a mesma conta. A conta é o que a mesa pediu hoje (dia de Maputo) e não pagou.
+- [x] QR: pedido na loja da mesa, "Mesa N" no nome, stock e ficha técnica baixam, comanda com o número da loja (saía `ENC-`); canal `dine_in` (era `pickup`).
+- [x] POS: aba Mesas (conta por mesa, QR + balcão), "Mesa" no tipo de pedido, fechar conta no ecrã de pagamento.
+- [x] ⏳ Gates `packages/db/tests/mesas.test.ts` (12) e `apps/web/lib/pos/__tests__/tables.test.ts` (12). O de BD não correu nesta máquina (sem Docker): SQL e PL/pgSQL validados pelo parser do Postgres 17; corre no CI.
+- [ ] Aplicar 1081/1082 no staging fora do horário, sem as 1077–1079; ensaiar a mesa 1: lançar, pedir pelo QR, fechar em misto.
+- [ ] QR com HAW/WAGYU e extras — a página da mesa ainda é a do motor herdado e cobra o Classic ao preço base.
+- [ ] Anular uma conta já fechada; avisar no fecho de caixa se houver mesas por fechar.

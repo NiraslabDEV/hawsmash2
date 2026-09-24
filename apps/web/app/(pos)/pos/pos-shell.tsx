@@ -36,6 +36,7 @@ import { buildPosUpsellFunnel, type PosUpsellStep } from '@/lib/pos/pos-upsell';
 import { isPosPin, POS_IDLE_TIMEOUT_MS } from '@/lib/pos/session';
 import { OrdersBoard } from './orders-board';
 import { SenhasTab } from './senhas-tab';
+import { MesasTab } from './mesas-tab';
 import { PosIcon, type PosIconName } from './pos-icons';
 import { AvailabilityPanel } from './availability-panel';
 import { useNewOrderAlert } from './use-new-order-alert';
@@ -53,6 +54,14 @@ import { PosLogin } from './pos-login';
 import { loadActiveOnlineOrders } from '@/lib/pos/delivery-orders';
 import { OnlineOrdersTab, type OnlineOrder } from './online-orders-tab';
 import { buildSaleClosing, type SaleClosing } from '@/lib/pos/sale-confirmation';
+import {
+  billLines,
+  fetchTableOverview,
+  tableErrorMessage,
+  tableTotalCents,
+  type PosTable,
+  type TableRef,
+} from '@/lib/pos/tables';
 import { TouchKeyboard } from './touch-keyboard';
 import { buildPickupSlots, formatSlot } from '@/lib/pos/schedule';
 import { noteHasChip, toggleNoteChip } from '@/lib/pos/notes';
@@ -113,6 +122,15 @@ type StoreChannels = {
 };
 
 type FulfillmentType = 'counter' | 'pickup' | 'delivery';
+
+/** A conta de uma mesa no ecrã de pagamento (1081). */
+type ContaMesa = {
+  table: TableRef;
+  totalCents: number;
+  lines: ReturnType<typeof billLines>;
+  /** Uma por abertura do pagamento: repetir o toque nunca cobra duas vezes. */
+  closeId: string;
+};
 
 const FULFILLMENT_LABELS: Record<FulfillmentType, string> = {
   counter: 'Balcão',
@@ -273,7 +291,7 @@ export function PosShell() {
   const warmedPhotoUrls = useRef<Set<string>>(new Set());
   // 'delivery' é só consulta — o cashier acompanha o que está a sair pela
   // loja online sem sair do POS nem precisar de acesso ao painel admin.
-  const [posView, setPosView] = useState<'menu' | 'delivery' | 'senhas'>('menu');
+  const [posView, setPosView] = useState<'menu' | 'delivery' | 'senhas' | 'mesas'>('menu');
   const [deliveryResult, setDeliveryResult] = useState<{ storeSlug: string; orders: OnlineOrder[] }>({ storeSlug: '', orders: [] });
   const deliveryOrders = deliveryResult.storeSlug === context?.storeSlug ? deliveryResult.orders : [];
   const [deliveryLoading, setDeliveryLoading] = useState(false);
@@ -299,12 +317,23 @@ export function PosShell() {
     totalCents: number;
     offline?: boolean;
     closing: SaleClosing;
+    /** Mesas (1081): o que se diz em vez de "VENDA REGISTADA". */
+    titulo?: string;
+    subtitulo?: string;
   } | null>(null);
   /** Um só temporizador de confirmação: o da venda anterior nunca fecha a seguinte. */
   const confirmationTimer = useRef<number | undefined>(undefined);
   useEffect(() => () => window.clearTimeout(confirmationTimer.current), []);
   const [lastSale, setLastSale] = useState<{ orderId: string; dailyNumber: number } | null>(null);
   const [paying, setPaying] = useState(false);
+  /** A mesa para onde vai o carrinho (1081). Null = venda normal, paga já. */
+  const [mesaAlvo, setMesaAlvo] = useState<TableRef | null>(null);
+  /** A conta de mesa no ecrã de pagamento. Null = cobra-se o carrinho. */
+  const [contaMesa, setContaMesa] = useState<ContaMesa | null>(null);
+  /** Escolha da mesa no carrinho: a lista, a carregar, ou fechada. */
+  const [mesaPicker, setMesaPicker] = useState<PosTable[] | 'loading' | null>(null);
+  /** Sobe quando uma conta fecha ou se lança na mesa: a aba relê já. */
+  const [mesasRefresh, setMesasRefresh] = useState(0);
   const [boardOpen, setBoardOpen] = useState(false);
   const [availabilityOpen, setAvailabilityOpen] = useState(false);
   /**
@@ -896,6 +925,7 @@ export function PosShell() {
       setOrderNote('');
       setScheduledFor('');
       setCustomerOpen(false);
+      setMesaAlvo(null);
     }
   }, [lines.length]);
 
@@ -1017,6 +1047,8 @@ export function PosShell() {
     return channels.zones.find((zone) => zone.id === zoneId)?.fee_cents ?? 0;
   }, [channels.zones, fulfillment, zoneId]);
   const totalCents = subtotalCents + deliveryFeeCents;
+  /** O que o ecrã de pagamento cobra: a conta da mesa, ou o carrinho. */
+  const cobrarCents = contaMesa ? contaMesa.totalCents : totalCents;
   const [orderNote, setOrderNote] = useState('');
   /** Hora marcada, em ISO com fuso. Vazio = para agora. */
   const [scheduledFor, setScheduledFor] = useState('');
@@ -1048,7 +1080,7 @@ export function PosShell() {
       seed: Math.floor(Date.now() / 1000),
     });
     if (passos.length === 0) {
-      setPaying(true);
+      concluirPedido();
       return;
     }
     setFunnel(passos);
@@ -1060,7 +1092,7 @@ export function PosShell() {
     if (proximo >= funnel.length) {
       setFunnel([]);
       setFunnelIndex(0);
-      setPaying(true);
+      concluirPedido();
       return;
     }
     setFunnelIndex(proximo);
@@ -1082,8 +1114,8 @@ export function PosShell() {
   // balcão. Cartão pequeno, mais por linha, mesma grelha.
   const isDrinksCategory = /bebida/i.test(activeCategoryObj?.name ?? '');
   const paymentPlan = useMemo(
-    () => buildPaymentPlan({ totalCents, methods, mixed, allocations }),
-    [allocations, methods, mixed, totalCents],
+    () => buildPaymentPlan({ totalCents: cobrarCents, methods, mixed, allocations }),
+    [allocations, methods, mixed, cobrarCents],
   );
   const cashPaymentCents =
     paymentPlan.payments.find((payment) => payment.method === 'cash')?.amountCents ?? 0;
@@ -1108,10 +1140,10 @@ export function PosShell() {
   const mobileInstructions = useMemo(() => {
     if (!mobileMethod) return null;
     const due = !mixed
-      ? totalCents
+      ? cobrarCents
       : (allocations[mobileMethod] ?? 0) || Math.max(0, paymentPlan.remainingCents);
     return paymentInstructions(mobileMethod, paymentInfo, due);
-  }, [allocations, mixed, mobileMethod, paymentInfo, paymentPlan.remainingCents, totalCents]);
+  }, [allocations, cobrarCents, mixed, mobileMethod, paymentInfo, paymentPlan.remainingCents]);
 
   /**
    * O que aparece no visor virado para o cliente, passo a passo. Sem venda em
@@ -1119,7 +1151,7 @@ export function PosShell() {
    */
   const displayState = useMemo<DisplayState>(() => {
     if (confirmation) return { step: 'thanks', dailyNumber: confirmation.dailyNumber };
-    if (lines.length === 0) return { step: 'idle' };
+    if (lines.length === 0 && !contaMesa) return { step: 'idle' };
     if (paying) {
       // Troco em primeiro lugar: é o número que o cliente quer confirmar.
       if (cashPaymentCents > 0 && changeCents !== null) {
@@ -1129,7 +1161,7 @@ export function PosShell() {
       return {
         step: 'payment',
         method,
-        totalCents,
+        totalCents: cobrarCents,
         number: mobileInstructions?.prettyNumber ?? null,
       };
     }
@@ -1155,6 +1187,8 @@ export function PosShell() {
     paying,
     receivedCents,
     totalCents,
+    cobrarCents,
+    contaMesa,
   ]);
 
   // O artigo fica no visor o tempo de o cliente o ler e depois dá lugar ao
@@ -1296,7 +1330,7 @@ export function PosShell() {
       .reduce((sum, method) => sum + (allocations[method] ?? 0), 0);
     setAllocations((current) => ({
       ...current,
-      [keypadTarget]: Math.max(0, totalCents - others),
+      [keypadTarget]: Math.max(0, cobrarCents - others),
     }));
   }
 
@@ -1321,7 +1355,146 @@ export function PosShell() {
     setConfirmation(null);
   }
 
+  /** Fim do funil: um pedido para a mesa vai já para a cozinha; o resto vai pagar. */
+  function concluirPedido() {
+    if (mesaAlvo) {
+      void lancarNaMesa(mesaAlvo);
+      return;
+    }
+    setPaying(true);
+  }
+
+  async function abrirEscolhaDeMesa() {
+    if (!context) return;
+    setMesaPicker('loading');
+    try {
+      const overview = await fetchTableOverview(supabase, context.deviceId);
+      setMesaPicker(overview.tables.filter((table) => table.active));
+    } catch (pickerError) {
+      setMesaPicker(null);
+      setError(tableErrorMessage(pickerError instanceof Error ? pickerError.message : undefined));
+    }
+  }
+
+  /** O carrinho passa a ir para esta mesa: sem dados de cliente e sem pagar agora. */
+  function escolherMesa(mesa: TableRef) {
+    setMesaAlvo(mesa);
+    setFulfillment('counter');
+    setCustomerOpen(false);
+    setMesaPicker(null);
+    setError(null);
+  }
+
+  /**
+   * Lança o carrinho na mesa (1081): vai para a cozinha e fica na conta da
+   * mesa, sem gaveta nem pagamento. Online-only, como a entrega — a conta da
+   * mesa vive no servidor e é partilhada com o QR.
+   */
+  async function lancarNaMesa(mesa: TableRef) {
+    if (!context || lines.length === 0 || submitting) return;
+    if (!navigator.onLine) {
+      setError(tableErrorMessage('offline'));
+      return;
+    }
+    setSubmitting(true);
+    setError(null);
+    const { data, error: launchError } = await supabase.rpc('launch_table_order', {
+      p_payload: {
+        clientSaleId: saleId,
+        deviceId: context.deviceId,
+        tableId: mesa.id,
+        items: salePayloadItems(lines),
+        ...(orderNote.trim() ? { notes: orderNote.trim() } : {}),
+      },
+    });
+    setSubmitting(false);
+    if (launchError) {
+      setError(tableErrorMessage(launchError.message));
+      return;
+    }
+    showConfirmation({
+      orderId: data.order_id as string,
+      dailyNumber: data.daily_number as number,
+      totalCents: data.total_cents as number,
+      titulo: `NA COZINHA · MESA ${mesa.number}`,
+      subtitulo: 'Fica na conta da mesa. Paga-se no fim.',
+      closing: buildSaleClosing({ payments: [], cashReceivedCents: null, clientChangeCents: null }),
+    });
+    setCart({});
+    setSaleId(crypto.randomUUID());
+    setMesaAlvo(null);
+    setMesasRefresh((n) => n + 1);
+  }
+
+  /** Abre o ecrã de pagamento com a conta da mesa em vez do carrinho. */
+  function abrirContaMesa(table: PosTable) {
+    setContaMesa({
+      table: { id: table.id, number: table.number },
+      totalCents: tableTotalCents(table),
+      lines: billLines(table),
+      closeId: crypto.randomUUID(),
+    });
+    setAllocations({});
+    setCashReceivedCents(0);
+    setError(null);
+    setPaying(true);
+  }
+
+  async function fecharContaMesa(conta: ContaMesa) {
+    if (!context || !paymentPlan.complete || submitting) return;
+    if (cashPaymentCents > 0 && changeCents === null) {
+      setError('O valor recebido em dinheiro é insuficiente.');
+      return;
+    }
+    const closingInput = {
+      payments: paymentPlan.payments,
+      cashReceivedCents: cashPaymentCents > 0 ? receivedCents : null,
+      clientChangeCents: changeCents,
+    };
+    setSubmitting(true);
+    setError(null);
+    const { data, error: closeError } = await supabase.rpc('close_table_bill', {
+      p_payload: {
+        clientCloseId: conta.closeId,
+        deviceId: context.deviceId,
+        tableId: conta.table.id,
+        expectedTotalCents: conta.totalCents,
+        payments: paymentPlan.payments,
+        ...(cashPaymentCents > 0 ? { cashReceivedCents: receivedCents } : {}),
+      },
+    });
+    setSubmitting(false);
+    if (closeError) {
+      setError(tableErrorMessage(closeError.message));
+      // A conta mudou (entrou um pedido, ou outra caixa já a fechou): volta à
+      // mesa para a ver outra vez, em vez de cobrar um total que já não é.
+      if (/table_bill_changed|table_has_no_open_orders/.test(closeError.message)) {
+        setPaying(false);
+        setContaMesa(null);
+        setPosView('mesas');
+        setMesasRefresh((n) => n + 1);
+      }
+      return;
+    }
+    showConfirmation({
+      orderId: '',
+      dailyNumber: conta.table.number,
+      totalCents: data.total_cents as number,
+      titulo: `CONTA FECHADA · MESA ${conta.table.number}`,
+      closing: buildSaleClosing({ ...closingInput, serverChangeCents: data.change_cents }),
+    });
+    setPaying(false);
+    setContaMesa(null);
+    setAllocations({});
+    setCashReceivedCents(0);
+    setMesasRefresh((n) => n + 1);
+  }
+
   async function finalizeSale() {
+    if (contaMesa) {
+      await fecharContaMesa(contaMesa);
+      return;
+    }
     if (!context || lines.length === 0 || !paymentPlan.complete) return;
     if (cashPaymentCents > 0 && changeCents === null) {
       setError('O valor recebido em dinheiro é insuficiente.');
@@ -1824,10 +1997,32 @@ export function PosShell() {
             <PosIcon name="ticket" size={18} className="shrink-0 opacity-80" />
             Senhas
           </button>
+          {/* A mesa: o que se pede pelo QR e ao balcão, numa conta só (1081). */}
+          <button
+            type="button"
+            aria-current={posView === 'mesas' ? 'true' : undefined}
+            onClick={() => setPosView('mesas')}
+            className="pos-rail-item min-w-28 shrink-0 !gap-2 lg:min-w-0"
+          >
+            <PosIcon name="table" size={18} className="shrink-0 opacity-80" />
+            Mesas
+          </button>
         </nav>
 
         <section className="overflow-y-auto p-2.5 lg:p-3">
-          {posView === 'senhas' ? (
+          {posView === 'mesas' ? (
+            <MesasTab
+              deviceId={context.deviceId}
+              storeId={context.storeId}
+              storeName={context.storeName}
+              refreshKey={mesasRefresh}
+              onPedir={(mesa) => {
+                escolherMesa(mesa);
+                setPosView('menu');
+              }}
+              onFecharConta={abrirContaMesa}
+            />
+          ) : posView === 'senhas' ? (
             <SenhasTab
               storeId={context.storeId}
               storeName={context.storeName}
@@ -1931,12 +2126,13 @@ export function PosShell() {
                   <button
                     key={tipo}
                     type="button"
-                    aria-pressed={fulfillment === tipo}
+                    aria-pressed={!mesaAlvo && fulfillment === tipo}
                     onClick={() => {
-                      if (fulfillment === tipo) {
+                      if (!mesaAlvo && fulfillment === tipo) {
                         setCustomerOpen((aberto) => !aberto);
                         return;
                       }
+                      setMesaAlvo(null);
                       setFulfillment(tipo);
                       setCustomerOpen(tipo !== 'counter');
                     }}
@@ -1947,6 +2143,19 @@ export function PosShell() {
                   </button>
                 );
               })}
+              {/* Mesa: o pedido vai para a conta da mesa e paga-se no fim.
+                  Online-only, como a entrega. */}
+              {online && (
+                <button
+                  type="button"
+                  aria-pressed={mesaAlvo !== null}
+                  onClick={() => void abrirEscolhaDeMesa()}
+                  className="flex-col !gap-0.5 !text-[0.75rem]"
+                >
+                  <PosIcon name="table" size={16} />
+                  {mesaAlvo ? `Mesa ${mesaAlvo.number}` : 'Mesa'}
+                </button>
+              )}
             </div>
 
             {(() => {
@@ -2168,13 +2377,24 @@ export function PosShell() {
                 <span className="pos-num">{mt(deliveryFeeCents)}</span>
               </p>
             )}
+            {error && !paying && (
+              <p role="alert" className="pos-note pos-note--danger mb-2">
+                {error}
+              </p>
+            )}
             <button
               type="button"
-              disabled={lines.length === 0}
+              disabled={lines.length === 0 || submitting || (mesaAlvo !== null && !online)}
               onClick={startCheckout}
               className="pos-btn pos-btn--primary w-full !min-h-16 !justify-between !rounded-[18px] !px-5"
             >
-              <span className="text-xl tracking-[0.06em]">PAGAR</span>{' '}
+              <span className="text-xl tracking-[0.06em]">
+                {mesaAlvo
+                  ? submitting
+                    ? 'A LANÇAR…'
+                    : `LANÇAR NA MESA ${mesaAlvo.number}`
+                  : 'PAGAR'}
+              </span>{' '}
               <span className="pos-num text-2xl">{mt(totalCents)}</span>
             </button>
           </div>
@@ -2460,19 +2680,71 @@ export function PosShell() {
         </div>
       )}
 
+      {/* Para que mesa vai este pedido. Um toque, alvos grandes, e a conta que
+          cada mesa já tem — para não se lançar na mesa errada. */}
+      {mesaPicker !== null && (
+        <div className="fixed inset-0 z-50 grid place-items-center p-4">
+          <div aria-hidden className="pos-scrim" onClick={() => setMesaPicker(null)} />
+          <section className="pos-sheet relative w-full max-w-2xl !p-6">
+            <div className="flex items-baseline justify-between gap-3">
+              <h2 className="text-2xl font-extrabold">Para que mesa?</h2>
+              <button
+                type="button"
+                onClick={() => setMesaPicker(null)}
+                className="pos-btn pos-btn--quiet !min-h-12 shrink-0"
+              >
+                <PosIcon name="close" size={20} />
+                Fechar
+              </button>
+            </div>
+            {mesaPicker === 'loading' ? (
+              <p className="mt-4 text-ink-mute">A carregar as mesas…</p>
+            ) : mesaPicker.length === 0 ? (
+              <p className="mt-4 text-ink-mute">Esta loja ainda não tem mesas activas.</p>
+            ) : (
+              <ul className="mt-4 grid grid-cols-3 gap-2 sm:grid-cols-4">
+                {mesaPicker.map((table) => {
+                  const total = tableTotalCents(table);
+                  return (
+                    <li key={table.id}>
+                      <button
+                        type="button"
+                        onClick={() => escolherMesa({ id: table.id, number: table.number })}
+                        className={`flex min-h-24 w-full flex-col items-center justify-center rounded-2xl border p-2 active:bg-white/10 ${
+                          mesaAlvo?.id === table.id ? 'border-gold bg-gold/[0.08]' : 'border-white/[0.07] bg-bg2'
+                        }`}
+                      >
+                        <span className="pos-num text-4xl font-extrabold leading-none">{table.number}</span>
+                        <span className="mt-1 text-xs text-ink-mute">{total > 0 ? mt(total) : 'Livre'}</span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </section>
+        </div>
+      )}
+
       {paying && (
         <div className="pos-screen fixed inset-0 z-40 flex flex-col">
           <header className="flex shrink-0 items-center justify-between gap-4 border-b border-white/[0.07] bg-bg1 px-6 py-4">
             <div>
               <p className="pos-eyebrow">TOTAL A PAGAR</p>
-              <p className="pos-num mt-1 text-5xl font-extrabold leading-none text-gold">{mt(totalCents)}</p>
+              <p className="pos-num mt-1 text-5xl font-extrabold leading-none text-gold">{mt(cobrarCents)}</p>
             </div>
             <button
               type="button"
-              onClick={() => setPaying(false)}
+              onClick={() => {
+                setPaying(false);
+                if (contaMesa) {
+                  setContaMesa(null);
+                  setPosView('mesas');
+                }
+              }}
               className="pos-btn pos-btn--quiet shrink-0 !text-lg"
             >
-              ← Voltar ao carrinho
+              {contaMesa ? '← Voltar às mesas' : '← Voltar ao carrinho'}
             </button>
           </header>
 
@@ -2482,6 +2754,29 @@ export function PosShell() {
                 {/* O que se está a cobrar, à vista de quem cobra. Sem isto o
                     ecrã pede um valor sem dizer de quê, e conferir obrigava a
                     voltar ao carrinho — e a repetir o funil de oferta. */}
+                {contaMesa ? (
+                  <div className="pos-card !p-4">
+                    <p className="pos-eyebrow !text-gold">CONTA · MESA {contaMesa.table.number}</p>
+                    <ul className="mt-3 max-h-52 space-y-1.5 overflow-y-auto">
+                      {contaMesa.lines.map((line) => (
+                        <li
+                          key={line.key}
+                          className="flex items-baseline justify-between gap-3 text-[0.9375rem] font-medium"
+                        >
+                          <span className="min-w-0">
+                            <span className="pos-num font-bold text-gold">{line.qty}×</span> {line.label}
+                            {line.notes && <span className="text-ink-mute"> · {line.notes}</span>}
+                          </span>
+                          <span className="pos-num shrink-0 text-ink-dim">{mt(line.totalCents)}</span>
+                        </li>
+                      ))}
+                    </ul>
+                    <p className="mt-3 flex items-baseline justify-between border-t border-white/[0.07] pt-3 text-lg font-bold">
+                      <span>TOTAL</span>
+                      <span className="pos-num text-gold">{mt(contaMesa.totalCents)}</span>
+                    </p>
+                  </div>
+                ) : (
                 <div className="pos-card !p-4">
                   <div className="flex items-baseline justify-between gap-3">
                     <p className="pos-eyebrow">
@@ -2520,6 +2815,7 @@ export function PosShell() {
                     <span className="pos-num text-gold">{mt(totalCents)}</span>
                   </p>
                 </div>
+                )}
 
                 {/* Misto só faz sentido com dois meios ligados e com a loja a
                     deixar dividir a conta (aba POS). */}
@@ -2734,14 +3030,18 @@ export function PosShell() {
               type="button"
               disabled={
                 submitting ||
-                lines.length === 0 ||
+                (!contaMesa && lines.length === 0) ||
                 !paymentPlan.complete ||
                 (cashPaymentCents > 0 && changeCents === null)
               }
               onClick={() => void finalizeSale()}
               className="pos-btn pos-btn--primary pos-btn--lg mx-auto !flex w-full max-w-5xl !text-2xl !tracking-[0.03em]"
             >
-              {submitting ? 'A registar…' : 'FINALIZAR VENDA'}
+              {submitting
+                ? 'A registar…'
+                : contaMesa
+                  ? `FECHAR CONTA · MESA ${contaMesa.table.number}`
+                  : 'FINALIZAR VENDA'}
             </button>
           </footer>
         </div>
@@ -2879,12 +3179,16 @@ export function PosShell() {
                 confirmation.offline ? 'text-amber-300' : 'text-emerald-300'
               }`}
             >
-              {confirmation.offline ? 'VENDA GUARDADA OFFLINE' : 'VENDA REGISTADA'}
+              {confirmation.titulo ??
+                (confirmation.offline ? 'VENDA GUARDADA OFFLINE' : 'VENDA REGISTADA')}
             </p>
             <p className="pos-num my-3 font-display text-[8.5rem] leading-none tracking-normal text-ink">
               {confirmation.dailyNumber}
             </p>
             <p className="pos-num text-3xl font-extrabold text-gold">{mt(confirmation.totalCents)}</p>
+            {confirmation.subtitulo && (
+              <p className="mt-2 text-base text-ink-dim">{confirmation.subtitulo}</p>
+            )}
 
             {/* Com dinheiro, o troco manda no ecrã e o OK é obrigatório: o
                 caixa confirma que o que deu é o que o sistema gravou. */}
