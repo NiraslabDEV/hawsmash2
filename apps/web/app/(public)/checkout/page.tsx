@@ -450,6 +450,7 @@ export default function CheckoutPage() {
       items: cart.map(item => ({
         menuItemId: item.menuItemId,
         qty:        item.qty,
+        ...(item.upsell ? { upsell: item.upsell } : {}),
         ...(item.variantId ? { variantId: item.variantId } : {}),
         ...(item.addonIds && item.addonIds.length ? { addonIds: item.addonIds } : {}),
         // Escolhas do prato (acompanhamentos, molho, …). Sem isto o

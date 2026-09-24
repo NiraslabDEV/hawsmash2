@@ -18,11 +18,13 @@
  * 2 — têm preços diferentes e saem na comanda com nomes diferentes.
  */
 
+import { capUpsell, reduceUpsell, mergeUpsell, type UpsellAttribution } from '../analytics/upsell-attribution';
 import type { PosMenuItem } from './offline-store';
 
 export type PosVariant = NonNullable<PosMenuItem['variants']>[number];
 
 export type CartLine = {
+  upsell?: UpsellAttribution;
   /**
    * Identidade no carrinho: item, variante e nota. A nota entra na chave de
    * propósito — um Classic "sem jalapeño" e um Classic normal são dois pratos
@@ -108,7 +110,7 @@ export function changeQty(cart: Cart, sellable: Sellable, delta: number): Cart {
     delete seguinte[sellable.id];
     return seguinte;
   }
-  return { ...cart, [sellable.id]: { ...sellable, qty } };
+  return { ...cart, [sellable.id]: { ...sellable, qty, upsell: delta > 0 ? mergeUpsell(existente?.upsell, sellable.upsell, qty) : reduceUpsell(existente?.upsell, existente?.qty ?? 0, qty) } };
 }
 
 export function cartLines(cart: Cart): CartLine[] {
@@ -158,10 +160,11 @@ export function removeOneOfItem(cart: Cart, menuItemId: string): Cart {
  */
 export function salePayloadItems(
   lines: CartLine[],
-): Array<{ menuItemId: string; qty: number; variantId?: string; notes?: string }> {
+): Array<{ menuItemId: string; qty: number; variantId?: string; notes?: string; upsell?: UpsellAttribution }> {
   return lines.map((linha) => ({
     menuItemId: linha.menuItemId,
     qty: linha.qty,
+    ...(linha.upsell ? { upsell: capUpsell(linha.upsell, linha.qty) } : {}),
     ...(linha.variantId ? { variantId: linha.variantId } : {}),
     ...(linha.notes ? { notes: linha.notes } : {}),
   }));
@@ -187,6 +190,7 @@ export function setLineNotes(cart: Cart, line: CartLine, notes: string | null): 
     id,
     notes: nota,
     qty: (existente?.qty ?? 0) + line.qty,
+    upsell: mergeUpsell(existente?.upsell, line.upsell, (existente?.qty ?? 0) + line.qty),
   };
   return seguinte;
 }

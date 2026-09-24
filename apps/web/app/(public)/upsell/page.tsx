@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -10,7 +10,7 @@ import { useBrand } from '@/lib/brand/context';
 
 import { useCart } from '@/utils/useCart';
 import { useStoreSlug } from '@/utils/useStore';
-import { trackAddToCart } from '@/lib/analytics/track';
+import { trackAddToCart, trackUpsell } from '@/lib/analytics/track';
 import { alreadyServed, companionOffers, upgradeOffers, upsellDecision } from '@/lib/upsell';
 
 import '../_storefront/landing.css';
@@ -84,6 +84,17 @@ export default function UpsellPage() {
     served,
   });
 
+  const seenOffers = useRef(new Set<string>());
+  useEffect(() => {
+    if (decision !== 'show') return;
+    for (const [id, placement] of [...offers.map(o => [o.item.id, 'online_upgrade']), ...companions.map(o => [o.id, 'online_companion'])]) {
+      const key = `${storeSlug}:${id}:${placement}`;
+      if (seenOffers.current.has(key)) continue;
+      seenOffers.current.add(key);
+      trackUpsell('upsell_view', id, placement, 'online', storeSlug);
+    }
+  }, [decision, offers, companions, storeSlug]);
+
   useEffect(() => {
     if (decision === 'store') router.replace(`/l/${storeSlug}`);
     if (decision === 'checkout') router.replace('/checkout');
@@ -119,7 +130,8 @@ export default function UpsellPage() {
       const variants = (item.variants ?? []).filter((v) => v.available !== false);
       const chosenId = flavours[item.id];
       const variant = variants.find((v) => v.id === chosenId) ?? defaultVariant(item);
-      add(item.id, 1, variant ? { variantId: variant.id } : {});
+      add(item.id, 1, { ...(variant ? { variantId: variant.id } : {}), upsell: { kind: 'companion', qty: 1, placement: 'online_companion' } });
+      trackUpsell('upsell_accept', item.id, 'online_companion', 'online', storeSlug);
       trackAddToCart({
         id: item.id,
         name: item.name,
@@ -127,7 +139,7 @@ export default function UpsellPage() {
         qty: 1,
       });
     },
-    [add, flavours],
+    [add, flavours, storeSlug],
   );
 
   const handleContinue = useCallback(() => {
@@ -136,7 +148,8 @@ export default function UpsellPage() {
     // juntá-la a outra e mexer nos índices seguintes.
     const chosen = offers.filter((offer) => upgrades[offer.index]).sort((a, b) => b.index - a.index);
     for (const offer of chosen) {
-      setLineVariantByIndex(offer.index, offer.better.id);
+      setLineVariantByIndex(offer.index, offer.better.id, { kind: 'upgrade', qty: offer.qty, placement: 'online_upgrade', fromVariantId: offer.current.id });
+      trackUpsell('upsell_accept', offer.item.id, 'online_upgrade', 'online', storeSlug);
       trackAddToCart({
         id: `${offer.item.id}:${offer.better.id}`,
         name: `${offer.item.name} — ${offer.better.name}`,
@@ -145,7 +158,7 @@ export default function UpsellPage() {
       });
     }
     router.push('/checkout');
-  }, [offers, router, setLineVariantByIndex, upgrades]);
+  }, [offers, router, setLineVariantByIndex, upgrades, storeSlug]);
 
   if (decision !== 'show' || leaving) {
     return (

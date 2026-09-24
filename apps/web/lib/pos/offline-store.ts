@@ -1,3 +1,4 @@
+import type { UpsellAttribution } from '../analytics/upsell-attribution';
 import { z } from 'zod';
 
 // Nome da base local do POS. Neutro de propósito: o produto não sabe o nome
@@ -91,6 +92,7 @@ export type OfflineSaleDraft = {
   createdAt: string;
   items: Array<{
     menuItemId: string;
+    upsell?: UpsellAttribution;
     /**
      * Variante escolhida (HAW/WAGYU, Zero, 6 unidades…). Sem isto uma venda
      * feita sem rede sincronizava ao **preço base** — um WAGYU cobrado ao
@@ -128,6 +130,7 @@ const offlineSaleDraftSchema: z.ZodType<OfflineSaleDraft> = z.object({
   createdAt: z.string().datetime(),
   items: z.array(z.object({
     menuItemId: z.string().uuid(),
+    upsell: z.object({ kind: z.enum(['companion','upgrade']), qty: z.number().int().positive(), placement: z.string().max(60), fromVariantId: z.string().uuid().optional() }).optional().catch(undefined),
     variantId: z.string().uuid().optional(),
     name: z.string().min(1),
     qty: z.number().int().positive(),

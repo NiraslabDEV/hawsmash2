@@ -203,3 +203,15 @@ describe('carrinho do balcão com variantes', () => {
     });
   });
 });
+
+it('atribui só unidades adicionadas pela oferta e preserva notas',()=>{
+ const product=resolveSellable(classic);
+ const first=changeQty({},product,1);
+ const accepted=changeQty(first,{...product,upsell:{kind:'companion',qty:1,placement:'pos_companion'}},1);
+ expect(salePayloadItems(cartLines(accepted))[0].upsell?.qty).toBe(1);
+ const normal=changeQty(accepted,product,1);
+ expect(cartLines(normal)[0].upsell?.qty).toBe(1);
+ const reduced=changeQty(normal,product,-1);
+ expect(cartLines(reduced)[0].upsell).toBeUndefined();
+ expect(cartTotalCents(normal)).toBe(90000);
+});

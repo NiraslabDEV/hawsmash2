@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { UpsellInsights } from '@/components/admin/upsell-insights';
 import { fetchAccountingExport } from '@/lib/admin/export-client';
 import type { AccountingLayout, CsvFormat } from '@/lib/admin/accounting-export';
 import { cents, formatMT } from '@delivery/core';
@@ -20,7 +21,7 @@ import {
 } from 'recharts';
 
 type Period = 'day' | 'week' | 'month' | 'all';
-type Tab = 'vendas' | 'aquisicao';
+type Tab = 'vendas' | 'aquisicao' | 'pos';
 type Store = { id: string; short_name: string };
 
 interface FunnelStep {
@@ -221,7 +222,7 @@ function ExportContabilidadeCard({ stores, isOwner, selectedStore }: { stores: S
 
   return (
     <div id="exportar" className="insight-export">
-      <InsightPanel title="Pronto para a contabilidade" description="Exporte os dados para conferir e mapear no software do contabilista.">
+      <InsightPanel title="Pronto para a contabilidade" description="Exporte todas as origens da loja e datas escolhidas abaixo, independentemente do filtro de vendas.">
         <form onSubmit={(event) => { event.preventDefault(); void handleExport(); }}>
           <label><span id="export-store-label">Loja</span><select aria-labelledby="export-store-label" value={storeId} onChange={(e) => setStoreId(e.target.value)} disabled={!ready}>
             {isOwner && <option value="all">Todas as lojas</option>}
@@ -253,6 +254,8 @@ function ExportContabilidadeCard({ stores, isOwner, selectedStore }: { stores: S
 export default function AnalisePage() {
   const [period, setPeriod] = useState<Period>('week');
   const [tab, setTab] = useState<Tab>('vendas');
+  const [origin, setOrigin] = useState<'all' | 'online' | 'pos'>('all');
+  const salesOrigin = tab === 'pos' ? 'pos' : origin;
 
   const [stores, setStores] = useState<Store[]>([]);
   const [isOwner, setIsOwner] = useState(false);
@@ -316,7 +319,7 @@ export default function AnalisePage() {
       try {
         const from = analysisPeriodStart(period);
         const [{ data, error: err }, { data: fData, error: fErr }, attr] = await Promise.all([
-          supabase.rpc('get_dashboard_metrics', { p_period: period, p_store_id: storeId }),
+          supabase.rpc('get_sales_metrics', { p_period: period, p_store_id: storeId, p_origin: salesOrigin }),
           supabase.rpc('get_funnel_metrics', { p_from: from, p_store_id: storeId }),
           supabase.rpc('get_attribution_report', { p_from: from, p_store_id: storeId }),
         ]);
@@ -343,7 +346,7 @@ export default function AnalisePage() {
 
     void fetchMetrics();
     return () => { active = false; };
-  }, [period, storeId, attempt]);
+  }, [period, storeId, attempt, salesOrigin]);
 
   const fulfillmentLabels: Record<string, string> = {
     pickup: 'Levantamento',
@@ -390,7 +393,7 @@ export default function AnalisePage() {
     <div className="insights">
       <header className="insight-header">
         <div><p className="insight-eyebrow">Visão do negócio</p><h1>Análise</h1>
-          <p className="insight-subtitle">{tab === 'vendas' ? 'Os números que ajudam a decidir o próximo passo.' : 'Do primeiro contacto à compra. Veja o que traz clientes.'}</p>
+          <p className="insight-subtitle">{tab === 'pos' ? 'O desempenho das vendas criadas no balcão e nas mesas.' : tab === 'vendas' ? 'Os números que ajudam a decidir o próximo passo.' : 'Do primeiro contacto à compra online. Sem vendas do POS.'}</p>
         </div>
         {tab === 'vendas' && metrics && !loading && !error && !setupError && <a className="insight-button" href="#exportar"><InsightIcon name="download" />Exportar relatório</a>}
       </header>
@@ -407,14 +410,16 @@ export default function AnalisePage() {
         </div>
       </div>
       <nav className="insight-tabs" aria-label="Vistas da análise">
-        {([['vendas', 'Vendas'], ['aquisicao', 'Aquisição']] as [Tab, string][]).map(([value, label]) =>
-          <button key={value} aria-pressed={tab === value} aria-controls="analysis-content" onClick={() => setTab(value)}><InsightIcon name={value === 'vendas' ? 'chart' : 'globe'} />{label}</button>)}
+        {([['vendas', 'Vendas'], ['aquisicao', 'Aquisição'], ['pos', 'POS']] as [Tab, string][]).map(([value, label]) =>
+          <button key={value} aria-pressed={tab === value} aria-controls="analysis-content" onClick={() => setTab(value)}><InsightIcon name={value === 'aquisicao' ? 'globe' : 'chart'} />{label}</button>)}
       </nav>
+      {tab === 'vendas' && <div className="insight-filter mb-4"><span className="insight-filter-label">Origem do pedido</span><div className="insight-segment" role="group" aria-label="Filtrar por origem">{([['all','Todos'],['online','Online'],['pos','POS']] as const).map(([value,label]) => <button key={value} aria-pressed={origin === value} onClick={() => setOrigin(value)}>{label}</button>)}</div></div>}
+      {tab === 'aquisicao' && <p className="insight-subtitle mb-4">Apenas o percurso online. Pedidos feitos no site e pagos ao balcão continuam aqui. Vendas criadas no POS têm a sua própria vista.</p>}
       <div className="insight-context"><span>{PERIOD_LABELS[period]} · {storeOptions.find((s) => s.id === storeId)?.label ?? 'A carregar lojas'}</span><span>Hora de Maputo · Valores em MT</span></div>
       <div id="analysis-content" className="contents" aria-busy={loading}>
-      {setupError ? <div className="insight-notice" role="alert"><strong>Não foi possível abrir a análise</strong><p>{setupError}</p><button className="insight-button" onClick={() => setAttempt((n) => n + 1)}>Tentar novamente</button></div> : loading ? <div className="insight-loading" role="status"><div className="insight-loading-bars" aria-hidden="true"><span /><span /><span /></div>A carregar {tab === 'vendas' ? 'vendas' : 'aquisição'}…</div> : <>
-      {tab === 'vendas' && error && <div className="insight-notice" role="alert"><strong>As vendas estão indisponíveis</strong><p>{error}</p><button className="insight-button" onClick={() => setAttempt((n) => n + 1)}>Tentar novamente</button></div>}
-      {tab === 'vendas' && metrics && (
+      {setupError ? <div className="insight-notice" role="alert"><strong>Não foi possível abrir a análise</strong><p>{setupError}</p><button className="insight-button" onClick={() => setAttempt((n) => n + 1)}>Tentar novamente</button></div> : loading ? <div className="insight-loading" role="status"><div className="insight-loading-bars" aria-hidden="true"><span /><span /><span /></div>A carregar {tab === 'aquisicao' ? 'aquisição' : 'vendas'}…</div> : <>
+      {tab !== 'aquisicao' && error && <div className="insight-notice" role="alert"><strong>As vendas estão indisponíveis</strong><p>{error}</p><button className="insight-button" onClick={() => setAttempt((n) => n + 1)}>Tentar novamente</button></div>}
+      {tab !== 'aquisicao' && metrics && (
         <>
           <div className="insight-grid">
             <MetricCard featured label="Facturação" value={formatCents(metrics.revenue_cents)} icon="chart" detail={revenueTrend !== null ? <><TrendTag pct={revenueTrend} />vs. período anterior</> : 'Vendas confirmadas no período'} />
@@ -544,8 +549,8 @@ export default function AnalisePage() {
           {(funnel || attribution) && <div className="insight-grid">
             <MetricCard featured label="Sessões no site" value={funnel ? funnel.funnel.total_sessions.toLocaleString('pt-PT') : '—'} detail="Sessões únicas no período" icon="globe" />
             <MetricCard label="Conversão do funil" value={funnel?.funnel.pct_overall != null ? `${funnel.funnel.pct_overall.toLocaleString('pt-PT')}%` : '—'} detail="Sessões que chegaram à compra" icon="chart" />
-            <MetricCard label="Pedidos atribuídos" value={attribution ? attribution.totals.orders.toLocaleString('pt-PT') : '—'} detail="Pedidos do relatório de atribuição" icon="orders" />
-            <MetricCard label="Receita atribuída" value={attribution ? formatCents(attribution.totals.revenue_cents) : '—'} detail="Receita de pedidos reais" icon="ticket" />
+            <MetricCard label="Pedidos atribuídos" value={attribution ? attribution.totals.orders.toLocaleString('pt-PT') : '—'} detail="Pedidos online confirmados" icon="orders" />
+            <MetricCard label="Receita atribuída" value={attribution ? formatCents(attribution.totals.revenue_cents) : '—'} detail="Receita de pedidos online confirmados" icon="ticket" />
           </div>}
           {!funnel && !attribution && !acquisitionError && <InsightEmpty title="Ainda não há dados de aquisição">As visitas e compras aparecerão aqui quando houver actividade.</InsightEmpty>}
           {/* Funil de conversão first-party */}
@@ -760,6 +765,7 @@ export default function AnalisePage() {
         </>
       )}
       </>}
+      {!loading && !setupError && storeId !== undefined && <UpsellInsights period={period} storeId={storeId} origin={tab === 'aquisicao' ? 'online' : salesOrigin} />}
       </div>
     </div>
   );

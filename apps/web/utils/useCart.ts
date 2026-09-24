@@ -1,5 +1,7 @@
 'use client';
 
+import { capUpsell, reduceUpsell, mergeUpsell, type UpsellAttribution } from '@/lib/analytics/upsell-attribution';
+
 import { useState, useEffect, useCallback } from 'react';
 
 /**
@@ -20,6 +22,7 @@ export interface CartModifier {
 }
 
 export interface CartLine {
+  upsell?: UpsellAttribution;
   menuItemId: string;
   qty: number;
   notes?: string;
@@ -52,6 +55,7 @@ export function lineSignature(
 const plainSignature = (menuItemId: string) => `${menuItemId}|||`;
 
 export interface AddOptions {
+  upsell?: UpsellAttribution;
   variantId?: string;
   addonIds?: string[];
   notes?: string;
@@ -82,6 +86,7 @@ export function useCart() {
     const incoming: CartLine = {
       menuItemId,
       qty,
+      ...(opts.upsell ? { upsell: capUpsell(opts.upsell, qty) } : {}),
       ...(opts.variantId ? { variantId: opts.variantId } : {}),
       ...(opts.addonIds && opts.addonIds.length ? { addonIds: opts.addonIds } : {}),
       ...(opts.modifiers && opts.modifiers.length ? { modifiers: opts.modifiers } : {}),
@@ -91,7 +96,7 @@ export function useCart() {
     setCart((prev) => {
       const existing = prev.find((l) => lineSignature(l) === sig);
       if (existing) {
-        return prev.map((l) => (lineSignature(l) === sig ? { ...l, qty: l.qty + qty } : l));
+        return prev.map((l) => (lineSignature(l) === sig ? { ...l, qty: l.qty + qty, upsell: mergeUpsell(l.upsell, incoming.upsell, l.qty + qty) } : l));
       }
       return [...prev, incoming];
     });
@@ -102,7 +107,7 @@ export function useCart() {
     setCart((prev) =>
       qty <= 0
         ? prev.filter((_, i) => i !== index)
-        : prev.map((l, i) => (i === index ? { ...l, qty } : l))
+        : prev.map((l, i) => (i === index ? { ...l, qty, upsell: reduceUpsell(l.upsell, l.qty, qty) } : l))
     );
   }, []);
 
@@ -114,16 +119,16 @@ export function useCart() {
   // Troca a variante de uma linha (subir de tamanho/gama no upsell). Se já
   // existir uma linha com a assinatura de destino, as duas juntam-se — senão
   // ficavam duas linhas do mesmo produto com a mesma escolha.
-  const setLineVariantByIndex = useCallback((index: number, variantId: string) => {
+  const setLineVariantByIndex = useCallback((index: number, variantId: string, upsell?: UpsellAttribution) => {
     setCart((prev) => {
       const line = prev[index];
       if (!line || line.variantId === variantId) return prev;
-      const updated: CartLine = { ...line, variantId };
+      const updated: CartLine = { ...line, variantId, upsell: capUpsell(upsell, line.qty) };
       const sig = lineSignature(updated);
       const twinIndex = prev.findIndex((l, i) => i !== index && lineSignature(l) === sig);
       if (twinIndex < 0) return prev.map((l, i) => (i === index ? updated : l));
       return prev
-        .map((l, i) => (i === twinIndex ? { ...l, qty: l.qty + line.qty } : l))
+        .map((l, i) => (i === twinIndex ? { ...l, qty: l.qty + line.qty, upsell: mergeUpsell(l.upsell, updated.upsell, l.qty + line.qty) } : l))
         .filter((_, i) => i !== index);
     });
   }, []);
@@ -135,7 +140,7 @@ export function useCart() {
     setCart((prev) =>
       qty <= 0
         ? prev.filter((l) => lineSignature(l) !== sig)
-        : prev.map((l) => (lineSignature(l) === sig ? { ...l, qty } : l))
+        : prev.map((l) => (lineSignature(l) === sig ? { ...l, qty, upsell: reduceUpsell(l.upsell, l.qty, qty) } : l))
     );
   }, []);
 

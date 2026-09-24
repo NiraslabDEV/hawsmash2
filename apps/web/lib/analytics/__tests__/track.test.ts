@@ -6,6 +6,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import {
   trackAddToCart,
+  trackUpsell,
   trackBeginCheckout,
   trackPurchase,
   trackViewMenu,
@@ -184,4 +185,14 @@ describe('F7 — dimensão da loja em todos os eventos', () => {
     const call = fetchCalls.find((entry) => entry.url === '/api/track');
     expect(call?.body.store).toBeUndefined();
   });
+});
+
+it('upsell POS conserva loja e venda sem enviar valor monetário do browser', () => {
+  trackUpsell('upsell_accept','item-1','pos_companion','pos','matola','sale-1');
+  expect(fetchCalls.at(-1)?.body).toMatchObject({type:'upsell_accept',store:'matola',payload:{item_id:'item-1',placement:'pos_companion',origin:'pos',context_id:'sale-1'}});
+  expect(fetchCalls.at(-1)?.body.value_cents).toBeUndefined();
+});
+it('telemetria indisponível nunca impede aceitar o upsell', () => {
+  (globalThis as any).fetch=()=>{throw new Error('offline');};
+  expect(()=>trackUpsell('upsell_accept','item','online_companion','online')).not.toThrow();
 });

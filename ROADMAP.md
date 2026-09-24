@@ -442,3 +442,12 @@ detalhe do pedido no quadro do POS (1072, `update_order_details`).
 - [x] CSV padrão/Excel, detalhe por pagamento ou resumo por pedido sem duplicar totais de pagamentos mistos; estados de devolução separados.
 - [x] Testes antes da correcção para autenticação e valores; download pelo route handler real com Auth/RPC simulados, ficheiro conferido e auditoria de acessibilidade repetida.
 - [~] B-112 — adaptador específico WinREST/software certificado: falta contrato de importação/API e ensaio no destino. CSV genérico pronto, compatibilidade directa não declarada.
+
+## Origem online/POS e desempenho de upsells · 2026-09-24
+
+- [x] Aquisição online sem vendas POS; Vendas Todos/Online/POS e vista POS própria, com filtros no servidor e comparação anterior consistente.
+- [x] Rastrear ofertas/aceitações, acompanhamentos e upgrades do site e ofertas do POS; conservar atribuição na fila offline, nos retries e após alterações ao carrinho.
+- [x] Receita adicional confirmada, descontos e margem bruta estimada por produto/oferta; custos desconhecidos explícitos, sem inventar histórico.
+- [x] Ensaios de dinheiro/isolamento/idempotência, interfaces e acessibilidade; contrato em `docs/ANALISE-ORIGENS-UPSELL.md`.
+- [x] Corrigir trigger Railway: produção acompanha `main`, staging acompanha `dev`.
+- [ ] Aplicar 1073/1074 e confirmar o deploy desta entrega no staging.

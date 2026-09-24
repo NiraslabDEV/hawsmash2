@@ -260,12 +260,13 @@ function currentStore(): string | undefined {
 
 function postFP(
   type: string,
-  opts?: { value_cents?: number; payload?: Record<string, unknown> },
+  opts?: { value_cents?: number; payload?: Record<string, unknown>; store?: string },
 ) {
   if (typeof window === 'undefined') return;
   const store = currentStore();
   fetch('/api/track', {
     method: 'POST',
+    keepalive: true,
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ type, utm: getUtm(), ...(store ? { store } : {}), ...opts }),
   }).catch(() => {});
@@ -444,4 +445,9 @@ export function trackPurchase({ orderId, totalCents, items = [] }: PurchaseInput
       { eventID: eventId },
     );
   }
+}
+
+/** Observação best-effort; os valores vendidos são calculados na BD. */
+export function trackUpsell(type: 'upsell_view' | 'upsell_accept', itemId: string, placement: string, origin: 'online' | 'pos', store?: string, contextId?: string) {
+  try { postFP(type, { payload: { item_id: itemId, placement, origin, ...(contextId ? { context_id: contextId } : {}) }, ...(store ? { store } : {}) }); } catch { /* Nunca bloquear o carrinho. */ }
 }

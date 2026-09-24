@@ -35,14 +35,15 @@ async function setup(page: Page, state: { fail: boolean; empty: boolean; slow: b
     if (name === 'stores') body = [{ id: 'store-a', short_name: 'Loja A' }, { id: 'store-b', short_name: 'Loja B' }];
     if (name === 'settings') body = { accepting_orders: true };
     if (name.startsWith('get_')) requests.push({ name, params });
-    if (name === 'get_dashboard_metrics') {
+    if (name === 'get_sales_metrics') {
       if (state.slow && params.p_store_id === 'store-a') await new Promise((r) => setTimeout(r, 700));
       body = { ...sales, total_orders: params.p_store_id === 'store-b' ? 8 : params.p_store_id === 'store-a' ? 99 : 39 };
       if (state.empty) body = { ...sales, revenue_cents: 0, avg_ticket_cents: 0, total_orders: 0, avg_time_minutes: 0, previous: null, pickup_vs_delivery: [], top_items: [], by_method: [], hourly: [], top_customers: [], period_buckets: [] };
     }
+    if (name === 'get_upsell_metrics') body = {orders:2,units:3,revenue_cents:15000,margin_cents:null,lines_without_cost:1,views:10,accepts:3,products:[{menu_item_id:'test',name_snapshot:'PLACEHOLDER Oferta',kind:'companion',placement:'online_companion',units:3,orders:2,revenue_cents:15000,margin_cents:null,lines_without_cost:1}]};
     if (name === 'get_funnel_metrics') body = state.empty ? { ...funnel, funnel: { ...funnel.funnel, total_sessions: 0, step_menu: 0, step_cart: 0, step_checkout: 0, step_payment: 0, step_purchase: 0, pct_overall: null }, by_source: [] } : funnel;
     if (name === 'get_attribution_report') body = state.empty ? { ...acquisition, totals: { orders: 0, revenue_cents: 0, sessions: 0 }, by_channel: [], by_campaign: [], discovery: [] } : acquisition;
-    if (state.failSales && name === 'get_dashboard_metrics') { status = 503; body = { message: 'PLACEHOLDER_FAILURE' }; }
+    if (state.failSales && name === 'get_sales_metrics') { status = 503; body = { message: 'PLACEHOLDER_FAILURE' }; }
     if (state.fail && ['get_funnel_metrics', 'get_attribution_report'].includes(name)) { status = 503; body = { message: 'PLACEHOLDER_FAILURE' }; }
     await route.fulfill({ status, json: body, headers: { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': '*' } }).catch(() => {});
   });
@@ -122,7 +123,7 @@ test('gerente só dispõe da sua loja e exportação usa Maputo', async ({ page 
   const requests = await setup(page, { fail: false, empty: false, slow: false, manager: true });
   await expect(page.getByRole('button', { name: 'Todas', exact: true })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Loja A', exact: true })).toHaveCount(0);
-  expect(requests.filter((r) => r.name === 'get_dashboard_metrics').every((r) => r.params.p_store_id === 'store-b')).toBe(true);
+  expect(requests.filter((r) => r.name === 'get_sales_metrics').every((r) => r.params.p_store_id === 'store-b')).toBe(true);
   await page.getByLabel('De', { exact: true }).fill('2026-09-01');
   await page.getByLabel('Até', { exact: true }).fill('2026-09-24');
   let url = '';
@@ -152,7 +153,7 @@ test('falha das vendas mantém aquisição disponível e recupera sem recarregar
 test('gerente sem loja não consulta métricas consolidadas', async ({ page }) => {
   const requests = await setup(page, { fail: false, empty: false, slow: false, manager: true, noStore: true });
   await expect(page.locator('.insights').getByRole('alert')).toContainText('Não tem uma loja activa atribuída');
-  expect(requests.filter((r) => ['get_dashboard_metrics', 'get_funnel_metrics', 'get_attribution_report'].includes(r.name))).toEqual([]);
+  expect(requests.filter((r) => ['get_sales_metrics', 'get_funnel_metrics', 'get_attribution_report'].includes(r.name))).toEqual([]);
 });
 
 test('reflow a 320px, tabelas por teclado e falha de exportação recuperável', async ({ page }) => {
@@ -193,4 +194,50 @@ test('download atravessa a API real com sessão do navegador sem cookies de aute
   await expect(page.getByText(/O formato WinREST ainda não está validado/)).toBeVisible();
   await audit(page);
   await page.locator('.insight-export').screenshot({ path: 'output/playwright/analysis-exportacao.png' });
+});
+
+ test('POS separado e origem Online enviada ao servidor', async ({page}) => {
+  const requests = await setup(page);
+  await page.getByRole('group', {name:'Filtrar por origem'}).getByRole('button',{name:'Online',exact:true}).click();
+  await expect.poll(() => requests.filter(r => r.name === 'get_sales_metrics').at(-1)?.params.p_origin).toBe('online');
+  await page.getByRole('navigation',{name:'Vistas da análise'}).getByRole('button',{name:'POS',exact:true}).click();
+  await expect.poll(() => requests.filter(r => r.name === 'get_sales_metrics').at(-1)?.params.p_origin).toBe('pos');
+  await expect(page.getByText('O desempenho das vendas criadas no balcão e nas mesas.')).toBeVisible();
+  await audit(page);
+  await page.setViewportSize({width:320,height:800});
+  await audit(page);
+  await page.screenshot({path:'output/playwright/analysis-pos-mobile.png',fullPage:true});
+ });
+
+test('upsells mostram receita, aceitação e custo desconhecido sem inventar lucro', async ({page}) => {
+ const requests = await setup(page);
+ const panel=page.getByRole('region',{name:'Desempenho dos upsells'});
+ await expect(panel.getByText('PLACEHOLDER Oferta')).toBeVisible();
+ await expect(panel.getByText('Por apurar').first()).toBeVisible();
+ await expect(panel.getByText('Ofertas vistas')).toBeVisible();
+ await page.getByRole('button',{name:'Aquisição',exact:true}).click();
+ await expect.poll(()=>requests.filter(r=>r.name==='get_upsell_metrics').at(-1)?.params.p_origin).toBe('online');
+ await audit(page);
+});
+
+test('ofertas online rastreiam vista/aceitação e preservam a origem no carrinho', async ({page}) => {
+ await setup(page);
+ const events: Array<Record<string,unknown>>=[];
+ await page.route('**/api/track',async route=>{events.push(route.request().postDataJSON());await route.fulfill({json:{ok:true}});});
+ await page.route('**/api/menu?**',async route=>route.fulfill({json:{upsell_enabled:true,categories:[{id:'category',name:'PLACEHOLDER Cardápio',items:[
+  {id:'burger',name:'PLACEHOLDER Burger',price_cents:10000,available:true,variants:[{id:'base',name:'Base',price_cents:10000},{id:'premium',name:'Premium',price_cents:15000}]},
+  {id:'drink',name:'PLACEHOLDER Bebida',price_cents:5000,available:true,is_upsell:true}
+ ]}]}}));
+ await page.evaluate(()=>localStorage.setItem('cart',JSON.stringify([{menuItemId:'burger',variantId:'base',qty:1}])));
+ await page.goto('/upsell');
+ await expect(page.getByRole('button',{name:'Passar PLACEHOLDER Burger para Premium'})).toBeVisible();
+ await expect.poll(()=>events.filter(e=>e.type==='upsell_view').length).toBe(2);
+ await page.getByRole('button',{name:'Passar PLACEHOLDER Burger para Premium'}).click();
+ await page.locator('.hs-upsell-card').getByRole('button',{name:/Juntar|Adicionar/i}).click();
+ await page.locator('.hs-upsell-cta').getByRole('button').click();
+ await expect.poll(async()=>page.evaluate(()=>JSON.parse(localStorage.getItem('cart') ?? '[]').find((x:{menuItemId:string})=>x.menuItemId==='burger')?.upsell?.kind)).toBe('upgrade');
+ const cart=await page.evaluate(()=>JSON.parse(localStorage.getItem('cart') ?? '[]'));
+ expect(cart.find((x:{menuItemId:string})=>x.menuItemId==='drink').upsell).toMatchObject({kind:'companion',qty:1});
+ expect(cart.find((x:{menuItemId:string})=>x.menuItemId==='burger').upsell).toMatchObject({kind:'upgrade',fromVariantId:'base',qty:1});
+ await expect.poll(()=>events.filter(e=>e.type==='upsell_accept').length).toBe(2);
 });

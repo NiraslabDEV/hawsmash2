@@ -31,6 +31,7 @@ import {
 } from '@/lib/pos/offline-sales';
 import { syncOfflineSales } from '@/lib/pos/offline-sync';
 import { connectionStatus } from '@/lib/pos/connection-status';
+import { trackUpsell } from '@/lib/analytics/track';
 import { buildPosUpsellFunnel, type PosUpsellStep } from '@/lib/pos/pos-upsell';
 import { isPosPin, POS_IDLE_TIMEOUT_MS } from '@/lib/pos/session';
 import { OrdersBoard } from './orders-board';
@@ -612,6 +613,7 @@ export function PosShell() {
               items: sale.items.map((item) => ({
                 menuItemId: item.menuItemId,
                 qty: item.qty,
+                ...(item.upsell ? { upsell: item.upsell } : {}),
                 ...(item.variantId ? { variantId: item.variantId } : {}),
                 ...(item.notes ? { notes: item.notes } : {}),
               })),
@@ -982,6 +984,10 @@ export function PosShell() {
   const [funnel, setFunnel] = useState<PosUpsellStep[]>([]);
   const [funnelIndex, setFunnelIndex] = useState(0);
   const funnelStep = funnel[funnelIndex] ?? null;
+  useEffect(() => {
+    if (!funnelStep || !context?.storeSlug) return;
+    for (const item of funnelStep.items) trackUpsell('upsell_view', item.id, `pos_${funnelStep.kind}`, 'pos', context.storeSlug, saleId);
+  }, [funnelStep, context?.storeSlug, saleId]);
   const [paymentInfo, setPaymentInfo] = useState<PosPaymentInfo>(EMPTY_PAYMENT_INFO);
   /** Último artigo tocado — é o que o visor do cliente mostra a seguir. */
   const [lastTouched, setLastTouched] = useState<{ id: string; name: string } | null>(null);
@@ -1138,6 +1144,10 @@ export function PosShell() {
     // escolha (batata) e um produto de escolha única continuarem a ser um toque.
     const sellable = resolveSellable(item, variant ?? defaultVariant(item));
     setLastTouched({ id: sellable.id, name: sellable.name });
+    if (funnelStep && delta > 0) {
+      sellable.upsell = { kind: 'companion', qty: delta, placement: `pos_${funnelStep.kind}` };
+      trackUpsell('upsell_accept', item.id, sellable.upsell.placement, 'pos', context?.storeSlug, saleId);
+    }
     setCart((current) => applyQty(current, sellable, delta));
   }
 
@@ -1164,7 +1174,7 @@ export function PosShell() {
    */
   function changeLineQty(line: CartLine, delta: number) {
     setLastTouched({ id: line.id, name: line.name });
-    setCart((current) => applyQty(current, line, delta));
+    setCart((current) => applyQty(current, { ...line, upsell: undefined }, delta));
   }
 
   function selectMethod(method: CounterPaymentMethod) {
@@ -1276,6 +1286,7 @@ export function PosShell() {
           ...(line.variantId ? { variantId: line.variantId } : {}),
           name: line.name,
           qty: line.qty,
+          ...(line.upsell ? { upsell: line.upsell } : {}),
           unitPriceCents: line.price_cents,
           station: line.station,
           ...(line.notes ? { notes: line.notes } : {}),

@@ -77,3 +77,15 @@ describe('sincronização das vendas offline', () => {
     expect(await listOfflineSales()).toEqual([]);
   });
 });
+
+it('preserva atribuição de upsell na fila offline e no envio',async()=>{
+ const upsell={kind:'companion' as const,qty:1,placement:'pos_companion'};
+ await enqueueOfflineSale({...sale,items:[{...sale.items[0],upsell}]});
+ const send=vi.fn().mockResolvedValue({order_id:'order-1'});
+ await syncOfflineSales(send,10000);
+ expect(send.mock.calls[0][0].items[0].upsell).toEqual(upsell);
+});
+it('metadados de upsell inválidos não impedem guardar a venda',async()=>{
+ await enqueueOfflineSale({...sale,items:[{...sale.items[0],upsell:{kind:'companion',qty:-1,placement:'pos_companion'}}]});
+ expect((await listOfflineSales())[0].items[0].upsell).toBeUndefined();
+});

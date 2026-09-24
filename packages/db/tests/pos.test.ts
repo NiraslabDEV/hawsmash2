@@ -30,6 +30,7 @@ let originalStoreItem: {
   track_stock: boolean;
   stock_qty: number;
 };
+const originalIngredients: Array<{store_id:string;ingredient_id:string;qty:number}> = [];
 const createdDeviceIds: string[] = [];
 const createdOrderIds: string[] = [];
 const createdUserIds: string[] = [];
@@ -49,6 +50,12 @@ beforeAll(async () => {
   }
 
   maputoStoreId = store.id;
+  // Isola o ensaio de vendas de reservas consumidas por corridas anteriores.
+  const ingredientStock = await admin.from('store_ingredients').select('store_id,ingredient_id,qty').eq('store_id',maputoStoreId);
+  if (ingredientStock.error) throw ingredientStock.error;
+  originalIngredients.push(...(ingredientStock.data ?? []));
+  const provision = await admin.from('store_ingredients').update({qty:100000}).eq('store_id',maputoStoreId);
+  if (provision.error) throw provision.error;
 
   const { data: matolaStore, error: matolaStoreError } = await admin
     .from("stores")
@@ -220,6 +227,7 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
+  for (const row of originalIngredients) await admin.from('store_ingredients').update({qty:row.qty}).eq('store_id',row.store_id).eq('ingredient_id',row.ingredient_id);
   if (createdDrawerRequestIds.length > 0) {
     await admin.from("print_jobs").delete().in("request_id", createdDrawerRequestIds);
   }
@@ -404,6 +412,7 @@ describe("F2 — create_counter_sale", () => {
           menuItemId: classicSmashId,
           qty: 1,
           unitPriceCents: 1,
+          upsell: {kind:"companion",qty:1,placement:"pos_companion"},
         },
       ],
       payments: [{ method: "cash", amountCents: 30000 }],
@@ -423,6 +432,9 @@ describe("F2 — create_counter_sale", () => {
       duplicate: false,
     });
     expect(second.data.duplicate).toBe(true);
+    const marked = await manager.from('order_upsells').select('qty,kind,store_id').eq('order_id',first.data.order_id);
+    expect(marked.error).toBeNull();
+    expect(marked.data).toEqual([{qty:1,kind:'companion',store_id:maputoStoreId}]);
 
     createdOrderIds.push(first.data.order_id);
 

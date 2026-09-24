@@ -880,3 +880,13 @@ Validação final desta etapa: `pnpm lint`, `pnpm test` (942), build de produç�
 | Promoção da melhoria | B-111 | falta validar o fluxo com as sessões e os dados reais antes de publicar |
 
 Verificação final desta continuação: 963 testes de domínio/integração local, 9 ensaios Playwright, lint/typecheck e build aprovados. Zero violações automáticas A/AA na área nova, incluindo os selectores de exportação. B-111 e B-112 permanecem abertos.
+
+## PACOTE FINAL — origens e upsells · 2026-09-24
+
+- Funcional: atribuição online/POS separada; upsells observados e ligados a itens confirmados, relatório por produto/oferta e margem bruta apenas com custo conhecido.
+- Para o cliente: nenhuma decisão necessária para activar o rastreio. O histórico anterior não permite atribuir compras a ofertas com rigor.
+- Para Gabriel: completar fichas técnicas/custos para os produtos com “Por apurar”; custos diferenciais de upgrades exigem modelo próprio antes de apresentar margem desses upgrades. A interface mantém receita disponível.
+- Hardware: nenhum bloqueio novo; rastreio não muda o talão nem exige actualizar o bridge.
+- Pendências anteriores preservadas: B-111 (ensaio humano com dono/gerente e dados reais) e B-112 (contrato de importação WinREST). Não são fechadas por testes simulados.
+- Segunda passagem: trigger de produção corrigido para `main`; publicação de `dev` fica limitada ao staging. Não há novo bloqueio técnico nesta entrega; limitações de dados explicitadas em `docs/ANALISE-ORIGENS-UPSELL.md`.
+- Contagem desta entrega: cliente 0, acesso/infraestrutura 0, hardware 0; mantêm-se as duas pendências anteriores de validação/fornecedor.
