@@ -202,7 +202,7 @@ test('download atravessa a API real com sessão do navegador sem cookies de aute
   await expect.poll(() => requests.filter(r => r.name === 'get_sales_metrics').at(-1)?.params.p_origin).toBe('online');
   await page.getByRole('navigation',{name:'Vistas da análise'}).getByRole('button',{name:'POS',exact:true}).click();
   await expect.poll(() => requests.filter(r => r.name === 'get_sales_metrics').at(-1)?.params.p_origin).toBe('pos');
-  await expect(page.getByText('O desempenho das vendas criadas no balcão e nas mesas.')).toBeVisible();
+  await expect(page.getByText('O desempenho das vendas criadas no POS, incluindo entregas e levantamentos.')).toBeVisible();
   await audit(page);
   await page.setViewportSize({width:320,height:800});
   await audit(page);

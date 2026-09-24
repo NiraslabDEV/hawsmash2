@@ -9,6 +9,7 @@ declare
   item_id uuid; line_id uuid := gen_random_uuid();
   since timestamptz := '2090-01-01'; until_at timestamptz := '2090-01-03';
 begin
+  assert not private.is_pos_order('dine_in',null),'pedido pelo QR da mesa não é automaticamente POS';
   select id into shop from public.stores order by id limit 1;
   select id into other_shop from public.stores where id <> shop limit 1;
   assert shop is not null and other_shop is not null, 'duas lojas de teste necessárias';

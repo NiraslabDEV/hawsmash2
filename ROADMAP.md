@@ -450,4 +450,6 @@ detalhe do pedido no quadro do POS (1072, `update_order_details`).
 - [x] Receita adicional confirmada, descontos e margem bruta estimada por produto/oferta; custos desconhecidos explícitos, sem inventar histórico.
 - [x] Ensaios de dinheiro/isolamento/idempotência, interfaces e acessibilidade; contrato em `docs/ANALISE-ORIGENS-UPSELL.md`.
 - [x] Corrigir trigger Railway: produção acompanha `main`, staging acompanha `dev`.
-- [ ] Aplicar 1073/1074 e confirmar o deploy desta entrega no staging.
+- [x] Aplicar 1073/1074 em staging e reconciliar as RPCs autenticadas por leitura, sem vendas artificiais.
+- [x] QR de mesa permanece online quando não tem origem POS (1075); verificação de regressão antes da correcção.
+- [x] Publicar a interface no staging: deploy `59e6620` confirmado com HTTP 200 e bundles novos; revisão do QR em migration forward-only 1075.

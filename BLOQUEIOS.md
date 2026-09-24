@@ -890,3 +890,5 @@ Verificação final desta continuação: 963 testes de domínio/integração loc
 - Pendências anteriores preservadas: B-111 (ensaio humano com dono/gerente e dados reais) e B-112 (contrato de importação WinREST). Não são fechadas por testes simulados.
 - Segunda passagem: trigger de produção corrigido para `main`; publicação de `dev` fica limitada ao staging. Não há novo bloqueio técnico nesta entrega; limitações de dados explicitadas em `docs/ANALISE-ORIGENS-UPSELL.md`.
 - Contagem desta entrega: cliente 0, acesso/infraestrutura 0, hardware 0; mantêm-se as duas pendências anteriores de validação/fornecedor.
+
+Verificação adicional desta entrega: 973 testes unitários, 60 testes de base de dados e 12 Playwright aprovados, lint/typecheck e build aprovados. Leitura autenticada de staging com totais reconciliados. Segunda revisão preservou a origem online de pedidos via QR de mesa.

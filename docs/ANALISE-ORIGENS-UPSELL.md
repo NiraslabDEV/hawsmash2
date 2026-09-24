@@ -3,8 +3,8 @@
 ## Origem comercial
 
 - Vendas: Todos / Online / POS; POS tem também uma vista própria.
-- POS = `client_sale_id` preenchido ou canal `counter`/`dine_in`. Entregas criadas no balcão continuam POS.
-- Online pago no balcão continua online. O método de pagamento não classifica a origem.
+- POS = `client_sale_id` preenchido ou canal `counter`. Entregas criadas no balcão continuam POS.
+- O QR público de mesa (`dine_in` sem identificação POS) continua online. Online pago no balcão continua online. O método de pagamento não classifica a origem.
 - Aquisição exclui pedidos POS em todos os totais, canais, campanhas e descoberta. Eventos POS e telemetria de upsell não criam sessões no funil online.
 - `get_sales_metrics` filtra todos os indicadores e a comparação anterior. `get_dashboard_metrics` mantém o contrato consolidado para consumidores existentes.
 - Exportação contabilística continua independente do filtro de origem, claramente identificada no formulário.
@@ -32,6 +32,8 @@ Testes escritos antes da lógica reproduziram a contaminação por POS. Ensaio S
 
 ## Publicação
 
-Migrations 1073 e 1074 apenas no staging. Railway: o trigger de produção foi corrigido de `dev` para `main`, conforme `CLAUDE.md`; alteração do trigger não promove esta entrega para produção. Desenvolvimento visual concorrente do POS foi preservado no checkout principal e excluído desta entrega isolada.
+Migrations 1073, 1074 e 1075 apenas no staging. Railway: o trigger de produção foi corrigido de `dev` para `main`, conforme `CLAUDE.md`; alteração do trigger não promove esta entrega para produção. Desenvolvimento visual concorrente do POS foi preservado no checkout principal e excluído desta entrega isolada.
 
 Validação desta entrega: 973 testes unitários, 60 testes de base de dados (Supabase local por IPv4), 12 testes Playwright e lint/typecheck aprovados. Auditoria de segurança local sem problemas. As capturas mobile/desktop foram revistas.
+
+Segunda revisão: o teste do QR público falhou antes da 1075 e passou com a origem corrigida. Build local aprovado; leitura autenticada de staging reconciliou Todos/Online/POS sem criar vendas.

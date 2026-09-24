@@ -393,7 +393,7 @@ export default function AnalisePage() {
     <div className="insights">
       <header className="insight-header">
         <div><p className="insight-eyebrow">Visão do negócio</p><h1>Análise</h1>
-          <p className="insight-subtitle">{tab === 'pos' ? 'O desempenho das vendas criadas no balcão e nas mesas.' : tab === 'vendas' ? 'Os números que ajudam a decidir o próximo passo.' : 'Do primeiro contacto à compra online. Sem vendas do POS.'}</p>
+          <p className="insight-subtitle">{tab === 'pos' ? 'O desempenho das vendas criadas no POS, incluindo entregas e levantamentos.' : tab === 'vendas' ? 'Os números que ajudam a decidir o próximo passo.' : 'Do primeiro contacto à compra online. Sem vendas do POS.'}</p>
         </div>
         {tab === 'vendas' && metrics && !loading && !error && !setupError && <a className="insight-button" href="#exportar"><InsightIcon name="download" />Exportar relatório</a>}
       </header>
