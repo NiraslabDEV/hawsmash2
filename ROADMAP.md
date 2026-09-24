@@ -453,3 +453,17 @@ detalhe do pedido no quadro do POS (1072, `update_order_details`).
 - [x] Aplicar 1073/1074 em staging e reconciliar as RPCs autenticadas por leitura, sem vendas artificiais.
 - [x] QR de mesa permanece online quando não tem origem POS (1075); verificação de regressão antes da correcção.
 - [x] Publicar a interface no staging: deploy `59e6620` confirmado com HTTP 200 e bundles novos; revisão do QR em migration forward-only 1075.
+
+## O mesmo produto em várias linhas do balcão — 2026-09-24
+
+Incidente: 6 Classic (5 HAW e 1 WAGYU) e 4 batatas, pago por e-Mola, recusado duas vezes com
+`duplicate_item`. Não era o e-Mola: a `create_counter_sale_unlocked` da 1023 recusava o mesmo produto em
+duas linhas, e o carrinho do POS separa HAW de WAGYU e um "sem cebola" de um normal. A venda inteira
+revertia — sem pedido, sem pagamento registado, sem talão — e uma destas feita sem rede nunca sincronizava (1080).
+
+- [x] Tirar a verificação `duplicate_item`; stock, ficha técnica e anulação já contavam por linha ou por produto.
+- [x] Talão completo com a variante no nome (`1x Classic Smash WAGYU`), para sair com o bridge que está nas lojas.
+- [x] Remendo às duas funções que salta o que a 1077 já corrigiu: não a pisa em nenhuma ordem de aplicação. Simulado sobre o texto da 1023 e da 1064 (LF e CRLF).
+- [x] ⏳ Gate `packages/db/tests/mesmo-produto-varias-linhas.test.ts` (5): o pedido real pago por e-Mola, talão, nota, stock e venda offline. Não correu nesta máquina (sem Docker) — corre no CI.
+- [ ] Aplicar 1080 no staging **sem** as 1077–1079, que ainda estão em curso (`db push` a partir de uma árvore limpa), e depois no LIVE.
+- [ ] Antes de sair a 1077: o talão dela manda a variante num campo à parte, que o bridge actual ignora. Sai com o `.exe` novo, ou o WAGYU volta a sair no papel como "Classic Smash".
