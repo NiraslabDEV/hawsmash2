@@ -2184,6 +2184,10 @@ export type Database = {
         }
         Returns: Json
       }
+      call_ticket: {
+        Args: { p_daily_number: number; p_store_id: string }
+        Returns: Json
+      }
       claim_conversion_jobs: {
         Args: { p_limit?: number }
         Returns: {

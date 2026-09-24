@@ -1,11 +1,17 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { useBrand } from '@/lib/brand/context';
+import { newlyReady, ticketLabel } from '@/lib/pos/senhas';
 import { createClient } from '@/utils/supabase/client';
 
-type QueueEntry = { daily_number: number; order_number: string };
+type QueueEntry = {
+  daily_number: number;
+  order_number: string;
+  channel?: string | null;
+  fulfillment_type?: string | null;
+};
 
 type Queue = {
   store: { slug: string; short_name: string };
@@ -14,7 +20,10 @@ type Queue = {
   preparing: QueueEntry[];
 };
 
-const REFRESH_MS = 10_000;
+// A senha chamada no POS tem de aparecer enquanto o caixa ainda a está a dizer.
+const REFRESH_MS = 5_000;
+/** Quanto tempo a senha acabada de ficar pronta ocupa o ecrã inteiro. */
+const HIGHLIGHT_MS = 8_000;
 
 /**
  * Ecrã de senhas do balcão. Recarrega sozinho e, se o backend falhar, mantém o
@@ -25,6 +34,10 @@ export function QueueScreen({ storeSlug, storeName }: { storeSlug: string; store
   const supabase = useMemo(() => createClient(), []);
   const [queue, setQueue] = useState<Queue | null>(null);
   const [stale, setStale] = useState(false);
+  const [highlight, setHighlight] = useState<QueueEntry | null>(null);
+  /** As senhas prontas da leitura anterior — `null` até à primeira. */
+  const known = useRef<Set<string> | null>(null);
+  const highlightTimer = useRef<number | undefined>(undefined);
 
   const refresh = useCallback(async () => {
     const { data, error } = await supabase.rpc('get_store_queue', { p_store_slug: storeSlug });
@@ -32,9 +45,20 @@ export function QueueScreen({ storeSlug, storeName }: { storeSlug: string; store
       setStale(true);
       return;
     }
-    setQueue(data as Queue);
+    const next = data as Queue;
+    const novas = newlyReady(known.current, next.ready);
+    known.current = new Set(next.ready.map((entry) => entry.order_number));
+    // `ready` vem do mais recente para o mais antigo: destaca-se o último chamado.
+    if (novas[0]) {
+      setHighlight(novas[0]);
+      window.clearTimeout(highlightTimer.current);
+      highlightTimer.current = window.setTimeout(() => setHighlight(null), HIGHLIGHT_MS);
+    }
+    setQueue(next);
     setStale(false);
   }, [storeSlug, supabase]);
+
+  useEffect(() => () => window.clearTimeout(highlightTimer.current), []);
 
   useEffect(() => {
     void refresh();
@@ -52,7 +76,7 @@ export function QueueScreen({ storeSlug, storeName }: { storeSlug: string; store
           {brand.name} {storeName}
         </h1>
         <span className="text-2xl font-bold" style={{ color: stale ? '#ff9b9b' : 'var(--tv-muted-2)' }}>
-          {stale ? 'A reconectar…' : 'Pronto a levantar'}
+          {stale ? 'A reconectar…' : 'Pedido pronto'}
         </span>
       </header>
 
@@ -71,6 +95,9 @@ export function QueueScreen({ storeSlug, storeName }: { storeSlug: string; store
               >
                 <span className="text-[8rem] font-black leading-none" style={{ color: 'var(--tv-primary)' }}>
                   {entry.daily_number}
+                </span>
+                <span className="mt-2 text-3xl font-bold uppercase tracking-widest" style={{ color: 'var(--tv-muted)' }}>
+                  {ticketLabel({ channel: entry.channel ?? null, fulfillment_type: entry.fulfillment_type ?? null })}
                 </span>
               </li>
             ))}
@@ -99,6 +126,28 @@ export function QueueScreen({ storeSlug, storeName }: { storeSlug: string; store
           ))}
         </ul>
       </footer>
+
+      {/* A senha acabada de chamar ocupa o ecrã: quem está sentado de costas
+          para a TV vê-a mudar pelo canto do olho. */}
+      {highlight && (
+        <div
+          role="status"
+          className="fixed inset-0 grid place-items-center p-8"
+          style={{ background: 'var(--tv-bg, #000)' }}
+        >
+          <div className="text-center">
+            <p className="text-6xl font-black uppercase tracking-widest" style={{ color: 'var(--tv-text)' }}>
+              Pedido pronto
+            </p>
+            <p className="text-[18rem] font-black leading-none" style={{ color: 'var(--tv-primary)' }}>
+              {highlight.daily_number}
+            </p>
+            <p className="text-6xl font-bold uppercase tracking-widest" style={{ color: 'var(--tv-muted)' }}>
+              {ticketLabel({ channel: highlight.channel ?? null, fulfillment_type: highlight.fulfillment_type ?? null })}
+            </p>
+          </div>
+        </div>
+      )}
     </main>
   );
 }

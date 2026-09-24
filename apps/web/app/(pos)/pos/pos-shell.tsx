@@ -35,6 +35,7 @@ import { trackUpsell } from '@/lib/analytics/track';
 import { buildPosUpsellFunnel, type PosUpsellStep } from '@/lib/pos/pos-upsell';
 import { isPosPin, POS_IDLE_TIMEOUT_MS } from '@/lib/pos/session';
 import { OrdersBoard } from './orders-board';
+import { SenhasTab } from './senhas-tab';
 import { PosIcon, type PosIconName } from './pos-icons';
 import { AvailabilityPanel } from './availability-panel';
 import { useNewOrderAlert } from './use-new-order-alert';
@@ -272,7 +273,7 @@ export function PosShell() {
   const warmedPhotoUrls = useRef<Set<string>>(new Set());
   // 'delivery' é só consulta — o cashier acompanha o que está a sair pela
   // loja online sem sair do POS nem precisar de acesso ao painel admin.
-  const [posView, setPosView] = useState<'menu' | 'delivery'>('menu');
+  const [posView, setPosView] = useState<'menu' | 'delivery' | 'senhas'>('menu');
   const [deliveryResult, setDeliveryResult] = useState<{ storeSlug: string; orders: OnlineOrder[] }>({ storeSlug: '', orders: [] });
   const deliveryOrders = deliveryResult.storeSlug === context?.storeSlug ? deliveryResult.orders : [];
   const [deliveryLoading, setDeliveryLoading] = useState(false);
@@ -1813,10 +1814,26 @@ export function PosShell() {
             <PosIcon name="truck" size={18} className="shrink-0 opacity-80" />
             Delivery
           </button>
+          {/* A senha que a cozinha pôs no balcão vai daqui para a TV. */}
+          <button
+            type="button"
+            aria-current={posView === 'senhas' ? 'true' : undefined}
+            onClick={() => setPosView('senhas')}
+            className="pos-rail-item min-w-28 shrink-0 !gap-2 lg:min-w-0"
+          >
+            <PosIcon name="ticket" size={18} className="shrink-0 opacity-80" />
+            Senhas
+          </button>
         </nav>
 
         <section className="overflow-y-auto p-2.5 lg:p-3">
-          {posView === 'delivery' ? (
+          {posView === 'senhas' ? (
+            <SenhasTab
+              storeId={context.storeId}
+              storeName={context.storeName}
+              keyboardActive={!ocupado && !locked}
+            />
+          ) : posView === 'delivery' ? (
             <OnlineOrdersTab
               storeName={context.storeName}
               orders={deliveryOrders}

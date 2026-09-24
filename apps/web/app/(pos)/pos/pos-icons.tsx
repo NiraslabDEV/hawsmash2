@@ -110,6 +110,12 @@ const PATHS = {
       <circle cx="7" cy="18" r="2" />
     </>
   ),
+  ticket: (
+    <>
+      <path d="M3 8a2 2 0 0 0 2-2h14a2 2 0 0 0 2 2v2a2 2 0 0 0 0 4v2a2 2 0 0 0-2 2H5a2 2 0 0 0-2-2v-2a2 2 0 0 0 0-4z" />
+      <path d="M9 10h6M9 14h4" />
+    </>
+  ),
   pencil: (
     <>
       <path d="M12 20h9" />
