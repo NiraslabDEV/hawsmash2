@@ -20,6 +20,8 @@ type ModifierGroup = {
   extra_price_cents: number;
   options: ModifierOption[];
 };
+type MenuVariant = { id: string; name: string; price_cents: number; is_default?: boolean };
+type MenuAddon = { id: string; name: string; price_cents: number };
 type MenuItem = {
   id: string;
   name: string;
@@ -28,6 +30,8 @@ type MenuItem = {
   photo_url: string | null;
   available: boolean;
   modifier_groups: ModifierGroup[];
+  variants?: MenuVariant[];
+  addons?: MenuAddon[];
 };
 type Category = { id: string; name: string; items: MenuItem[] };
 type Menu = { categories: Category[]; accepting_orders: boolean };
@@ -54,6 +58,49 @@ function lineExtraPreview(group: ModifierGroup, optionIds: string[]): number {
 // acompanhamentos) é apresentado passo a passo, como no protótipo. Com 1–2
 // grupos mostra-se tudo de uma vez — obrigar a "Continuar" seria fricção.
 const isGuided = (item: MenuItem) => item.modifier_groups.length >= 3;
+
+// Variante (HAW / WAGYU) e extras entram na folha de escolhas como grupos:
+// é o que ela já sabe mostrar, validar e resumir. Ao enviar voltam a ser
+// `variantId` e `addonIds`, como na loja online — o preço é do servidor.
+const VARIANT_GROUP = 'variant';
+const ADDON_GROUP = 'addons';
+
+function defaultVariantId(item: MenuItem): string | null {
+  const variants = item.variants ?? [];
+  return (variants.find((v) => v.is_default) ?? variants[0])?.id ?? null;
+}
+
+function withChoiceGroups(item: MenuItem): MenuItem {
+  const groups: ModifierGroup[] = [];
+  const variants = item.variants ?? [];
+  if (variants.length > 1) {
+    groups.push({
+      id: VARIANT_GROUP,
+      name: 'Escolhe',
+      selection_type: 'single',
+      min_select: 1,
+      max_select: 1,
+      free_quantity: 0,
+      extra_price_cents: 0,
+      // A variante substitui o preço base: aqui mostra-se a diferença.
+      options: variants.map((v) => ({ id: v.id, name: v.name, price_cents: v.price_cents - item.price_cents })),
+    });
+  }
+  const addons = item.addons ?? [];
+  if (addons.length > 0) {
+    groups.push({
+      id: ADDON_GROUP,
+      name: 'Extras',
+      selection_type: 'multi',
+      min_select: 0,
+      max_select: addons.length,
+      free_quantity: 0,
+      extra_price_cents: 0,
+      options: addons.map((a) => ({ id: a.id, name: a.name, price_cents: a.price_cents })),
+    });
+  }
+  return groups.length > 0 ? { ...item, modifier_groups: [...groups, ...(item.modifier_groups ?? [])] } : item;
+}
 
 export default function TableMenuPage() {
   const brand = useBrand();
@@ -110,7 +157,10 @@ export default function TableMenuPage() {
     fetch(`/api/menu?channel=dine_in${loja}`)
       .then((r) => r.json())
       .then((data: Menu) => {
-        setMenu(data);
+        setMenu({
+          ...data,
+          categories: (data.categories ?? []).map((c) => ({ ...c, items: c.items.map(withChoiceGroups) })),
+        });
         const first = data.categories?.find((c) => c.items.length > 0);
         if (first) setActiveCat(first.id);
       });
@@ -133,6 +183,9 @@ export default function TableMenuPage() {
   function openCustomize(item: MenuItem) {
     const defaults: Record<string, string[]> = {};
     for (const g of item.modifier_groups) defaults[g.id] = [];
+    // A variante vem já marcada na do costume: um toque a menos para o HAW.
+    const variante = defaultVariantId(item);
+    if (defaults[VARIANT_GROUP] && variante) defaults[VARIANT_GROUP] = [variante];
     setDraftSelections(defaults);
     setDraftQty(1);
     setDraftNotes('');
@@ -270,15 +323,24 @@ export default function TableMenuPage() {
     setError('');
 
     const payload = {
-      items: cart.map((l) => ({
-        menuItemId: l.menuItemId,
-        qty: l.qty,
-        modifiers: Object.entries(l.selections)
-          .filter(([, optionIds]) => optionIds.length > 0)
-          .map(([groupId, optionIds]) => ({ groupId, optionIds })),
-        notes: l.notes || undefined,
-        person: people[l.who],
-      })),
+      items: cart.map((l) => {
+        const variantId = l.selections[VARIANT_GROUP]?.[0];
+        const addonIds = l.selections[ADDON_GROUP] ?? [];
+        return {
+          menuItemId: l.menuItemId,
+          qty: l.qty,
+          ...(variantId ? { variantId } : {}),
+          ...(addonIds.length > 0 ? { addonIds } : {}),
+          modifiers: Object.entries(l.selections)
+            .filter(
+              ([groupId, optionIds]) =>
+                groupId !== VARIANT_GROUP && groupId !== ADDON_GROUP && optionIds.length > 0,
+            )
+            .map(([groupId, optionIds]) => ({ groupId, optionIds })),
+          notes: l.notes || undefined,
+          person: people[l.who],
+        };
+      }),
       fulfillmentType: 'dine_in',
       tableId,
       // O servidor recusa a mesa se não for desta loja (1081).
@@ -1069,11 +1131,18 @@ function ItemSheet({
         ? `Mais ${over} — extra ${mt(g.extra_price_cents)} cada (+${mt(over * g.extra_price_cents)})`
         : `Até ${g.free_quantity} grátis · extra ${mt(g.extra_price_cents)} cada`;
     }
+    if (g.id === VARIANT_GROUP) return 'O preço muda com a escolha';
+    if (g.id === ADDON_GROUP) return 'Toque para juntar ao lanche';
     if (g.selection_type === 'single') return 'Mesmo preço';
     return 'Toque para juntar ao prato';
   };
 
   const priceFor = (g: ModifierGroup, o: ModifierOption, selected: boolean) => {
+    // Na variante o preço é a diferença para o base: o HAW não é "grátis".
+    if (g.id === VARIANT_GROUP) {
+      if (o.price_cents === 0) return 'Preço base';
+      return o.price_cents > 0 ? `+ ${mt(o.price_cents)}` : `− ${mt(-o.price_cents)}`;
+    }
     if (o.price_cents > 0) return `+ ${mt(o.price_cents)}`;
     const n = (selections[g.id] ?? []).length;
     if (g.free_quantity > 0 && g.extra_price_cents > 0 && !selected && n >= g.free_quantity) {

@@ -484,7 +484,7 @@ tudo para a mesma mesa, e a mesa paga no fim, tudo junto. 6 mesas em cada loja (
 - [x] Conta da mesa (`close_table_bill`): cobra só o que o caixa viu, misto/troco/gaveta, pagamentos repartidos pelos pedidos (o fecho de caixa conta-os), talão completo da conta; duas caixas não fecham a mesma conta. A conta é o que a mesa pediu hoje (dia de Maputo) e não pagou.
 - [x] QR: pedido na loja da mesa, "Mesa N" no nome, stock e ficha técnica baixam, comanda com o número da loja (saía `ENC-`); canal `dine_in` (era `pickup`).
 - [x] POS: aba Mesas (conta por mesa, QR + balcão), "Mesa" no tipo de pedido, fechar conta no ecrã de pagamento.
-- [x] ⏳ Gates `packages/db/tests/mesas.test.ts` (12) e `apps/web/lib/pos/__tests__/tables.test.ts` (12). O de BD não correu nesta máquina (sem Docker): SQL e PL/pgSQL validados pelo parser do Postgres 17; corre no CI.
+- [x] ⏳ Gates `packages/db/tests/mesas.test.ts` (13) e `apps/web/lib/pos/__tests__/tables.test.ts` (12). O de BD não correu nesta máquina (sem Docker): SQL e PL/pgSQL validados pelo parser do Postgres 17; corre no CI.
 - [ ] Aplicar 1081/1082 no staging fora do horário, sem as 1077–1079; ensaiar a mesa 1: lançar, pedir pelo QR, fechar em misto.
-- [ ] QR com HAW/WAGYU e extras — a página da mesa ainda é a do motor herdado e cobra o Classic ao preço base.
+- [x] QR com HAW/WAGYU e extras: entram na folha de escolhas da página da mesa como grupos (a variante já marcada na do costume) e seguem como `variantId`/`addonIds`, a preço do servidor.
 - [ ] Anular uma conta já fechada; avisar no fecho de caixa se houver mesas por fechar.

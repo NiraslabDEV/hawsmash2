@@ -515,6 +515,35 @@ describe("1081 · a conta da mesa", () => {
     expect(error?.message).toContain("table_has_no_open_orders");
   });
 
+  it("pelo QR, o WAGYU é cobrado ao preço do WAGYU e sai no papel como WAGYU", async () => {
+    const { data, error } = await anon.rpc("create_order", {
+      p_store_slug: "matola",
+      p_payload: {
+        fulfillmentType: "dine_in",
+        tableId: mesaId,
+        items: [{ menuItemId: classicId, qty: 1, variantId: wagyuId }],
+      },
+    });
+    expect(error).toBeNull();
+    criadosPedidos.push(data as string);
+
+    const { data: pedido } = await admin
+      .from("orders")
+      .select("total_cents")
+      .eq("id", data as string)
+      .single();
+    expect(pedido?.total_cents).toBe(precoWagyu);
+
+    const { data: comandas } = await admin
+      .from("print_jobs")
+      .select("payload")
+      .eq("order_id", data as string)
+      .eq("kind", "order");
+    expect(comandas![0].payload.items).toEqual([
+      expect.objectContaining({ name: "Classic Smash", variant: "WAGYU", quantity: 1 }),
+    ]);
+  });
+
   it("sem stock para o pedido todo, o lançamento reverte inteiro", async () => {
     await admin
       .from("store_items")
