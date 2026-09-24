@@ -48,6 +48,14 @@ const PATHS = {
     </>
   ),
   chevron: <path d="m9 18 6-6-6-6" />,
+  chevronDown: <path d="m6 9 6 6 6-6" />,
+  chevronUp: <path d="m18 15-6-6-6 6" />,
+  user: (
+    <>
+      <circle cx="12" cy="8" r="4" />
+      <path d="M4 21a8 8 0 0 1 16 0" />
+    </>
+  ),
   back: (
     <>
       <path d="m12 19-7-7 7-7" />

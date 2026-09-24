@@ -884,6 +884,7 @@ export function PosShell() {
       setZoneId('');
       setOrderNote('');
       setScheduledFor('');
+      setCustomerOpen(false);
     }
   }, [lines.length]);
 
@@ -984,6 +985,13 @@ export function PosShell() {
   const [noteDraft, setNoteDraft] = useState('');
   /** Selector aberto no painel do carrinho (horário ou zona). */
   const [cartPicker, setCartPicker] = useState<'schedule' | 'zone' | null>(null);
+  /**
+   * Os dados do cliente abertos no carrinho. Fechados, são uma barra só: o
+   * espaço do painel é dos artigos, que é o que se confere a cada venda. Abrem
+   * ao escolher Levantamento ou Entrega (é aí que são precisos) e fecham à mão
+   * depois de anotados — a barra continua a dizer o que falta.
+   */
+  const [customerOpen, setCustomerOpen] = useState(false);
 
   /**
    * A taxa da zona escolhida.
@@ -1630,10 +1638,10 @@ export function PosShell() {
 
   return (
     <main className="min-h-screen lg:h-screen lg:overflow-hidden">
-      <header className="flex min-h-[4.5rem] items-center gap-2 border-b border-white/[0.07] bg-bg1 px-4">
+      <header className="flex min-h-[3.75rem] items-center gap-2 border-b border-white/[0.07] bg-bg1 px-3">
         <div className="min-w-0 flex-1">
           <p className="flex items-center gap-2">
-            <span className="truncate font-display text-[1.65rem] leading-none tracking-[0.04em] text-gold">
+            <span className="truncate font-display text-[1.4rem] leading-none tracking-[0.04em] text-gold">
               {brand.name}
             </span>
             <span className="rounded-md bg-white/[0.07] px-1.5 py-0.5 text-[0.625rem] font-bold tracking-[0.16em] text-ink-dim">
@@ -1652,7 +1660,7 @@ export function PosShell() {
           type="button"
           onClick={() => setBoardOpen(true)}
           aria-label={alerta.piscar ? `Pedidos — ${alerta.aAtender} à espera` : 'Pedidos'}
-          className={`pos-btn relative !min-h-14 shrink-0 ${alerta.piscar ? 'pos-alarm' : ''}`}
+          className={`pos-btn relative !min-h-12 shrink-0 !rounded-[14px] !px-4 !text-[0.9375rem] ${alerta.piscar ? 'pos-alarm' : ''}`}
         >
           <PosIcon name="inbox" />
           Pedidos
@@ -1666,7 +1674,7 @@ export function PosShell() {
         <button
           type="button"
           onClick={() => setAvailabilityOpen(true)}
-          className="pos-btn !min-h-14 shrink-0"
+          className="pos-btn !min-h-12 shrink-0 !rounded-[14px] !px-4 !text-[0.9375rem]"
         >
           <PosIcon name="ban" />
           Esgotados
@@ -1678,7 +1686,7 @@ export function PosShell() {
               type="button"
               disabled={reprintPending}
               onClick={() => void reprintLastReceipt()}
-              className="pos-btn pos-btn--accent-outline !min-h-14 shrink-0 !px-4 !text-sm"
+              className="pos-btn pos-btn--accent-outline !min-h-12 shrink-0 !rounded-[14px] !px-3.5 !text-sm"
             >
               <PosIcon name="printer" size={18} />
               {reprintPending ? 'A reimprimir…' : `Reimprimir talão #${lastSale.dailyNumber}`}
@@ -1686,7 +1694,7 @@ export function PosShell() {
             <button
               type="button"
               onClick={() => setVoidOpen(true)}
-              className="pos-btn pos-btn--danger !min-h-14 shrink-0 !px-4 !text-sm"
+              className="pos-btn pos-btn--danger !min-h-12 shrink-0 !rounded-[14px] !px-3.5 !text-sm"
             >
               <PosIcon name="undo" size={18} />
               Anular #{lastSale.dailyNumber}
@@ -1697,7 +1705,7 @@ export function PosShell() {
         <button
           type="button"
           onClick={() => void lockDevice()}
-          className="pos-btn pos-btn--quiet !min-h-14 shrink-0 !px-4 !text-sm"
+          className="pos-btn pos-btn--quiet !min-h-12 shrink-0 !rounded-[14px] !px-3.5 !text-sm"
         >
           <PosIcon name="lock" size={18} />
           Bloquear · trocar
@@ -1711,7 +1719,7 @@ export function PosShell() {
         </div>
       </header>
 
-      <div className="grid lg:h-[calc(100vh-4.5rem)] lg:grid-cols-[10.5rem_minmax(0,1fr)_25rem]">
+      <div className="grid lg:h-[calc(100vh-3.75rem)] lg:grid-cols-[9.5rem_minmax(0,1fr)_24rem]">
         <nav className="flex gap-1.5 overflow-x-auto border-b border-white/[0.07] bg-bg1 p-2 lg:flex-col lg:overflow-y-auto lg:border-b-0 lg:border-r lg:p-2.5">
           {categories.map((category) => (
             <button
@@ -1742,7 +1750,7 @@ export function PosShell() {
           </button>
         </nav>
 
-        <section className="overflow-y-auto p-3 lg:p-4">
+        <section className="overflow-y-auto p-2.5 lg:p-3">
           {posView === 'delivery' ? (
             <OnlineOrdersTab
               storeName={context.storeName}
@@ -1754,7 +1762,7 @@ export function PosShell() {
               onRefresh={() => void fetchDeliveryOrders()}
             />
           ) : (
-          <div className="grid grid-cols-2 gap-3 md:grid-cols-3 2xl:grid-cols-4">
+          <div className="grid grid-cols-2 gap-2.5 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
             {visibleItems.map((item) => {
               const availability = posItemAvailability(item);
               const qty = qtyOfItem(cart, item.id);
@@ -1797,16 +1805,16 @@ export function PosShell() {
                       </span>
                     )}
                     {qty && (
-                      <span className="pos-qty absolute right-2.5 top-2.5">
+                      <span className="pos-qty absolute right-2 top-2">
                         {qty}
                       </span>
                     )}
                   </span>
-                  <span className="flex flex-1 flex-col justify-between gap-1.5 px-3.5 pb-3 pt-2.5">
-                    <span className="block text-[0.9375rem] font-semibold leading-snug text-ink">
+                  <span className="flex flex-1 flex-col justify-between gap-1 px-3 pb-2.5 pt-2">
+                    <span className="block text-[0.8125rem] font-semibold leading-snug text-ink">
                       {item.name}
                     </span>
-                    <span className="pos-num block text-lg font-bold text-gold">
+                    <span className="pos-num block text-base font-bold text-gold">
                       {mt(item.price_cents)}
                     </span>
                   </span>
@@ -1820,17 +1828,20 @@ export function PosShell() {
         {/* Se num ecrã baixo nem assim couber, o painel inteiro rola — nunca
             corta o botão PAGAR nem um campo por preencher. */}
         <aside className="flex min-h-[36rem] flex-col border-t border-white/[0.07] bg-bg1 lg:min-h-0 lg:overflow-y-auto lg:border-l lg:border-t-0">
-          <div className="shrink-0 space-y-2 border-b border-white/[0.07] p-3">
+          <div className="shrink-0 space-y-2 border-b border-white/[0.07] p-2.5">
             <div className="flex items-center justify-between px-1">
-              <h2 className="text-lg font-bold tracking-tight">Carrinho</h2>
-              <span className="pos-num rounded-full bg-white/[0.06] px-2.5 py-1 text-xs font-semibold text-ink-dim">
+              <h2 className="text-base font-bold tracking-tight">Carrinho</h2>
+              <span className="pos-num rounded-full bg-white/[0.06] px-2 py-0.5 text-[0.6875rem] font-semibold text-ink-dim">
                 {count} artigos
               </span>
             </div>
 
             {/* Tipo de pedido. Só aparecem os canais que a loja tem ligados —
                 oferecer entrega numa loja sem entrega é prometer o que não se
-                cumpre. Offline fica só o balcão (CLAUDE §7.5). */}
+                cumpre. Offline fica só o balcão (CLAUDE §7.5).
+                Escolher Levantamento ou Entrega abre os dados do cliente, que
+                é o que esse pedido pede a seguir; tocar outra vez no mesmo
+                tipo abre ou fecha os dados. */}
             <div className="pos-seg">
               {(['counter', 'pickup', 'delivery'] as FulfillmentType[]).map((tipo) => {
                 if (!canalPermitido(tipo)) return null;
@@ -1839,106 +1850,186 @@ export function PosShell() {
                     key={tipo}
                     type="button"
                     aria-pressed={fulfillment === tipo}
-                    onClick={() => setFulfillment(tipo)}
-                    className="flex-col !gap-1 !text-[0.8125rem]"
+                    onClick={() => {
+                      if (fulfillment === tipo) {
+                        setCustomerOpen((aberto) => !aberto);
+                        return;
+                      }
+                      setFulfillment(tipo);
+                      setCustomerOpen(tipo !== 'counter');
+                    }}
+                    className="flex-col !gap-0.5 !text-[0.75rem]"
                   >
-                    <PosIcon name={FULFILLMENT_ICONS[tipo]} size={18} />
+                    <PosIcon name={FULFILLMENT_ICONS[tipo]} size={16} />
                     {FULFILLMENT_LABELS[tipo]}
                   </button>
                 );
               })}
             </div>
 
-            {/* Os dados do pedido em barras compactas: cada uma diz o que é e o
-                que já tem, e tocar abre o sítio de a preencher (teclado do POS
-                ou selector grande). Empilhados em campos de altura inteira, com
-                horário a rolar de lado e um <select> nativo, a entrega não
-                cabia no ecrã do balcão e o carrinho ficava sem espaço.
-                Nome e telefone aparecem em qualquer venda, não só entrega:
-                é o que deixa reconhecer quem compra ao balcão também. */}
-            <div className="grid grid-cols-2 gap-2">
-              {/* A loja pode dispensar nome e telefone no balcão (aba POS). */}
-              {(fulfillment !== 'counter' || posSettings.cart.askCustomerOnCounter) && (
-              <>
-              <CartField
-                label="Nome"
-                value={customerName.trim()}
-                placeholder="Nome do cliente"
-                warn={fulfillment !== 'counter'}
-                onClick={() => setKeyboardField('name')}
-              />
-              <CartField
-                label={
-                  customerLookup
-                    ? customerLookup.orders_count > 0
-                      ? `Telefone · 👋 ${customerLookup.orders_count} pedidos`
-                      : 'Telefone · 🆕 novo'
-                    : 'Telefone'
-                }
-                value={customerPhone.trim()}
-                placeholder={fulfillment === 'counter' ? 'Opcional' : 'Telefone'}
-                warn={fulfillment !== 'counter'}
-                onClick={() => setKeyboardField('phone')}
-              />
-              </>
-              )}
-              {fulfillment === 'delivery' && (
-                <CartField
-                  className="col-span-2"
-                  label="Morada"
-                  value={customerAddress.trim()}
-                  placeholder="Sem isto o entregador liga"
-                  warn
-                  onClick={() => setKeyboardField('address')}
-                />
-              )}
-              {fulfillment !== 'counter' && (
-                <CartField
-                  className={fulfillment === 'delivery' ? '' : 'col-span-2'}
-                  label="Horário"
-                  value={formatSlot(scheduledFor || null)}
-                  placeholder="Agora"
-                  onClick={() => setCartPicker('schedule')}
-                />
-              )}
-              {fulfillment === 'delivery' && (
-                <CartField
-                  label="Zona"
-                  value={(() => {
-                    const zona = channels.zones.find((z) => z.id === zoneId);
-                    return zona ? `${zona.name} · ${mt(zona.fee_cents)}` : '';
-                  })()}
-                  placeholder="Escolher zona"
-                  warn
-                  onClick={() => setCartPicker('zone')}
-                />
-              )}
-              <CartField
-                className="col-span-2"
-                label="Observações"
-                value={orderNote.trim()}
-                placeholder="+ Nota do pedido"
-                onClick={() => setKeyboardField('orderNote')}
-              />
-            </div>
+            {(() => {
+              const zona = channels.zones.find((z) => z.id === zoneId);
+              const pedeCliente = fulfillment !== 'counter' || posSettings.cart.askCustomerOnCounter;
+              const faltam =
+                fulfillment === 'counter'
+                  ? []
+                  : [
+                      !customerName.trim() && 'nome',
+                      !customerPhone.trim() && 'telefone',
+                      fulfillment === 'delivery' && !customerAddress.trim() && 'morada',
+                      fulfillment === 'delivery' && !zona && 'zona',
+                    ].filter((campo): campo is string => Boolean(campo));
+              const resumo = [
+                customerName.trim(),
+                customerPhone.trim(),
+                fulfillment === 'delivery' ? customerAddress.trim() : '',
+                fulfillment === 'delivery' && zona ? zona.name : '',
+                fulfillment !== 'counter' ? formatSlot(scheduledFor || null) : '',
+                orderNote.trim() ? `Nota: ${orderNote.trim()}` : '',
+              ]
+                .filter(Boolean)
+                .join(' · ');
+              const titulo =
+                fulfillment === 'counter'
+                  ? pedeCliente
+                    ? 'Cliente e nota'
+                    : 'Nota do pedido'
+                  : `Dados · ${FULFILLMENT_LABELS[fulfillment]}`;
+
+              if (!customerOpen) {
+                // Fechados, os dados são uma barra: diz o que já se sabe e, a
+                // âmbar, o que ainda falta para a entrega sair bem.
+                return (
+                  <button
+                    type="button"
+                    onClick={() => setCustomerOpen(true)}
+                    data-warn={faltam.length > 0}
+                    className="pos-field !min-h-12 w-full"
+                  >
+                    <PosIcon
+                      name={pedeCliente ? 'user' : 'pencil'}
+                      size={16}
+                      className={`shrink-0 ${faltam.length > 0 ? 'text-amber-300' : 'text-ink-mute'}`}
+                    />
+                    <span className="min-w-0 flex-1">
+                      <span className={`pos-eyebrow !block truncate ${faltam.length > 0 ? '!text-amber-300/80' : ''}`}>
+                        {faltam.length > 0 ? `Faltam: ${faltam.join(', ')}` : titulo}
+                      </span>
+                      <span
+                        className={`block truncate text-[0.8125rem] ${
+                          resumo ? 'font-semibold text-ink' : 'font-medium text-ink-mute'
+                        }`}
+                      >
+                        {resumo || (pedeCliente ? 'Toca para anotar' : '+ Nota do pedido')}
+                      </span>
+                    </span>
+                    <PosIcon name="chevronDown" size={16} className="shrink-0 text-ink-mute" />
+                  </button>
+                );
+              }
+
+              return (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between gap-2 pl-1">
+                    <span className="pos-eyebrow">{titulo}</span>
+                    <button
+                      type="button"
+                      onClick={() => setCustomerOpen(false)}
+                      className="pos-btn !min-h-10 !gap-1 !rounded-xl !px-3 !text-[0.8125rem]"
+                    >
+                      <PosIcon name="chevronUp" size={16} />
+                      Fechar
+                    </button>
+                  </div>
+
+                  {/* Os dados do pedido em barras compactas: cada uma diz o que é
+                      e o que já tem, e tocar abre o sítio de a preencher (teclado
+                      do POS ou selector grande). Nome e telefone aparecem em
+                      qualquer venda, não só entrega: é o que deixa reconhecer
+                      quem compra ao balcão também. */}
+                  <div className="grid grid-cols-2 gap-1.5">
+                    {/* A loja pode dispensar nome e telefone no balcão (aba POS). */}
+                    {pedeCliente && (
+                      <>
+                        <CartField
+                          label="Nome"
+                          value={customerName.trim()}
+                          placeholder="Nome do cliente"
+                          warn={fulfillment !== 'counter'}
+                          onClick={() => setKeyboardField('name')}
+                        />
+                        <CartField
+                          label={
+                            customerLookup
+                              ? customerLookup.orders_count > 0
+                                ? `Telefone · 👋 ${customerLookup.orders_count} pedidos`
+                                : 'Telefone · 🆕 novo'
+                              : 'Telefone'
+                          }
+                          value={customerPhone.trim()}
+                          placeholder={fulfillment === 'counter' ? 'Opcional' : 'Telefone'}
+                          warn={fulfillment !== 'counter'}
+                          onClick={() => setKeyboardField('phone')}
+                        />
+                      </>
+                    )}
+                    {fulfillment === 'delivery' && (
+                      <CartField
+                        className="col-span-2"
+                        label="Morada"
+                        value={customerAddress.trim()}
+                        placeholder="Sem isto o entregador liga"
+                        warn
+                        onClick={() => setKeyboardField('address')}
+                      />
+                    )}
+                    {fulfillment !== 'counter' && (
+                      <CartField
+                        className={fulfillment === 'delivery' ? '' : 'col-span-2'}
+                        label="Horário"
+                        value={formatSlot(scheduledFor || null)}
+                        placeholder="Agora"
+                        onClick={() => setCartPicker('schedule')}
+                      />
+                    )}
+                    {fulfillment === 'delivery' && (
+                      <CartField
+                        label="Zona"
+                        value={zona ? `${zona.name} · ${mt(zona.fee_cents)}` : ''}
+                        placeholder="Escolher zona"
+                        warn
+                        onClick={() => setCartPicker('zone')}
+                      />
+                    )}
+                    <CartField
+                      className="col-span-2"
+                      label="Observações"
+                      value={orderNote.trim()}
+                      placeholder="+ Nota do pedido"
+                      onClick={() => setKeyboardField('orderNote')}
+                    />
+                  </div>
+                </div>
+              );
+            })()}
           </div>
 
-          <div className="min-h-[8rem] flex-1 overflow-y-auto px-3">
+          <div className="min-h-[8rem] flex-1 overflow-y-auto px-2.5">
             {lines.length === 0 ? (
               <div className="grid h-full min-h-28 place-items-center text-center">
                 <div>
-                  <PosIcon name="bag" size={28} strokeWidth={1.5} className="mx-auto text-ink-mute opacity-60" />
+                  <PosIcon name="bag" size={26} strokeWidth={1.5} className="mx-auto text-ink-mute opacity-60" />
                   <p className="mt-2 text-sm text-ink-mute">Toca num produto para começar.</p>
                 </div>
               </div>
             ) : (
               <ul className="divide-y divide-white/[0.06]">
                 {lines.map((line) => (
-                  <li key={line.id} className="flex items-center gap-3 py-2.5">
+                  <li key={line.id} className="flex items-center gap-2 py-1.5">
                     <div className="min-w-0 flex-1">
-                      <h3 className="truncate text-[0.9375rem] font-semibold leading-tight">{line.name}</h3>
-                      <div className="mt-1 flex min-w-0 items-center gap-2">
-                        <span className="pos-num shrink-0 text-sm font-bold text-gold">
+                      <h3 className="truncate text-[0.8125rem] font-semibold leading-tight">{line.name}</h3>
+                      <div className="mt-1 flex min-w-0 items-center gap-1.5">
+                        <span className="pos-num shrink-0 text-[0.8125rem] font-bold text-gold">
                           {mt(line.price_cents * line.qty)}
                         </span>
                         {/* "SEM JALAPENO" é meio balcão. Sai na comanda da
@@ -1950,34 +2041,34 @@ export function PosShell() {
                             setNoteDraft(line.notes ?? '');
                             setNoteLine(line);
                           }}
-                          className={`pos-press inline-flex min-h-12 min-w-0 items-center gap-1.5 rounded-xl px-3 text-left text-[0.6875rem] font-bold uppercase tracking-wide ${
+                          className={`pos-press inline-flex min-h-8 min-w-0 items-center gap-1 rounded-lg px-2 text-left text-[0.625rem] font-bold uppercase tracking-wide ${
                             line.notes
                               ? 'bg-[color:var(--pos-accent-soft)] text-gold'
                               : 'bg-white/[0.05] text-ink-mute'
                           }`}
                         >
-                          <PosIcon name="pencil" size={13} className="shrink-0" />
+                          <PosIcon name="pencil" size={11} className="shrink-0" />
                           <span className="truncate">{line.notes ?? '+ sem / nota'}</span>
                         </button>
                       </div>
                     </div>
-                    <div className="pos-well !flex shrink-0 !items-center !p-1">
+                    <div className="pos-well !flex shrink-0 !items-center !rounded-xl !p-0.5">
                       <button
                         type="button"
                         onClick={() => changeLineQty(line, -1)}
-                        className="pos-press grid h-16 w-14 place-items-center rounded-[11px] active:bg-white/10"
+                        className="pos-press grid h-12 w-11 place-items-center rounded-[10px] active:bg-white/10"
                         aria-label={`Retirar ${line.name}`}
                       >
-                        <PosIcon name="minus" size={20} />
+                        <PosIcon name="minus" size={18} />
                       </button>
-                      <span className="pos-num min-w-8 text-center text-lg font-bold">{line.qty}</span>
+                      <span className="pos-num min-w-7 text-center text-base font-bold">{line.qty}</span>
                       <button
                         type="button"
                         onClick={() => changeLineQty(line, 1)}
-                        className="pos-press grid h-16 w-14 place-items-center rounded-[11px] active:bg-white/10"
+                        className="pos-press grid h-12 w-11 place-items-center rounded-[10px] active:bg-white/10"
                         aria-label={`Adicionar ${line.name}`}
                       >
-                        <PosIcon name="plus" size={20} />
+                        <PosIcon name="plus" size={18} />
                       </button>
                     </div>
                   </li>
@@ -1986,20 +2077,25 @@ export function PosShell() {
             )}
           </div>
 
-          <section className="shrink-0 border-t border-white/[0.07] p-3">
-            <div className="mb-2.5 flex items-baseline justify-between px-1">
-              <span className="pos-eyebrow">TOTAL</span>
-              <strong className="pos-num text-[2rem] font-extrabold leading-none">{mt(totalCents)}</strong>
-            </div>
+          {/* O total vive no próprio botão: é o número que se diz ao cliente
+              no momento em que se carrega nele, e poupa uma linha ao carrinho. */}
+          <div className="shrink-0 border-t border-white/[0.07] p-2.5">
+            {deliveryFeeCents > 0 && (
+              <p className="mb-1.5 flex items-baseline justify-between px-1 text-xs font-medium text-ink-mute">
+                <span>Inclui entrega</span>
+                <span className="pos-num">{mt(deliveryFeeCents)}</span>
+              </p>
+            )}
             <button
               type="button"
               disabled={lines.length === 0}
               onClick={startCheckout}
-              className="pos-btn pos-btn--primary pos-btn--lg w-full !text-2xl !tracking-[0.04em]"
+              className="pos-btn pos-btn--primary w-full !min-h-16 !justify-between !rounded-[18px] !px-5"
             >
-              PAGAR
+              <span className="text-xl tracking-[0.06em]">PAGAR</span>{' '}
+              <span className="pos-num text-2xl">{mt(totalCents)}</span>
             </button>
-          </section>
+          </div>
         </aside>
       </div>
 
@@ -2210,14 +2306,14 @@ export function PosShell() {
                           />
                         )}
                         {qty > 0 && (
-                          <span className="pos-qty absolute right-2.5 top-2.5">
+                          <span className="pos-qty absolute right-2 top-2">
                             {qty}
                           </span>
                         )}
                       </span>
-                      <span className="flex flex-1 flex-col justify-between gap-1.5 px-3.5 pb-3 pt-2.5">
-                        <span className="block text-[0.9375rem] font-semibold leading-snug text-ink">{item.name}</span>
-                        <span className="pos-num block text-lg font-bold text-gold">
+                      <span className="flex flex-1 flex-col justify-between gap-1 px-3 pb-2.5 pt-2">
+                        <span className="block text-[0.8125rem] font-semibold leading-snug text-ink">{item.name}</span>
+                        <span className="pos-num block text-base font-bold text-gold">
                           {mt(item.price_cents)}
                         </span>
                       </span>
