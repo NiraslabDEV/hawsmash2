@@ -38,6 +38,14 @@ import { OrdersBoard } from './orders-board';
 import { PosIcon, type PosIconName } from './pos-icons';
 import { AvailabilityPanel } from './availability-panel';
 import { useNewOrderAlert } from './use-new-order-alert';
+import { prepararSom, tocarAlarme } from '@/lib/pos/chime';
+import {
+  CURRENT_BUILD,
+  VERSION_CHECK_MS,
+  canReloadNow,
+  fetchLatestBuild,
+  isNewBuild,
+} from '@/lib/pos/app-update';
 import { PosLogin } from './pos-login';
 import { loadActiveOnlineOrders } from '@/lib/pos/delivery-orders';
 import { OnlineOrdersTab, type OnlineOrder } from './online-orders-tab';
@@ -1508,6 +1516,37 @@ export function PosShell() {
     </div>
   );
 
+  // Versão nova publicada → o POS recarrega-se sozinho no primeiro momento em
+  // que não estraga nada (lib/pos/app-update.ts). O quiosque nunca é
+  // recarregado à mão, e sem isto cada melhoria só chegava ao balcão depois de
+  // alguém fechar e abrir o programa.
+  const [versaoNova, setVersaoNova] = useState(false);
+  useEffect(() => {
+    const verificar = async () => {
+      if (isNewBuild(CURRENT_BUILD, await fetchLatestBuild())) setVersaoNova(true);
+    };
+    void verificar();
+    const timer = window.setInterval(() => void verificar(), VERSION_CHECK_MS);
+    return () => window.clearInterval(timer);
+  }, []);
+  const ocupado =
+    paying ||
+    funnel.length > 0 ||
+    !!confirmation ||
+    !!keyboardField ||
+    !!variantPick ||
+    !!noteLine ||
+    !!cartPicker ||
+    boardOpen ||
+    availabilityOpen ||
+    voidOpen ||
+    unbindConfirm;
+  useEffect(() => {
+    if (!versaoNova) return;
+    if (!canReloadNow({ cartEmpty: lines.length === 0, busy: ocupado, online })) return;
+    window.location.reload();
+  }, [versaoNova, lines.length, ocupado, online]);
+
   if (loading) {
     return (
       <main className="grid min-h-screen place-items-center">
@@ -1652,6 +1691,21 @@ export function PosShell() {
             {context.storeName} · {context.deviceLabel}
           </p>
         </div>
+        {/* O browser tem o som suspenso: o pedido chega, o botão pisca e ninguém
+            ouve. Um toque aqui liga o som e dá um toque de teste — é também
+            como se confirma que as colunas do PC estão ligadas e com volume. */}
+        {posSettings.alerts.newOrderChime && alerta.somBloqueado && (
+          <button
+            type="button"
+            onClick={() => {
+              prepararSom();
+              tocarAlarme();
+            }}
+            className="pos-btn pos-alarm !min-h-12 shrink-0 !rounded-[14px] !px-4 !text-[0.9375rem]"
+          >
+            🔇 Som dos pedidos desligado — tocar para ligar
+          </button>
+        )}
         {/* O caixa gere as entregas sem sair do terminal. E daqui que se ve
             o que ja foi pago e ainda nao saiu pela porta. */}
         {/* Um pedido da internet faz-se ver daqui: pisca enquanto houver algum

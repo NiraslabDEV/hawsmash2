@@ -166,8 +166,24 @@ Vê se a tarefa do quiosque já tem a opção:
 
 - **Se não existir tarefa "POS Kiosk"**, não inventes uma: escreve no relatório como o POS arranca.
 
-Depois fecha o Edge e arranca a tarefa (`Start-ScheduledTask -TaskName "POS Kiosk"`), para o POS abrir já
-com a versão nova. Confirma com o Gabriel que **o volume do Windows está alto e sem silêncio**.
+Depois fecha **todos** os processos do Edge e arranca a tarefa, para o POS abrir já com a versão nova e com
+a opção do som. Fechar a janela não chega: com o "arranque rápido" o Edge fica em segundo plano e ignora a
+opção (aconteceu a 24 Set). O instalador já faz isto; à mão:
+
+```powershell
+Get-Process msedge -ErrorAction SilentlyContinue | Stop-Process -Force
+Start-ScheduledTask -TaskName "POS Kiosk"
+```
+
+**Som do PC** — se nem o YouTube tem som, o problema não é o POS:
+- há colunas ligadas? Muitos PCs tácteis e monitores **não têm**, e o som vai para o HDMI do monitor;
+- `Win+R` → `mmsys.cpl` → **Reprodução**: as colunas como **Predefinidas** (a barra verde mexe com som);
+- volume do Windows alto, e o Edge não silenciado no **Misturador de volume**;
+- `Get-CimInstance Win32_SoundDevice | Select-Object Name, Status` e
+  `Get-Service Audiosrv, AudioEndpointBuilder` (têm de estar `Running`).
+
+No POS, o aviso **"🔇 Som dos pedidos desligado — tocar para ligar"** no topo quer dizer que o Edge abriu
+sem a opção do som: um toque liga-o e dá um toque de teste. Se tocar no aviso e continuar sem som, é o PC.
 
 ---
 

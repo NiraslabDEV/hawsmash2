@@ -28,5 +28,22 @@ $settings = New-ScheduledTaskSettingsSet -RestartCount 999 -RestartInterval (New
 $principal = New-ScheduledTaskPrincipal -UserId $env:USERNAME -LogonType Interactive -RunLevel Highest
 
 Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger $trigger -Settings $settings -Principal $principal -Force | Out-Null
+
+# As opcoes acima so valem se o Edge arrancar do zero. Com o "arranque rapido"
+# (ligado por omissao no Windows) fica um msedge.exe em segundo plano, o
+# quiosque reaproveita-o e o --autoplay-policy e ignorado: o POS ve o pedido
+# e fica calado. Aconteceu em Maputo (24 Set). Desliga-se o arranque rapido e
+# fecha-se tudo o que for Edge antes de arrancar — este PC e so do POS.
+try {
+  $politica = 'HKLM:\SOFTWARE\Policies\Microsoft\Edge'
+  New-Item -Path $politica -Force | Out-Null
+  Set-ItemProperty -Path $politica -Name 'StartupBoostEnabled' -Value 0 -Type DWord
+  Set-ItemProperty -Path $politica -Name 'BackgroundModeEnabled' -Value 0 -Type DWord
+} catch {
+  Write-Warning "Nao consegui desligar o arranque rapido do Edge (corre como administrador): $($_.Exception.Message)"
+}
+Get-Process -Name msedge -ErrorAction SilentlyContinue | Stop-Process -Force
+Start-Sleep -Seconds 2
+
 Start-ScheduledTask -TaskName $TaskName
 Write-Host "POS configurado em kiosk para $PosUrl."

@@ -24,6 +24,24 @@ function obterContexto(): AudioContext | null {
   return contexto;
 }
 
+/**
+ * O browser deixa tocar agora? `false` quando o áudio está suspenso — o Edge
+ * sem `--autoplay-policy` e ninguém tocou no ecrã desde que a página abriu.
+ * É o estado em que o POS "vê" o pedido mas fica calado; o ecrã tem de o dizer.
+ */
+export function somBloqueado(): boolean {
+  const c = obterContexto();
+  return !!c && c.state !== 'running';
+}
+
+/** Avisa quando o áudio passa de suspenso a ligado (ou ao contrário). */
+export function aoMudarEstadoDoSom(aviso: () => void): () => void {
+  const c = obterContexto();
+  if (!c) return () => {};
+  c.addEventListener('statechange', aviso);
+  return () => c.removeEventListener('statechange', aviso);
+}
+
 export function prepararSom(): void {
   const c = obterContexto();
   if (c && c.state === 'suspended') void c.resume();

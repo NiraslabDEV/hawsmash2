@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createClient } from '@/utils/supabase/client';
-import { prepararSom, tocarAlarme } from '@/lib/pos/chime';
+import { aoMudarEstadoDoSom, prepararSom, somBloqueado, tocarAlarme } from '@/lib/pos/chime';
 import {
   ARRIVAL_STATUSES,
   alertState,
@@ -31,7 +31,7 @@ export function useNewOrderAlert(
   storeId: string | null,
   boardOpen: boolean,
   sound = true,
-): AlertState {
+): AlertState & { somBloqueado: boolean } {
   const [supabase] = useState(() => createClient());
   const [orders, setOrders] = useState<AlertOrder[]>([]);
   const [naoVistos, setNaoVistos] = useState<Set<string>>(new Set());
@@ -121,5 +121,15 @@ export function useNewOrderAlert(
     return () => window.removeEventListener('pointerdown', desbloquear);
   }, []);
 
-  return estado;
+  // Som suspenso = o POS vê o pedido e fica calado. Aconteceu na loja: o Edge
+  // abriu sem `--autoplay-policy` e ninguém tinha tocado no ecrã. O ecrã passa
+  // a dizê-lo, em vez de falhar em silêncio.
+  const [bloqueado, setBloqueado] = useState(false);
+  useEffect(() => {
+    const actualizar = () => setBloqueado(somBloqueado());
+    actualizar();
+    return aoMudarEstadoDoSom(actualizar);
+  }, []);
+
+  return { ...estado, somBloqueado: bloqueado };
 }
