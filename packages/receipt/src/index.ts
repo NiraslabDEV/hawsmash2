@@ -14,6 +14,7 @@ export * from './types';
 export * from './layout';
 export * from './tickets';
 export * from './cash-day';
+export * from './senha';
 export * from './encode';
 export * from './preview';
 export * from './sample';

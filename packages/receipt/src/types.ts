@@ -6,6 +6,8 @@
  * pré-visualização; o bridge re-exporta-os (`services/print-bridge/src/types.ts`).
  */
 
+import type { SenhaSlipPayload } from './senha';
+
 export interface PrintItemModifier {
   group_name: string;
   options: Array<{ name: string }>;
@@ -164,7 +166,8 @@ export type PrintPayload =
   | TestPrintPayload
   | KitchenTicketPayload
   | CustomerReceiptPayload
-  | CashClosePayload;
+  | CashClosePayload
+  | SenhaSlipPayload;
 
 export function isTestPayload(p: PrintPayload): p is TestPrintPayload {
   return (p as TestPrintPayload).test === true;

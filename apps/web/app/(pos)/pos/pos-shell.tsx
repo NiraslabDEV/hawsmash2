@@ -59,6 +59,7 @@ import {
   billLines,
   fetchTableOverview,
   tableErrorMessage,
+  tableName,
   tableTotalCents,
   type PosTable,
   type TableRef,
@@ -1381,7 +1382,10 @@ export function PosShell() {
   function escolherMesa(mesa: TableRef) {
     setMesaAlvo(mesa);
     setFulfillment('counter');
-    setCustomerOpen(false);
+    // O nome é da conta (1092): a mesa que já o tem traz-no; numa livre abre-se
+    // o campo, para a caixa escrever de quem é.
+    if (mesa.name) setCustomerName(mesa.name);
+    setCustomerOpen(!mesa.name && !customerName.trim());
     setMesaPicker(null);
     setError(null);
   }
@@ -1405,6 +1409,7 @@ export function PosShell() {
         deviceId: context.deviceId,
         tableId: mesa.id,
         items: salePayloadItems(lines),
+        ...(customerName.trim() ? { customerName: customerName.trim() } : {}),
         ...(orderNote.trim() ? { notes: orderNote.trim() } : {}),
       },
     });
@@ -2180,7 +2185,8 @@ export function PosShell() {
 
             {(() => {
               const zona = channels.zones.find((z) => z.id === zoneId);
-              const pedeCliente = fulfillment !== 'counter' || posSettings.cart.askCustomerOnCounter;
+              const pedeCliente =
+                mesaAlvo !== null || fulfillment !== 'counter' || posSettings.cart.askCustomerOnCounter;
               const faltam =
                 fulfillment === 'counter'
                   ? []
@@ -2200,8 +2206,9 @@ export function PosShell() {
               ]
                 .filter(Boolean)
                 .join(' · ');
-              const titulo =
-                fulfillment === 'counter'
+              const titulo = mesaAlvo
+                ? `Conta da mesa ${mesaAlvo.number}`
+                : fulfillment === 'counter'
                   ? pedeCliente
                     ? 'Cliente e nota'
                     : 'Nota do pedido'
@@ -2729,12 +2736,15 @@ export function PosShell() {
                     <li key={table.id}>
                       <button
                         type="button"
-                        onClick={() => escolherMesa({ id: table.id, number: table.number })}
+                        onClick={() => escolherMesa({ id: table.id, number: table.number, name: tableName(table) })}
                         className={`flex min-h-24 w-full flex-col items-center justify-center rounded-2xl border p-2 active:bg-white/10 ${
                           mesaAlvo?.id === table.id ? 'border-gold bg-gold/[0.08]' : 'border-white/[0.07] bg-bg2'
                         }`}
                       >
                         <span className="pos-num text-4xl font-extrabold leading-none">{table.number}</span>
+                        {tableName(table) && (
+                          <span className="mt-1 max-w-full truncate text-sm font-bold">{tableName(table)}</span>
+                        )}
                         <span className="mt-1 text-xs text-ink-mute">{total > 0 ? mt(total) : 'Livre'}</span>
                       </button>
                     </li>

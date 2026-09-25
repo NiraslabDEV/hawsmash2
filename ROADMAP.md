@@ -518,3 +518,15 @@ no fim de tudo, o fecho do dia. Entrega o G1 da Fase 2 (responsável identificad
 - [ ] Trocar o `.exe` nas lojas (Maputo e Matola); até lá o fecho do dia sai no formato do fecho de turno.
 - [ ] Aplicar a 1091 no LIVE fora do horário e fazer o primeiro fecho do dia a sério.
 - [x] Painel: lista dos fechos do dia na aba Caixa (últimos 20, com os turnos, quem os fez e o PDF de cada turno).
+## Mesas: nome da conta, 20 em Maputo e senha pequena — 2026-09-25
+
+Pedido do dono: o pedido de mesa sai em duas cópias e com uma senha pequena; Maputo passa a 20 mesas, porque
+as a mais servem de conta por pessoa, com o nome do cliente no cartão da mesa (1092, dados na 1093).
+
+- [x] Comanda da mesa nas vias da loja (com 2: balcão e cozinha), do balcão e do QR; senha pequena no balcão (SENHA, MESA, nome) — formato novo do `@delivery/receipt`, que num bridge antigo cai no herdado.
+- [x] Nome da conta: escrito ao lançar na mesa, herdado pelos pedidos seguintes do balcão e do QR; aparece no cartão da mesa, na escolha de mesa e no cabeçalho da conta.
+- [x] Maputo com 20 mesas (1093), cada uma com o seu QR; a Matola fica com 6.
+- [x] ⏳ Gates: `packages/db/tests/mesas.test.ts` (15), `packages/receipt/src/__tests__/senha.test.ts` (4), `apps/web/lib/pos/__tests__/tables.test.ts` (14). O de BD corre no CI.
+- [ ] Aplicar 1092/1093 no staging.
+- [ ] Gerar o `.exe` do bridge com a senha pequena e trocá-lo nas lojas; até lá a senha sai no formato herdado (nome e MESA, sem artigos).
+- [ ] Imprimir e colar os QR das mesas 7–20 de Maputo e 1–6 da Matola.

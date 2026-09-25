@@ -3,7 +3,9 @@ import {
   billLines,
   itemLabel,
   minutesOpen,
+  orderCustomerName,
   tableErrorMessage,
+  tableName,
   tableTotalCents,
   type PosTable,
   type TableOrder,
@@ -94,6 +96,27 @@ describe('mesas · a conta', () => {
     ]);
     expect(minutesOpen(conta, new Date('2026-09-24T18:35:30.000Z'))).toBe(30);
     expect(minutesOpen(mesa([]), new Date())).toBeNull();
+  });
+});
+
+describe('mesas · o nome da conta (1092)', () => {
+  it('tira a mesa da frente: "Mesa 5 · João" é o João', () => {
+    expect(orderCustomerName('Mesa 5 · João')).toBe('João');
+    expect(orderCustomerName('mesa 12 ·  Ana Maria ')).toBe('Ana Maria');
+    expect(orderCustomerName('Mesa 5')).toBeNull();
+    expect(orderCustomerName(null)).toBeNull();
+    // Um nome escrito sem a mesa (QR antigo) fica como está.
+    expect(orderCustomerName('Ana')).toBe('Ana');
+  });
+
+  it('o cartão mostra o último nome escrito na conta; sem nome, nada', () => {
+    const conta = mesa([
+      pedido({ id: 'a', customer_name: 'Mesa 2 · João', created_at: '2026-09-25T10:00:00.000Z' }),
+      pedido({ id: 'b', customer_name: 'Mesa 2', created_at: '2026-09-25T10:30:00.000Z' }),
+    ]);
+    expect(tableName(conta)).toBe('João');
+    expect(tableName(mesa([pedido({ customer_name: 'Mesa 2' })]))).toBeNull();
+    expect(tableName(mesa([]))).toBeNull();
   });
 });
 

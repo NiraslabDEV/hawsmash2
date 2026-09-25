@@ -53,6 +53,7 @@ let mesaMaputoId: string;
 let inicio: string;
 let stockAntes: { available: boolean; track_stock: boolean; stock_qty: number } | null = null;
 let dineInAntes: boolean | null = null;
+let viasAntes: number | null = null;
 let ingredientesAntes: Array<{ ingredient_id: string; qty: number }> = [];
 
 const MESA = 97;
@@ -116,6 +117,16 @@ beforeAll(async () => {
   const { data: lojas } = await admin.from("stores").select("id,slug").in("slug", ["matola", "maputo"]);
   matolaStoreId = lojas!.find((l) => l.slug === "matola")!.id as string;
   maputoStoreId = lojas!.find((l) => l.slug === "maputo")!.id as string;
+
+  // As vias da loja decidem quantas comandas saem (1092): fixa-se em 2 — o
+  // valor de fábrica — para não depender do que outro ficheiro deixou.
+  const { data: vias } = await admin
+    .from("stores")
+    .select("kitchen_ticket_copies")
+    .eq("id", matolaStoreId)
+    .single();
+  viasAntes = (vias?.kitchen_ticket_copies as number | undefined) ?? null;
+  await admin.from("stores").update({ kitchen_ticket_copies: 2 }).eq("id", matolaStoreId);
 
   const { data: classic } = await admin
     .from("menu_items")
@@ -195,6 +206,9 @@ afterAll(async () => {
   if (!admin) return;
   if (dineInAntes !== null) {
     await admin.from("menu_items").update({ available_dine_in: dineInAntes }).eq("id", classicId);
+  }
+  if (viasAntes !== null) {
+    await admin.from("stores").update({ kitchen_ticket_copies: viasAntes }).eq("id", matolaStoreId);
   }
   for (const linha of ingredientesAntes) {
     await admin
@@ -317,23 +331,31 @@ describe("1081 · a conta da mesa", () => {
     // Stock do produto: as três carnes saem já, na mesma transacção.
     expect(await stockDoClassic()).toBe(47);
 
-    // A comanda da mesa: formato herdado, MESA e o número da loja.
-    const { data: comandas } = await admin
+    // A comanda da mesa (1092): nas vias da loja — balcão e cozinha — no
+    // formato herdado, com MESA e o número da loja.
+    const { data: papel } = await admin
       .from("print_jobs")
-      .select("station,payload")
-      .eq("order_id", lancadoId)
-      .eq("kind", "order");
-    expect(comandas).toHaveLength(1);
-    expect(comandas![0]).toMatchObject({
-      station: "kitchen",
-      payload: {
+      .select("station,kind,payload")
+      .eq("order_id", lancadoId);
+    const comandas = (papel ?? []).filter((p) => p.kind === "order");
+    expect(comandas.map((c) => c.station).sort()).toEqual(["counter", "kitchen"]);
+    for (const comanda of comandas) {
+      expect(comanda.payload).toMatchObject({
         fulfillment_type: "dine_in",
         table_number: MESA,
         order_number: pedido!.order_number,
         payment_method: "no_payment",
-      },
+      });
+      expect(comanda.payload.template).toBeUndefined();
+    }
+
+    // E a senha pequena, no balcão.
+    const senhas = (papel ?? []).filter((p) => p.kind === "receipt");
+    expect(senhas).toHaveLength(1);
+    expect(senhas[0]).toMatchObject({
+      station: "counter",
+      payload: { template: "senha", daily_number: data.daily_number, table_number: MESA },
     });
-    expect(comandas![0].payload.template).toBeUndefined();
 
     // Repetir o lançamento devolve o mesmo pedido (Regra 4).
     const repetido = await lancar([{ menuItemId: classicId, qty: 9 }], clientSaleId);
@@ -370,16 +392,20 @@ describe("1081 · a conta da mesa", () => {
     totalQr = pedido!.total_cents as number;
     expect(await stockDoClassic()).toBe(46);
 
-    const { data: comandas } = await admin
+    // O mesmo papel do balcão: a comanda antiga do motor (ENC-) saiu da fila.
+    const { data: papel } = await admin
       .from("print_jobs")
-      .select("payload")
-      .eq("order_id", qrId)
-      .eq("kind", "order");
-    expect(comandas).toHaveLength(1);
-    expect(comandas![0].payload).toMatchObject({
-      order_number: pedido!.order_number,
-      table_number: MESA,
-    });
+      .select("station,kind,payload")
+      .eq("order_id", qrId);
+    const comandas = (papel ?? []).filter((p) => p.kind === "order");
+    expect(comandas).toHaveLength(2);
+    for (const comanda of comandas) {
+      expect(comanda.payload).toMatchObject({
+        order_number: pedido!.order_number,
+        table_number: MESA,
+      });
+    }
+    expect((papel ?? []).filter((p) => p.kind === "receipt")).toHaveLength(1);
   });
 
   it("um QR de uma mesa de Maputo não entra como pedido da Matola", async () => {
@@ -556,5 +582,87 @@ describe("1081 · a conta da mesa", () => {
     const { data: pedidos } = await admin.from("orders").select("id").eq("client_sale_id", clientSaleId);
     expect(pedidos ?? []).toHaveLength(0);
     expect(await stockDoClassic()).toBe(1);
+  });
+});
+
+describe("1092 · o nome da conta", () => {
+  let mesaNomeId: string;
+  const NUMERO = 98;
+
+  beforeAll(async () => {
+    await admin
+      .from("store_items")
+      .update({ stock_qty: 50 })
+      .eq("store_id", matolaStoreId)
+      .eq("menu_item_id", classicId);
+    const { data, error } = await admin
+      .from("tables")
+      .insert({ store_id: matolaStoreId, number: NUMERO })
+      .select("id")
+      .single();
+    if (error || !data) throw new Error(`Setup 1092: mesa — ${error?.message}`);
+    mesaNomeId = data.id as string;
+    criadasMesas.push(mesaNomeId);
+  });
+
+  function lancarNaMesaNome(customerName?: string) {
+    return caixa.rpc("launch_table_order", {
+      p_payload: {
+        clientSaleId: crypto.randomUUID(),
+        deviceId,
+        tableId: mesaNomeId,
+        items: [{ menuItemId: classicId, qty: 1, variantId: hawId }],
+        ...(customerName ? { customerName } : {}),
+      },
+    });
+  }
+
+  it("o nome escrito ao lançar fica na conta, e o balcão e o QR herdam-no", async () => {
+    const primeiro = await lancarNaMesaNome("João");
+    expect(primeiro.error).toBeNull();
+    criadosPedidos.push(primeiro.data.order_id as string);
+    expect(primeiro.data.customer_name).toBe(`Mesa ${NUMERO} · João`);
+
+    // O segundo pedido do João não pede o nome outra vez.
+    const segundo = await lancarNaMesaNome();
+    expect(segundo.error).toBeNull();
+    criadosPedidos.push(segundo.data.order_id as string);
+    expect(segundo.data.customer_name).toBe(`Mesa ${NUMERO} · João`);
+
+    // Nem o que ele pede pelo telemóvel.
+    const qr = await anon.rpc("create_order", {
+      p_store_slug: "matola",
+      p_payload: {
+        fulfillmentType: "dine_in",
+        tableId: mesaNomeId,
+        items: [{ menuItemId: classicId, qty: 1 }],
+      },
+    });
+    expect(qr.error).toBeNull();
+    criadosPedidos.push(qr.data as string);
+    const { data: pedidoQr } = await admin
+      .from("orders")
+      .select("customer_name")
+      .eq("id", qr.data as string)
+      .single();
+    expect(pedidoQr?.customer_name).toBe(`Mesa ${NUMERO} · João`);
+
+    // A senha pequena leva o nome.
+    const { data: senha } = await admin
+      .from("print_jobs")
+      .select("payload")
+      .eq("order_id", segundo.data.order_id as string)
+      .eq("kind", "receipt")
+      .single();
+    expect(senha?.payload).toMatchObject({ template: "senha", customer_name: `Mesa ${NUMERO} · João` });
+  });
+
+  it("um nome novo escrito a meio passa a ser o da conta", async () => {
+    const outro = await lancarNaMesaNome("Ana");
+    expect(outro.error).toBeNull();
+    criadosPedidos.push(outro.data.order_id as string);
+    const seguinte = await lancarNaMesaNome();
+    criadosPedidos.push(seguinte.data.order_id as string);
+    expect(seguinte.data.customer_name).toBe(`Mesa ${NUMERO} · Ana`);
   });
 });

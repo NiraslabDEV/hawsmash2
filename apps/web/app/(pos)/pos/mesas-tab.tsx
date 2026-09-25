@@ -9,6 +9,7 @@ import {
   itemLabel,
   minutesOpen,
   tableErrorMessage,
+  tableName,
   tableTotalCents,
   type PosTable,
   type TableRef,
@@ -134,6 +135,7 @@ export function MesasTab({
               const ocupada = table.orders.length > 0;
               const minutos = minutesOpen(table, now);
               const doQr = table.orders.filter((order) => order.origin === 'qr').length;
+              const nome = tableName(table);
               return (
                 <li key={table.id}>
                   <button
@@ -159,6 +161,11 @@ export function MesasTab({
                     <span className={`pos-num text-5xl font-extrabold leading-none ${ocupada ? 'text-gold' : 'text-ink'}`}>
                       {table.number}
                     </span>
+                    {/* Em Maputo a mesa a mais é a conta de uma pessoa: o nome
+                        é o que a caixa procura (1092). */}
+                    {nome && (
+                      <span className="block w-full truncate text-base font-bold text-ink">{nome}</span>
+                    )}
                     {ocupada ? (
                       <span className="w-full">
                         <span className="pos-num block text-lg font-bold">{mt(total)}</span>
@@ -186,7 +193,10 @@ export function MesasTab({
         ) : (
           <div className="pos-card flex flex-col gap-3 !p-4">
             <div className="flex items-baseline justify-between gap-3">
-              <h3 className="text-2xl font-extrabold">Mesa {selected.number}</h3>
+              <h3 className="min-w-0 truncate text-2xl font-extrabold">
+                Mesa {selected.number}
+                {tableName(selected) ? ` · ${tableName(selected)}` : ''}
+              </h3>
               <span className="pos-num text-2xl font-extrabold text-gold">
                 {mt(tableTotalCents(selected))}
               </span>
@@ -235,7 +245,9 @@ export function MesasTab({
             <button
               type="button"
               disabled={!selected.active}
-              onClick={() => onPedir({ id: selected.id, number: selected.number })}
+              onClick={() =>
+                onPedir({ id: selected.id, number: selected.number, name: tableName(selected) })
+              }
               className="pos-btn w-full"
             >
               <PosIcon name="plus" size={20} />

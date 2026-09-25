@@ -49,7 +49,7 @@ export type TableOverview = {
 };
 
 /** A mesa para onde vai o carrinho, ou a conta que se está a fechar. */
-export type TableRef = { id: string; number: number };
+export type TableRef = { id: string; number: number; name?: string | null };
 
 export const TABLE_ORDER_STATUS_LABEL: Record<string, string> = {
   in_preparation: 'Em preparo',
@@ -70,6 +70,26 @@ export function itemLabel(item: TableOrderItem): string {
       : `${item.name} ${variante}`;
   const extras = (item.addons ?? []).map((addon) => addon.name).filter(Boolean);
   return extras.length > 0 ? `${base} + ${extras.join(' + ')}` : base;
+}
+
+/**
+ * O nome da conta (1092): o último que se escreveu num pedido desta mesa.
+ * Fica no pedido como "Mesa 5 · João" — aqui é só "João". Sem nome, null.
+ */
+export function orderCustomerName(customerName: string | null | undefined): string | null {
+  const nome = (customerName ?? '').replace(/^mesa\s+\d+\s*(·\s*)?/i, '').trim();
+  return nome || null;
+}
+
+export function tableName(table: PosTable): string | null {
+  const recentes = [...table.orders].sort(
+    (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+  );
+  for (const order of recentes) {
+    const nome = orderCustomerName(order.customer_name);
+    if (nome) return nome;
+  }
+  return null;
 }
 
 export function tableTotalCents(table: PosTable): number {
