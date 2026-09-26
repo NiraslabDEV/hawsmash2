@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { formatMT, type Cents } from '@delivery/core';
 import { createClient } from '@/utils/supabase/client';
 import {
@@ -91,6 +91,10 @@ export function CaixaTab({
   online,
   pendingSales,
   keyboardActive,
+  troca = null,
+  onPassarTurno,
+  onTrocaConcluida,
+  onCancelarTroca,
 }: {
   storeId: string;
   storeName: string;
@@ -100,6 +104,16 @@ export function CaixaTab({
   pendingSales: number;
   /** Falso com um pagamento ou outro painel aberto: aí os algarismos são deles. */
   keyboardActive: boolean;
+  /**
+   * Troca de turno em curso, guiada pelo POS: 'fechar' — quem sai conta a
+   * gaveta e fecha o seu turno; 'abrir' — quem entra abre o seu.
+   */
+  troca?: 'fechar' | 'abrir' | null;
+  /** Turno de quem sai fechado: o POS bloqueia e mostra os cartões da equipa. */
+  onPassarTurno?: () => void;
+  /** Quem entra abriu o turno: a troca acabou. */
+  onTrocaConcluida?: () => void;
+  onCancelarTroca?: () => void;
 }) {
   const [supabase] = useState(() => createClient());
   const [store, setStore] = useState<CashStore | null>(null);
@@ -198,6 +212,16 @@ export function CaixaTab({
     }
   }
 
+  // Troca de turno: quem sai vai direito à contagem da gaveta — uma vez por
+  // turno, para o Cancelar do fecho não o reabrir sozinho.
+  const trocaIniciada = useRef<string | null>(null);
+  useEffect(() => {
+    if (troca !== 'fechar' || !session || modo !== null) return;
+    if (trocaIniciada.current === session.id) return;
+    trocaIniciada.current = session.id;
+    start('fecho');
+  });
+
   function startDay() {
     if (session) return;
     setFeedback(null);
@@ -229,7 +253,8 @@ export function CaixaTab({
     setDraft(emptyDraft('abrir'));
     setFeedback({ tone: 'ok', text: `Turno aberto · fundo ${mt(current.amount)}` });
     void load();
-  }, [busy, current.amount, load, storeId, supabase]);
+    if (troca === 'abrir') onTrocaConcluida?.();
+  }, [busy, current.amount, load, onTrocaConcluida, storeId, supabase, troca]);
 
   const addMovement = useCallback(async () => {
     if (busy || !movementReady(current.amount, current.reason)) return;
@@ -384,13 +409,45 @@ export function CaixaTab({
           </p>
         </div>
 
+        {troca && (
+          <div role="status" className="pos-note pos-note--warn flex items-center justify-between gap-3 !text-base">
+            <span>
+              <strong className="block">Troca de turno · {troca === 'fechar' ? '1 de 2' : '2 de 2'}</strong>
+              {troca === 'fechar'
+                ? 'Conta a gaveta e fecha o teu turno. Depois passa ao próximo caixa.'
+                : 'Abre o teu turno com o fundo que está na gaveta.'}
+            </span>
+            {troca === 'fechar' && onCancelarTroca && (
+              <button type="button" onClick={onCancelarTroca} className="pos-btn pos-btn--quiet !min-h-12 shrink-0">
+                Cancelar troca
+              </button>
+            )}
+          </div>
+        )}
+
         {!online && (
           <p role="alert" className="pos-note pos-note--warn">
             Sem ligação. Abrir, lançar e fechar o caixa precisam de internet — as vendas continuam.
           </p>
         )}
 
-        {modo === 'abrir' && (
+        {/* Quem sai não abre o turno de quem entra: com o turno fechado, passa
+            o POS — os cartões da equipa aparecem e o próximo entra com o PIN. */}
+        {modo === 'abrir' && troca === 'fechar' && (
+          <section className="flex flex-col gap-3">
+            <p className="text-sm text-ink-mute">O teu turno está fechado. O talão de fecho sai no balcão.</p>
+            <button
+              type="button"
+              onClick={onPassarTurno}
+              className="pos-btn pos-btn--primary pos-btn--lg w-full"
+            >
+              <PosIcon name="user" size={22} />
+              PASSAR AO PRÓXIMO CAIXA
+            </button>
+          </section>
+        )}
+
+        {modo === 'abrir' && troca !== 'fechar' && (
           <>
             <div className="pos-well !flex !min-h-20 !items-center !justify-between !px-5">
               <span className="text-sm font-semibold text-ink-mute">Fundo inicial</span>

@@ -530,3 +530,12 @@ as a mais servem de conta por pessoa, com o nome do cliente no cartão da mesa (
 - [ ] Aplicar 1092/1093 no staging.
 - [ ] Gerar o `.exe` do bridge com a senha pequena e trocá-lo nas lojas; até lá a senha sai no formato herdado (nome e MESA, sem artigos).
 - [ ] Imprimir e colar os QR das mesas 7–20 de Maputo e 1–6 da Matola.
+
+## Troca de turno no POS — 2026-09-26
+
+Pedido do dono: um botão TROCAR DE TURNO que passa o POS para o caixa seguinte, com o PIN dele — e o caixa
+também: quem sai responde pelo seu dinheiro, quem entra abre o seu.
+
+- [x] TROCAR DE TURNO no topo do POS: abre a aba Caixa já na contagem da gaveta (1 de 2); fechado o turno, "PASSAR AO PRÓXIMO CAIXA" bloqueia e mostra os cartões; quem entra põe o PIN e vai direito a abrir o seu turno com o fundo (2 de 2). Cancelar a troca não fecha nada.
+- [x] O "Bloquear · trocar" fica para uma ausência curta, sem mexer no caixa.
+- [ ] ⏳ Ensaiar no POS com dois caixas reais (sem teste automático: é orquestração de ecrãs sobre as RPCs do caixa, já cobertas).

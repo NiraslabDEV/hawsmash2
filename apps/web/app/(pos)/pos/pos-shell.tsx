@@ -294,6 +294,12 @@ export function PosShell() {
   // 'delivery' é só consulta — o cashier acompanha o que está a sair pela
   // loja online sem sair do POS nem precisar de acesso ao painel admin.
   const [posView, setPosView] = useState<'menu' | 'delivery' | 'senhas' | 'mesas' | 'caixa'>('menu');
+  /** Troca de turno guiada (aba Caixa): quem sai fecha, quem entra abre. */
+  const [trocaTurno, setTrocaTurno] = useState<'fechar' | 'abrir' | null>(null);
+  // Quem entra na troca vai direito a abrir o seu caixa, logo depois do PIN.
+  useEffect(() => {
+    if (!locked && trocaTurno === 'abrir') setPosView('caixa');
+  }, [locked, trocaTurno]);
   const [deliveryResult, setDeliveryResult] = useState<{ storeSlug: string; orders: OnlineOrder[] }>({ storeSlug: '', orders: [] });
   const deliveryOrders = deliveryResult.storeSlug === context?.storeSlug ? deliveryResult.orders : [];
   const [deliveryLoading, setDeliveryLoading] = useState(false);
@@ -1947,6 +1953,21 @@ export function PosShell() {
           </>
         )}
         <span aria-hidden className="mx-1 h-8 w-px shrink-0 bg-white/10" />
+        {/* Troca de turno: quem sai conta a gaveta e fecha o seu caixa, quem
+            entra põe o PIN e abre o seu (CLAUDE §9). O Bloquear fica para uma
+            ausência curta, sem mexer no caixa. */}
+        <button
+          type="button"
+          disabled={!online}
+          onClick={() => {
+            setTrocaTurno('fechar');
+            setPosView('caixa');
+          }}
+          className="pos-btn !min-h-12 shrink-0 !rounded-[14px] !px-3.5 !text-sm"
+        >
+          <PosIcon name="user" size={18} />
+          TROCAR DE TURNO
+        </button>
         <button
           type="button"
           onClick={() => void lockDevice()}
@@ -2034,6 +2055,16 @@ export function PosShell() {
               online={online}
               pendingSales={pendingSales}
               keyboardActive={!ocupado && !locked}
+              troca={trocaTurno}
+              onCancelarTroca={() => setTrocaTurno(null)}
+              onPassarTurno={() => {
+                setTrocaTurno('abrir');
+                void lockDevice();
+              }}
+              onTrocaConcluida={() => {
+                setTrocaTurno(null);
+                setPosView('menu');
+              }}
             />
           ) : posView === 'mesas' ? (
             <MesasTab
