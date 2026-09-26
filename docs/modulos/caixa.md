@@ -57,7 +57,7 @@ Testes puros de leitura, entradas e relatório estão em [lib/cash/__tests__](..
 
 ## Contrato preservado da spec
 
-O bloco SQL seguinte é o desenho inicial. O módulo acima distingue turnos, movimentos e fechos do dia actuais. A compatibilidade de autenticação dos endpoints PDF/email com o login por cookie precisa de ensaio (R03).
+O bloco SQL seguinte é o desenho inicial. O módulo acima distingue turnos, movimentos e fechos do dia actuais. Os endpoints PDF/email lêem cookies, enquanto os chamadores mantêm sessão no browser; a compatibilidade de autenticação precisa de ensaio (R-03).
 
 ## 9. CAIXA (por loja, por turno)
 

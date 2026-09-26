@@ -8,7 +8,7 @@ Retrato estático da **árvore de trabalho**, incluindo ficheiros ainda não com
 
 ## Âmbito e excepções
 
-O catálogo/menu, marca, ingredientes/fichas e biblioteca de media são partilhados pela empresa. `stores` identifica a própria loja; `staff_profiles` liga-se por `staff_stores`. `order_feedback` e `referral_redemptions` obtêm loja por join a pedidos. As tabelas de conta são globais e fechadas a acesso directo do browser desde a 1035; usam token por RPC de serviço. `event_log` admite eventos de empresa owner-only; `analytics_events` admite tráfego pré-loja. `order_attribution` e `conversion_jobs` admitem NULL com policy mais permissiva: ver auditoria V-05.
+O catálogo/menu, marca, ingredientes/fichas e biblioteca de media são partilhados pela empresa. `stores` identifica a própria loja; `staff_profiles` liga-se por `staff_stores`. `order_feedback` e `referral_redemptions` obtêm loja por join a pedidos. `customer_devices`, `customer_login_codes` e `customer_addresses` não expõem leitura directa ao browser desde a 1035; usam token por RPC de serviço. `customers` conserva leitura autenticada do dono, sujeita à sua policy. `event_log` admite eventos de empresa owner-only; `analytics_events` admite tráfego pré-loja. `order_attribution` e `conversion_jobs` admitem NULL com policy mais permissiva: ver auditoria V-05.
 
 | Tabela | store_id | RLS na cadeia | Criação | Colunas observadas |
 | --- | --- | --- | --- | --- |

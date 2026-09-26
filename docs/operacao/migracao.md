@@ -1,6 +1,6 @@
 # Migração e cutover
 
-Plano original preservado. O script actual importa categorias/produtos, pedidos e itens e agrega clientes por telefone; NÃO importa feedback, lista de espera ou fechos antigos. Ver auditoria R01: apagar/recriar itens não é transaccional e a flag de confirmação anunciada não foi implementada. Nada foi executado nesta revisão. Cutover exige backup, dry-run e reconciliação.
+Plano original preservado. O script actual importa categorias/produtos, pedidos e itens e agrega clientes por telefone; NÃO importa feedback, lista de espera ou fechos antigos. Ver auditoria R-04: apagar/recriar itens não é transaccional e a flag de confirmação anunciada não foi implementada. Nenhuma importação foi executada nesta revisão. Cutover exige backup, dry-run e reconciliação.
 
 ## 15. MIGRAÇÃO DO HAWSMASH 1.0
 
