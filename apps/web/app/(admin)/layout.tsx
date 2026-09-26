@@ -52,7 +52,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const [user, setUser] = useState<User | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [badge, setBadge] = useState<number | null>(null);
-  const [storeOpen, setStoreOpen] = useState<boolean | null>(null);
+  // O interruptor real é por loja (stores.accepting_orders, CLAUDE §5.6); o do
+  // singleton `settings` não fecha nada e já não se mostra.
+  const [storesOpen, setStoresOpen] = useState<Array<{ short_name: string; accepting_orders: boolean }> | null>(null);
   const [role, setRole] = useState<StaffRole | null>(null);
 
   useEffect(() => {
@@ -80,8 +82,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       supabase.rpc('get_order_stats').then(({ data }) => {
         if (data) setBadge((data.ativos ?? 0) + (data.aguarda_pagamento ?? 0));
       });
-      supabase.from('settings').select('accepting_orders').eq('id', 1).single()
-        .then(({ data }) => { if (data) setStoreOpen(data.accepting_orders); });
+      supabase.from('stores').select('short_name,accepting_orders').eq('active', true).order('sort')
+        .then(({ data }) => { if (data) setStoresOpen(data as Array<{ short_name: string; accepting_orders: boolean }>); });
     }
     checkAuth();
   }, [router]);
@@ -160,13 +162,17 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       {/* Rodapé: estado da loja */}
       <div className="border-t border-white/[0.08] p-4 space-y-3">
         <div>
-          <p className="text-[11px] uppercase tracking-wide text-[#8A7A69] mb-1">Status da loja</p>
-          <div className="flex items-center gap-2">
-            <span className={`w-2.5 h-2.5 rounded-full ${storeOpen ? 'bg-green-500 shadow-[0_0_10px_rgba(34,197,94,0.6)]' : 'bg-red-500'}`} />
-            <span className={`text-sm font-medium ${storeOpen ? 'text-green-400' : 'text-red-400'}`}>
-              {storeOpen == null ? '—' : storeOpen ? 'Loja aberta' : 'Loja fechada'}
-            </span>
-          </div>
+          <p className="text-[11px] uppercase tracking-wide text-[#8A7A69] mb-1">Pedidos online</p>
+          {storesOpen == null ? (
+            <span className="text-sm font-medium text-[#8A7A69]">—</span>
+          ) : storesOpen.map((loja) => (
+            <div key={loja.short_name} className="flex items-center gap-2">
+              <span className={`w-2.5 h-2.5 rounded-full ${loja.accepting_orders ? 'bg-green-500 shadow-[0_0_10px_rgba(34,197,94,0.6)]' : 'bg-red-500'}`} />
+              <span className={`text-sm font-medium ${loja.accepting_orders ? 'text-green-400' : 'text-red-400'}`}>
+                {loja.short_name} · {loja.accepting_orders ? 'a aceitar' : 'fechada'}
+              </span>
+            </div>
+          ))}
         </div>
         <a href="/menu" target="_blank" rel="noopener noreferrer"
           className="block text-center text-sm font-semibold rounded-xl border border-white/[0.08] py-2 text-[#F3E4CE] hover:bg-white/[0.06] transition-all">

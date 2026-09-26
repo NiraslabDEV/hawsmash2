@@ -4,6 +4,7 @@ import {
   ImportDataError,
   aggregateCustomers,
   buildReport,
+  importWriteBlocked,
   mapOrder,
   mapOrderItem,
   mapOrderStatus,
@@ -172,5 +173,24 @@ describe('importação do HAWSMASH 1.0', () => {
       customers: 1,
       revenue_cents: 45000,
     });
+  });
+});
+
+describe('importWriteBlocked — escrever fora de uma base local exige confirmação', () => {
+  it('dry-run nunca é bloqueado', () => {
+    expect(importWriteBlocked(false, [], 'https://PLACEHOLDER.supabase.co')).toBeNull();
+  });
+  it('--apply numa base local passa', () => {
+    expect(importWriteBlocked(true, ['--apply'], 'http://localhost:54731')).toBeNull();
+    expect(importWriteBlocked(true, ['--apply'], 'http://127.0.0.1:54731')).toBeNull();
+  });
+  it('--apply numa base remota sem a confirmação é recusado', () => {
+    expect(importWriteBlocked(true, ['--apply'], 'https://PLACEHOLDER.supabase.co')).toMatch(/--i-know-this-is-live/);
+  });
+  it('--apply com --i-know-this-is-live passa', () => {
+    expect(importWriteBlocked(true, ['--apply', '--i-know-this-is-live'], 'https://PLACEHOLDER.supabase.co')).toBeNull();
+  });
+  it('URL em falta ou inválido é recusado', () => {
+    expect(importWriteBlocked(true, ['--apply', '--i-know-this-is-live'], undefined)).toMatch(/inválido/);
   });
 });

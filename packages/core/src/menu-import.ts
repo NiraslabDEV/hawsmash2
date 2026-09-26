@@ -102,14 +102,16 @@ export function normalizeMenuImport(raw: unknown): NormalizedMenu {
         }
 
         const priceStr = typeof i.price === 'number' ? i.price.toFixed(2) : i.price.trim();
-        const n = parseFloat(priceStr);
-        if (!Number.isFinite(n) || n < 0) {
+        let priceCents: Cents;
+        try {
+          priceCents = decimalStringToCents(priceStr);
+        } catch {
           throw new Error(`Preço inválido no item "${i.name}": ${JSON.stringify(i.price)}`);
         }
         return {
           name: i.name.trim(),
           description: i.description.trim(),
-          price_cents: decimalStringToCents(priceStr),
+          price_cents: priceCents,
           photo_url: i.photo_url.trim(),
           available: i.available,
           track_stock: i.track_stock,

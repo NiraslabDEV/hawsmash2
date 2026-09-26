@@ -13,7 +13,7 @@
  * Uso:
  *   LEGACY_SUPABASE_URL=… LEGACY_SERVICE_KEY=… \
  *   NEXT_PUBLIC_SUPABASE_URL=… SUPABASE_SERVICE_ROLE_KEY=… \
- *   pnpm tsx scripts/import-hawsmash-1.ts [--apply] [--store maputo]
+ *   pnpm tsx scripts/import-hawsmash-1.ts [--apply [--i-know-this-is-live]] [--store maputo]
  */
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
@@ -23,6 +23,7 @@ import {
   mapCategory,
   mapOrder,
   mapOrderItem,
+  importWriteBlocked,
   mapProduct,
   type LegacyCategory,
   type LegacyOrder,
@@ -106,6 +107,9 @@ async function main(): Promise<void> {
     log('dry-run terminado — nada foi escrito. Repetir com --apply depois de conferir.');
     return;
   }
+
+  const blocked = importWriteBlocked(apply, args, process.env.NEXT_PUBLIC_SUPABASE_URL);
+  if (blocked) throw new Error(blocked);
 
   const target = createClient(
     requireEnv('NEXT_PUBLIC_SUPABASE_URL'),
@@ -218,7 +222,9 @@ async function main(): Promise<void> {
       mapOrderItem(item, inserted.id, store.id),
     );
     if (orderItems.length > 0) {
-      await target.from('order_items').delete().eq('order_id', inserted.id);
+      // Um delete falhado seguido de insert duplicaria as linhas do pedido.
+      const { error: deleteError } = await target.from('order_items').delete().eq('order_id', inserted.id);
+      if (deleteError) throw new Error(`Itens do pedido ${mapped.order_number}: ${deleteError.message}`);
       const { error: itemsError } = await target.from('order_items').insert(orderItems);
       if (itemsError) throw new Error(`Itens do pedido ${mapped.order_number}: ${itemsError.message}`);
     }

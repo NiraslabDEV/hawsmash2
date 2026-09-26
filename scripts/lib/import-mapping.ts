@@ -267,3 +267,26 @@ export function buildReport(input: {
     skipped: input.skipped ?? [],
   };
 }
+
+/**
+ * Escrever exige confirmação explícita fora de uma base local (R-04 da
+ * auditoria de 26/09). O comentário do script prometia
+ * `--i-know-this-is-live` e nada o verificava: `--apply` bastava para
+ * reescrever pedidos em qualquer projecto.
+ */
+export function importWriteBlocked(
+  apply: boolean,
+  args: string[],
+  targetUrl: string | undefined,
+): string | null {
+  if (!apply) return null;
+  let host = '';
+  try {
+    host = new URL(targetUrl ?? '').hostname;
+  } catch {
+    return 'NEXT_PUBLIC_SUPABASE_URL inválido — não sei para onde escreveria.';
+  }
+  const local = host === 'localhost' || host === '127.0.0.1' || host === '::1';
+  if (local || args.includes('--i-know-this-is-live')) return null;
+  return `--apply contra ${host} exige --i-know-this-is-live (base remota: staging ou produção).`;
+}

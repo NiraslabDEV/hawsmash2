@@ -36,6 +36,22 @@ describe('decimalStringToCents()', () => {
     expect(decimalStringToCents('0.00')).toBe(0);
     expect(decimalStringToCents('99.999')).toBe(10000);
   });
+
+  it('não passa por float: valores que o float arredonda mal saem certos', () => {
+    // 1.005 * 100 = 100.49999… em float: Math.round dava 100.
+    expect(decimalStringToCents('1.005')).toBe(101);
+    expect(decimalStringToCents('0.29')).toBe(29);
+    expect(decimalStringToCents('1234567.89')).toBe(123456789);
+    expect(decimalStringToCents('25,5')).toBe(2550);
+    expect(decimalStringToCents(' 300 ')).toBe(30000);
+    expect(decimalStringToCents('99.994')).toBe(9999);
+  });
+
+  it('recusa o que não é um valor em MT', () => {
+    for (const bad of ['12abc', '-5', '1e3', '', 'grátis', '1.2.3', '.50', 'NaN', 'Infinity']) {
+      expect(() => decimalStringToCents(bad), bad).toThrow();
+    }
+  });
 });
 
 describe('formatMT()', () => {
