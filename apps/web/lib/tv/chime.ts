@@ -6,7 +6,7 @@
  * atravessar o barulho da cozinha; este toca na sala, para quem está à espera.
  *
  * O browser só toca som depois de um toque no ecrã, ou arrancado com
- * `--autoplay-policy=no-user-gesture-required` (docs/TVS.md).
+ * `--autoplay-policy=no-user-gesture-required` (docs/modulos/tvs-kds.md).
  */
 
 let contexto: AudioContext | null = null;

@@ -121,13 +121,13 @@ Antes de dar uma tarefa por concluída, percorrer esta lista. Se alguma falhar, 
 | Preciso de… | Vai a |
 |---|---|
 | regra de dinheiro / estado / validação | `packages/core/src/` (+ testes em `__tests__`) |
-| schema, RPC, RLS | `supabase/migrations/1NNN_*.sql` (+ `packages/db/tests/rls.test.ts`) |
+| schema, RPC, RLS | `supabase/migrations/` (ficheiros com timestamp; + `packages/db/tests/rls.test.ts`) |
 | POS | `apps/web/app/(pos)/pos/` |
 | painel | `apps/web/app/(admin)/` |
 | loja pública | `apps/web/app/(public)/` |
-| TVs / KDS | `apps/web/app/(tv)/` |
-| impressão, gaveta, bridge | `services/print-bridge/src/` |
-| pagamento automático | `packages/paysuite/` + `apps/web/lib/payments/` |
+| TVs / KDS | TVs em `apps/web/app/(tv)/`; KDS planeado em `ROADMAP.md` G2, sem rota implementada |
+| impressão, gaveta, bridge | `services/print-bridge/src/`; formatos partilhados em `packages/receipt/src/` |
+| pagamento automático | `packages/payments/` + `apps/web/lib/payments/` |
 | tracking | `apps/web/lib/analytics/track.ts` (**único** sítio que toca `dataLayer`/`fbq`/`gtag`) |
 
 **Reaproveitar antes de inventar.** O motor herdado está descrito em `docs/engine/DELIVERY-OS-CLAUDE.md` e o

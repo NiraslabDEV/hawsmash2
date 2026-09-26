@@ -10,7 +10,7 @@
  * O painel limpa o que envia com o mesmo `resolvePosSettings` com que o POS o
  * lê: o que se vê aqui depois de guardar é exactamente o que o balcão usa.
  *
- * Contrato e portabilidade: docs/POS-DEFINICOES.md.
+ * Contrato e portabilidade: docs/modulos/pos.md.
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react';

@@ -1,5 +1,5 @@
 // Política do backup nocturno, isolada da execução para poder ser testada
-// sem tocar em nenhuma base de dados. Ver docs/RUNBOOK.md §2 e CLAUDE.md §11.6.
+// sem tocar em nenhuma base de dados. Ver docs/operacao/runbook.md §2 e CLAUDE.md §11.6.
 
 /** Dias que um dump fica guardado antes de ser apagado. */
 export const RETENTION_DAYS = 30;

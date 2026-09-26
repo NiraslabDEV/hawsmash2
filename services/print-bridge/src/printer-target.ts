@@ -1,7 +1,7 @@
 // Para onde vai o papel.
 //
 // O bridge nasceu a falar TCP 9100 — impressoras de rede, que e o que
-// docs/HARDWARE.md sempre previu para a loja: a cozinha imprime mesmo com o PC
+// docs/operacao/hardware.md sempre previu para a loja: a cozinha imprime mesmo com o PC
 // do balcao fechado. Mas o PC touch do HAWSMASH traz uma **impressora
 // acoplada**, que em Windows nao e um endereco IP: e uma fila de impressao
 // (a POS80 na porta VPORT-USB:, ver BLOQUEIOS B-006).

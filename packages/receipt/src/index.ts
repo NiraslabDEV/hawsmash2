@@ -6,7 +6,7 @@
  * - `preview.ts`: instruções → linhas de ecrã (aba POS do painel);
  * - `layout.ts`: os modelos e interruptores, lidos com tolerância.
  *
- * Sem dependências de Node nem do browser. Ver docs/POS-DEFINICOES.md §Impressão.
+ * Sem dependências de Node nem do browser. Ver docs/modulos/impressao.md §Impressão.
  */
 
 export * from './ops';

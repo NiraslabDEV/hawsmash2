@@ -5,6 +5,11 @@ rajadas de 30 pedidos/minuto e mais de 100 pedidos abertos. São **cenários de 
 não capacidade já medida. As instalações seguintes reutilizam o código e configuram lojas,
 horários, menus, contas de pagamento, equipa e impressoras próprias.
 
+**Revisão documental de 26/09/2026:** a matriz descreve código local e trabalho pendente, não uma medição
+nova de staging/produção. Os ensaios registados no [plano LIVE](live.md) e no [ROADMAP](../../ROADMAP.md)
+conservam a sua data. As violações e riscos da [auditoria, secção 5](../AUDITORIA-DOCUMENTACAO.md#5-código-que-viola-a-spec)
+continuam por resolver; a preparação para volume não os valida implicitamente.
+
 ## O que já existe e o que falta
 
 | Frente | Evidência no motor | Trabalho que ainda exige implementação ou validação |
@@ -13,12 +18,12 @@ horários, menus, contas de pagamento, equipa e impressoras próprias.
 | Várias cozinhas | `stores`, permissões por loja, menus/preços/zonas/horários e painel; migrations 1001–1011 | Configurar cada cozinha, testar papéis e consolidado na BD de staging |
 | Pagamentos | Provider M-Pesa, simulador, referência estável, confirmação comum; `packages/payments/`, `apps/web/lib/payments/` | Credenciais, limites reais do fornecedor, concorrência de cobranças, reconciliação contínua e alertas no painel |
 | Conciliação com extracto | Conferência local de ficheiros normalizados, descrita abaixo | Adaptador do extracto real, obtenção diária, persistência auditada, revisão no painel; não é a consulta de estado ao M-Pesa |
-| Painel de pedidos | Ecrã com acções, filtros, itens, reimpressão e paginação por servidor na migration 1045 | Aplicar/validar a migration; construir fila por prazo prometido, cores por atraso e prioridade operacional. Não inventar prazo para pedido imediato |
+| Painel de pedidos | Ecrã com acções, filtros, itens, reimpressão e paginação por servidor na migration 1045; aplicação/ensaio em staging reportados no plano LIVE de 22/09 | Reconfirmar a instalação e fechar o ensaio operacional B-105; construir fila por prazo prometido, cores por atraso e prioridade operacional. Não inventar prazo para pedido imediato |
 | Entregas agrupadas | Pedidos têm loja, zona e estado | Lotes de despacho por loja/zona, atribuição ao estafeta e histórico; impedir agrupar lojas distintas. Agrupar por zona não calcula a melhor rota |
 | Stock e ficha técnica | Produto, ingredientes, receitas, movimentos e custo guardado na venda; migrations 1024–1026 | Configurar receitas reais, testar consumo/anulação/concorrência e fechar os testes de integração pendentes |
 | Impressão | Fila persistente, reimpressão, retentativas e bridge por loja | A escolha entre kitchen/counter ainda não é failover. Implementar reserva e tratar resultado incerto para não imprimir duas vezes; validar com duas impressoras |
-| Relatórios | Agregados por loja e CMV; migrations 1026/1037, exportação 1028 | Exportação deve paginar além do limite da API; medir planos/índices com 96.000 pedidos/ano antes de decidir pré-cálculos adicionais |
-| Marketing e medição | Configuração, atribuição 1029 e outbox de conversões 1030 | Confirmar entrega real a Meta/Google. Email marketing separado, consentimento, desinscrição, retornos, segmentos e automações ainda são trabalho próprio |
+| Relatórios | Agregados por loja e CMV; migrations 1026/1037, exportação 1028 com paginação explícita na API e CSV documentado em [Relatórios](../modulos/relatorios.md) | Validar o formato no programa de destino (B-112), medir exportação e planos/índices com 96.000 pedidos/ano antes de decidir pré-cálculos adicionais |
+| Marketing e medição | Configuração, atribuição 1029, outbox de conversões 1030 e campanhas de preço 1060; [Marketing](../modulos/marketing.md) | Integrar componentes de campanha na montra activa e validar checkout; confirmar entrega real a Meta/Google. Email marketing separado, consentimento, desinscrição, retornos, segmentos e automações ainda são trabalho próprio |
 | Pesquisa e agentes | Metadados, MCP/WebMCP e pacote de plugin | Sitemap, robots, dados estruturados do menu/empresa e páginas de dúvidas; validação do domínio. MCP não garante indexação nem citação por IA |
 | Infraestrutura, suporte e carga | Health, dispositivos, filas, scripts e testes funcionais | Dimensionamento do deploy/BD, métricas de pico, alertas entregues, restauro e ensaio de carga. Instância separada não prova hardware dedicado nem elasticidade automática |
 
@@ -37,7 +42,7 @@ operação; não se criam contas nem se contratam serviços a partir deste plano
 3. **Preparar a conferência de extractos.** Uma função pura compara referências/centavos e
    devolve ocorrências. Esta camada é independente do formato do fornecedor e não escreve na BD.
 
-Activação depende de B-105/B-106/B-107 em [`BLOQUEIOS.md`](../BLOQUEIOS.md).
+Activação depende de B-105/B-106/B-107 em [BLOQUEIOS](../../BLOQUEIOS.md).
 
 ### Executar a reconciliação de estado
 
@@ -55,6 +60,9 @@ de iniciar uma passagem nova, sem cursor, depois de concluir a anterior. `comple
 significa que percorreu o conjunto dessa passagem; pode continuar a haver pagamentos pendentes.
 Inspeccionar `reason`, `pending`, `providerFailed`, `errors` e `skipped`; um HTTP 200 sozinho
 não prova que o dinheiro ficou resolvido. Erro de leitura devolve 503 com possibilidade de retoma.
+
+Não existe scheduler configurado no repositório; a presença da rota não prova execução periódica.
+Ver [crons](../referencia/crons.md) para distinguir as guardas de cada endpoint.
 
 Manter uma única execução coordenada por instalação: ainda não há lease persistente entre
 réplicas. A confirmação reutiliza a idempotência do domínio, mas execuções paralelas podem

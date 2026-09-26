@@ -1,3 +1,5 @@
+> **Arquivo HAWSMASH 1.0.** O corpo é histórico e conserva as ligações originais. [Roadmap desta versão](HAWSMASH-1.0-ROADMAP.md) · [Documentação actual](../README.md).
+
 # CLAUDE.md — HAWSMASH
 
 Restaurante de smash burgers em Maputo, Moçambique.

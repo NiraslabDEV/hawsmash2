@@ -12,6 +12,11 @@
 **Legenda:** 🔴 bloqueia o empacotamento · 🟡 bloqueia crescer · 🟢 melhoria
 **Estado:** `[ ]` por fazer · `[x]` feito · `[~] B-0NN` bloqueado
 
+**Revisão documental de 26/09/2026:** os marcadores conservam o histórico de implementação. Não provam
+activação em produção nem fecham ensaios de staging, operação ou hardware ainda pendentes. A
+[auditoria](docs/AUDITORIA-DOCUMENTACAO.md) descreve o código local e as divergências; esta revisão não
+executa nenhuma fase do produto.
+
 ---
 
 ## 0. A DECISÃO DE ARQUITECTURA (fechada — mudar só com ADR)
@@ -33,12 +38,17 @@ e auditar o multi-tenant. Não antes, e sempre com ADR em `docs/decisions/`.
 
 ---
 
-## 1. O PROBLEMA CENTRAL — porque é que hoje não se instala
+## 1. O PROBLEMA ORIGINAL — diagnóstico anterior à P1
 
-`config/brand.ts` é importado por **12 ficheiros** através do alias `@brand`. É um módulo TypeScript:
-os valores entram no **bundle em tempo de compilação**.
+O diagnóstico que motivou a P1 era este: `config/brand.ts` era importado por **12 ficheiros** através do
+alias `@brand`, com os valores a entrar no **bundle em tempo de compilação**. A contagem e as consequências
+abaixo pertencem a esse retrato histórico.
 
-Consequências, todas verificadas neste repositório:
+**Estado local actual:** `brand_settings`, `get_brand()` e `update_brand()` já suportam marca em runtime,
+com edição pelo dono em `/aparencia` e cache de 60 segundos no servidor. `config/brand.ts` é fallback de
+fábrica. O ensaio E2E em staging continua pendente na P1; ver [Aparência](docs/modulos/aparencia.md).
+
+Consequências registadas antes dessa implementação:
 
 | O que acontece | Porquê |
 |---|---|
@@ -75,7 +85,7 @@ Consequências, todas verificadas neste repositório:
 **Objectivo:** o HAWSMASH a operar nas duas lojas, sem bloqueios abertos. Empacotar antes disto é
 construir sobre areia — cada coisa que ainda falhar no cliente real volta a falhar em todos os outros.
 
-- [ ] Fechar os 7 bloqueios abertos do [`BLOQUEIOS.md`](BLOQUEIOS.md) (hardware, cutover, backups, Sentry)
+- [ ] Fechar os bloqueios abertos do [`BLOQUEIOS.md`](BLOQUEIOS.md): o inventário textual de 26/09/2026 tem **35 abertos e 2 resolvidos**, com dependências de cliente, infraestrutura/validação e hardware
 - [ ] Ensaio geral por loja: 20 vendas de balcão, 5 entregas, 1 fecho de caixa, 1 falha de rede simulada
 - [ ] Uma semana de operação real sem incidente que exija código novo
 
@@ -133,9 +143,10 @@ editar um único ficheiro**.
 
 **Objectivo:** a montra deixa de ser do HAWSMASH e passa a ser **um tema**.
 
-`apps/web/app/(public)/_hawsmash/` são ~1.000 linhas de loja feita à medida de um cliente. Ou vira
-configuração, ou assume-se como personalização paga — mas não pode ficar como está, com o nome de um
-cliente no caminho de um ficheiro que todos os outros vão usar.
+O diagnóstico original identificava ~1.000 linhas em `apps/web/app/(public)/_hawsmash/` feitas à medida de
+um cliente. A pasta já foi renomeada para `apps/web/app/(public)/_storefront/`, e vários textos passaram a
+dados. A decisão sobre tema configurável ou personalização paga, a ordem das secções e as restantes
+pendências continuam abaixo; a mudança do nome da pasta não fecha esta fase.
 
 - [ ] Decidir e registar em ADR: **tema configurável** ou **montra à medida vendida à parte**
 - [x] Renomear `_hawsmash/` → `_storefront/` (o nome de um cliente não é o nome de um módulo)
@@ -161,7 +172,7 @@ cliente no caminho de um ficheiro que todos os outros vão usar.
 - [ ] Importação de cardápio por ficheiro, com pré-visualização antes de gravar
 - [ ] `pnpm setup:client` cobre o caminho todo, incluindo criar o dono e a primeira loja
 - [ ] Instalação real cronometrada, com registo do que emperrou
-- [ ] `docs/onboarding-checklist.md` corrigido com o que a realidade mostrou
+- [ ] [Checklist de instalação](docs/operacao/instalacao.md) corrigida com o que a instalação cronometrada mostrar
 
 **DoD:** instalação completa em menos de 60 minutos, feita por outra pessoa, com o cronómetro a correr.
 Se der mais de 60, o que falhou é requisito — volta para esta fase.

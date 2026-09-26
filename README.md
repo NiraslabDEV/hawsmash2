@@ -1,83 +1,65 @@
 # HAWSMASH 2.0 — Restaurant OS multi-unidade
 
-> Sistema completo de restaurante para o **HAWSMASH** (Maputo + Matola): **balcão (POS), delivery,
-> levantamento, pagamentos M-Pesa/e-Mola, estoque, caixa, cozinha e relatórios** — duas lojas, um só painel.
-> Desenvolvido por **Niraslab / Leapfrog** (niraslab.dev@gmail.com).
+Aplicação de restaurante com POS, encomendas online, mesas, pagamentos, caixa, estoque, impressão e TVs. Uma instalação representa uma empresa; cada unidade física tem o seu `store_id`. A identidade é dado em `brand_settings`, com fábrica neutra no código.
 
-| Documento | Para quê |
-|---|---|
-| **[`CLAUDE.md`](CLAUDE.md)** | **Spec do produto** — arquitectura, schema, regras invioláveis. Fonte de verdade |
-| **[`ROADMAP.md`](ROADMAP.md)** | Plano por fases, com DoD e o **prompt único** da corrida contínua |
-| **[`ROADMAP-PRODUTO.md`](ROADMAP-PRODUTO.md)** | Plano para **empacotar** o motor e instalar noutro restaurante (ver `CLAUDE.md` §18) |
-| **[`AGENTS.md`](AGENTS.md)** | Como o agente de código trabalha aqui — **corrida contínua**, ler antes de codar |
-| **[`BLOQUEIOS.md`](BLOQUEIOS.md)** | Registo vivo do que ficou por fechar e porquê — atacado de uma vez só no fim |
-| [`docs/HARDWARE.md`](docs/HARDWARE.md) | Equipamento por loja, ligações, testes de aceitação |
-| [`docs/RUNBOOK.md`](docs/RUNBOOK.md) | Operação: monitorização, alertas, backups, incidentes, abertura |
-| [`docs/engine/`](docs/engine/) | Spec do motor herdado (Delivery OS) — consulta |
-| [`docs/legacy/`](docs/legacy/) | HAWSMASH 1.0 em produção: spec, edge functions, print-bridge, proposta |
+Começa pelo [índice da documentação](docs/README.md). As decisões estão no [CLAUDE](CLAUDE.md), o método em [AGENTS](AGENTS.md), a execução no [ROADMAP](ROADMAP.md), as dependências em [BLOQUEIOS](BLOQUEIOS.md) e a evolução no [roadmap de produto](ROADMAP-PRODUTO.md).
 
----
+## Arranque de desenvolvimento
 
-## Origem
+Pré-requisitos: Git, Node **22.x** (aceita >=22 e <25), pnpm **9.0.0**. Para BD local descartável: Docker e Supabase CLI disponíveis no PATH. Sem BD podes correr testes unitários e simular impressão; isso não entrega checkout funcional.
 
-Este repositório nasce da fusão de dois sistemas em produção:
+Na raiz, em PowerShell:
 
-- **Delivery OS** (Casa do Bom Pasteleiro / Babalaza) — motor Next.js + Supabase: loja online, painel,
-  Paysuite (M-Pesa automático), print-bridge ESC/POS, caixa, estoque, tracking, CRM. É a **base do código**.
-- **HAWSMASH 1.0** (`hawsmash.com`, a facturar ~360.000 MT/mês) — fluxo manual de comprovativos, aprovação por
-  email, fecho de caixa, relatório semanal, impressora empacotada em `.exe`, horário configurável.
-  É a **base da operação real** e da experiência do que falha em Moçambique.
-
-O que o 2.0 acrescenta aos dois: **multi-unidade (`store_id`), POS de balcão com gaveta, modo offline,
-perfis de equipa com auditoria, estoque e caixa por loja, ecrãs de TV**.
-
----
-
-## Stack
-
-| Camada | Tecnologia |
-|---|---|
-| Frontend | Next.js 14 (App Router) + TypeScript + Tailwind/shadcn |
-| Backend | Supabase (Postgres + RLS + Realtime + Auth + Storage) |
-| Pagamentos | Paysuite (M-Pesa/e-Mola automático) · manual por comprovativo · balcão (dinheiro/cartão) |
-| Impressão | `services/print-bridge` — ESC/POS TCP 9100 + HTTP local na LAN + gaveta |
-| Testes | Vitest (domínio + RLS) · Playwright (POS e checkout) |
-| Monorepo | pnpm workspaces + Turborepo |
-
-```bash
-pnpm install
-pnpm dev            # web em localhost:3000
-pnpm test           # vitest (todos os pacotes) — gate de merge
-pnpm lint           # eslint + tsc
-pnpm db:migrate     # aplica migrations + seed
-pnpm db:types       # regenera tipos do schema
-pnpm bridge:dev     # print-bridge com impressora simulada (sem hardware)
-pnpm test:e2e       # playwright
+```powershell
+corepack enable
+corepack prepare pnpm@9.0.0 --activate
+pnpm install --frozen-lockfile
+Copy-Item .env.example apps/web/.env.local
 ```
 
----
+Preenche localmente o exemplo copiado com URL/chaves da BD de desenvolvimento, nunca produção. Next lê a configuração de `apps/web`; CLIs e bridge têm configuração própria. Ver [ambiente](docs/referencia/ambiente.md).
 
-## Ambientes
+Para criar uma BD **local descartável**, com Docker a correr:
 
-| | Branch | Supabase | Deploy |
-|---|---|---|---|
-| **Produção** | `main` | `hawsmash2` (Pro, PITR) | Railway |
-| **Staging** | `dev` | `hawsmash2-staging` | Railway |
-
-```
-dev → testar staging → merge main → live
+```powershell
+supabase start
+pnpm db:migrate
+pnpm --filter web dev
 ```
 
-Migrations correm **primeiro em staging**. Nada de SQL manual em produção.
+**db:migrate e db:seed executam supabase db reset:** apagam e recriam a BD local. Não são actualização incremental de uma instalação. O seed é específico da primeira instalação, não onboarding neutro.
 
----
+Abre `http://localhost:3000`. `/` escolhe loja; `/login` autentica staff; `/pedidos` é o painel; `/pos` é o balcão. Não existe prefixo `/admin`. Conta de ensaio, perfil e loja: [instalação](docs/operacao/instalacao.md).
 
-## Começar
+`pnpm dev` arranca as tarefas do monorepo, incluindo serviços que exigem configuração; o comando acima arranca apenas a web.
 
-1. `pnpm install`
-2. `cp .env.example .env` e preencher (Supabase, Resend, Paysuite se aplicável)
-3. `pnpm db:migrate` — cria schema e seed das duas lojas
-4. `pnpm dev` → `http://localhost:3000` (loja) · `/admin` (painel) · `/pos` (balcão)
-5. `pnpm bridge:dev` para simular a impressora
+## Impressão sem equipamento
 
-Estado do trabalho e próxima fase: **[`ROADMAP.md`](ROADMAP.md)**.
+```powershell
+pnpm --filter print-bridge dev:sim
+```
+
+Inicia impressora TCP em loopback, envia talão sintético e termina. Não usa Supabase nem equipamento. Para o serviço integrado, ver [impressão](docs/modulos/impressao.md) e [bridge](services/print-bridge/README.md). O atalho raiz bridge:dev usa sintaxe POSIX e não funciona tal qual no shell Windows padrão.
+
+## Verificar
+
+```powershell
+pnpm lint
+pnpm test
+node scripts/docs/check-links.mjs
+node scripts/docs/check-schema.mjs
+node scripts/docs/check-spec.mjs
+node scripts/docs/schema-catalog.mjs --check
+```
+
+Lint inclui TypeScript. O teste raiz corre __tests__, **não o gate de BD**. Com Supabase local descartável, sem hardware ligado, o gate separado é `pnpm --filter @delivery/db test:db --run`. Escreve/remove fixtures e utilizadores: nunca apontar a uma instalação em uso.
+
+`pnpm test:e2e` corre Playwright padrão. Agentes, paginação, análise e pagamentos têm configs próprias: [matriz de testes/CI](docs/referencia/testes.md).
+
+Next/Vite carregam ficheiros de ambiente. Para auditorias que proíbem essa leitura, o [validador isolado](scripts/docs/validate-isolated.mjs) copia apenas ficheiros permitidos, sem configuração privada.
+
+## Operação e limites
+
+Fluxo previsto: dev → staging → main → produção, com bases separadas e migrations primeiro em staging. [Runbook](docs/operacao/runbook.md) e [bloqueios](BLOQUEIOS.md) distinguem código de instalação validada.
+
+A [auditoria](docs/AUDITORIA-DOCUMENTACAO.md#5-código-que-viola-a-spec) contém violações de permissões, isolamento e idempotência ainda não corrigidas nesta revisão documental. Documentação e testes unitários não as resolvem nem garantem operação em produção.

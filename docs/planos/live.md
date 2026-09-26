@@ -1,11 +1,18 @@
-# PLANO-LIVE.md — pôr o LIVE do HAWSMASH 2.0 redondo
+# Plano LIVE — pôr o LIVE do HAWSMASH 2.0 redondo
 
 > **O que é:** o plano de infraestrutura que leva o `hawsmash2` (LIVE) de "base de dados com cardápio"
-> a "sistema que a equipa consegue usar". Termina onde o [`RUNBOOK.md §6`](RUNBOOK.md) começa — o ensaio
+> a "sistema que a equipa consegue usar". Termina onde o [runbook §6](../operacao/runbook.md) começa — o ensaio
 > geral e a checklist de abertura não se repetem aqui.
 >
 > **Aberto em:** 2026-09-22 · **Conduz:** Niraslab (Gabriel)
-> **Não inclui:** data de cutover nem DNS — isso é [`B-010`](../BLOQUEIOS.md) e é agenda com o cliente.
+> **Não inclui:** data de cutover nem DNS — isso é [`B-010`](../../BLOQUEIOS.md) e é agenda com o cliente.
+
+**Leitura em 26/09/2026:** este é um registo histórico de execução, sobretudo de 22–23/09. Contagens de
+migrations, estado dos ambientes, acessos e resultados são os reportados em cada data; não foram
+reconsultados nesta revisão documental. A árvore local já avançou — ver [migrations](../referencia/migrations.md),
+[ROADMAP](../../ROADMAP.md) e [BLOQUEIOS](../../BLOQUEIOS.md). “Feito” numa fase não significa que a
+instalação passou o ensaio humano, o hardware ou o cutover. A [auditoria](../AUDITORIA-DOCUMENTACAO.md)
+regista os limites e divergências ainda abertos.
 
 ---
 
@@ -22,7 +29,7 @@ bundles JS servidos. **Revisto ao fim do dia**, já por consulta às duas bases 
 | Migrations por aplicar no LIVE | **15** — `1037` … `1051` (as 13 previstas + `1050` e `1051`, abertas hoje) |
 | Contas de staff no LIVE | **nenhuma** — 0 em `auth.users`, 0 em `staff_profiles`, 0 dispositivos |
 | Gate `pnpm lint && pnpm test` | **verde** — 91 ficheiros, 788 testes. Estava vermelho por um worktree morto, não por código (ver §2.5) |
-| Gate de integração contra staging | **verde** — inclui `rls.test.ts` (42) e o `pos-card-login` da `1049` (11), que fecha o [`B-110`](../BLOQUEIOS.md) |
+| Gate de integração contra staging | **verde, reportado nessa data** — inclui `rls.test.ts` (42) e o `pos-card-login` da `1049` (11); fecha a parcela SQL do [`B-110`](../../BLOQUEIOS.md), não a entrada humana no terminal |
 | Railway `staging` | serve HTTP 200, compilado contra o ref antigo → reconfirmar agora que o Supabase voltou |
 | Railway `production` | serve HTTP 200 mas **sem `*.supabase.co` no bundle** — variáveis nunca preenchidas; aponta ao ramo `dev` |
 | `main` vs `dev` | **108 commits** atrás |
@@ -59,10 +66,10 @@ directamente, sente. É o script do §15. Corrigido pela **`1051`**.
 
 ## 2. Princípios que este plano não quebra
 
-1. **Staging antes de produção** ([`CLAUDE.md §2`](../CLAUDE.md)). É por isso que a Fase 1 existe: sem
-   staging, as 11-13 migrations chegariam ao LIVE sem nunca terem corrido em lado nenhum — incluindo a
-   `1049`, que mexe em `staff_profiles` e na autenticação do POS e que o [`B-110`](../BLOQUEIOS.md) diz
-   nunca ter corrido contra um Supabase real.
+1. **Staging antes de produção** ([`CLAUDE.md`](../../CLAUDE.md)). Foi por isso que a Fase 1 existiu:
+   testar as migrations antes do LIVE, incluindo a `1049`, que mexe em `staff_profiles` e na
+   autenticação do POS. O [`B-110`](../../BLOQUEIOS.md) passou a ter prova SQL 11/11 a 22/09; falta
+   a entrada real com caixa/gerente no terminal.
 2. **Migrations versionadas, forward-only, nunca SQL à mão em produção** (`§11.7`). Onde for preciso
    escrever dados em vez de schema — a primeira conta de dono — usa-se **script versionado e idempotente**,
    não o editor SQL do dashboard.
@@ -85,9 +92,10 @@ directamente, sente. É o script do §15. Corrigido pela **`1051`**.
 | 0.1 | Estado do `hawsmash2-staging` no dashboard: **pausado** ou **apagado**? | Gabriel | Pausado = *Restore* e a Fase 1 encolhe para 10 minutos. Apagado = projecto novo e ref novo em toda a configuração |
 | 0.2 | Chave `service_role` e password de BD do `hawsmash2` | Gabriel | Sem elas não se confirma o que está aplicado no LIVE, não se cria a equipa e não corre o `check-placeholders` |
 | 0.3 | Emails definitivos da equipa: reais por pessoa ou um por papel? | Gabriel + Ridwan | Os `@hawsmash.test` são contas de teste e não recebem email — recuperação de senha e alertas ficam sem destino |
-| 0.4 | Um Paysuite para as duas lojas ou um por loja? | Ridwan | [`B-001`](../BLOQUEIOS.md) / `CLAUDE.md §16 #1`. A Fase 5 preenche a chave; se for uma por loja, vai em `stores`, não no ambiente |
+| 0.4 | Um Paysuite para as duas lojas ou um por loja? | Ridwan | [`B-001`](../../BLOQUEIOS.md) / `CLAUDE.md §16 #1`. A Fase 5 preenche a chave; se for uma por loja, vai em `stores`, não no ambiente |
 
-**0.1 e 0.2 travam tudo.** 0.3 trava a Fase 4. 0.4 trava só a parte de pagamento da Fase 5.
+No plano original, **0.1 e 0.2 travavam tudo**; a restauração resolveu 0.1. A falta da password do LIVE,
+0.3 e 0.4 mantêm os efeitos descritos no registo abaixo até nova evidência de operação.
 
 ---
 
@@ -110,14 +118,15 @@ disco** — era o ponto onde um caminho antigo dava 404 em silêncio.
 
 ### 1B · Se estiver apagado
 1. Criar projecto Supabase novo (Free), região a mesma do LIVE.
-2. Aplicar as **116 migrations** por ordem, do zero.
+2. Aplicar todas as migrations canónicas por ordem, do zero, num ambiente de teste autorizado;
+   a contagem de 116 pertencia ao plano original, não à árvore actual.
 3. Correr o seed de configuração (lojas, horários, números, cardápio).
 4. Actualizar o ref novo em **três sítios**: `apps/web/.env.local`, `.env.local` da raiz, e as variáveis
    do ambiente `staging` no Railway.
-5. Actualizar `CREDENCIAIS-ACESSOS.md` e a referência ao ref antigo em `BLOQUEIOS.md:420`.
+5. Actualizar o registo privado de acessos e a referência ao ref antigo em [BLOQUEIOS](../../BLOQUEIOS.md).
 6. Recriar a equipa de teste (o mesmo script da Fase 4, apontado a staging).
 
-### 1C · Fechar o B-110 ✅
+### 1C · B-110 — parcela SQL validada; entrada humana pendente
 `packages/db/tests/pos-card-login.test.ts` corrido contra staging: **11/11 verdes** — o terminal só lista
 a equipa da sua loja, o PIN errado conta e trava ao quinto, a entrada certa limpa o castigo, e o browser
 não chama a verificação do PIN. É a primeira vez que a `1049` correu contra um Supabase a sério.
@@ -201,7 +210,7 @@ ensaio em staging não prova o cardápio do LIVE**. A Fase 6 tem de olhar para a
   mesmos 714 pedidos com que entrou;
 - avisos do Supabase relidos: nada de novo. Os `SECURITY DEFINER` chamáveis por `anon` são o padrão do
   §17 (acesso público só por RPC), e os dois `security definer view` (`funnel_rates`,
-  `funnel_by_source`) são anteriores a esta janela — ficam anotados, não foram tocados. *(Resolvido na 1066: removidas e substituídas por `analytics_sessions` com `security_invoker` — ver [`RASTREIO.md`](RASTREIO.md).)*
+  `funnel_by_source`) são anteriores a esta janela — ficam anotados, não foram tocados. *(Resolvido na 1066: removidas e substituídas por `analytics_sessions` com `security_invoker` — ver [Marketing](../modulos/marketing.md).)*
 
 ### 6.3 O plano original desta fase
 
@@ -252,18 +261,20 @@ Tem `--dry-run`, que imprime quem vai criar sem escrever nada. No fim mostra as 
 4. Guardar as senhas e os PINs em `CREDENCIAIS-ACESSOS.md` — que **nunca vai ao git** (`.gitignore`).
 5. Entregar a cada pessoa só o que é dela.
 
-**Critério de saída:** cada perfil entra no painel, vê a sua loja e nada da outra.
+**Critério de saída:** dono/gerente/caixa entram nas áreas permitidas e respeitam o âmbito de loja.
+O perfil cozinha não tem acesso ao painel; o KDS continua planeado. Validar também o acesso directo às
+RPCs: a auditoria V-03/V-14/V-15 encontrou permissões mais amplas do que a navegação sugere.
 
 ---
 
 ## 8. Fase 5 — Railway `production`
 
-Hoje este ambiente é a casca descrita em [`BLOQUEIOS.md:409`](../BLOQUEIOS.md) — responde `{"status":"ok"}`
+No levantamento de 22/09, este ambiente era a casca descrita em [BLOQUEIOS](../../BLOQUEIOS.md) — respondia `{"status":"ok"}`
 sem Supabase nenhum por trás. **Parece vivo, e é essa a parte perigosa:** o link tem a palavra "production"
 no nome e um envio por engano mostra ao cliente um sistema a fingir que existe.
 
-1. Apontar o ambiente ao ramo **`main`** (hoje está em `dev`).
-2. Preencher as variáveis: `NEXT_PUBLIC_SUPABASE_URL` e `SUPABASE_SERVICE_ROLE_KEY` do `hawsmash2`,
+1. Confirmar a origem actual e apontar o ambiente ao ramo **`main`** (estava em `dev` no levantamento).
+2. Preencher as variáveis: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` e `SUPABASE_SERVICE_ROLE_KEY` do `hawsmash2`,
    `NEXT_PUBLIC_APP_BASE_URL`, SMTP Hostinger, Paysuite (conforme 0.4), tracking.
 3. Redeploy e **verificar como aqui se verificou**: o bundle JS servido tem de conter
    `hmutptcbusxncnofinrw.supabase.co`. Se não contiver, a variável não entrou no build.
@@ -294,12 +305,12 @@ a checklist de abertura, e reconfirmar o `check-placeholders` depois.
 
 ## 10. Fase 7 — entrega
 
-A partir daqui manda o [`RUNBOOK.md`](RUNBOOK.md):
+A partir daqui manda o [runbook](../operacao/runbook.md):
 - §6 ensaio geral na véspera, por loja (~90 min)
 - §7 checklist de abertura, assinada por loja
-- Manuais: [`manual-caixa.md`](manual-caixa.md), [`manual-cozinha.md`](manual-cozinha.md), [`manual-dono.md`](manual-dono.md)
+- Manuais: [caixa](../operacao/manual-caixa.md), [cozinha](../operacao/manual-cozinha.md), [dono](../operacao/manual-dono.md)
 
-Cutover e DNS: [`B-010`](../BLOQUEIOS.md) — precisa de data com o Ridwan. O 1.0 fica **read-only** e
+Cutover e DNS: [`B-010`](../../BLOQUEIOS.md) — precisa de data com o Ridwan. O 1.0 fica **read-only** e
 arquivado, **não se apaga durante 90 dias** (`CLAUDE.md §15`).
 
 ---
@@ -309,7 +320,7 @@ arquivado, **não se apaga durante 90 dias** (`CLAUDE.md §15`).
 | Fase | Data | Quem | Resultado |
 |---|---|---|---|
 | 0 · decisões | 22 Set | Gabriel | 0.1 resolvida (staging estava pausado, restaurado). 0.2 resolvida para o staging; **a do LIVE continua em falta**. 0.3 e 0.4 por decidir |
-| 1 · staging | 22 Set | Gabriel + agente | ✅ Restaurado e migrado até à `1051`. B-110 fechado: `pos-card-login` 11/11. Fotos da `1042` confirmadas |
+| 1 · staging | 22 Set | Gabriel + agente | ✅ Restaurado e migrado até à `1051`. Parcela SQL do B-110: `pos-card-login` 11/11; entrada humana ainda pendente. Fotos da `1042` confirmadas |
 | 2 · gate + main | 22 Set | Gabriel + agente | ⏳ Gate verde (91 ficheiros / 788 testes) e integração verde contra staging. **Falta o merge `dev` → `main`** |
 | 3 · schema LIVE | 23 Set 00:20 | Gabriel + agente | ✅ 16 aplicadas (`1037`…`1052`). LIVE em **119 migrations**, lista idêntica ao repo. Fotos do cardápio corrigidas pela `1052` |
 | 3 · schema LIVE (2.ª) | 23 Set 14:33 | Gabriel + agente | ✅ `1060` (promoções) e `1061` (esgotado no balcão). LIVE em **121 migrations**. Corpos das 7 funções novas conferidos por `md5` contra o repo: idênticos. `get_menu` das duas lojas responde pelo embrulho novo, sem campanha activa — e nenhuma pode activar nas lojas HAWSMASH, porque têm POS (`counter_enabled`) |
@@ -327,7 +338,7 @@ Resolvidas a 22 Set:
 - ~~**O staging pode estar apagado**~~ → estava **pausado**. Caminho 1A, ref mantido.
 - ~~**Os 108 commits nunca correram contra uma BD real**~~ → já correram. Dívida paga.
 
-O que fica por saber, e onde pode doer:
+Pendências registadas à data, a reconfirmar antes da próxima janela:
 
 - ~~**Não se sabe o estado dos privilégios do LIVE**~~ → medido na janela da Fase 3: a escrita directa
   à chave de serviço passou e normalizou o telefone. A `1051` está boa nos dois ambientes.

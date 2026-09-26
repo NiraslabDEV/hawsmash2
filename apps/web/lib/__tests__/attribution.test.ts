@@ -172,7 +172,7 @@ describe('attributionPayload', () => {
 /**
  * Casos reais dos anuncios do Meta, trazidos do SLICE (painel de 2026-09-20):
  * 14 linhas de origem que eram 5 origens, e nomes de campanha no lugar do
- * meio. Ver docs/RASTREIO.md §3.
+ * meio. Ver docs/modulos/marketing.md §3.
  */
 describe('buildTouch — lixo dos anúncios do Meta', () => {
   it('utm_source=MetaAds vira facebook pago e o nome da campanha sai do meio', () => {

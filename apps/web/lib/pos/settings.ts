@@ -22,7 +22,7 @@
  * ecrã; não é uma regra de dinheiro, e o servidor não a impõe (uma venda
  * offline feita antes da mudança tem de continuar a sincronizar).
  *
- * Portável: não importa nada do resto do POS. Ver `docs/POS-DEFINICOES.md`.
+ * Portável: não importa nada do resto do POS. Ver `docs/modulos/pos.md`.
  */
 
 import { FACTORY_PRINT_LAYOUT, resolvePrintLayout, type PrintLayout } from '@delivery/receipt';

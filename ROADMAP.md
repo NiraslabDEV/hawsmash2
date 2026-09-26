@@ -32,6 +32,12 @@ posterior) e preenche a secção PACOTE FINAL do BLOQUEIOS.md.
 **Legenda:** 🔴 bloqueia a abertura · 🟡 bloqueia a operação confortável · 🟢 melhoria
 **Estado:** `[ ]` por fazer · `[x]` feito · `[x] ⏳` feito, falta validar em runtime/hardware · `[~] B-0NN` bloqueado (ver `BLOQUEIOS.md`)
 
+**Revisão documental de 26/09/2026:** este ficheiro conserva as entregas, resultados datados e pendências
+da execução. Código presente, ensaio local, staging, produção e hardware são estados distintos. A
+[auditoria](docs/AUDITORIA-DOCUMENTACAO.md) regista divergências que os marcadores históricos não resolvem;
+os resultados de testes abaixo não foram repetidos nesta revisão. As referências numéricas ao CLAUDE
+nos prompts conservam a organização da spec usada quando cada fase foi escrita.
+
 **Ordem:** F0 → F1 → (F2 ‖ F3) → F4 → F5 → F6 → F7 → F8 → F9 → **F10**.
 **F1 bloqueia tudo** — mexer no POS antes de o `store_id` existir é retrabalho garantido.
 Um item `[~]` **nunca** trava a fase: se o resto da fase estiver verde, a fase avança e o bloqueio fica registado.
@@ -66,7 +72,7 @@ _Os dias são referência de calendário, não paragens: a corrida não pára en
 
 - [x] `git init` + branch `dev` (default) e `main`; `.gitignore` já cobre `node_modules`, `.env*`, `.next`
 - [x] `pnpm install` verde; `pnpm lint && pnpm test` verdes (motor herdado já tem testes)
-- [x] `config/brand.ts` → identidade HAWSMASH (nome, dourado `#e5a93c`, fundo escuro, logo, redes)
+- [x] Identidade inicial HAWSMASH em `config/brand.ts` (entrega histórica da F0); desde a P1, identidade em `brand_settings` e ficheiro só como fallback de fábrica — ver [Aparência](docs/modulos/aparencia.md)
 - [x] **Dois projectos Supabase novos**: `hawsmash2` (Pro) e `hawsmash2-staging` (Free). Nunca reutilizar o do 1.0
 - [x] `.env.example` actualizado (web + print-bridge) — sem um único segredo real commitado
 - [x] Deploy staging no Railway a partir de `dev`; healthcheck `/api/health` a responder
@@ -110,7 +116,7 @@ _Os dias são referência de calendário, não paragens: a corrida não pára en
 - [x] Vinculação do dispositivo à loja (`devices`) + sessão longa + bloqueio de ecrã com PIN
 - [x] ⏳ **Entrada pelo cartão da pessoa** (1049): grelha da equipa da loja + PIN no teclado do ecrã,
       em vez de email/palavra-passe. Bloquear devolve a mesma grelha (render turno é um toque).
-      Validar 1049 e a abertura de sessão em staging — B-110
+      Gate SQL da 1049 reportado 11/11 em staging a 22/09; entrada humana por cartão com caixa/gerente ainda pendente — B-110
 - [x] Testes Vitest: idempotência (mesma `client_sale_id` 2× → 1 pedido), troco, esgotado, anulação
 - [x] Playwright: venda ponta a ponta (dinheiro com troco) e anulação com motivo
 - [x] **Tirar no upsell o que se pôs no upsell** — cada cartão do funil tem `−` / `+` e há caminho de volta
@@ -131,7 +137,7 @@ _Os dias são referência de calendário, não paragens: a corrida não pára en
 - [x] `print-bridge` por loja: `STORE_ID` no `.env`, poll só da sua loja, duas impressoras (cozinha + balcão)
 - [x] **Servidor HTTP local** (`POST /print`, `POST /drawer`, `GET /health`) autenticado por `LOCAL_TOKEN`
 - [x] **Gaveta**: pulso `1B 70 00 19 FA`; abertura fora de venda exige perfil e grava `event_log`
-- [x] Talões: comanda de cozinha (nº do dia grande, sem preços) + talão do cliente (com troco)
+- [x] Talões de cozinha e cliente; a descrição inicial de cozinha sem preços foi sucedida pelas migrations 1062–1064 e pelos modelos configuráveis da 1071 — ver [Impressão](docs/modulos/impressao.md)
 - [x] Reimpressão pelo painel e pelo POS (`reprint`), sempre logada
 - [x] `heartbeat` de 60 s + watchdog + arranque automático no Windows + `.exe` (SEA, herdado do 1.0)
 - [x] Testes do render ESC/POS (snapshot) + integração com o simulador
@@ -152,9 +158,9 @@ _Os dias são referência de calendário, não paragens: a corrida não pára en
 **Objectivo:** a loja vende com a internet em baixo. É esta fase que evita o telefonema de sábado.
 
 - [x] PWA do POS: manifest, service worker, instalação no PC touch, arranque em modo kiosk
-- [x] Cache do menu (IndexedDB) refrescada a cada 2 min — **única fonte de preço offline**
+- [x] Cache do menu (IndexedDB) refrescada a cada **15 s no código actual** — fonte de preço offline; a cadência diverge dos 2 min do ADR 0006 (auditoria V-11)
 - [x] Fila de vendas offline com `client_sale_id`; impressão imediata pelo HTTP local do bridge
-- [x] Sincronização automática ao voltar a ligação, com backoff; zero duplicados (idempotência da F2)
+- [x] Sincronização automática por `sync_counter_sale` ao voltar a ligação, com backoff e idempotência por `client_sale_id`; venda online usa `create_counter_sale`
 - [x] Divergência de preço na sincronização → `needs_review` + lista **Conciliação** no painel
 - [x] Banner de estado (`SEM LIGAÇÃO · N por sincronizar`) e confirmação verde ao sincronizar
 - [x] Testes: fila persiste a reinício do browser; 3 vendas offline → 3 pedidos; reenvio → nenhum duplicado
@@ -235,6 +241,7 @@ O estoque de produto final não descreve a cozinha: o que acaba é a carne, não
 - [x] Aba **Sistema**: semáforo por loja (POS, bridge, impressora, último pedido, fila de impressão)
 - [x] Alertas automáticos (email + WhatsApp deep link) da lista de `CLAUDE.md §11.5` — `/api/cron/alerts`, com arrefecimento de 30 min
 - [x] Digest diário ao dono — `/api/cron/digest` + `get_daily_digest`
+- [~] Resumo mensal ao dono com a loja no Google (1096) — `/api/cron/monthly` + `get_monthly_digest`; B-114 (scheduler, chave Places, Place IDs, acesso à API do Perfil)
 - [~] B-014 `pg_dump` nocturno (script pronto e ensaiado; destino externo B-008) + **teste de restauro** por correr
 - [x] ⏳ B-013 Sentry (web + bridge) ligado — inerte até haver DSN
 
@@ -245,18 +252,19 @@ O estoque de produto final não descreve a cozinha: o que acaba é a carne, não
 ## F9 🔴 Migração, ensaio e go-live
 
 - [x] `scripts/import-hawsmash-1.ts` com **dry-run** e relatório de contagens (CLAUDE §15) — mapeamento testado em `scripts/__tests__/import-mapping.test.ts`
-- [~] B-009 Importação real para staging → conferência dos totais com o 1.0 (falta a chave de leitura do projecto antigo)
+- [x] B-009 resolvido em 31/08: importação real reportada no LIVE 2.0 para Maputo — 714 pedidos, 1494 linhas, 381 clientes, 4 categorias e 15 produtos. Isto é histórico importado, não prova de ensaio completo em staging
+- [ ] Conferir o lote final antes do cutover; o importador actual não cobre feedback, lista de espera nem fechos antigos. Rever também as limitações do script na auditoria R-04 antes de nova execução
 - [x] ⏳ **TVs**: `/tv/[store]/menu` e `/tv/[store]/senhas` — rotas prontas; falta apontar os ecrãs físicos (B-011)
   - [x] ⏳ **Aba TVs no painel (1090, 24 Set):** 2 TVs por loja + adicionar/duplicar/apagar; modo senhas + vídeos,
         só senhas, só vídeos ou cardápio; títulos e tempos das senhas, rotação, tamanho, lista de vídeos; biblioteca
-        de vídeos partilhada com cache na TV (toca sem internet); "Ligada / sem sinal" por TV. `docs/TVS.md`.
+        de vídeos partilhada com cache na TV (toca sem internet); "Ligada / sem sinal" por TV. [TVs e KDS](docs/modulos/tvs-kds.md).
         Gates: `apps/web/lib/tv/__tests__` (24) verdes; `packages/db/tests/tvs.test.ts` por correr nesta máquina (sem Docker).
   - [ ] Aplicar 1090 no staging; carregar um vídeo real e ver a box Android a tocá-lo e a manter com a rede desligada.
   - [ ] Confirmar o tecto de upload do projecto Supabase (B-113) antes de o dono carregar vídeos grandes.
 - [~] B-006 **Ensaio geral** por loja: 20 vendas de balcão, 5 delivery, 1 fecho de caixa, 1 falha de rede simulada,
       1 falha de impressora simulada
-- [x] ⏳ Manuais PT (`docs/manual-caixa.md`, `docs/manual-cozinha.md`, `docs/manual-dono.md`) — escritos; formação presencial por dar
-- [x] ⏳ Checklist de abertura (`docs/RUNBOOK.md` §7) + guião do ensaio geral (§6) — por assinar no dia
+- [x] ⏳ Manuais PT ([caixa](docs/operacao/manual-caixa.md), [cozinha](docs/operacao/manual-cozinha.md), [dono](docs/operacao/manual-dono.md)) — escritos; formação presencial por dar
+- [x] ⏳ Checklist de abertura ([runbook](docs/operacao/runbook.md) §7) + guião do ensaio geral (§6) — por assinar no dia
 - [~] B-010 Cutover: DNS para o 2.0, 1.0 em read-only, acompanhamento reforçado nos primeiros dias
 
 **PROMPT:** *"Executa a F9: migração do HAWSMASH 1.0 (dry-run primeiro), ecrãs de TV, ensaio geral guiado, manuais em português e checklist de abertura. Nada é apagado no 1.0."*
@@ -265,10 +273,10 @@ O estoque de produto final não descreve a cozinha: o que acaba é a carne, não
 
 ## F10 🔴 Aba Lojas — configurar a operação sem tocar na base de dados
 
-> **Porquê depois da F9:** a corrida F0→F9 deixou a configuração das lojas (horário, zonas, números de
+> **Motivação histórica da F10:** a corrida F0→F9 deixou a configuração das lojas (horário, zonas, números de
 > pagamento, rodapé) só acessível por SQL, e o interruptor "Aceitando pedidos" das Definições escreve em
-> `settings`, que o checkout multi-loja **ignora** — ou seja, hoje **não há forma de fechar uma loja pelo
-> painel**. Isso é operação do dia a dia, não configuração de instalação. Ver `CLAUDE.md §5.6`.
+> `settings`, que o checkout multi-loja **ignora**. A aba Lojas entretanto implementada controla
+> `stores.accepting_orders`; o indicador legado de Definições continua divergente (auditoria V-06).
 
 - [x] Migration `1011_stores_admin.sql`: RPCs `save_store`, `set_store_hours`, `save_delivery_zone`,
       `delete_delivery_zone`, `set_store_accepting_orders`, `get_store_admin` — dono para tudo, gerente só
@@ -277,7 +285,7 @@ O estoque de produto final não descreve a cozinha: o que acaba é a carne, não
 - [x] Segredos do Paysuite deixam de ser legíveis pelo cliente autenticado (grant por coluna em `stores`)
 - [x] Aba **Lojas** no painel: criar loja, editar contactos/pagamento/rodapé/canais, horário por dia,
       zonas e taxas, kill switch com motivo
-- [x] Definições deixa de mostrar um interruptor que não fecha nada; aponta para a aba Lojas
+- [x] Modal de Definições aponta para a aba Lojas; entrega parcial: o cartão “Estado da Loja” ainda lê o singleton `settings`, sem representar a abertura efectiva de cada loja (auditoria V-06)
 - [x] Testes: só o dono cria/edita; gerente fecha a **sua** loja e não a outra; `slug`/`order_prefix` recusam
       alteração; horário inválido recusado; zona em uso desactiva em vez de apagar; tudo auditado
       (`packages/db/tests/stores-admin.test.ts` + `e2e/lojas.spec.ts`)
@@ -317,6 +325,10 @@ isolamento entre lojas."*
 | G8 🟢 | **Criar loja copiando outra** — "copiar configuração de: Maputo · Matola" na aba Lojas. Nunca copia segredos do Paysuite | [ADR 0002](docs/decisions/0002-criar-loja-a-partir-de-outra.md) |
 | G9 🟢 | **Atendimento no site** — bolha de conversa com **dúvidas em botão e resposta escrita de antemão** (com indicador de escrita), e escalada para uma **gaveta de conversas no POS** que empilha por tempo de espera. Perguntas e respostas em `chat_topics`, editáveis no painel — nunca em código | [CLAUDE.md §19](CLAUDE.md) · [~] [B-021](BLOQUEIOS.md) |
 
+Esta tabela conserva o plano da fase 2. Partes de G1, G4–G6 e G8 já têm implementação descrita nos módulos
+e nas entregas datadas abaixo; isso não prova activação integral. **G2 continua planeado: não existe rota
+`/kds/[store]` no código auditado.**
+
 ---
 
 ## A1 🟢 Canal de encomendas por agente *(produto · 2026-09-14)*
@@ -333,7 +345,7 @@ isolamento entre lojas."*
       no ChatGPT com identidade e política de privacidade da instalação.
 
 **Âmbito verificado:** implementação e ensaio local isolado. Não implica activação em produção
-nem publicação no ChatGPT. Ver [`docs/MCP.md`](docs/MCP.md) e
+nem publicação no ChatGPT. Ver [Agentes](docs/modulos/agentes.md) e
 [`CLAUDE.md §13.1`](CLAUDE.md).
 
 ---
@@ -348,7 +360,7 @@ nem publicação no ChatGPT. Ver [`docs/MCP.md`](docs/MCP.md) e
 - [~] B-107 Validar o formato e as referências do extracto real antes de criar o adaptador diário.
 
 Plano V2–V6, matriz de lacunas e cenários de carga em
-[`docs/PREPARACAO-VOLUME.md`](docs/PREPARACAO-VOLUME.md). Esta passagem prepara a base;
+[plano de volume](docs/planos/volume.md). Esta passagem prepara a base;
 não declara os 1.500 pedidos/dia, 30 pedidos/minuto ou 96.000 pedidos/ano já ensaiados.
 O KDS completo é uma evolução separada. Não executar integrações reais por inferência da proposta.
 
@@ -365,7 +377,7 @@ O KDS completo é uma evolução separada. Não executar integrações reais por
 - [~] B-108 Validar migrations 1046/1047, permissões e percurso integrado em staging.
 - [~] B-109 Integração directa Movitel e ensaio acompanhados em V1.2 (orientação actual).
 
-Ver [`docs/EMOLA-ONLINE.md`](docs/EMOLA-ONLINE.md). Preparação local, sem activação real.
+Ver [Pagamentos](docs/modulos/pagamentos.md). Preparação local, sem activação real.
 
 ## V1.2 — e-Mola directo Movitel *(produto · 2026-09-14)*
 
@@ -382,25 +394,26 @@ Paysuite permanece no motor. Nenhuma cobrança real ou adesão a fornecedor foi 
 
 O HAWSMASH 2.0 é a **primeira instância multi-unidade** do Restaurant OS. O caminho para produto:
 1. Consolidar este motor (uma empresa, N lojas) — é o que esta fase entrega.
-2. Extrair a instanciação (`config/brand.ts` + seed + `stores`) num onboarding self-service.
+2. Completar a instanciação (`brand_settings` + seed + `stores`, com `config/brand.ts` como fallback) num onboarding self-service.
 3. Só depois discutir multi-tenant real (`tenant_id` + RLS por inquilino) — **com ADR** e sem tocar neste cliente.
 
 ## Campanhas automáticas por loja — 2026-09-23
 
-- [x] Reajuste auditado e idempotente por loja; desconto por unidade com data final; banner e preços de tabela/campanha.
+- [x] Reajuste auditado e idempotente por loja; desconto por unidade com data final; componentes de banner/preços presentes no código.
 - [x] Ensaio SQL local transaccional: arredondamento, retry, isolamento, expiração e total do pedido.
-- [x] ⏳ Validar checkout público completo e activar apenas depois de staging (ver docs/CAMPANHAS.md).
+- [x] ⏳ Implementação parcial, por validar no checkout público completo antes de activar — ver [Marketing](docs/modulos/marketing.md).
+- [ ] Integrar `CampaignBanner`/`CampaignPrice` na montra activa e condicionar o cupão no checkout; a auditoria não encontrou importadores destes componentes. Validar expiração e total antes de fechar a integração.
 
 
 ## Definições do POS por loja — 2026-09-23
 
 Aba **POS** no painel (`/definicoes-pos`): cada loja configura o seu balcão sem deploy.
-Contrato e checklist para levar a outros projectos: [`docs/POS-DEFINICOES.md`](docs/POS-DEFINICOES.md) ·
+Contrato e checklist para levar a outros projectos: [POS](docs/modulos/pos.md) ·
 [ADR 0006](docs/decisions/0006-definicoes-do-pos-por-loja.md).
 
 - [x] `store_pos_settings` (1067): RLS por loja, escrita só por RPC, `event_log` com as secções mudadas.
 - [x] Frases do upsell e notas rápidas desta casa saem do código para dados (1068); fábrica neutra.
-- [x] POS lê as definições (cache offline, relê a cada 2 min): pagamentos, misto, upsell por passo,
+- [x] POS lê as definições (cache offline, relê a cada 15 s no código actual; divergência do ADR 0006 em V-11): pagamentos, misto, upsell por passo,
       notas rápidas, tipo de pedido ao abrir, nome/telefone no balcão, confirmação, som.
 - [x] Painel: editar por loja, repor fábrica, descartar, copiar para outra loja.
 - [x] Testes: contrato (`settings.test.ts`), isolamento entre lojas (`pos-settings.test.ts`), e2e local.
@@ -411,7 +424,7 @@ Contrato e checklist para levar a outros projectos: [`docs/POS-DEFINICOES.md`](d
 ## Upsell por loja e modelos do talão — 2026-09-23
 
 Aba **POS**: o dono escolhe os produtos de cada passo do upsell e como sai o papel, loja a loja.
-Contrato em [`docs/POS-DEFINICOES.md`](docs/POS-DEFINICOES.md) §1 e §11 · [ADR 0007](docs/decisions/0007-modelos-do-talao.md).
+Contrato em [POS](docs/modulos/pos.md) e [Impressão](docs/modulos/impressao.md) · [ADR 0007](docs/decisions/0007-modelos-do-talao.md).
 
 - [x] Produtos por passo do upsell (lista da loja, com ordem; vazio = os do Cardápio); POS e painel.
 - [x] `packages/receipt`: os formatos saem do bridge para um pacote partilhado; o de fábrica sai byte a byte igual (`talao-bytes.test.ts`, 9 formatos).
@@ -438,7 +451,7 @@ detalhe do pedido no quadro do POS (1072, `update_order_details`).
 - [x] Redesenhar Vendas e Aquisição: hierarquia, indicadores, gráficos, funil, tabelas e exportação; componentes reutilizáveis e estilos limitados à nova base.
 - [x] Validar no browser: 8 cenários Playwright locais, desktop/móvel/320 px, auditoria axe A/AA da área redesenhada, teclado, filtros, falhas, estados vazios e CSV.
 - [x] Corrigir períodos móveis de Aquisição, exportação no fuso de Maputo, formatação `formatMT`, respostas atrasadas e lojas autorizadas na exportação.
-- [x] Documentar a base em `docs/ANALISE-DESIGN.md` para migrar as restantes páginas numa próxima etapa.
+- [x] Documentar a base em [Análise da interface](docs/desenvolvimento/analise-interface.md) para migrar as restantes páginas numa próxima etapa.
 - [~] B-111 — validar em staging com sessões e dados reais antes de promover. Não foi publicado em produção nesta corrida.
 
 ## Exportação autenticada e CSV para integração · 2026-09-24
@@ -454,7 +467,7 @@ detalhe do pedido no quadro do POS (1072, `update_order_details`).
 - [x] Aquisição online sem vendas POS; Vendas Todos/Online/POS e vista POS própria, com filtros no servidor e comparação anterior consistente.
 - [x] Rastrear ofertas/aceitações, acompanhamentos e upgrades do site e ofertas do POS; conservar atribuição na fila offline, nos retries e após alterações ao carrinho.
 - [x] Receita adicional confirmada, descontos e margem bruta estimada por produto/oferta; custos desconhecidos explícitos, sem inventar histórico.
-- [x] Ensaios de dinheiro/isolamento/idempotência, interfaces e acessibilidade; contrato em `docs/ANALISE-ORIGENS-UPSELL.md`.
+- [x] Ensaios de dinheiro/isolamento/idempotência, interfaces e acessibilidade; contrato em [Marketing](docs/modulos/marketing.md) e [Relatórios](docs/modulos/relatorios.md).
 - [x] Corrigir trigger Railway: produção acompanha `main`, staging acompanha `dev`.
 - [x] Aplicar 1073/1074 em staging e reconciliar as RPCs autenticadas por leitura, sem vendas artificiais.
 - [x] QR de mesa permanece online quando não tem origem POS (1075); verificação de regressão antes da correcção.

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // pnpm menu:import <ficheiro.json> [--dry-run]
-// Importa um cardápio no formato canónico (docs/menu-format.md) para a BD via RPC import_menu.
+// Importa um cardápio no formato canónico (docs/desenvolvimento/cardapio-importacao.md) para a BD via RPC import_menu.
 // Valida + converte preços (centavos) com packages/core; envia para o Supabase com a service role.
 
 import { readFileSync, existsSync } from 'node:fs';

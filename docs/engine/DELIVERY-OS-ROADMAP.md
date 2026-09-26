@@ -1,3 +1,5 @@
+> **Arquivo do motor anterior.** As ligações relativas no corpo pertencem ao repositório de origem. Destinos actuais: [importação de cardápio](../desenvolvimento/cardapio-importacao.md), [JSON de exemplo](../../examples/menu.example.json), [guia Paysuite](../../.claude/skills/connect-paysuite/SKILL.md). Para o sistema actual: [índice](../README.md).
+
 # ROADMAP.md — Delivery OS: Roteiro de Execução em Fases
 
 > **Como usar:** abrir o Claude Code na raiz do repo. Colar o PROMPT da fase atual, exatamente como está.
