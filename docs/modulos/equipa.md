@@ -56,7 +56,7 @@ Uma primeira entrada, criação de sessão ou troca de operador precisa da rota 
 
 ## Contrato preservado da spec
 
-A matriz seguinte é a regra do produto. As permissões SQL diferem para cozinha e acções sensíveis: auditoria V03/V14/V15. Bloquear um ecrã não impõe essa regra na BD.
+A matriz seguinte é a regra do produto. Desde a 1097/1099 a BD impõe-na nas transições (`advance_order` por perfil), na confirmação de pagamento (só servidor) e nos comprovativos (loja, sem cozinha). Continua por impor a leitura de valores pela cozinha (V-03, B-116). Bloquear um ecrã não impõe regra nenhuma na BD.
 
 ## 6. EQUIPA, PERFIS E AUDITORIA
 

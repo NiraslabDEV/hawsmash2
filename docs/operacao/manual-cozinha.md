@@ -72,8 +72,8 @@ Não continuar a montar um produto que já acabou: o cliente paga e não recebe.
 
 ## Nota para o responsável pela instalação
 
-O perfil `kitchen` destina-se a preparação, sem acesso financeiro. A auditoria encontrou uma divergência:
-as policies/RPCs de pedidos e payloads de impressão ainda expõem valores, e a autorização de certas
-transições é mais ampla do que a regra de produto. Ocultar dinheiro no ecrã não corrige RLS. Não declarar
-esse isolamento validado nem usar o manual para alargar permissões; ver V-03/V-14 na
+O perfil `kitchen` destina-se a preparação, sem acesso financeiro. Desde a 1097 a cozinha só avança
+preparo — não aprova nem cancela. As policies/RPCs de pedidos e payloads de impressão ainda expõem
+valores (V-03, B-116): ocultar dinheiro no ecrã não corrige RLS. Não declarar esse isolamento validado
+nem usar o manual para alargar permissões; ver V-03/V-14 na
 [auditoria](../AUDITORIA-DOCUMENTACAO.md), [Equipa](../modulos/equipa.md) e [Impressão](../modulos/impressao.md).

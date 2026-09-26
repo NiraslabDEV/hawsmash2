@@ -46,11 +46,11 @@ de vendas, variantes, adicionais, modificadores ou de todos os preços/configura
   `normalizeMenuImport` e `packages/core/src/money.ts`. Não pôr centavos no campo `price`.
 - **Preço nulo ou omitido:** o normalizador grava `price_cents=0`, força `available=false` e acrescenta
   `(preço a confirmar)` à descrição. Um zero explícito é diferente: mantém o `available` fornecido/default.
-- **Limite conhecido:** a implementação usa `toFixed(2)` para números, `parseFloat` na validação e
-  `Math.round(parseFloat(...) * 100)` na conversão. Não oferece validação decimal estrita nem cumpre a
-  regra de conversão sem float; valores com sufixos podem ser aceites pelo prefixo numérico. A
-  [auditoria V-07](../AUDITORIA-DOCUMENTACAO.md#5-código-que-viola-a-spec) regista a divergência. Fornecer
-  preços com ponto e duas casas, conferir o dry-run e não tratar o parser actual como validador de texto livre.
+- **Conversão de preço:** números passam por `toFixed(2)`; texto é convertido por `decimalStringToCents`
+  com aritmética de inteiros (sem float, desde 26/09 — [auditoria V-07](../AUDITORIA-DOCUMENTACAO.md#5-código-que-viola-a-spec)).
+  Aceita ponto ou vírgula; a partir da terceira casa arredonda meio para cima; recusa negativos, notação
+  científica e texto a seguir ao número (`12abc`). A aba Cardápio do painel ainda tem uma conversão local
+  própria, por alinhar.
 - `name` da categoria e do item identificam os registos na importação. O normalizador remove espaços
   exteriores, mas não verifica unicidade de nomes no ficheiro; conferir duplicações antes de importar.
 - `photo_url` deve ser uma URL acessível ou caminho público correcto: a loja usa-o tal como recebido.

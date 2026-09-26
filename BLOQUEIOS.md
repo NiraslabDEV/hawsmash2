@@ -40,9 +40,9 @@
 
 ## Estado actual do registo — revisão documental de 26/09/2026
 
-**35 entradas abertas e 2 resolvidas no texto.** Esta contagem não é validação de uma instalação. As dependências e parcelas já documentadas como resolvidas foram esclarecidas em B-006/B-008/B-012/B-022/B-101/B-110; nenhum bloqueio foi fechado sem evidência suficiente.
+**39 entradas abertas e 2 resolvidas no texto** (35 da revisão documental + B-115–B-118 das correcções do mesmo dia). Esta contagem não é validação de uma instalação. As dependências e parcelas já documentadas como resolvidas foram esclarecidas em B-006/B-008/B-012/B-022/B-101/B-110; nenhum bloqueio foi fechado sem evidência suficiente.
 
-As [violações de código identificadas na auditoria](docs/AUDITORIA-DOCUMENTACAO.md#5-código-que-viola-a-spec) são uma lista separada para decisão técnica. Esta revisão só reorganiza documentação; não corrige permissões, idempotência ou gateways.
+As [violações de código identificadas na auditoria](docs/AUDITORIA-DOCUMENTACAO.md#5-código-que-viola-a-spec) foram corrigidas no mesmo dia no branch `fix/violacoes-spec`, salvo V-03, V-10 e V-11 (decisões B-116–B-118); o estado item a item está na §5.1 da auditoria. **As migrations 1097–1099 não estão aplicadas em nenhuma base** — B-115.
 
 ## ABERTOS
 
@@ -79,7 +79,7 @@ Confirmar protecção de branch, ambientes e DNS; configurar e ensaiar SMTP, Sen
 
 | Prioridade pelo impacto na abertura | Sem isto, o que falta assegurar |
 |---|---|
-| Violações V01–V05 e V13–V16 da [auditoria](docs/AUDITORIA-DOCUMENTACAO.md) | Isolamento, privacidade, autorização financeira, retry de movimentos e confirmação online independente da fila de impressão; exigem tarefa de código própria |
+| B-115 — aplicar 1097–1099 e o código de `fix/violacoes-spec` | Isolamento, privacidade, autorização financeira, retry de movimentos e confirmação online independente da fila de impressão. Corrigido e provado numa BD local; sem efeito até aplicar |
 | B-006, B-004, B-110 | Venda por operador, papel e operação contínua nas duas lojas |
 | B-017, B-020, B-101–102 | Controlo de componentes/custos e prova de integridade de stock, conta e isolamento na BD |
 | B-002–003, B-001, B-100, B-106–109 | Entrega na zona correcta e recebimento/reconciliação; manual é contingência, não validação dos automáticos |
@@ -716,7 +716,7 @@ As 16 violações da spec permanecem no relatório, separadas dos IDs histórico
   1. **Scheduler.** Nada chama a rota sozinho no 2.0 — o mesmo buraco do B-106 (o digest diário também não
      corre). `GET /api/cron/monthly` com `Authorization: Bearer $CRON_SECRET`, cron `0 6 1 * *` (UTC = 08h Maputo).
   2. **`CRON_SECRET`** e **`OWNER_EMAIL`** (a caixa da casa) no Railway do ambiente que envia. Sem segredo a rota
-     responde 503; é a única rota de cron que fecha assim, porque manda email e chama uma API paga.
+     responde 503 — desde `fix/violacoes-spec` (26/09) todos os crons fecham assim (R-02 da auditoria).
   3. **`GOOGLE_PLACES_API_KEY`**: projecto Google Cloud com facturação, *Places API (New)* activada, chave de
      servidor restrita a essa API. Duas leituras por mês.
   4. **Place ID** de cada loja na aba **Lojas** (localizador de Place ID do Google). Loja sem perfil próprio no
@@ -733,6 +733,70 @@ As 16 violações da spec permanecem no relatório, separadas dos IDs histórico
     vendeu.
 - Para fechar: resumo recebido na caixa da casa com as duas lojas e a nota de cada uma; pedido de acesso GBP aprovado
   e métricas no email.
+
+---
+
+### B-115 · [Segurança] Aplicar 1097–1099 e o código das correcções da auditoria
+
+- Estado: **aberto**. Categoria: **acesso/infraestrutura**. Desbloqueia: Gabriel.
+- O que é: o branch `fix/violacoes-spec` corrige 13 violações e 4 riscos da auditoria de 26/09
+  ([§5.1](docs/AUDITORIA-DOCUMENTACAO.md)). Três migrations (`1097_estado_e_pagamento_por_perfil`,
+  `1098_sangria_idempotente`, `1099_isolamento_de_dados`) e código do painel, POS e rotas. Provado numa BD
+  local ([evidência](docs/validation/correcoes-violacoes-2026-09-26.md)); **nada foi aplicado em staging nem no LIVE**.
+- Porque não avancei: o staging é o que o POS de Maputo usa; aplicar a meio do serviço é manutenção em horário de
+  loja (§18.4) e mexe em quem pode aprovar e cancelar.
+- Para fechar, por esta ordem, **fora do horário**:
+  1. `supabase migration list --linked` no staging; aplicar **só** 1097–1099 (procedimento de pasta temporária se a
+     1077/1078/1096 de outra sessão ainda estiverem pendentes).
+  2. Correr `pnpm --filter @delivery/db test:db --run tests/permissoes-e-isolamento.test.ts` contra o staging **com a
+     bridge desligada** (o travão da suite pára se estiver viva).
+  3. **`CRON_SECRET`** preenchido no Railway de cada ambiente e no scheduler: sem ele, alerts/digest/conversions
+     passam a responder 503 (antes corriam abertos).
+  4. Deploy do código (merge de `fix/violacoes-spec` em `dev`). A ordem migration → código não é obrigatória para a
+     sangria (o POS cai para a assinatura antiga), mas é para o resto.
+  5. Ensaio curto no POS: caixa aprova e recusa um pedido online; caixa **não** consegue cancelar uma venda paga
+     (recebe a mensagem do gerente); sangria com rede a falhar não duplica; o PDF do fecho descarrega; o email de
+     fecho chega ao dono (antes nunca chegava — R-03).
+  6. `RELEASE_GUARD=1` só no ambiente LIVE do Railway, quando existir.
+- Se correr mal: `advance_order`/`confirm_payment` voltam atrás com uma migration nova que repõe a 1062; os grants da
+  1099 revertem-se com `grant`. Nada apaga dados.
+
+---
+
+### B-116 · [Equipa] A cozinha vê dinheiro (V-03)
+
+- Estado: **aberto**. Categoria: **decisão técnica**. Desbloqueia: Gabriel.
+- Pergunta exacta: esconder totais e pagamentos à cozinha vale uma mudança de schema agora, ou basta a cozinha não
+  ter contas próprias até à Fase 2?
+- O problema: a RLS decide **que linhas** cada um vê, não **que colunas**. `orders`, `order_items`, `print_jobs` e
+  `get_orders` devolvem valores a quem vê o pedido, e o perfil `kitchen` vê os pedidos da loja (CLAUDE §6: "não vê
+  dinheiro"). O painel esconde; uma chamada directa à API não.
+- Como avancei: nada no código. As restantes protecções da cozinha estão feitas (não aprova, não cancela, não abre
+  comprovativos — 1097/1099).
+- Opções: (a) vista/RPC da cozinha sem colunas de dinheiro e retirar à cozinha o SELECT directo — horas, toca no
+  quadro do POS; (b) não criar contas `kitchen` até ao KDS da Fase 2, onde a vista nasce já certa — minutos.
+  Recomendo (b) enquanto a cozinha só lê papel.
+
+---
+
+### B-117 · [Bridge] Nome do cliente no executável e na tarefa do Windows (V-10)
+
+- Estado: **aberto**. Categoria: **hardware/instalação**. Desbloqueia: Gabriel, na loja.
+- O problema: `build-sea.ps1` e `install-task.ps1` trazem o nome do cliente como omissão (CLAUDE §18.3).
+- Porque não mudei: Maputo já tem a tarefa instalada com esse nome. Mudar a omissão e reinstalar criaria uma
+  **segunda** tarefa ao lado da antiga — duas bridges a puxar a mesma fila.
+- Para fechar, na próxima visita: `uninstall-task.ps1` com o nome antigo, trocar as omissões para um nome neutro
+  (ex.: `print-bridge.exe`, "Print Bridge"), reinstalar, confirmar uma só tarefa e um só heartbeat em `devices`.
+
+---
+
+### B-118 · [POS] ADR 0006 diz 2 min; o POS relê definições e cardápio a cada 15 s (V-11)
+
+- Estado: **aberto**. Categoria: **decisão (documentação)**. Desbloqueia: Gabriel.
+- Pergunta exacta: confirmar os 15 s e emendar o ADR 0006?
+- Contexto: os 15 s são deliberados (`apps/web/lib/pos/offline-store.ts`): a 2 min, um produto marcado como esgotado
+  continuava à venda no balcão até ao ciclo seguinte. O custo é uma leitura leve a cada 15 s por terminal.
+- Se a resposta for "2 min": uma constante e um teste — minutos.
 
 ---
 

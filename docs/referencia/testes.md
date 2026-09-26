@@ -42,7 +42,7 @@ Bridge: lint/test/test:watch, dev/bridge:dev (watch do serviço), dev:sim (demon
 
 ## 3. Scripts fora do menu principal
 
-- import-hawsmash-1.ts: dry-run lê origem; --apply escreve destino; guarda prometida ausente (R-04).
+- import-hawsmash-1.ts: dry-run lê origem; --apply escreve destino; numa base remota exige --i-know-this-is-live (R-04, corrigido a 26/09).
 - backup.mjs: pg_dump, pasta/dry-run, retenção 30 dias; transporte externo não implementado.
 - check-placeholders.mjs: consulta stores/delivery_zones/staff_profiles; manual, não ligado ao build.
 - reconcile-payment-statement.ts: ficheiros JSON locais, não consulta banco/fornecedor nem confirma pagamento.

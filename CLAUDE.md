@@ -101,14 +101,27 @@ Código em `apps/web/`, `packages/` e `services/print-bridge/`; SQL em `supabase
 
 Uma instância é uma empresa; `store_id` é unidade física, nunca tenant.
 Catálogo partilhado; preços efectivos, disponibilidade, numeração e operação por loja.
+
+- O kill switch real é `stores.accepting_orders`; `settings` é só da empresa e não fecha loja nenhuma.
+- `slug` e `order_prefix` são imutáveis depois de criados (histórico, cookies, `.env` da bridge).
+- Horário, zonas, números de pagamento e provider vivem em `stores`; nunca o mesmo campo nos dois sítios.
+
 [Contrato e gestão de lojas](docs/modulos/lojas.md).
 
 ---
 
 ## 6. EQUIPA, PERFIS E AUDITORIA
 
-Perfis `owner`, `manager`, `cashier`, `kitchen`; acções sensíveis registam actor e loja.
-O POS abre a sessão de cada operador por cartão + PIN, mantendo autoria da venda.
+| Perfil | Vê | Pode |
+|---|---|---|
+| `owner` | **todas** as lojas | tudo: definições, preços, equipa, anulações, consolidado |
+| `manager` | as suas lojas | operação completa da loja: aprovar, anular, caixa, sangria, estoque, cardápio |
+| `cashier` | a sua loja | vender, imprimir, receber, gaveta **em venda**, o seu caixa; aprovar/recusar pedidos online depois de conferir o comprovativo; marcar esgotado/disponível. **Não** anula venda paga (decisão do dono, 23 Set) |
+| `kitchen` | a sua loja | ver pedidos e avançar preparo (em preparo → pronto). **Não vê dinheiro** — ainda não imposto na BD, B-116 |
+
+Imposto na BD, não no ecrã: `advance_order` por perfil e `confirm_payment` só do servidor (1097), `void_sale` só
+manager/owner, comprovativos só da loja e sem cozinha (1099). Acções sensíveis gravam `event_log` com actor e loja.
+O POS abre a sessão Supabase **de cada operador** por cartão + PIN — nunca uma sessão do terminal.
 [Equipa, permissões exigidas e efectivas](docs/modulos/equipa.md).
 
 ---
@@ -117,6 +130,10 @@ O POS abre a sessão de cada operador por cartão + PIN, mantendo autoria da ven
 
 POS touch, PWA, pagamentos, turnos e fila IndexedDB com `client_sale_id`.
 Servidor fixa preços e estado; impressão/rede degradam sem perder a venda.
+
+- `create_counter_sale` é transaccional e idempotente por `client_sale_id`; recalcula preço e troco, baixa stock.
+- Anular é `void_sale` (manager/owner, motivo, repõe stock); a venda anulada nunca desaparece. Reimprimir loga.
+- Sangria/reforço/despesa levam `p_request_id` (1098). Nunca um `confirm()` do browser em fluxo de venda.
 [Fluxos, definições e contrato offline (§7.5 original)](docs/modulos/pos.md).
 
 ---
@@ -155,7 +172,8 @@ Realtime só dispara `refetch`; testes e migrations em staging precedem produç�
 
 ## 12. PEDIDO — canais e máquina de estados
 
-Delivery, levantamento, balcão e mesas; transições pela camada SQL, nunca pelo cliente.
+Delivery, levantamento, balcão e mesas; transições só por `advance_order`, nunca por update directo.
+Papel na aprovação/confirmação é best-effort: falha vira `print.enqueue_failed`, não reverte o pedido (1097).
 A máquina pura herdada não é a autoridade de todos os estados actuais.
 [Pedidos](docs/modulos/pedidos.md) · [mesas](docs/modulos/mesas.md).
 

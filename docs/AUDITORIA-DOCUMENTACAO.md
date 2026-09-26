@@ -108,7 +108,9 @@ Não há, no conjunto actual, índices gerais de documentação e de ADRs, catá
 
 ## 5. Código que viola a spec
 
-**Não corrigido nesta tarefa.** As conclusões seguintes têm suporte no código versionado/árvore local. A prioridade indica impacto potencial, não exploração ou incidente confirmado. A remediação de comportamento/schema precisa de tarefa própria e, para SQL, nova migration.
+**Estado em 26/09, fim do dia:** a revisão documental não corrigiu código; a correcção veio a seguir, no branch `fix/violacoes-spec` (tabela 5.1). A tabela abaixo mantém a evidência original, com as linhas do código **antes** da correcção.
+
+A prioridade indica impacto potencial, não exploração ou incidente confirmado.
 
 | ID / prioridade | Regra preservada | Evidência e contradição |
 |---|---|---|
@@ -123,13 +125,43 @@ Não há, no conjunto actual, índices gerais de documentação e de ADRs, catá
 | V-09 · média | AGENTS §1.5: guarda de PLACEHOLDER_ ligada ao build de produção | `scripts/check-placeholders.mjs` existe e consulta três tabelas, mas não é chamado pelos scripts build, Railway ou CI. Teste puro do detector não prova que o build bloqueia uma instalação com placeholders |
 | V-10 · média | CLAUDE §17/§18.3: identidade do cliente fora de caminhos/variáveis/código do produto | `services/print-bridge/windows/build-sea.ps1:19` e `windows/install-task.ps1:3` fixam nome de executável/tarefa com identidade do cliente; `scripts/lib/backup-plan.mjs:8` fixa-a no rótulo de backup. O teste de conteúdo cobre TS/TSX/CSS, não scripts PowerShell |
 | V-11 · baixa | ADR 0006: leitura de definições do POS a cada 2 min | `apps/web/lib/pos/offline-store.ts:19` e `apps/web/app/(pos)/pos/pos-shell.tsx:568` fazem leitura a cada 15 s. Decisão original não será reescrita; é necessário reconciliar implementação e decisão |
-| V-12 · média | CLAUDE §3: Zod em todas as boundaries | Três handlers send-order/approval/rejection-email lêem JSON com verificações de campos em vez de schema; `apps/web/app/api/emails/send-order-email/route.tsx:13` aceita destinatário/assunto/HTML do caller. Também não têm guard de autorização; ver R-01 |
+| V-12 · média | CLAUDE §3: Zod em todas as boundaries | Três handlers send-order/approval/rejection-email liam JSON com verificações de campos em vez de schema; o send-order-email (linha 13, rota removida em `e1b9ecb`) aceitava destinatário/assunto/HTML do caller. Também não têm guard de autorização; ver R-01 |
 | V-13 · alta | CLAUDE §1 regra 4: operações de dinheiro idempotentes | `supabase/migrations/20260819220000_1007_cash.sql:204` define add_cash_movement sem chave de pedido; `:250` insere sempre uma nova linha. cash_movements não tem unicidade de retry. Repetir a mesma sangria/reforço após resposta incerta volta a contabilizá-la; não depende de a UI fazer retry automático |
 | V-14 · alta | CLAUDE §6/§7.4: cozinha só avança preparo; anulação de venda exige manager/owner | `supabase/migrations/20260923140000_1062_comanda_padrao_em_todos_os_canais.sql:163` verifica acesso à loja e delega em advance_order_legacy. `supabase/migrations/20260819231000_f6_stock_consumption.sql:507` e `:533` aceitam APPROVE/CANCEL sem auth_role. Cozinha pode aprovar/cancelar por RPC; caixa pode contornar a restrição de void_sale por CANCEL |
 | V-15 · alta | CLAUDE §17: não confiar no cliente para estado de pagamento | `supabase/migrations/20260923140000_1062_comanda_padrao_em_todos_os_canais.sql:205` e `:236` autorizam confirm_payment a authenticated com acesso ao pedido. O legado em `supabase/migrations/20260819231000_f6_stock_consumption.sql:633` recebe provider/ref/montante do caller e confirma ao coincidir o total. Um staff da loja pode chamar a RPC sem verificação de gateway. O HMAC do handler HTTP não protege a chamada directa à RPC |
 | V-16 · alta | CLAUDE §1/§8: papel best-effort não reverte a venda | No online, `supabase/migrations/20260923140000_1062_comanda_padrao_em_todos_os_canais.sql:174` e `:227` chamam enqueue_kitchen_tickets sem bloco de excepção; o legado também insere print_jobs dentro da transacção. Erro SQL na preparação do papel reverte aprovação/confirmação. Isto é diferente de falha física da impressora, que continua assíncrona; o POS tem protecção própria |
 
 Nos nomes abreviados de migration desta secção, o ficheiro completo correspondente está no inventário do anexo A. Os sufixos são únicos no retrato auditado.
+
+### 5.1 Estado após a correcção de 26/09 (`fix/violacoes-spec`)
+
+Cada correcção SQL foi provada **antes** (cenário vermelho) e **depois** (verde) numa BD local — PGlite com as 152 migrations e o seed, sem Docker nem ambiente remoto; evidência em [validation/correcoes-violacoes-2026-09-26.md](validation/correcoes-violacoes-2026-09-26.md). **Nenhuma migration foi aplicada em staging ou produção.** O gate em supabase-js está em `packages/db/tests/permissoes-e-isolamento.test.ts`, por correr contra um Supabase local.
+
+| ID | Estado | Como | Commit |
+|---|---|---|---|
+| V-01 | Corrigido | 1099: `identify_customer`/`get_customer_orders` sem `anon`; POS e painel usam-nas com sessão; a montra pública já não as chamava | `ba8956a` |
+| V-02 | Corrigido | 1099: comprovativos lidos só pela equipa da loja do pedido (sem cozinha); ninguém apaga/altera pela API; envio igual ao do checkout | `ba8956a` |
+| V-03 | **Aberto — decisão** | Esconder colunas de dinheiro à cozinha exige separar dados ou mudar as leituras do quadro/POS. Ver BLOQUEIOS B-116 | — |
+| V-04 | Corrigido | 1099: `store_items` só aceita UPDATE directo de `available`; stock e preço pelas RPCs auditadas | `ba8956a` |
+| V-05 | Corrigido | 1099: linhas sem loja em atribuição/conversões só para o dono | `ba8956a` |
+| V-06 | Corrigido | Definições só com email do dono e oferta online; o menu lateral mostra cada loja por `stores.accepting_orders` | `782ed7a` |
+| V-07 | Corrigido no core | `decimalStringToCents` sem float. **Falta** a cópia local em `apps/web/app/(admin)/menu-section.tsx`, que tem trabalho de outra sessão por commitar | `782ed7a` |
+| V-08 | Corrigido | Emails de pedido por `formatMT` | `e1b9ecb` |
+| V-09 | Corrigido | `pnpm build` corre a guarda com `RELEASE_GUARD=1` (ligar só no LIVE) | `782ed7a` |
+| V-10 | **Aberto — decisão** | Renomear o `.exe`/tarefa numa loja já instalada criaria uma segunda tarefa ao lado da antiga. Ver BLOQUEIOS B-117 | — |
+| V-11 | **Aberto — decisão** | Os 15 s são deliberados (esgotado deixava de valer até 2 min). Falta emendar o ADR 0006 — BLOQUEIOS B-118 | — |
+| V-12 | Corrigido | Rotas de email com Zod e sessão | `e1b9ecb` |
+| V-13 | Corrigido | 1098: `p_request_id` em `add_cash_movement`; painel e POS mandam a chave e caem para a assinatura antiga se a base ainda não tiver a 1098 | `ba8956a` |
+| V-14 | Corrigido | 1097: APPROVE só owner/manager/cashier; CANCEL de caixa só antes de haver dinheiro; cozinha só avança preparo | `ba8956a` |
+| V-15 | Corrigido | 1097: `confirm_payment` só `service_role` | `ba8956a` |
+| V-16 | Corrigido na comanda da casa | 1097: `enqueue_kitchen_tickets` em subbloco, falha em `print.enqueue_failed`. A comanda antiga do motor continua na transacção (sem conflito possível na primeira aprovação) | `ba8956a` |
+| R-01 | Corrigido | Relay removido; emails de pedido com sessão, destinatário da BD, HTML escapado | `e1b9ecb` |
+| R-02 | Corrigido | Todos os crons fechados sem `CRON_SECRET` (503) | `e1b9ecb` |
+| R-03 | Corrigido | PDF e emails do caixa aceitam o Bearer; o link PDF descarrega autenticado | `e1b9ecb` |
+| R-04 | Corrigido | `--apply` remoto exige `--i-know-this-is-live`; delete falhado pára antes do insert | `782ed7a` |
+| R-05–R-08 | Abertos | Limites documentados (bridge, perfis de UI, turbo env, lojas por join) | — |
+
+Achado novo nesta correcção: `/api/conversions/fire` também estava aberto (qualquer `orderId` e valor gravavam uma compra no funil). Corrigido em `e1b9ecb`.
 
 ### Riscos e limitações que não se devem disfarçar de factos corrigidos
 

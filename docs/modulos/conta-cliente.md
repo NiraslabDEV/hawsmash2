@@ -46,7 +46,7 @@ As RPCs `account_bind_device`, `account_me`, `account_logout`, `account_save_add
 
 O UUID de pedido é tratado por `account_bind_device` como prova de posse. Porém as RPCs públicas de resumo por telefone devolvem IDs de pedidos, e o handler bind aceita esse ID sem outra prova. A combinação permite obter sessão/perfil a partir de um identificador que já é público por telefone. **Hash dos tokens, httpOnly e grants service-only não eliminam esta cadeia.**
 
-É o achado **V-01** da [auditoria, secção 5](../AUDITORIA-DOCUMENTACAO.md#5-código-que-viola-a-spec). Não foi explorado contra dados reais e não foi corrigido nesta tarefa documental. Não prometer privacidade conforme ADR até existir uma correcção de comportamento validada. `get_order_status` não precisa de expor a morada para esta cadeia existir: o perfil devolvido pelo bind é suficiente.
+Era o achado **V-01** da [auditoria, secção 5](../AUDITORIA-DOCUMENTACAO.md#5-código-que-viola-a-spec). A 1099 retira `identify_customer` e `get_customer_orders` ao `anon` — o telefone deixa de dar ids de pedidos a quem não tem sessão da equipa; provado numa BD local, por aplicar (B-115). `get_order_status` não precisa de expor a morada para esta cadeia existir: o perfil devolvido pelo bind é suficiente.
 
 ## Código, auditoria e testes
 

@@ -4,7 +4,7 @@ A caixa controla o dinheiro físico e separa-o dos restantes meios de pagamento.
 
 ## Perfis e unidade
 
-As RPCs de caixa verificam autenticação, perfil `owner`/`manager`/`cashier` e `auth_can_store`, recusando `kitchen`. Isto não garante ausência de acesso financeiro noutros módulos: leituras de pedidos e as RPCs `advance_order`/`confirm_payment` têm as divergências V03/V14/V15 da [auditoria](../AUDITORIA-DOCUMENTACAO.md). O POS mostra a loja vinculada ao dispositivo, mesmo se a pessoa tiver outras lojas; “Todas” no painel é consolidação de leitura. A regra de produto atribui ao caixa a operação da sua caixa; a implementação SQL organiza a sessão aberta **por loja**, serializada com um lock. Não interpretar a mudança de operador como criação automática de uma gaveta independente.
+As RPCs de caixa verificam autenticação, perfil `owner`/`manager`/`cashier` e `auth_can_store`, recusando `kitchen`. Isto não garante ausência de acesso financeiro noutros módulos: desde a 1097, `advance_order` impõe o perfil (o caixa não cancela venda paga; a cozinha não aprova nem cancela) e `confirm_payment` é só do servidor; a leitura de valores pela cozinha continua aberta (V-03, B-116). Ver a [auditoria §5.1](../AUDITORIA-DOCUMENTACAO.md). O POS mostra a loja vinculada ao dispositivo, mesmo se a pessoa tiver outras lojas; “Todas” no painel é consolidação de leitura. A regra de produto atribui ao caixa a operação da sua caixa; a implementação SQL organiza a sessão aberta **por loja**, serializada com um lock. Não interpretar a mudança de operador como criação automática de uma gaveta independente.
 
 ## Fluxo do turno
 
@@ -57,7 +57,7 @@ Testes puros de leitura, entradas e relatório estão em [lib/cash/__tests__](..
 
 ## Contrato preservado da spec
 
-O bloco SQL seguinte é o desenho inicial. O módulo acima distingue turnos, movimentos e fechos do dia actuais. Os endpoints PDF/email lêem cookies, enquanto os chamadores mantêm sessão no browser; a compatibilidade de autenticação precisa de ensaio (R-03).
+O bloco SQL seguinte é o desenho inicial. O módulo acima distingue turnos, movimentos e fechos do dia actuais. Os endpoints PDF/email aceitam o Bearer da sessão do browser (antes só cookies, e respondiam 401 — R-03, corrigido a 26/09); o painel descarrega o PDF autenticado. Sangria, reforço e despesa levam `p_request_id` (1098): repetir o mesmo movimento não o conta duas vezes.
 
 ## 9. CAIXA (por loja, por turno)
 

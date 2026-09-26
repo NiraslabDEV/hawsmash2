@@ -4,7 +4,7 @@ O pedido é o registo comum da encomenda online, venda de balcão e consumo em m
 
 ## Perfis e fluxos
 
-O dono consulta todas as lojas; gerente, caixa e cozinha ficam sujeitos às lojas atribuídas. “Todas” serve a leitura consolidada: mutações devem referir uma encomenda e loja concretas. O caixa pode aprovar comprovativos no POS e marcar disponibilidade. Pela spec, a cozinha só deve avançar preparação, sem poderes financeiros; o SQL actual não impõe integralmente esse limite. Ver V03/V14/V15 na [auditoria](../AUDITORIA-DOCUMENTACAO.md).
+O dono consulta todas as lojas; gerente, caixa e cozinha ficam sujeitos às lojas atribuídas. “Todas” serve a leitura consolidada: mutações devem referir uma encomenda e loja concretas. O caixa pode aprovar comprovativos no POS e marcar disponibilidade. A cozinha só avança preparação (em preparo → pronto → entregue); aprovar é de owner/manager/cashier; cancelar é de owner/manager, e do caixa só antes de haver dinheiro — imposto em `advance_order` pela 1097. A cozinha ainda lê valores (V-03, B-116). Ver a [auditoria §5.1](../AUDITORIA-DOCUMENTACAO.md).
 
 | Origem | Percurso de referência |
 |---|---|
