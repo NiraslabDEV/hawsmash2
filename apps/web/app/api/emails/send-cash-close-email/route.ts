@@ -3,7 +3,7 @@ import { isEmailConfigured, sendMail } from '@/lib/email/transport';
 
 import { cashCloseEmailHtml, cashCloseReportFromSession } from '@/lib/cash/report';
 import { getBrand } from '@/lib/brand/server';
-import { createCashServerClient } from '@/lib/cash/server-client';
+import { cashClientFromRequest } from '@/lib/cash/server-client';
 
 export async function POST(request: Request) {
   if (!isEmailConfigured()) {
@@ -21,9 +21,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Sessão obrigatória.' }, { status: 400 });
   }
 
-  const supabase = await createCashServerClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: 'Autenticação necessária.' }, { status: 401 });
+  const auth = await cashClientFromRequest(request);
+  if (!auth) return NextResponse.json({ error: 'Autenticação necessária.' }, { status: 401 });
+  const { supabase } = auth;
 
   const { data: session, error } = await supabase
     .from('cash_sessions')

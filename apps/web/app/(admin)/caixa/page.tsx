@@ -5,6 +5,7 @@ import { formatMT, type Cents } from '@delivery/core';
 
 import { parseMTInput } from '@/lib/cash/input';
 import { createClient } from '@/utils/supabase/client';
+import { downloadStaffFile, staffFetch } from '@/lib/admin/staff-fetch';
 
 import { DayClosesSection } from './day-closes';
 
@@ -201,7 +202,7 @@ export default function CaixaPage() {
       return;
     }
     const sessionId = (data as { session_id: string }).session_id;
-    void fetch('/api/emails/send-cash-close-email', {
+    void staffFetch('/api/emails/send-cash-close-email', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ sessionId }),
@@ -301,7 +302,7 @@ export default function CaixaPage() {
                 <div key={item.id} className="flex items-center gap-3 border-b border-white/5 py-3 last:border-0">
                   <div className="min-w-0 flex-1"><p className="truncate font-bold text-white">{item.shift_label}</p><p className="text-xs text-[#938779]">{dateTime(item.closed_at)}</p></div>
                   <div className="text-right"><p className="font-bold text-white">{mt(item.expected_cash_cents)}</p><p className={item.difference_cents === 0 ? 'text-xs text-[#938779]' : 'text-xs text-amber-300'}>{mt(item.difference_cents)}</p></div>
-                  <a href={`/api/cash-sessions/${item.id}/report`} className="rounded-lg border border-white/10 px-3 py-2 text-xs font-bold text-[#F5A623]">PDF</a>
+                  <button type="button" onClick={() => { void downloadStaffFile(`/api/cash-sessions/${item.id}/report`, 'fecho.pdf').catch(() => undefined); }} className="rounded-lg border border-white/10 px-3 py-2 text-xs font-bold text-[#F5A623]">PDF</button>
                 </div>
               ))}
             </ListSection>

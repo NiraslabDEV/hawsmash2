@@ -2,15 +2,15 @@ import { NextResponse } from 'next/server';
 
 import { buildCashClosePdf, cashCloseReportFromSession } from '@/lib/cash/report';
 import { getBrand } from '@/lib/brand/server';
-import { createCashServerClient } from '@/lib/cash/server-client';
+import { cashClientFromRequest } from '@/lib/cash/server-client';
 
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: { params: { id: string } },
 ) {
-  const supabase = await createCashServerClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: 'Autenticação necessária.' }, { status: 401 });
+  const auth = await cashClientFromRequest(request);
+  if (!auth) return NextResponse.json({ error: 'Autenticação necessária.' }, { status: 401 });
+  const { supabase } = auth;
 
   const { data: session, error } = await supabase
     .from('cash_sessions')

@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 
+import { sendApprovalEmailForOrder } from '@/lib/email/order-emails';
 import { fireConversions } from '@/lib/server-analytics/conversions';
 import { orderToReference } from './reference';
 
@@ -27,10 +28,6 @@ export interface ConfirmOrderInput {
   amountCents: number;
   /** De onde veio a confirmação — fica no `event_log` para se poder explicar. */
   source: string;
-  /** Base do site, para os efeitos secundários (email). Sem ela, não se envia. */
-  origin?: string;
-  /** Para o email de aprovação, quando existir. */
-  customer?: { email?: string | null; name?: string | null; orderNumber?: string | null };
 }
 
 export interface ConfirmOrderResult {
@@ -84,20 +81,8 @@ export async function confirmOrderPaid(input: ConfirmOrderInput): Promise<Confir
   // Só na PRIMEIRA confirmação. Tudo o que vem a seguir é best-effort: uma
   // falha a enviar email não pode desfazer um pagamento (CLAUDE.md §1).
   if (result === 'ok') {
-    const { customer, origin } = input;
-    if (customer?.email && origin) {
-      fetch(`${origin}/api/emails/send-approval-email`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          to: customer.email,
-          customerName: customer.name,
-          orderNumber: customer.orderNumber,
-          totalCents: amountCents,
-          paymentMethod: method,
-        }),
-      }).catch(() => {});
-    }
+    // Destinatário e conteúdo lidos do pedido na BD — nunca do chamador.
+    sendApprovalEmailForOrder(svc, orderId).catch(() => {});
     fireConversions(orderId, amountCents, svc).catch(() => {});
   }
 

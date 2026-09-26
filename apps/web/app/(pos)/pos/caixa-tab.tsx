@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { formatMT, type Cents } from '@delivery/core';
 import { createClient } from '@/utils/supabase/client';
+import { staffFetch } from '@/lib/admin/staff-fetch';
 import {
   CASH_MOVEMENT_HINTS,
   CASH_MOVEMENT_LABELS,
@@ -297,7 +298,7 @@ export function CaixaTab({
     }
     const report = data as CashCloseReport;
     // O talão de fecho já está na fila (trigger da F5); o email é best-effort.
-    void fetch('/api/emails/send-cash-close-email', {
+    void staffFetch('/api/emails/send-cash-close-email', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ sessionId: report.session_id }),
@@ -325,7 +326,7 @@ export function CaixaTab({
     const dayCloseId = (data as { day_close_id?: string } | null)?.day_close_id;
     // O talão do dia já está na fila (1091); o email é best-effort.
     if (dayCloseId) {
-      void fetch('/api/emails/send-cash-day-email', {
+      void staffFetch('/api/emails/send-cash-day-email', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ dayCloseId }),

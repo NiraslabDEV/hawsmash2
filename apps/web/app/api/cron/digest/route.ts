@@ -3,6 +3,7 @@ import { NextResponse } from 'next/server';
 import { isEmailConfigured, sendMail } from '@/lib/email/transport';
 import { formatMT, type Cents } from '@delivery/core';
 import { getBrand } from '@/lib/brand/server';
+import { cronUnauthorized } from '@/lib/cron/auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -66,13 +67,8 @@ function digestHtml(day: string, stores: DigestStore[], brandName: string): stri
 
 /** Digest diário ao dono: vendas por loja, fecho de caixa e incidentes. */
 export async function GET(request: Request) {
-  const cronSecret = process.env.CRON_SECRET;
-  if (cronSecret) {
-    const authorization = request.headers.get('authorization') ?? '';
-    if (authorization !== `Bearer ${cronSecret}`) {
-      return new Response('unauthorized', { status: 401 });
-    }
-  }
+  const denied = cronUnauthorized(request);
+  if (denied) return denied;
 
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;

@@ -45,6 +45,7 @@ export interface RunDirectChargeInput {
     customer_name?: string | null;
   };
   msisdn: string;
+  /** Já não é usado: o email de aprovação lê o pedido na BD. */
   origin?: string;
 }
 
@@ -62,7 +63,7 @@ export function serviceClient(options?: { signal?: AbortSignal }): SupabaseClien
 export async function runDirectCharge(
   input: RunDirectChargeInput,
 ): Promise<DirectChargeOutcome> {
-  const { svc, provider, providerName, order, msisdn, origin } = input;
+  const { svc, provider, providerName, order, msisdn } = input;
 
   if (!isDirectProvider(provider)) {
     throw new Error('provider_is_not_direct');
@@ -134,12 +135,6 @@ export async function runDirectCharge(
       method: order.payment_method,
       amountCents: order.total_cents,
       source: 'direct_charge',
-      origin,
-      customer: {
-        email: order.customer_email,
-        name: order.customer_name,
-        orderNumber: order.order_number,
-      },
     });
 
     // Cobrou mas não conseguimos gravar: o pior sítio para dizer "falhou".

@@ -124,12 +124,6 @@ export async function POST(request: Request) {
     method: order.payment_method ?? 'mpesa',
     amountCents: order.total_cents,
     source: 'return_verify',
-    origin: new URL(request.url).origin,
-    customer: {
-      email: order.customer_email,
-      name: order.customer_name,
-      orderNumber: order.order_number,
-    },
   });
 
   if (!confirm.ok) {

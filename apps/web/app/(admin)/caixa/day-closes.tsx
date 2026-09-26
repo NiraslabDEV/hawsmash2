@@ -10,6 +10,7 @@ import {
   type CashDayReport,
 } from '@/lib/cash/day';
 import { createClient } from '@/utils/supabase/client';
+import { downloadStaffFile } from '@/lib/admin/staff-fetch';
 
 /** Os últimos fechos do dia — é o que se consulta; o resto está no email e no papel. */
 const LIMIT = 20;
@@ -171,12 +172,13 @@ function DayDetail({ report }: { report: CashDayReport }) {
               </p>
             </div>
             {shift.session_id && (
-              <a
-                href={`/api/cash-sessions/${shift.session_id}/report`}
+              <button
+                type="button"
+                onClick={() => { void downloadStaffFile(`/api/cash-sessions/${shift.session_id}/report`, 'fecho.pdf').catch(() => undefined); }}
                 className="rounded-lg border border-white/10 px-3 py-2 text-xs font-bold text-[#F5A623]"
               >
                 PDF
-              </a>
+              </button>
             )}
           </li>
         ))}

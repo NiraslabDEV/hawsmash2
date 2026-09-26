@@ -1,8 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
-const state = vi.hoisted(() => ({ conversions: vi.fn() }));
+const state = vi.hoisted(() => ({ conversions: vi.fn(), email: vi.fn() }));
 vi.mock('@/lib/server-analytics/conversions', () => ({ fireConversions: state.conversions }));
+vi.mock('@/lib/email/order-emails', () => ({ sendApprovalEmailForOrder: state.email }));
 import { confirmOrderPaid } from '../confirm';
 
 const rpc = vi.fn();
@@ -16,8 +17,7 @@ const storeId = '10000000-0000-4000-8000-000000000001';
 const svc = { rpc, from } as unknown as SupabaseClient;
 const input = {
   svc, orderId, storeId, provider: 'emola_sim', providerRef: 'PLACEHOLDER_REF', method: 'emola',
-  amountCents: 12345, source: 'test', origin: 'https://store.example',
-  customer: { email: 'PLACEHOLDER_CLIENT@example.test', name: 'PLACEHOLDER_CLIENT' },
+  amountCents: 12345, source: 'test',
 };
 const paid = { status: 'paid', payment_method: 'emola', total_cents: 12345 };
 
@@ -28,6 +28,7 @@ beforeEach(() => {
   from.mockReturnValue(chain); select.mockReturnValue(chain); eq.mockReturnValue(chain);
   maybeSingle.mockResolvedValue({ data: paid, error: null });
   state.conversions.mockResolvedValue(undefined);
+  state.email.mockResolvedValue({ ok: true });
   fetchMock.mockResolvedValue({ ok: true });
   vi.stubGlobal('fetch', fetchMock);
 });
@@ -37,7 +38,10 @@ describe('confirmação comum só aceita pagamento verificado', () => {
   it('primeira confirmação válida envia efeitos uma vez', async () => {
     expect(await confirmOrderPaid(input)).toEqual({ ok: true, result: 'ok', error: null });
     expect(state.conversions).toHaveBeenCalledTimes(1);
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    // O email lê destinatário e conteúdo do pedido na BD — só com o id.
+    expect(state.email).toHaveBeenCalledTimes(1);
+    expect(state.email).toHaveBeenCalledWith(svc, orderId);
+    expect(fetchMock).not.toHaveBeenCalled();
     expect(from).not.toHaveBeenCalled();
   });
   it.each(['invalid_state', 'amount_mismatch', 'order_not_found', null, 'PLACEHOLDER_UNKNOWN_RESULT'])('resultado %s não anuncia pedido pago', async (result) => {
@@ -45,7 +49,7 @@ describe('confirmação comum só aceita pagamento verificado', () => {
     const outcome = await confirmOrderPaid(input);
     expect(outcome.ok).toBe(false);
     expect(state.conversions).not.toHaveBeenCalled();
-    expect(fetchMock).not.toHaveBeenCalled();
+    expect(state.email).not.toHaveBeenCalled();
   });
   it.each(['paid', 'in_preparation', 'ready', 'delivered'])('duplicate só aceita estado canónico %s com valor/método iguais', async (status) => {
     rpc.mockResolvedValue({ data: 'duplicate', error: null });
@@ -55,7 +59,7 @@ describe('confirmação comum só aceita pagamento verificado', () => {
     expect(eq).toHaveBeenCalledWith('id', orderId);
     expect(eq).toHaveBeenCalledWith('store_id', storeId);
     expect(state.conversions).not.toHaveBeenCalled();
-    expect(fetchMock).not.toHaveBeenCalled();
+    expect(state.email).not.toHaveBeenCalled();
   });
   it.each([
     { status: 'cancelled' }, { status: 'awaiting_payment' }, { status: 'payment_failed' },
@@ -65,7 +69,7 @@ describe('confirmação comum só aceita pagamento verificado', () => {
     maybeSingle.mockResolvedValue({ data: { ...paid, ...patch }, error: null });
     expect((await confirmOrderPaid(input)).ok).toBe(false);
     expect(state.conversions).not.toHaveBeenCalled();
-    expect(fetchMock).not.toHaveBeenCalled();
+    expect(state.email).not.toHaveBeenCalled();
   });
   it('duplicate sem ordem legível não confirma', async () => {
     rpc.mockResolvedValue({ data: 'duplicate', error: null });

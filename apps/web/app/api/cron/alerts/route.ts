@@ -10,6 +10,7 @@ import {
   type SystemAlert,
 } from '@/lib/alerts/digest';
 import { getBrand } from '@/lib/brand/server';
+import { cronUnauthorized } from '@/lib/cron/auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -19,13 +20,8 @@ export const dynamic = 'force-dynamic';
  * para a loja. Falhar a enviar nunca é fatal — fica registado na mesma.
  */
 export async function GET(request: Request) {
-  const cronSecret = process.env.CRON_SECRET;
-  if (cronSecret) {
-    const authorization = request.headers.get('authorization') ?? '';
-    if (authorization !== `Bearer ${cronSecret}`) {
-      return new Response('unauthorized', { status: 401 });
-    }
-  }
+  const denied = cronUnauthorized(request);
+  if (denied) return denied;
 
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;

@@ -1,60 +1,38 @@
 import { NextResponse } from 'next/server';
-import { isEmailConfigured, sendMail } from '@/lib/email/transport';
+import { z } from 'zod';
+
+import { staffFromRequest } from '@/lib/auth/staff-request';
+import { sendRejectionEmailForOrder } from '@/lib/email/order-emails';
+import { isEmailConfigured } from '@/lib/email/transport';
+import { serviceClient } from '@/lib/payments/direct';
+
+/**
+ * Painel → "pagamento não confirmado" ao cliente de um pedido cancelado.
+ *
+ * Só a equipa (Bearer da sessão) e só pedidos que ela consegue ver pela RLS.
+ * O corpo diz **que pedido** e o motivo; o destinatário sai da BD.
+ */
+const bodySchema = z.object({
+  orderId: z.string().uuid(),
+  reason: z.string().trim().min(1).max(500),
+});
 
 export async function POST(request: Request) {
-  try {
-    if (!isEmailConfigured()) {
-      return NextResponse.json(
-        { error: 'SMTP not configured' },
-        { status: 503 }
-      );
-    }
+  const staff = await staffFromRequest(request);
+  if (!staff.ok) return NextResponse.json({ error: staff.error }, { status: staff.status });
+  if (staff.role === 'kitchen') return NextResponse.json({ error: 'Sem permissão.' }, { status: 403 });
 
-    const body = await request.json();
-    const { to, customerName, orderNumber, reason, paymentMethod } = body;
+  const parsed = bodySchema.safeParse(await request.json().catch(() => null));
+  if (!parsed.success) return NextResponse.json({ error: 'Pedido inválido.' }, { status: 400 });
 
-    if (!to || !customerName || !orderNumber || !reason) {
-      return NextResponse.json(
-        { error: 'Missing required fields' },
-        { status: 400 }
-      );
-    }
+  const { data: visible } = await staff.client.from('orders').select('id').eq('id', parsed.data.orderId).maybeSingle();
+  if (!visible) return NextResponse.json({ error: 'Pedido não encontrado.' }, { status: 404 });
 
-    const html = `
-      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-        <h1 style="color: #e5a93c;">Pagamento Não Confirmado</h1>
-        <p>Olá ${customerName},</p>
-        <p>Lamentamos informar que o seu pagamento não foi confirmado.</p>
-        <div style="background: #1a1614; padding: 20px; border-radius: 8px; margin: 20px 0;">
-          <p><strong>Número do Pedido:</strong> ${orderNumber}</p>
-          <p><strong>Método de Pagamento:</strong> ${paymentMethod.toUpperCase()}</p>
-          <p><strong>Motivo:</strong> ${reason}</p>
-        </div>
-        <p>Por favor, verifique os dados do pagamento ou entre em contacto com o restaurante.</p>
-        <p>Equipa ${process.env.BRAND_NAME || 'Delivery OS'}</p>
-      </div>
-    `;
-
-    const result = await sendMail({
-      to,
-      subject: `Pagamento Não Confirmado - Pedido ${orderNumber}`,
-      html,
-    });
-
-    if (!result.ok) {
-      console.error('Error sending rejection email:', result.error);
-      return NextResponse.json(
-        { error: result.error },
-        { status: 500 }
-      );
-    }
-
-    return NextResponse.json({ success: true });
-  } catch (err) {
-    console.error('Error in send-rejection-email:', err);
-    return NextResponse.json(
-      { error: 'Internal server error' },
-      { status: 500 }
-    );
+  if (!isEmailConfigured()) return NextResponse.json({ error: 'SMTP not configured' }, { status: 503 });
+  const result = await sendRejectionEmailForOrder(serviceClient(), parsed.data.orderId, parsed.data.reason);
+  if (!result.ok) {
+    const status = result.error === 'invalid_state' || result.error === 'no_recipient' ? 409 : 500;
+    return NextResponse.json({ error: result.error }, { status });
   }
+  return NextResponse.json({ success: true });
 }

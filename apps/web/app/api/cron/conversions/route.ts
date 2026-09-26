@@ -13,17 +13,13 @@ import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
 import { drainConversionJobs } from '@/lib/server-analytics/conversions';
+import { cronUnauthorized } from '@/lib/cron/auth';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: Request) {
-  const cronSecret = process.env.CRON_SECRET;
-  if (cronSecret) {
-    const auth = request.headers.get('authorization') ?? '';
-    if (auth !== `Bearer ${cronSecret}`) {
-      return new Response('unauthorized', { status: 401 });
-    }
-  }
+  const denied = cronUnauthorized(request);
+  if (denied) return denied;
 
   // Service role: a fila e os segredos de marketing nunca passam pelo browser.
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;

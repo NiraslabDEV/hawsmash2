@@ -4,7 +4,7 @@ import { isEmailConfigured, sendMail } from '@/lib/email/transport';
 import { parseCashDayReport } from '@/lib/cash/day';
 import { cashDayEmailHtml } from '@/lib/cash/report';
 import { getBrand } from '@/lib/brand/server';
-import { createCashServerClient } from '@/lib/cash/server-client';
+import { cashClientFromRequest } from '@/lib/cash/server-client';
 
 /**
  * O resumo do fecho do dia (1091) para o dono. Best-effort: o POS chama e não
@@ -26,9 +26,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Fecho do dia obrigatório.' }, { status: 400 });
   }
 
-  const supabase = await createCashServerClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return NextResponse.json({ error: 'Autenticação necessária.' }, { status: 401 });
+  const auth = await cashClientFromRequest(request);
+  if (!auth) return NextResponse.json({ error: 'Autenticação necessária.' }, { status: 401 });
+  const { supabase } = auth;
 
   // RLS: só a equipa da loja (sem a cozinha) lê o fecho do dia.
   const { data: day, error } = await supabase

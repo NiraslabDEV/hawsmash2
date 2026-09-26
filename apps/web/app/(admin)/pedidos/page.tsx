@@ -3,6 +3,7 @@
 import { Fragment, useCallback, useEffect, useReducer, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { createClient } from '@/utils/supabase/client';
+import { staffFetch } from '@/lib/admin/staff-fetch';
 import { formatMT, type Cents } from '@delivery/core';
 import { format, parseISO, formatDistanceToNow } from 'date-fns';
 import { pt } from 'date-fns/locale';
@@ -233,13 +234,13 @@ export default function PedidosPage() {
     const { data, error } = await supabase.rpc('advance_order', { p_order_id: order.id, p_event: event, ...(reason ? { p_reason: reason } : {}) });
     if (error) { setMessage({ type: 'error', text: error.message }); return false; }
     if (event === 'APPROVE') {
-      fetch('/api/conversions/fire', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ orderId: order.id, totalCents: order.total_cents }) }).catch(() => {});
+      staffFetch('/api/conversions/fire', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ orderId: order.id }) }).catch(() => {});
     }
     if (event === 'APPROVE' && order.customer_email) {
-      fetch('/api/emails/send-approval-email', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ to: order.customer_email, customerName: order.customer_name, orderNumber: order.order_number, totalCents: order.total_cents, paymentMethod: order.payment_method, storeName: order.store_name ?? null }) }).catch(console.error);
+      staffFetch('/api/emails/send-approval-email', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ orderId: order.id }) }).catch(console.error);
     }
     if (event === 'CANCEL' && order.customer_email) {
-      fetch('/api/emails/send-rejection-email', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ to: order.customer_email, customerName: order.customer_name, orderNumber: order.order_number, reason, paymentMethod: order.payment_method }) }).catch(console.error);
+      staffFetch('/api/emails/send-rejection-email', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ orderId: order.id, reason }) }).catch(console.error);
     }
     setMessage({ type: 'success', text: data?.message || 'Pedido atualizado!' });
     await refreshData();

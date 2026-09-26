@@ -2,35 +2,34 @@
  * POST /api/conversions/fire
  * Chamado fire-and-forget pelo admin panel após advance_order APPROVE.
  * Sempre responde 200 — o admin nunca deve esperar por isto.
+ *
+ * Só a equipa (Bearer da sessão) e só pedidos que ela vê pela RLS. O valor da
+ * compra é o `total_cents` gravado no pedido — nunca o que o browser mandar.
  */
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
+import { z } from 'zod';
+
+import { staffFromRequest } from '@/lib/auth/staff-request';
+import { serviceClient } from '@/lib/payments/direct';
 import { fireConversions } from '@/lib/server-analytics/conversions';
 
+const bodySchema = z.object({ orderId: z.string().uuid() });
+
 export async function POST(req: NextRequest) {
-  let body: unknown;
-  try {
-    body = await req.json();
-  } catch {
-    return NextResponse.json({ ok: false, error: 'invalid json' }, { status: 200 });
+  const staff = await staffFromRequest(req);
+  if (!staff.ok) return NextResponse.json({ ok: false, error: staff.error }, { status: staff.status });
+
+  const parsed = bodySchema.safeParse(await req.json().catch(() => null));
+  if (!parsed.success) {
+    return NextResponse.json({ ok: false, error: 'missing orderId' }, { status: 200 });
   }
 
-  const b = body as Record<string, unknown>;
-  const orderId = typeof b.orderId === 'string' ? b.orderId : null;
-  const totalCents = typeof b.totalCents === 'number' ? b.totalCents : null;
-
-  if (!orderId || totalCents === null) {
-    return NextResponse.json({ ok: false, error: 'missing orderId or totalCents' }, { status: 200 });
-  }
-
-  const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    { auth: { persistSession: false } },
-  );
+  const { data: order } = await staff.client.from('orders')
+    .select('id,total_cents').eq('id', parsed.data.orderId).maybeSingle();
+  if (!order) return NextResponse.json({ ok: false, error: 'order not found' }, { status: 200 });
 
   // fire-and-forget — não faz await, responde imediatamente
-  fireConversions(orderId, totalCents, supabase).catch(() => {});
+  fireConversions(order.id, order.total_cents, serviceClient()).catch(() => {});
 
   return NextResponse.json({ ok: true });
 }
