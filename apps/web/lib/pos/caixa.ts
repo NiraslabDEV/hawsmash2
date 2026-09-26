@@ -202,6 +202,7 @@ export function cashErrorMessage(message?: string): string {
     return 'O fecho do dia ainda não está disponível nesta loja. Chama o suporte.';
   }
   if (message.includes('no_open_session')) return 'Não há caixa aberto nesta loja.';
+  if (message.includes('request_id_reused')) return 'Esse movimento já foi registado com outro valor. Fecha e volta a abrir o movimento.';
   if (message.includes('invalid_opening_float') || message.includes('invalid_counted_cents')) {
     return 'O valor não é válido.';
   }

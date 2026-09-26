@@ -248,6 +248,12 @@ export function advanceErrorMessage(raw: string | undefined | null): {
   if (mensagem.includes('store_access_denied')) {
     return { texto: 'Este terminal não tem acesso a esse pedido.', mudouDeEstado: false };
   }
+  if (mensagem.includes('order_transition_denied')) {
+    return {
+      texto: 'O teu perfil não pode fazer isto. Cancelar um pedido já pago é com o gerente (anular venda).',
+      mudouDeEstado: false,
+    };
+  }
   // O resto mostra-se tal como vem: um código lido ao telefone resolve mais
   // depressa do que um "tenta outra vez" que não diz nada.
   return {

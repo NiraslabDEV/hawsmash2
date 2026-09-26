@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { formatMT, type Cents } from '@delivery/core';
 import { createClient } from '@/utils/supabase/client';
 import { staffFetch } from '@/lib/admin/staff-fetch';
+import { addCashMovement, movementRequestKeeper } from '@/lib/cash/movement';
 import {
   CASH_MOVEMENT_HINTS,
   CASH_MOVEMENT_LABELS,
@@ -117,6 +118,7 @@ export function CaixaTab({
   onCancelarTroca?: () => void;
 }) {
   const [supabase] = useState(() => createClient());
+  const movementKey = useRef(movementRequestKeeper());
   const [store, setStore] = useState<CashStore | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -230,6 +232,7 @@ export function CaixaTab({
   }
 
   const cancel = useCallback(() => {
+    movementKey.current.done();
     setAcao(null);
     setDayRequest(null);
     setReasonMissing(false);
@@ -260,11 +263,13 @@ export function CaixaTab({
   const addMovement = useCallback(async () => {
     if (busy || !movementReady(current.amount, current.reason)) return;
     setBusy(true);
-    const { error } = await supabase.rpc('add_cash_movement', {
-      p_store: storeId,
-      p_type: current.movementType,
-      p_amount_cents: current.amount,
-      p_reason: current.reason.trim(),
+    const { error } = await addCashMovement(supabase, {
+      store: storeId,
+      type: current.movementType,
+      amountCents: current.amount,
+      reason: current.reason,
+      // A mesma sangria, repetida depois de uma resposta perdida, conta uma vez.
+      requestId: movementKey.current.idFor(current.movementType, current.amount, current.reason),
     });
     setBusy(false);
     if (error) {

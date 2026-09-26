@@ -71,6 +71,12 @@ describe('quadro de pedidos · quando não avança', () => {
     expect(r.texto).toContain('esgotado');
   });
 
+  it('perfil sem permissão (1097) explica que anular venda paga é com o gerente', () => {
+    const r = advanceErrorMessage('order_transition_denied');
+    expect(r.mudouDeEstado).toBe(false);
+    expect(r.texto).toContain('gerente');
+  });
+
   it('só diz "mudou de estado" quando mudou mesmo', () => {
     expect(advanceErrorMessage('invalid_transition: cannot approve from status approved').mudouDeEstado).toBe(true);
   });

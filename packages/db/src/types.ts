@@ -2114,6 +2114,7 @@ export type Database = {
         Args: {
           p_amount_cents: number
           p_reason: string
+          p_request_id?: string
           p_store: string
           p_type: string
         }
