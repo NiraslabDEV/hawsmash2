@@ -512,6 +512,9 @@ no fim de tudo, o fecho do dia. Entrega o G1 da Fase 2 (responsável identificad
 - [x] Talão do dia em `@delivery/receipt` (`cash-day.ts`); na fila é um `cash_close` com `day`, e o bridge antigo imprime-o no formato do fecho de turno ("FECHO DO DIA" na linha do turno).
 - [x] POS: "Fechar turno" (era "Fechar caixa"), cartão **Fim do dia?** depois do último turno, resumo do dia com os turnos e confirmação; email ao dono (`/api/emails/send-cash-day-email`).
 - [x] ⏳ Gates: `packages/db/tests/cash-day.test.ts` (6), `packages/receipt/src/__tests__/cash-day.test.ts` (5), `apps/web/lib/cash/__tests__/day.test.ts` (4), `caixa.test.ts` (+4). O de BD não correu nesta máquina (Docker em baixo) — SQL e PL/pgSQL validados pelo parser do Postgres 17; corre no CI.
-- [ ] Aplicar 1091 no staging fora do horário e ensaiar: 2 turnos com pessoas diferentes, fecho do dia, talão e email.
-- [ ] Gerar o `.exe` do bridge com o talão do dia; até lá sai no formato do fecho de turno.
+- [x] 1091 aplicada no staging a 26/09, 10:10, antes da abertura (`db push` a partir do commit — só a 1091). O histórico do staging ficou em 2 dias fechados (23/09 e 25/09).
+- [x] Ensaio no staging numa transacção desfeita no fim (nada ficou gravado): turno do Gerente Maputo e turno da Caixa Maputo com despesa e diferença de 5 MT, pré-visualização, fecho do dia pela caixa, repetição devolve o mesmo fecho, segundo fecho recusado, Matola recusada, 1 registo de auditoria, talão do dia na fila do balcão. Talão (bridge novo e antigo) e email desenhados a partir do relatório real; o email não foi enviado — o staging manda ao email do dono.
+- [x] `.exe` do bridge gerado a partir do `9be3314` (`services/print-bridge/build/hawsmash-print-bridge-9be3314.exe`, fora do git) e ensaiado sem rede: imprime o talão do dia numa impressora simulada.
+- [ ] Trocar o `.exe` nas lojas (Maputo e Matola); até lá o fecho do dia sai no formato do fecho de turno.
+- [ ] Aplicar a 1091 no LIVE fora do horário e fazer o primeiro fecho do dia a sério.
 - [x] Painel: lista dos fechos do dia na aba Caixa (últimos 20, com os turnos, quem os fez e o PDF de cada turno).
