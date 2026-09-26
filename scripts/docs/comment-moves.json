@@ -1,0 +1,34 @@
+{
+  "scripts/import-menu.ts": [
+    "docs/menu-format.md",
+    "docs/desenvolvimento/cardapio-importacao.md"
+  ],
+  "services/print-bridge/src/printer-target.ts": [
+    "docs/HARDWARE.md",
+    "docs/operacao/hardware.md"
+  ],
+  "packages/receipt/src/index.ts": [
+    "docs/POS-DEFINICOES.md",
+    "docs/modulos/impressao.md"
+  ],
+  "scripts/lib/backup-plan.mjs": [
+    "docs/RUNBOOK.md",
+    "docs/operacao/runbook.md"
+  ],
+  "apps/web/lib/__tests__/attribution.test.ts": [
+    "docs/RASTREIO.md",
+    "docs/modulos/marketing.md"
+  ],
+  "apps/web/app/(admin)/definicoes-pos/page.tsx": [
+    "docs/POS-DEFINICOES.md",
+    "docs/modulos/pos.md"
+  ],
+  "apps/web/lib/tv/chime.ts": [
+    "docs/TVS.md",
+    "docs/modulos/tvs-kds.md"
+  ],
+  "apps/web/lib/pos/settings.ts": [
+    "docs/POS-DEFINICOES.md",
+    "docs/modulos/pos.md"
+  ]
+}

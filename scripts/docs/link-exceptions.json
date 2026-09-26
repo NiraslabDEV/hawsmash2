@@ -1,0 +1,176 @@
+[
+  {
+    "file": "BLOQUEIOS.md",
+    "target": "_hawsmash/sections.tsx",
+    "kind": "path",
+    "reason": "Nota de investigação anterior à renomeação; ficheiro actual apps/web/app/(public)/_storefront/sections.tsx."
+  },
+  {
+    "file": "BLOQUEIOS.md",
+    "target": "output/playwright/analysis-*.png",
+    "kind": "path",
+    "reason": "Artefactos locais de ensaio histórico. A pasta output foi expressamente excluída da leitura e não é uma fonte versionada."
+  },
+  {
+    "file": "docs/desenvolvimento/analise-interface.md",
+    "target": "output/playwright/analysis-*.png",
+    "kind": "path",
+    "reason": "Artefactos locais de ensaio histórico. A pasta output foi expressamente excluída da leitura e não é uma fonte versionada."
+  },
+  {
+    "file": "ROADMAP-PRODUTO.md",
+    "target": "public/assets/hawsmash/",
+    "kind": "path",
+    "reason": "Nome histórico removido pela neutralização da marca; texto descreve a sua remoção."
+  },
+  {
+    "file": "ROADMAP-PRODUTO.md",
+    "target": "public/assets/{babalaza,casa-do-bom-pasteleiro,thebox}/",
+    "kind": "path",
+    "reason": "Notação de conjunto dos três directórios legados sob apps/web/public/assets, preservada da spec; não é caminho literal."
+  },
+  {
+    "file": "docs/modulos/aparencia.md",
+    "target": "public/assets/hawsmash/",
+    "kind": "path",
+    "reason": "Nome histórico removido pela neutralização da marca; texto descreve a sua remoção."
+  },
+  {
+    "file": "docs/modulos/aparencia.md",
+    "target": "public/assets/{babalaza,casa-do-bom-pasteleiro,thebox}/",
+    "kind": "path",
+    "reason": "Notação de conjunto dos três directórios legados sob apps/web/public/assets, preservada da spec; não é caminho literal."
+  },
+  {
+    "file": "ROADMAP-PRODUTO.md",
+    "target": "apps/web/app/(public)/_hawsmash/",
+    "kind": "path",
+    "reason": "Nome anterior citado na fase concluída de renomeação; actual _storefront."
+  },
+  {
+    "file": "docs/AUDITORIA-DOCUMENTACAO.md",
+    "target": "packages/paysuite",
+    "kind": "path",
+    "reason": "Contra-exemplo: documento explica que o caminho já não existe e indica packages/payments."
+  },
+  {
+    "file": "docs/modulos/pagamentos.md",
+    "target": "packages/paysuite",
+    "kind": "path",
+    "reason": "Contra-exemplo: documento explica que o caminho já não existe e indica packages/payments."
+  },
+  {
+    "file": "docs/AUDITORIA-DOCUMENTACAO.md",
+    "target": "docs/revisao-geral",
+    "kind": "path",
+    "reason": "Nome da branch Git exigida pelo utilizador, não directório."
+  },
+  {
+    "file": "docs/AUDITORIA-DOCUMENTACAO.md",
+    "target": "1NNN_*.sql",
+    "kind": "path",
+    "reason": "Padrão antigo citado como discrepância D02; catálogo mostra os nomes físicos com timestamp."
+  },
+  {
+    "file": "docs/desenvolvimento/robustez.md",
+    "target": "1NNN_assunto.sql",
+    "kind": "path",
+    "reason": "Convenção lógica preservada da spec; nota actual esclarece prefixo timestamp. Não é migration real."
+  },
+  {
+    "file": "docs/decisions/0007-modelos-do-talao.md",
+    "target": "data/print-layout.json",
+    "kind": "path",
+    "reason": "Cache gerada pela bridge na instalação; não é ficheiro versionado. Configurável em PRINT_LAYOUT_FILE."
+  },
+  {
+    "file": "docs/modulos/impressao.md",
+    "target": "data/print-layout.json",
+    "kind": "path",
+    "reason": "Cache gerada pela bridge na instalação; não é ficheiro versionado. Configurável em PRINT_LAYOUT_FILE."
+  },
+  {
+    "file": "docs/modulos/pos.md",
+    "target": "data/print-layout.json",
+    "kind": "path",
+    "reason": "Cache gerada pela bridge na instalação; não é ficheiro versionado. Configurável em PRINT_LAYOUT_FILE."
+  },
+  {
+    "file": "docs/modulos/pos.md",
+    "target": "1NNN_definicoes_do_pos.sql",
+    "kind": "path",
+    "reason": "Nome exemplificativo para renumerar a migration no projecto de destino, não afirma ficheiro existente."
+  },
+  {
+    "file": "docs/desenvolvimento/cardapio-importacao.md",
+    "target": "menu.json",
+    "kind": "path",
+    "reason": "Nome do ficheiro de entrada criado pelo operador; exemplo real é examples/menu.example.json."
+  },
+  {
+    "file": "docs/historico/instalacao-pos-2026-09-23.md",
+    "target": "RELATORIO-POS-MAPUTO-2026-09-23.md",
+    "kind": "path",
+    "reason": "Entregável pedido pelo guiāo histórico, não encontrado na árvore versionada; não é prova de ensaio concluído."
+  },
+  {
+    "file": "docs/historico/montra-plano-anterior.md",
+    "target": "apps/web/public/assets/<brand>/",
+    "kind": "path",
+    "reason": "Parâmetro de instalação do plano anterior, não caminho literal; marca actual é dado em brand_settings."
+  },
+  {
+    "file": "docs/historico/montra-plano-anterior.md",
+    "target": "public/assets/<brand>/",
+    "kind": "path",
+    "reason": "Parâmetro de instalação do plano anterior, não caminho literal; marca actual é dado em brand_settings."
+  },
+  {
+    "file": "docs/historico/montra-plano-anterior.md",
+    "target": "(admin)/layout-loja/page.tsx",
+    "kind": "path",
+    "reason": "Rota proposta no plano histórico não implementada; painel actual usa aparencia. Plano preservado, não contrato actual."
+  },
+  {
+    "file": "docs/planos/live.md",
+    "target": "CREDENCIAIS-EQUIPA.json",
+    "kind": "path",
+    "reason": "Artefacto privado gerado fora do código; explicitamente proibido abrir nesta revisão. Existência não verificada."
+  },
+  {
+    "file": "docs/validation/1047-checkout-local.md",
+    "target": "sql-1047-results.json",
+    "kind": "path",
+    "reason": "Resultado temporário citado por ensaio datado; não versionado e não apresentado como nova validação."
+  },
+  {
+    "file": "docs/validation/1048-emola-directo-local.md",
+    "target": "sql-1048-results.json",
+    "kind": "path",
+    "reason": "Resultado temporário citado por ensaio datado; não versionado e não apresentado como nova validação."
+  },
+  {
+    "file": "docs/engine/DELIVERY-OS-ROADMAP.md",
+    "target": "docs/menu-format.md",
+    "kind": "link",
+    "reason": "Ligação relativa do repositório original arquivado. Destino actual na raiz: docs/desenvolvimento/cardapio-importacao.md. Não se reescreve o corpo do arquivo por instrução expressa; cabeçalho fornece ligações actuais."
+  },
+  {
+    "file": "docs/engine/DELIVERY-OS-ROADMAP.md",
+    "target": "examples/menu.example.json",
+    "kind": "link",
+    "reason": "Ligação relativa do repositório original arquivado. Destino actual na raiz: examples/menu.example.json. Não se reescreve o corpo do arquivo por instrução expressa; cabeçalho fornece ligações actuais."
+  },
+  {
+    "file": "docs/engine/DELIVERY-OS-ROADMAP.md",
+    "target": ".claude/skills/connect-paysuite/SKILL.md",
+    "kind": "link",
+    "reason": "Ligação relativa do repositório original arquivado. Destino actual na raiz: .claude/skills/connect-paysuite/SKILL.md. Não se reescreve o corpo do arquivo por instrução expressa; cabeçalho fornece ligações actuais."
+  },
+  {
+    "file": "docs/legacy/HAWSMASH-1.0-CLAUDE.md",
+    "target": "ROADMAP.md",
+    "kind": "link",
+    "reason": "Nome original no arquivo imutável; corresponde hoje a HAWSMASH-1.0-ROADMAP.md no mesmo directório. Cabeçalho fornece ligação válida."
+  }
+]

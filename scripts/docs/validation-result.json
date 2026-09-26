@@ -1,0 +1,46 @@
+{
+  "date": "2026-09-26",
+  "base": "a30c95987703ad1435233904438d67007e1c9f98",
+  "scope": "Documentação e cópia isolada da árvore local com alterações anteriores",
+  "stages": [
+    {
+      "name": "install",
+      "command": "pnpm install --offline --frozen-lockfile --ignore-scripts",
+      "exitCode": 0,
+      "durationMs": 26203
+    },
+    {
+      "name": "lint",
+      "command": "pnpm lint",
+      "exitCode": 0,
+      "durationMs": 31849
+    },
+    {
+      "name": "test",
+      "command": "pnpm test",
+      "exitCode": 0,
+      "durationMs": 11791
+    }
+  ],
+  "filesCopied": 918,
+  "protectedFiles": 773,
+  "migrationsHashed": 149,
+  "originalSourcesUnchanged": true,
+  "testFilesPassed": 120,
+  "testsPassed": 1116,
+  "baselineComparison": {
+    "nonMarkdownIntact": 811,
+    "commentPathsOnly": 8,
+    "unexpectedChanges": 0
+  },
+  "digests": {
+    "protected": "a82720872d0cb300acff6e31443f5c16138bb9e83df6ace1f5a61f38b785c205",
+    "migrations": "7bd7b9ae2e41423745d818e898f1139b59a00883e0d32efd86850caaa0f0503d"
+  },
+  "limitations": [
+    "Sem BD, E2E, build/deploy, hardware ou segredos da instalação.",
+    "Dependências instaladas apenas da cache offline, sem lifecycle scripts.",
+    "Sockets Node limitados a loopback; não equivale a uma sandbox do sistema operativo.",
+    "O snapshot inclui ficheiros permitidos não versionados e alterações locais existentes."
+  ]
+}

@@ -1,0 +1,735 @@
+{
+  "version": 1,
+  "source": "CLAUDE.md antes da reorganização de 26/09/2026, incluindo alterações locais anteriores",
+  "method": "SHA-256 por bloco; normaliza espaços, destinos de links Markdown e caminhos de docs movidos. Néo guarda contactos privados. §§0/1/17 e ADRs verificados separadamente.",
+  "pathMoves": {
+    "docs/HARDWARE.md": "docs/operacao/hardware.md",
+    "docs/RUNBOOK.md": "docs/operacao/runbook.md",
+    "docs/PREPARACAO-VOLUME.md": "docs/planos/volume.md",
+    "docs/POS-DEFINICOES.md": "docs/modulos/pos.md",
+    "docs/EMOLA-ONLINE.md": "docs/modulos/pagamentos.md",
+    "docs/MCP.md": "docs/modulos/agentes.md",
+    "docs/TVS.md": "docs/modulos/tvs-kds.md"
+  },
+  "blocks": [
+    {
+      "section": 4,
+      "block": 1,
+      "destination": "docs/desenvolvimento/arquitectura.md",
+      "sha256": "8e14567307158740418e812f8c1795480e0f409ed863b69a2202cf2806199298"
+    },
+    {
+      "section": 4,
+      "block": 2,
+      "destination": "docs/desenvolvimento/arquitectura.md",
+      "sha256": "e96da47bca8d15cc1f6e1f2ebd89cd8a35e6b4ace45fe2a2f4669fc82da90156"
+    },
+    {
+      "section": 4,
+      "block": 3,
+      "destination": "docs/desenvolvimento/arquitectura.md",
+      "sha256": "7203dbee3b78548c54b2478770657f813eceac43c7b1371feb0fdda83742a773"
+    },
+    {
+      "section": 5,
+      "block": 1,
+      "destination": "docs/modulos/lojas.md",
+      "sha256": "b36cc50d5da0f1168eba5bd71da236fd044d4b4e4fedf3988fef0700ee4f7695"
+    },
+    {
+      "section": 5,
+      "block": 2,
+      "destination": "docs/modulos/lojas.md",
+      "sha256": "e23aaf52a56d88f592914bffa7eb1abcb0764ddf6091a5cc205298eecb32b642"
+    },
+    {
+      "section": 5,
+      "block": 3,
+      "destination": "docs/modulos/lojas.md",
+      "sha256": "50ff62479b49ffea4364ca11b2277b23cd4baa3938079b06f5610f731b267bd4"
+    },
+    {
+      "section": 5,
+      "block": 4,
+      "destination": "docs/modulos/lojas.md",
+      "sha256": "c39554a3a08c2c0c0f1325305f540eada62dce18ec750d905182f7ebc1044b1a"
+    },
+    {
+      "section": 5,
+      "block": 5,
+      "destination": "docs/modulos/lojas.md",
+      "sha256": "f07e3f57c229125a822b57e970261829d250338267f7964b41a266c7c0940f73"
+    },
+    {
+      "section": 5,
+      "block": 6,
+      "destination": "docs/modulos/lojas.md",
+      "sha256": "63fa63e0fc57bbcd0c69331aad48c9ecb4dd773f0ed144b8b68c139ea77917d9"
+    },
+    {
+      "section": 5,
+      "block": 7,
+      "destination": "docs/modulos/lojas.md",
+      "sha256": "72b2346e9101228e0dbfe8c5f20a39573edc2783f35438f787f7edfd3906b31f"
+    },
+    {
+      "section": 5,
+      "block": 8,
+      "destination": "docs/modulos/lojas.md",
+      "sha256": "53cb35a8a3b224a15828e9b86c40e82c8cbf3abb839aa43f5c99853f73c21e34"
+    },
+    {
+      "section": 5,
+      "block": 9,
+      "destination": "docs/modulos/lojas.md",
+      "sha256": "6f1e8ac6b86fccd12db12d6943df00c02b146ad59ab2f2989f17c8844ae414b1"
+    },
+    {
+      "section": 5,
+      "block": 10,
+      "destination": "docs/modulos/lojas.md",
+      "sha256": "8b4955c99100be60eb88d764d25a193e10536d612fc50373ec67757a4d470557"
+    },
+    {
+      "section": 5,
+      "block": 11,
+      "destination": "docs/modulos/lojas.md",
+      "sha256": "c4cacecf00d83dc34fff11fd79f456b5d1e66cba6de95eb7968c60fa06e0eaef"
+    },
+    {
+      "section": 5,
+      "block": 12,
+      "destination": "docs/modulos/lojas.md",
+      "sha256": "e852d1cf54e0a4251fba10e9fb8562d6b272ff32bec2d760b14a89a897c189f9"
+    },
+    {
+      "section": 5,
+      "block": 13,
+      "destination": "docs/modulos/lojas.md",
+      "sha256": "8f49b405ea42df2a1802b9a150d7520897e6ce241422319874705fa508de13ca"
+    },
+    {
+      "section": 5,
+      "block": 14,
+      "destination": "docs/modulos/lojas.md",
+      "sha256": "f4cbeca953cb4c04e22587e1cd715e5785f86082a8c0a7cb8c82c70f61b16f60"
+    },
+    {
+      "section": 5,
+      "block": 15,
+      "destination": "docs/modulos/lojas.md",
+      "sha256": "ea7d578e943f0c68cec7b9eb66128dd740b558c86dcb818fe3f5772d9bf8eb4a"
+    },
+    {
+      "section": 5,
+      "block": 16,
+      "destination": "docs/modulos/lojas.md",
+      "sha256": "24cbe7dc656e94346a137cc4a2343158a70bf07946c7bb1d907e39aceebf09cc"
+    },
+    {
+      "section": 5,
+      "block": 17,
+      "destination": "docs/modulos/lojas.md",
+      "sha256": "ec093dcc9dd674450b8076ce735c1acb514409bba0cb16a57358d510a95637b1"
+    },
+    {
+      "section": 6,
+      "block": 1,
+      "destination": "docs/modulos/equipa.md",
+      "sha256": "d19d7098d638b08f09edb7f9f10a24e90c21e84cda7088b1b969b972ef590ea2"
+    },
+    {
+      "section": 6,
+      "block": 2,
+      "destination": "docs/modulos/equipa.md",
+      "sha256": "c69a8ca7fba86a1ee566fdf5014e0edd7b81d24108119bdeb44b1ee5ba6b1860"
+    },
+    {
+      "section": 6,
+      "block": 3,
+      "destination": "docs/modulos/equipa.md",
+      "sha256": "8187dbb587499b256400c865652e4e945cada0728cab732cbe51e1cafecfb738"
+    },
+    {
+      "section": 6,
+      "block": 4,
+      "destination": "docs/modulos/equipa.md",
+      "sha256": "c2f23f5ba62fb822d24f0d1552cbe3d7e2b37450e832870153939f31e371c091"
+    },
+    {
+      "section": 6,
+      "block": 5,
+      "destination": "docs/modulos/equipa.md",
+      "sha256": "3b4ae9c6af2de523d6e01eaf94f234931c61af25630951444419fac601c752d8"
+    },
+    {
+      "section": 7,
+      "block": 1,
+      "destination": "docs/modulos/pos.md",
+      "sha256": "523c67976beef4354ae902d6b1ac339ae373ee58a76a13d69a1810ee6f19c7dc"
+    },
+    {
+      "section": 7,
+      "block": 2,
+      "destination": "docs/modulos/pos.md",
+      "sha256": "21cadc4297004c9738fa88e7dd30f2c1840ea0c4ab33c2b10fef6024dbfbd39f"
+    },
+    {
+      "section": 7,
+      "block": 3,
+      "destination": "docs/modulos/pos.md",
+      "sha256": "4e9651cac3c1d7a391786a7f392a95915577d6a187c502592b59405584d87cb6"
+    },
+    {
+      "section": 7,
+      "block": 4,
+      "destination": "docs/modulos/pos.md",
+      "sha256": "2a65f463b223968fe160b1ff6497c36c35a84ca1703905150b8ad5be456b1d64"
+    },
+    {
+      "section": 7,
+      "block": 5,
+      "destination": "docs/modulos/pos.md",
+      "sha256": "f395d112ab3be265c6adea3d6641d0331b41ca7046f07c2de2a090f019565594"
+    },
+    {
+      "section": 7,
+      "block": 6,
+      "destination": "docs/modulos/pos.md",
+      "sha256": "29fd854ee810df33a65534b329c09f032e994f4cc9cbe4ae3d33fbae3620e18f"
+    },
+    {
+      "section": 7,
+      "block": 7,
+      "destination": "docs/modulos/pos.md",
+      "sha256": "d169009e2e35b102455de2ae1ba1a03f4666df15c2da0021edafc7c212b10638"
+    },
+    {
+      "section": 7,
+      "block": 8,
+      "destination": "docs/modulos/pos.md",
+      "sha256": "c41779ba4cf2b1714a3567eafa53c1ddd1afc9c1be3f715e4ce48085c501033f"
+    },
+    {
+      "section": 7,
+      "block": 9,
+      "destination": "docs/modulos/pos.md",
+      "sha256": "32d438741d85798ec4953c837e955f5f68957d7a2a5d7797a9160ce1508fbf00"
+    },
+    {
+      "section": 8,
+      "block": 1,
+      "destination": "docs/modulos/impressao.md",
+      "sha256": "15ac155789fdb4ec17eac8fe64db8ecbcbcc7f3e4d0be4c87f2d108237b98efe"
+    },
+    {
+      "section": 8,
+      "block": 2,
+      "destination": "docs/modulos/impressao.md",
+      "sha256": "e58335dcc03ac4b9c4c836fb384f7e5ea3f20df927103b6d821ddc931fa842e8"
+    },
+    {
+      "section": 8,
+      "block": 3,
+      "destination": "docs/modulos/impressao.md",
+      "sha256": "a2c42b1fac0ce154681f93b31aa15f4e3f8cea6f7a63e545ffa6b0e8326fa39d"
+    },
+    {
+      "section": 8,
+      "block": 4,
+      "destination": "docs/modulos/impressao.md",
+      "sha256": "c350b3a700934306f851d268c3c8ee18941f7be1a488e535fe524a02ea3622f4"
+    },
+    {
+      "section": 8,
+      "block": 5,
+      "destination": "docs/modulos/impressao.md",
+      "sha256": "d217abeda42faac5cb409cf5ed312e8f12e5916629236dba6d57fb36bef592c9"
+    },
+    {
+      "section": 9,
+      "block": 1,
+      "destination": "docs/modulos/caixa.md",
+      "sha256": "fd4466fdd0c6219ac518fbe62578935c0d442659b2f1582cd43268222ef6a31c"
+    },
+    {
+      "section": 9,
+      "block": 2,
+      "destination": "docs/modulos/caixa.md",
+      "sha256": "80ea93ee7451449b6f5fab026fac5dbeff1130bf7d50a63b469170b4e6d92e87"
+    },
+    {
+      "section": 10,
+      "block": 1,
+      "destination": "docs/modulos/estoque.md",
+      "sha256": "b9558cb644e63678519ed1b5b93b841a08baad11006fe4b9f40472cf276829a7"
+    },
+    {
+      "section": 10,
+      "block": 2,
+      "destination": "docs/modulos/estoque.md",
+      "sha256": "c1f416a9e89c4c3c393278f17ab76ae8358b8ff769786b4a67c10f703605b44d"
+    },
+    {
+      "section": 10,
+      "block": 3,
+      "destination": "docs/modulos/estoque.md",
+      "sha256": "dc2e39c7d8001f0924012e8ac55561d34306f8187931f3d82e6d56a6763819f2"
+    },
+    {
+      "section": 10,
+      "block": 4,
+      "destination": "docs/modulos/estoque.md",
+      "sha256": "59a63c69fdf556e7fd7163f920def8719ce00742f60d7116b12bcf03f93cde33"
+    },
+    {
+      "section": 10,
+      "block": 5,
+      "destination": "docs/modulos/estoque.md",
+      "sha256": "3cf1ddeae6198e69ec70d190791b3bae29d1322db886d43f31f5368caf3510b5"
+    },
+    {
+      "section": 10,
+      "block": 6,
+      "destination": "docs/modulos/estoque.md",
+      "sha256": "4f6e81dec651cbfd166a7362b90aba83feac21db8b863b5abc4accf6c4d637d0"
+    },
+    {
+      "section": 11,
+      "block": 1,
+      "destination": "docs/desenvolvimento/robustez.md",
+      "sha256": "04cf8c81e438334f2c47bf61a56a999709552029e492541381a20c51ae19f0a4"
+    },
+    {
+      "section": 11,
+      "block": 2,
+      "destination": "docs/desenvolvimento/robustez.md",
+      "sha256": "e376def1cbe2b91ca53ac62d5b9c28b22db3e0be6d2997f11f7dd38d3e1fef56"
+    },
+    {
+      "section": 11,
+      "block": 3,
+      "destination": "docs/desenvolvimento/robustez.md",
+      "sha256": "4bf0b138dd08c093eb08ed63509849b0bf0402e7377a5cdece8e968ecfcdd069"
+    },
+    {
+      "section": 11,
+      "block": 4,
+      "destination": "docs/desenvolvimento/robustez.md",
+      "sha256": "b8ef89807d6a9a671b144f88aaa8277e9b986a86b4c161e1a73c01a13b796b41"
+    },
+    {
+      "section": 11,
+      "block": 5,
+      "destination": "docs/desenvolvimento/robustez.md",
+      "sha256": "5c8fcf6189b90485e80eb7d4b4ba25b2bc00f0b8676abf8854f140ad0a1440d7"
+    },
+    {
+      "section": 11,
+      "block": 6,
+      "destination": "docs/desenvolvimento/robustez.md",
+      "sha256": "9b553f3b434289250ad44ca97329252cd846fb41423e1270dc070ec6db509c30"
+    },
+    {
+      "section": 11,
+      "block": 7,
+      "destination": "docs/desenvolvimento/robustez.md",
+      "sha256": "cef949fe5c0712ef63d445ad3b0bda0697df0fa25a922a9e5fa0ba92e356f547"
+    },
+    {
+      "section": 11,
+      "block": 8,
+      "destination": "docs/desenvolvimento/robustez.md",
+      "sha256": "8776e6004e59ee9d3b87fb96756cd3b2055b499e12fa130e62aff27a30a6eef7"
+    },
+    {
+      "section": 11,
+      "block": 9,
+      "destination": "docs/desenvolvimento/robustez.md",
+      "sha256": "bba58f6a68dfc3fcf41090274cfd7f3b7d8b6df9f08411299f988e63e8c236d3"
+    },
+    {
+      "section": 11,
+      "block": 10,
+      "destination": "docs/desenvolvimento/robustez.md",
+      "sha256": "b9c2f58a0c91ed4b4935f2482d567612aa8f590aa6165acab22006e4fbd227a7"
+    },
+    {
+      "section": 11,
+      "block": 11,
+      "destination": "docs/desenvolvimento/robustez.md",
+      "sha256": "347aafd02fc79a6822ba1a7fa7ae759b65de9cab31b2339f0695c04c223149e9"
+    },
+    {
+      "section": 11,
+      "block": 12,
+      "destination": "docs/desenvolvimento/robustez.md",
+      "sha256": "cf7bc3290fb5d03455445fec88183f86dbdad20fdb4493000cc434a90a9c8976"
+    },
+    {
+      "section": 11,
+      "block": 13,
+      "destination": "docs/desenvolvimento/robustez.md",
+      "sha256": "76b6bff942e3c03104785644519afa742af666a8f969211b5e29e705fb421e58"
+    },
+    {
+      "section": 11,
+      "block": 14,
+      "destination": "docs/desenvolvimento/robustez.md",
+      "sha256": "d6729cc5db961c57133716ad3ed9ae1e0628a8e8fe32add8dc5b7fbf5fac41d8"
+    },
+    {
+      "section": 11,
+      "block": 15,
+      "destination": "docs/desenvolvimento/robustez.md",
+      "sha256": "67beb7701d2cb0128b8d941132896db3ce9ade2c3d8e95e59553f104793bcf26"
+    },
+    {
+      "section": 11,
+      "block": 16,
+      "destination": "docs/desenvolvimento/robustez.md",
+      "sha256": "304d1604cb31d6678b650aed973fb828ebe91c855fe56dd89c2c0d7355b15b87"
+    },
+    {
+      "section": 11,
+      "block": 17,
+      "destination": "docs/desenvolvimento/robustez.md",
+      "sha256": "4730762ebf5ac4ac2e180eeed7bef9ce967f93d7d757f1db709fa0a56588ba30"
+    },
+    {
+      "section": 12,
+      "block": 1,
+      "destination": "docs/modulos/pedidos.md",
+      "sha256": "1de132d492dcfb86ea13e9f01549ce9fcbffdf85602a430c60b5bac54987d74b"
+    },
+    {
+      "section": 12,
+      "block": 2,
+      "destination": "docs/modulos/pedidos.md",
+      "sha256": "e40a529b7be914d2401783647fbca13a6725b7a68671510e9840eb42e73b5d10"
+    },
+    {
+      "section": 12,
+      "block": 3,
+      "destination": "docs/modulos/pedidos.md",
+      "sha256": "0c25745ae05193517e46d47c49f094568ad1c5ef89cc5c2c37a887ee4a195940"
+    },
+    {
+      "section": 13,
+      "block": 1,
+      "destination": "docs/modulos/site-checkout.md",
+      "sha256": "feeec073299548d3a04777e8f6dca857276df6a55afb2876e6d4dbfec7075df0"
+    },
+    {
+      "section": 13,
+      "block": 2,
+      "destination": "docs/modulos/site-checkout.md",
+      "sha256": "588b9ea4b2a30393ec13094b1f2fb336b572d3047c4dbc2e890d4855e304212a"
+    },
+    {
+      "section": 13,
+      "block": 3,
+      "destination": "docs/modulos/site-checkout.md",
+      "sha256": "9c9c76fa32fe3aa2819cfc23a22709a8e4dc504bc9ccbe1cb7d439171577ab8a"
+    },
+    {
+      "section": 13,
+      "block": 4,
+      "destination": "docs/modulos/site-checkout.md",
+      "sha256": "fe19cee34e2f95dc238ab0475c8949f6b8136149f994f5e5a362cae0a103879d"
+    },
+    {
+      "section": 13,
+      "block": 5,
+      "destination": "docs/modulos/site-checkout.md",
+      "sha256": "536de95e916b099ea373ccb12cab025a1aad853d585c429838686edd65802c04"
+    },
+    {
+      "section": 14,
+      "block": 1,
+      "destination": "docs/modulos/tvs-kds.md",
+      "sha256": "d44a9841464bfb821d3236989373b1006f25920c0c41dc1e0d983ef3b68fe4b8"
+    },
+    {
+      "section": 14,
+      "block": 2,
+      "destination": "docs/modulos/tvs-kds.md",
+      "sha256": "d8cb695d59706dbac73e4df825a6916559362066949bb38d4a7a49411ec2e64e"
+    },
+    {
+      "section": 14,
+      "block": 3,
+      "destination": "docs/modulos/tvs-kds.md",
+      "sha256": "462f3e62d732fc2e8818b6f3caaefde892fe11c70bf8668c24d1f6e92b9baa41"
+    },
+    {
+      "section": 14,
+      "block": 4,
+      "destination": "docs/modulos/tvs-kds.md",
+      "sha256": "dada2bb1fbc0699127699c04fb7568a3895add62746b3e9c49934ff7c1499599"
+    },
+    {
+      "section": 15,
+      "block": 1,
+      "destination": "docs/operacao/migracao.md",
+      "sha256": "cdd2d20bfbe29dc89230a99b1561aaf8883696127b361c401e6ab5b9eee3db82"
+    },
+    {
+      "section": 15,
+      "block": 2,
+      "destination": "docs/operacao/migracao.md",
+      "sha256": "0959a45810137208f9b43b5ace2d4656d496e208be90efef9ab09c9d5acec11e"
+    },
+    {
+      "section": 16,
+      "block": 1,
+      "destination": "docs/historico/decisoes-iniciais.md",
+      "sha256": "624b576bbbee008fd3a005563d48c7237674e0b7e88896a1c42d078f2ae3d468"
+    },
+    {
+      "section": 16,
+      "block": 2,
+      "destination": "docs/historico/decisoes-iniciais.md",
+      "sha256": "c93fed61a336138a71e9f00ac44f77333340ed26d022cc36529eb6163eb81562"
+    },
+    {
+      "section": 16,
+      "block": 3,
+      "destination": "docs/historico/decisoes-iniciais.md",
+      "sha256": "c19c8b50366efcc3719ef56f74959cbafb15c2d0e59dc5c65836472c31345184"
+    },
+    {
+      "section": 18,
+      "block": 1,
+      "destination": "docs/modulos/aparencia.md",
+      "sha256": "e3468885768f28de4669b72aa787e9c72be5b091c52a38e43d20869de12d83bc"
+    },
+    {
+      "section": 18,
+      "block": 2,
+      "destination": "docs/modulos/aparencia.md",
+      "sha256": "ffbe1f55590e74e655263fe48f1c1c437ef2d1d4e459f6dbc1c7dfc9dc33c10e"
+    },
+    {
+      "section": 18,
+      "block": 3,
+      "destination": "docs/modulos/aparencia.md",
+      "sha256": "c65bb11ae746ad841e0dd6d3ff2d861fc3db11c37d557c768a05f6e48b7be7e9"
+    },
+    {
+      "section": 18,
+      "block": 4,
+      "destination": "docs/modulos/aparencia.md",
+      "sha256": "eb6b760d603f81bdc9590fe0a24d99fb20e876f03714447dcaa1eaebf7dbffaa"
+    },
+    {
+      "section": 18,
+      "block": 5,
+      "destination": "docs/modulos/aparencia.md",
+      "sha256": "45f9080e58fadc9130508c0f9405840b1edc6cb05ffc454f8acb0abaa81ec1de"
+    },
+    {
+      "section": 18,
+      "block": 6,
+      "destination": "docs/modulos/aparencia.md",
+      "sha256": "890c3f052045d07ee5ad9ec5e7d42825a05d0adba1d7893b7469d69484c53baf"
+    },
+    {
+      "section": 18,
+      "block": 7,
+      "destination": "docs/modulos/aparencia.md",
+      "sha256": "856bfcf124c53a02e5b87973eceef1a4056543b640d00fdd951ca75f50245148"
+    },
+    {
+      "section": 18,
+      "block": 8,
+      "destination": "docs/modulos/aparencia.md",
+      "sha256": "9f34c1761dd7e7f701d402d6ce07dcdcbe77ad7fe92044ac1e2fbf39b69b0ad6"
+    },
+    {
+      "section": 18,
+      "block": 9,
+      "destination": "docs/modulos/aparencia.md",
+      "sha256": "a5b532c8b3f4c0218f64d5a093c093b65b8827b900687d637a4ac7d68b1407aa"
+    },
+    {
+      "section": 18,
+      "block": 10,
+      "destination": "docs/modulos/aparencia.md",
+      "sha256": "3e918ff1ca63c0ab88f60be634331bd8041f304ceccdd53a6376d2540df02798"
+    },
+    {
+      "section": 18,
+      "block": 11,
+      "destination": "docs/modulos/aparencia.md",
+      "sha256": "42536f4a74413ba0b800281989d2f8992e06088c4dd872d99f2d86e90f0840dd"
+    },
+    {
+      "section": 18,
+      "block": 12,
+      "destination": "docs/modulos/aparencia.md",
+      "sha256": "61d6e15b51c3bb359dc8cf2dc2791432920c47672b98d6467cee5d2412669625"
+    },
+    {
+      "section": 18,
+      "block": 13,
+      "destination": "docs/modulos/aparencia.md",
+      "sha256": "87720f4ab1dab7cb05972ddd770a461ff73f71cac04a6acd26ebe0cb933f4a56"
+    },
+    {
+      "section": 18,
+      "block": 14,
+      "destination": "docs/modulos/aparencia.md",
+      "sha256": "2bf3d81c29f2515d6f9a8c27444e8cff5e0637ef045fd7cb1482204550a7aa30"
+    },
+    {
+      "section": 18,
+      "block": 15,
+      "destination": "docs/modulos/aparencia.md",
+      "sha256": "6c69a00086de5003aca9d64f8e5d717dda5941b00aa305a3dc71f4c1739c3d05"
+    },
+    {
+      "section": 18,
+      "block": 16,
+      "destination": "docs/modulos/aparencia.md",
+      "sha256": "364ecca44462c72d5138bbecef2c4c1decb291cc269be2dbe7692301fcd3ad0f"
+    },
+    {
+      "section": 18,
+      "block": 17,
+      "destination": "docs/modulos/aparencia.md",
+      "sha256": "19532c7cd732c7e6b58964b2f6a1a9dcd81fc2b914410454a6294da34d606e6b"
+    },
+    {
+      "section": 18,
+      "block": 18,
+      "destination": "docs/modulos/aparencia.md",
+      "sha256": "d32c3da3ba11b34de595c2e9800a4f1fe226cb02b3427462db0394f36413acfd"
+    },
+    {
+      "section": 18,
+      "block": 19,
+      "destination": "docs/modulos/aparencia.md",
+      "sha256": "cf66ee36e926d757ed69a782c71a3d9603bc238264e63ab95f35a6540245c110"
+    },
+    {
+      "section": 18,
+      "block": 20,
+      "destination": "docs/modulos/aparencia.md",
+      "sha256": "c3bef915e7d7627b079d4701769c6601ce3af6b351e3e2d90f9977847dbc9ba4"
+    },
+    {
+      "section": 18,
+      "block": 21,
+      "destination": "docs/modulos/aparencia.md",
+      "sha256": "0c3278f8dedcf2002bad2dad1819f7171d3a7874544c176b1ef1adc51958517e"
+    },
+    {
+      "section": 18,
+      "block": 22,
+      "destination": "docs/modulos/aparencia.md",
+      "sha256": "c7c7fa28cd53603652b0f2f7bcb2668c0ae8ffd27a5a437856f124758504471f"
+    },
+    {
+      "section": 18,
+      "block": 23,
+      "destination": "docs/modulos/aparencia.md",
+      "sha256": "f131129b80be98b8c7552977b549605e876a08902a460cb54997f94ec4f721b6"
+    },
+    {
+      "section": 19,
+      "block": 1,
+      "destination": "docs/planos/atendimento.md",
+      "sha256": "8ad32123f9e1bfe21ea2833fe6700bbb46b59947a412848c77c05d6d2dbd1f49"
+    },
+    {
+      "section": 19,
+      "block": 2,
+      "destination": "docs/planos/atendimento.md",
+      "sha256": "b78fd6ed8355f844841c129ca8e960374ce87ff3310fd61ed30576a8a3e2c443"
+    },
+    {
+      "section": 19,
+      "block": 3,
+      "destination": "docs/planos/atendimento.md",
+      "sha256": "d7ce0402ba51c8a2460b23d8a20e4d0fd486897b9d765d717d1ce836362c581b"
+    },
+    {
+      "section": 19,
+      "block": 4,
+      "destination": "docs/planos/atendimento.md",
+      "sha256": "6289f9ac26d82d5717f2dc8253ddf85ce66c77775306f5afb6a56b7588dec797"
+    },
+    {
+      "section": 19,
+      "block": 5,
+      "destination": "docs/planos/atendimento.md",
+      "sha256": "6c799215e427e731d31a882e820c28d5a52a57f3ff5a0ee844ad64a86fa21fb0"
+    },
+    {
+      "section": 19,
+      "block": 6,
+      "destination": "docs/planos/atendimento.md",
+      "sha256": "916c9d22c954c28cc851ff8d40e4a94c09ebb2aa6f0edd203d4dba6cd1d2ab1c"
+    },
+    {
+      "section": 19,
+      "block": 7,
+      "destination": "docs/planos/atendimento.md",
+      "sha256": "886fe305f426a165e858c9dd5852a084bebfaebe0ddb97a7887d483b8fc2176c"
+    }
+  ],
+  "immutable": [
+    {
+      "file": "CLAUDE.md",
+      "section": 0,
+      "sha256": "b6adac3c8ad741a52a1c6c19a19c70f0b0f2ef3bcea133ea64f3517a971a91ea"
+    },
+    {
+      "file": "CLAUDE.md",
+      "section": 1,
+      "sha256": "7835a5bc48eb1b633e5b7cd369186609590a0e4de847ed7db5061941fef09042"
+    },
+    {
+      "file": "CLAUDE.md",
+      "section": 17,
+      "sha256": "f2db31488d3d83d11be3a4780ea9ca21b6c29f5fffb20b1c8a83f2b0ebdb4969"
+    },
+    {
+      "file": "docs/decisions/0001-multi-unidade.md",
+      "sha256": "46c01135e3fe03712a8444c634bf6a155c026905e3fd639c74ef93aee0263a0a"
+    },
+    {
+      "file": "docs/decisions/0002-criar-loja-a-partir-de-outra.md",
+      "sha256": "1c5e9097762486862ef5cd936780cf4685929699a9d1d7dc0b29527da2e7ae4f"
+    },
+    {
+      "file": "docs/decisions/0003-conta-do-cliente-por-dispositivo.md",
+      "sha256": "f336dd1c6a45e4b514da5d4802163499fc2661eeb469df917927eef317e936f4"
+    },
+    {
+      "file": "docs/decisions/0004-email-smtp-hostinger.md",
+      "sha256": "e5b2f4caa32f87f9936525f194a9c923ab114f7617fc02b8bc3771c80bd1683c"
+    },
+    {
+      "file": "docs/decisions/0005-canal-publico-de-agentes.md",
+      "sha256": "ef88369956ee20bff885361278ff10df1a4bf0812885664902a0bf7576317c9b"
+    },
+    {
+      "file": "docs/decisions/0006-definicoes-do-pos-por-loja.md",
+      "sha256": "85bec63bcb3f632bac7bcb5c2d4d3c7570ea621313ba19e75b1c66d656b52e60"
+    },
+    {
+      "file": "docs/decisions/0007-modelos-do-talao.md",
+      "sha256": "9b878a9307c946d351b49d165410268b1abe9e9585c6bae1eda99d1290e54f72"
+    }
+  ],
+  "corrections": [
+    {
+      "section": 16,
+      "reason": "Privacidade: retirar números privados, preservando decisão de contas partilhadas.",
+      "beforeHash": "c15fdde67dfb1f7939a8abdb83bcc5907ee9a71aa068544d947b272baaa40329",
+      "afterHash": "ab90f8e45768901f7445deac16a66b312979cd8fd34ae6952e633d3afb7aee28"
+    }
+  ]
+}

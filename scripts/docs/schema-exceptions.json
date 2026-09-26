@@ -1,0 +1,95 @@
+{
+  "description": "Excepções documentais exactas, nunca autorização de runtime. Os arquivos legacy/engine/historico e o relatório de auditoria são excluídos explicitamente pelo verificador.",
+  "exceptions": [
+    {
+      "file": "BLOQUEIOS.md",
+      "token": "chat_threads",
+      "kind": "table",
+      "reason": "B-021 regista a ligação futura da conversa ao pedido. O próprio bloqueio afirma que ainda não existe código nem migration do atendimento."
+    },
+    {
+      "file": "docs/decisions/0002-criar-loja-a-partir-de-outra.md",
+      "token": "store_templates",
+      "kind": "table",
+      "reason": "O ADR rejeita explicitamente uma tabela de templates; a referência documenta a alternativa recusada, não uma tabela entregue."
+    },
+    {
+      "file": "docs/modulos/equipa.md",
+      "token": "auth.users",
+      "kind": "table",
+      "reason": "Tabela gerida pelo Supabase Auth, referenciada pelas migrations mas criada pela plataforma, fora do catálogo de CREATE TABLE da aplicação."
+    },
+    {
+      "file": "docs/modulos/mesas.md",
+      "token": "save_table",
+      "kind": "function",
+      "reason": "Contra-exemplo deliberado: o módulo manda não inventar esta RPC e explica que o painel faz mutações directas à tabela tables."
+    },
+    {
+      "file": "docs/planos/atendimento.md",
+      "token": "chat_threads",
+      "kind": "table",
+      "reason": "Plano futuro de atendimento, identificado no início como não implementado; nenhuma migration actual cria as conversas."
+    },
+    {
+      "file": "docs/planos/atendimento.md",
+      "token": "chat_messages",
+      "kind": "table",
+      "reason": "Plano futuro de atendimento, identificado no início como não implementado; nenhuma migration actual cria as mensagens."
+    },
+    {
+      "file": "docs/planos/atendimento.md",
+      "token": "chat_topics",
+      "kind": "table",
+      "reason": "Plano futuro de atendimento, identificado no início como não implementado; nenhuma migration actual cria as perguntas e respostas."
+    },
+    {
+      "file": "docs/planos/live.md",
+      "token": "auth.users",
+      "kind": "table",
+      "reason": "Tabela gerida pelo Supabase Auth; o plano de acessos refere a plataforma e não declara que a aplicação a cria nas suas migrations."
+    },
+    {
+      "file": "docs/referencia/migrations.md",
+      "token": "private.create_order",
+      "kind": "function",
+      "reason": "Nome intermédio declarado na cadeia histórica e depois renomeado; esta tabela lista declarações por migration, não assinaturas finais."
+    },
+    {
+      "file": "docs/referencia/migrations.md",
+      "token": "private.get_menu",
+      "kind": "function",
+      "reason": "Nome intermédio declarado na cadeia histórica e depois renomeado; esta tabela lista declarações por migration, não assinaturas finais."
+    },
+    {
+      "file": "docs/referencia/migrations.md",
+      "token": "private.advance_order",
+      "kind": "function",
+      "reason": "Nome intermédio declarado na cadeia histórica e depois renomeado; esta tabela lista declarações por migration, não assinaturas finais."
+    },
+    {
+      "file": "docs/referencia/migrations.md",
+      "token": "private.confirm_payment",
+      "kind": "function",
+      "reason": "Nome intermédio declarado na cadeia histórica e depois renomeado; esta tabela lista declarações por migration, não assinaturas finais."
+    },
+    {
+      "file": "docs/referencia/migrations.md",
+      "token": "private.build_online_ticket_payload",
+      "kind": "function",
+      "reason": "Helper presente em migrations anteriores e removido da cadeia final; o inventário histórico conserva a declaração e o catálogo de RPCs descreve o estado final."
+    },
+    {
+      "file": "docs/referencia/migrations.md",
+      "token": "private.create_counter_sale",
+      "kind": "function",
+      "reason": "Nome intermédio declarado na cadeia histórica e depois renomeado; esta tabela lista declarações por migration, não assinaturas finais."
+    },
+    {
+      "file": "docs/referencia/tabelas-rls.md",
+      "token": "storage.objects",
+      "kind": "table",
+      "reason": "Tabela gerida pelo Supabase Storage. A referência documenta policies criadas pela aplicação sobre esta tabela da plataforma."
+    }
+  ]
+}
