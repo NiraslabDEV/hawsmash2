@@ -416,6 +416,11 @@ cash_movements (id, session_id, store_id, type, amount_cents, reason, created_by
   Imprime o fecho, gera PDF e envia email ao dono (herdado do 1.0 `send-caixa` e do motor `close_cash_session`).
 - **Conta desde o último fecho** — nunca "desde a meia-noite UTC" (bug real corrigido no motor; não repetir).
 - Consolidado das duas lojas num ecrã, com a decomposição por loja, por turno e por forma de pagamento.
+- **Turno e dia (1091):** o turno fecha com a contagem e a pessoa seguinte abre o seu, no POS (aba Caixa).
+  No fim, o **fecho do dia** (`close_cash_day`) junta os turnos fechados **desde o último fecho do dia** —
+  cada turno pertence a um só (`cash_sessions.day_close_id`). Soma o que os turnos congelaram, não recalcula;
+  diz quem abriu e fechou cada turno; exige nenhum turno aberto; é idempotente por `p_request_id`; imprime
+  (como `cash_close` com `day`, legível pelo bridge antigo) e envia email ao dono.
 
 ---
 

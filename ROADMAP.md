@@ -499,3 +499,19 @@ aceitavam o `cashier`, com loja, perfil e `event_log`.
 - [x] Talão de fecho (trigger da F5) e email ao dono, best-effort, como no painel. Manual do balcão actualizado.
 - [x] Gate `apps/web/lib/pos/__tests__/caixa.test.ts` (13): teclado, só a loja do terminal, centavos inteiros, movimento, mesas, mensagens.
 - [ ] Ensaiar no staging com um `cashier`: abrir, sangria, vender, fechar com diferença e ver o talão de fecho sair.
+
+## Fecho do dia — 2026-09-25
+
+Pedido do dono: abrir o turno → fechar o turno para trocar → a pessoa seguinte abre o dela → fecha → e,
+no fim de tudo, o fecho do dia. Entrega o G1 da Fase 2 (responsável identificado, troca de turno sem fechar o dia).
+
+- [x] Migration 1091: `cash_day_closes` por loja (RLS, sem a cozinha) e `cash_sessions.day_close_id`; cada turno entra num só fecho do dia.
+- [x] `close_cash_day(p_store, p_request_id)`: soma o que os turnos congelaram (não recalcula), quem abriu e fechou cada um, diferença do dia, fundo do início e o que ficou na gaveta; trava com turno aberto; idempotente; `event_log` `cash.day_closed`.
+- [x] `get_cash_day(p_store)`: o que o fecho vai juntar, antes de confirmar.
+- [x] Dias anteriores à 1091 fechados na própria migration (um por loja e dia de Maputo, sem papel) — sem isso o primeiro fecho juntava o histórico. Os turnos de hoje ficam para o fecho desta noite.
+- [x] Talão do dia em `@delivery/receipt` (`cash-day.ts`); na fila é um `cash_close` com `day`, e o bridge antigo imprime-o no formato do fecho de turno ("FECHO DO DIA" na linha do turno).
+- [x] POS: "Fechar turno" (era "Fechar caixa"), cartão **Fim do dia?** depois do último turno, resumo do dia com os turnos e confirmação; email ao dono (`/api/emails/send-cash-day-email`).
+- [x] ⏳ Gates: `packages/db/tests/cash-day.test.ts` (6), `packages/receipt/src/__tests__/cash-day.test.ts` (5), `apps/web/lib/cash/__tests__/day.test.ts` (4), `caixa.test.ts` (+4). O de BD não correu nesta máquina (Docker em baixo) — SQL e PL/pgSQL validados pelo parser do Postgres 17; corre no CI.
+- [ ] Aplicar 1091 no staging fora do horário e ensaiar: 2 turnos com pessoas diferentes, fecho do dia, talão e email.
+- [ ] Gerar o `.exe` do bridge com o talão do dia; até lá sai no formato do fecho de turno.
+- [x] Painel: lista dos fechos do dia na aba Caixa (últimos 20, com os turnos, quem os fez e o PDF de cada turno).

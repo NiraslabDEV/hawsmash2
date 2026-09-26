@@ -4,6 +4,7 @@ import {
   cashErrorMessage,
   movementReady,
   openTablesNotice,
+  parseCashDay,
   parseCashStore,
   pressCashKey,
 } from '../caixa';
@@ -120,6 +121,66 @@ describe('mesas por fechar no fecho', () => {
   });
 });
 
+describe('fecho do dia no POS', () => {
+  const pendente = {
+    business_date: '2026-09-25',
+    shifts_count: 1,
+    first_opened_at: '2026-09-25T09:00:00Z',
+    last_shift_closed_at: '2026-09-25T19:00:00Z',
+    opening_float_cents: 0,
+    closing_cash_cents: 50_000,
+    total_pedidos: 3,
+    total_faturado_cents: 90_000,
+    payments: { cash: 50_000, mpesa: 40_000, emola: 0, credit_card: 0 },
+    cash_sales_cents: 50_000,
+    sangria_cents: 0,
+    reforco_cents: 0,
+    despesa_cents: 0,
+    troco_inicial_cents: 0,
+    difference_cents: 0,
+    shifts: [
+      {
+        session_id: 's1',
+        shift_label: 'Turno 25/09/2026 11:00',
+        opened_at: '2026-09-25T09:00:00Z',
+        closed_at: '2026-09-25T19:00:00Z',
+        opened_by_name: 'Ana',
+        closed_by_name: 'Ana',
+        opening_float_cents: 0,
+        expected_cash_cents: 50_000,
+        counted_cash_cents: 50_000,
+        difference_cents: 0,
+        difference_reason: null,
+        total_pedidos: 3,
+        total_faturado_cents: 90_000,
+      },
+    ],
+  };
+
+  it('lê os turnos por fechar, o turno aberto e o último fecho do dia', () => {
+    const dia = parseCashDay({
+      open_session: null,
+      pending: pendente,
+      last_day_close: { id: 'd0', business_date: '2026-09-24', closed_at: '2026-09-24T20:00:00Z' },
+    });
+    expect(dia?.pending?.shifts_count).toBe(1);
+    expect(dia?.hasOpenSession).toBe(false);
+    expect(dia?.lastDayClose?.business_date).toBe('2026-09-24');
+  });
+
+  it('sem turnos por fechar, nada pendente; com turno aberto, diz que está aberto', () => {
+    const dia = parseCashDay({ open_session: { id: 'x' }, pending: null, last_day_close: null });
+    expect(dia?.pending).toBeNull();
+    expect(dia?.hasOpenSession).toBe(true);
+    expect(dia?.lastDayClose).toBeNull();
+  });
+
+  it('um resumo do dia mal formado não se mostra como se fosse certo', () => {
+    expect(parseCashDay(null)).toBeNull();
+    expect(parseCashDay({ open_session: null, pending: { ...pendente, total_faturado_cents: 1.5 } })).toBeNull();
+  });
+});
+
 describe('mensagens do caixa', () => {
   it('traduz as recusas do servidor para o balcão', () => {
     expect(cashErrorMessage('difference_reason_required')).toMatch(/motivo/i);
@@ -128,5 +189,10 @@ describe('mensagens do caixa', () => {
     expect(cashErrorMessage('cash_access_denied')).toMatch(/perfil/i);
     expect(cashErrorMessage('store_access_denied')).toMatch(/loja/i);
     expect(cashErrorMessage('Failed to fetch')).toMatch(/ligação/i);
+    expect(cashErrorMessage('session_open')).toMatch(/fecha primeiro o turno/i);
+    expect(cashErrorMessage('no_shifts_to_close')).toMatch(/não há turnos/i);
+    expect(cashErrorMessage('Could not find the function public.close_cash_day(p_request_id, p_store)')).toMatch(
+      /ainda não está disponível/i,
+    );
   });
 });

@@ -6,6 +6,8 @@ import { formatMT, type Cents } from '@delivery/core';
 import { parseMTInput } from '@/lib/cash/input';
 import { createClient } from '@/utils/supabase/client';
 
+import { DayClosesSection } from './day-closes';
+
 type MovementType = 'sangria' | 'reforco' | 'despesa' | 'troco_inicial';
 type CashMovement = {
   id: string;
@@ -294,7 +296,7 @@ export default function CaixaPage() {
                 </div>
               ))}
             </ListSection>
-            <ListSection title="Histórico de fechos" empty="Ainda não existem fechos.">
+            <ListSection title="Fechos de turno" empty="Ainda não existem fechos de turno.">
               {selectedStore.history.map((item) => (
                 <div key={item.id} className="flex items-center gap-3 border-b border-white/5 py-3 last:border-0">
                   <div className="min-w-0 flex-1"><p className="truncate font-bold text-white">{item.shift_label}</p><p className="text-xs text-[#938779]">{dateTime(item.closed_at)}</p></div>
@@ -315,6 +317,11 @@ export default function CaixaPage() {
           ))}
         </section>
       )}
+
+      <DayClosesSection
+        storeId={selectedStore?.store_id ?? null}
+        storeNames={Object.fromEntries(dashboard.stores.map((store) => [store.store_id, store.store_name]))}
+      />
 
       {dialog && selectedStore && (
         <div className="fixed inset-0 z-50 grid place-items-center bg-black/80 p-4">

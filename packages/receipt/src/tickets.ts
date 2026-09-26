@@ -34,6 +34,7 @@ import {
   wrap,
   type Op,
 } from './ops';
+import { buildCashDayReceipt, isCashDayPayload } from './cash-day';
 import { FACTORY_PRINT_LAYOUT, templateForVia, type PrintLayout, type TicketTemplate } from './layout';
 import {
   isCashClosePayload,
@@ -497,6 +498,8 @@ export function buildCustomerReceipt(payload: CustomerReceiptPayload): Op[] {
 }
 
 export function buildCashCloseReceipt(payload: CashClosePayload): Op[] {
+  // O fecho do dia (1091) chega pela mesma fila, com os turnos dentro.
+  if (isCashDayPayload(payload)) return buildCashDayReceipt(payload, brandHeader(payload.store_short_name));
   // O fecho de caixa vai para o dono e para o arquivo: leva a marca.
   const ops: Op[] = brandHeader(payload.store_short_name);
   ops.push(SIZE_DOUBLE, BOLD_ON, line('FECHO DE CAIXA'), BOLD_OFF, SIZE_NORMAL);

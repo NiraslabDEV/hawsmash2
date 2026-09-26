@@ -9,6 +9,8 @@
  * browser: o teclado, a leitura do painel e as frases.
  */
 
+import { parseCashDayReport, type CashDayReport } from '@/lib/cash/day';
+
 export type CashMovementType = 'sangria' | 'reforco' | 'despesa' | 'troco_inicial';
 
 export const CASH_MOVEMENT_TYPES: CashMovementType[] = ['sangria', 'reforco', 'despesa', 'troco_inicial'];
@@ -160,12 +162,45 @@ export function openTablesNotice(overview: unknown): { numbers: number[]; totalC
   };
 }
 
+/**
+ * O que o `get_cash_day` (1091) diz ao POS: os turnos fechados à espera do
+ * fecho do dia, se há um turno aberto (que o trava) e o último fecho do dia.
+ */
+export type CashDay = {
+  hasOpenSession: boolean;
+  pending: CashDayReport | null;
+  lastDayClose: { id: string; business_date: string; closed_at: string } | null;
+};
+
+export function parseCashDay(data: unknown): CashDay | null {
+  if (!data || typeof data !== 'object') return null;
+  const raw = data as { open_session?: unknown; pending?: unknown; last_day_close?: unknown };
+  let pending: CashDayReport | null = null;
+  if (raw.pending != null) {
+    pending = parseCashDayReport(raw.pending);
+    if (!pending) return null;
+  }
+  const last = raw.last_day_close as CashDay['lastDayClose'] | undefined;
+  return {
+    hasOpenSession: raw.open_session != null,
+    pending,
+    lastDayClose:
+      last && typeof last.id === 'string' && typeof last.business_date === 'string' ? last : null,
+  };
+}
+
 export function cashErrorMessage(message?: string): string {
   if (!message) return 'Não foi possível concluir. Tenta outra vez.';
   if (message.includes('difference_reason_required')) {
     return 'A diferença passa a tolerância. Conta outra vez; se estiver certa, escreve o motivo.';
   }
   if (message.includes('session_already_open')) return 'O caixa desta loja já está aberto.';
+  if (message.includes('session_open')) return 'Há um turno aberto: fecha primeiro o turno, depois o dia.';
+  if (message.includes('no_shifts_to_close')) return 'Não há turnos fechados à espera do fecho do dia.';
+  // A 1091 ainda não aplicada nesta base: o PostgREST não encontra a função.
+  if (message.includes('Could not find the function') || message.includes('PGRST202')) {
+    return 'O fecho do dia ainda não está disponível nesta loja. Chama o suporte.';
+  }
   if (message.includes('no_open_session')) return 'Não há caixa aberto nesta loja.';
   if (message.includes('invalid_opening_float') || message.includes('invalid_counted_cents')) {
     return 'O valor não é válido.';

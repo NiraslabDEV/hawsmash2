@@ -59,24 +59,38 @@ Se a impressora também estiver em baixo: a venda **grava na mesma**. Escreve o 
 
 ---
 
-## 5. Caixa: sangria, despesa e fecho
+## 5. Caixa: turnos, sangria e fecho do dia
 
 Tudo no POS, aba **Caixa** (barra da esquerda). Precisa de internet — se a rede cair,
 continua a vender e fecha quando voltar.
+
+O dia faz-se assim: **abre o turno → fecha o turno → a pessoa seguinte abre o dela → fecha →
+no fim de tudo, fecho do dia.**
 
 - **Sangria** (dinheiro para o cofre), **despesa** (pagaste algo com dinheiro da gaveta), **reforço** ou
   **troco inicial**: toca em **Sangria · reforço · despesa**, escolhe o tipo, escreve o valor e o motivo.
   Fica registado quem lançou.
 
-### Fechar
+### Fechar o turno (troca de turno)
 
-1. Aba **Caixa** → **Fechar caixa**.
+1. Aba **Caixa** → **Fechar turno**.
 2. Conta o dinheiro **físico** da gaveta e escreve o valor contado.
 3. O sistema mostra o **esperado** e a **diferença**. Se for maior do que a tolerância, tens de escrever o motivo.
-4. **Confirmar fecho**. Sai o **talão de fecho** e o dono recebe o resumo por email.
+4. **Fechar turno**. Sai o **talão do turno** e o dono recebe o resumo por email.
+5. A pessoa seguinte entra com o cartão e o PIN dela, conta o troco e toca em **Abrir turno**.
 
 Antes de fechar: se o POS avisar que há **vendas offline por sincronizar**, espera pela confirmação verde.
 Se houver **mesas com conta aberta**, cobra-as primeiro — o que não for pago não entra no fecho.
+
+### Fecho do dia (no fim de tudo)
+
+1. Fecha o último turno, como acima.
+2. Na aba **Caixa** aparece **Fim do dia?** → **Fecho do dia**.
+3. O ecrã mostra o dia inteiro: cada turno (quem abriu, quem fechou, a diferença), as vendas por forma de
+   pagamento e a **diferença do dia**. Confere e toca em **Confirmar fecho do dia**.
+4. Sai o **talão do dia** e o dono recebe o resumo por email.
+
+Com um turno aberto, o fecho do dia não deixa — fecha primeiro o turno.
 
 M-Pesa, e-Mola e cartão aparecem **separados** — esse dinheiro não está na gaveta.
 

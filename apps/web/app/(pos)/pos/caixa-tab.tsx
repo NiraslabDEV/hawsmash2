@@ -10,12 +10,20 @@ import {
   cashErrorMessage,
   movementReady,
   openTablesNotice,
+  parseCashDay,
   parseCashStore,
   pressCashKey,
   type CashCloseReport,
+  type CashDay,
   type CashMovementType,
   type CashStore,
 } from '@/lib/pos/caixa';
+import {
+  businessDateLabel,
+  dayShiftsLabel,
+  parseCashDayReport,
+  type CashDayReport,
+} from '@/lib/cash/day';
 import { fetchTableOverview } from '@/lib/pos/tables';
 import { PosIcon } from './pos-icons';
 import { TouchKeyboard } from './touch-keyboard';
@@ -68,12 +76,13 @@ function differenceLabel(cents: number): string {
 }
 
 /**
- * A aba Caixa: abrir o turno com o fundo, lançar sangrias e despesas e fechar
- * com a contagem da gaveta, sem sair do balcão.
+ * A aba Caixa: abrir o turno com o fundo, lançar sangrias e despesas, fechar
+ * o turno com a contagem da gaveta — a pessoa seguinte abre o seu — e, no fim
+ * de tudo, o fecho do dia, que junta os turnos (1091).
  *
- * Tudo passa pelas RPCs do caixa (1007) com a sessão de quem está no POS —
- * é essa pessoa que fica no `event_log` e no talão de fecho. O esperado vem
- * do servidor; o POS só o mostra. Sem internet, o caixa pausa e a venda não.
+ * Tudo passa pelas RPCs do caixa com a sessão de quem está no POS — é essa
+ * pessoa que fica no `event_log` e no talão. O esperado vem do servidor; o
+ * POS só o mostra. Sem internet, o caixa pausa e a venda não.
  */
 export function CaixaTab({
   storeId,
@@ -104,14 +113,21 @@ export function CaixaTab({
   const [reasonMissing, setReasonMissing] = useState(false);
   const [lastClose, setLastClose] = useState<CashCloseReport | null>(null);
   const [tablesNotice, setTablesNotice] = useState<ReturnType<typeof openTablesNotice>>(null);
+  const [day, setDay] = useState<CashDay | null>(null);
+  const [dayError, setDayError] = useState<string | null>(null);
+  /** A chave do fecho do dia em curso: repetir o toque devolve o mesmo fecho. */
+  const [dayRequest, setDayRequest] = useState<string | null>(null);
+  const [lastDay, setLastDay] = useState<CashDayReport | null>(null);
 
   const session = store?.open_session ?? null;
-  const modo: 'abrir' | Acao | null = !session
-    ? 'abrir'
+  const modo: 'abrir' | 'dia' | Acao | null = !session
+    ? dayRequest
+      ? 'dia'
+      : 'abrir'
     : acao && acao.sessionId === session.id
       ? acao.kind
       : null;
-  const draftKey = session ? `${modo ?? 'resumo'}:${session.id}` : 'abrir';
+  const draftKey = session ? `${modo ?? 'resumo'}:${session.id}` : (modo ?? 'abrir');
   const current = draft.key === draftKey ? draft : emptyDraft(draftKey);
   const difference = store ? current.amount - store.expected_cash_cents : 0;
 
@@ -131,8 +147,19 @@ export function CaixaTab({
   );
 
   const load = useCallback(async () => {
-    const { data, error } = await supabase.rpc('get_cash_dashboard', { p_store: storeId });
+    const [{ data, error }, dayResult] = await Promise.all([
+      supabase.rpc('get_cash_dashboard', { p_store: storeId }),
+      supabase.rpc('get_cash_day', { p_store: storeId }),
+    ]);
     setLoading(false);
+    // O fecho do dia é à parte: se falhar, o turno continua a abrir e a fechar.
+    if (dayResult.error) {
+      setDayError(cashErrorMessage(dayResult.error.message));
+    } else {
+      const parsedDay = parseCashDay(dayResult.data);
+      setDayError(parsedDay ? null : 'Não foi possível ler o fecho do dia.');
+      if (parsedDay) setDay(parsedDay);
+    }
     if (error) {
       setLoadError(`${cashErrorMessage(error.message)} Os valores são da última consulta.`);
       return;
@@ -144,6 +171,9 @@ export function CaixaTab({
     }
     setLoadError(null);
     setStore(parsed);
+    // Uma venda abriu um turno a meio do fecho do dia: o fecho fica sem efeito,
+    // em vez de voltar a aparecer quando esse turno fechar.
+    if (parsed.open_session) setDayRequest(null);
   }, [storeId, supabase]);
 
   useEffect(() => {
@@ -168,8 +198,15 @@ export function CaixaTab({
     }
   }
 
+  function startDay() {
+    if (session) return;
+    setFeedback(null);
+    setDayRequest(crypto.randomUUID());
+  }
+
   const cancel = useCallback(() => {
     setAcao(null);
+    setDayRequest(null);
     setReasonMissing(false);
     setDraft(emptyDraft('abrir'));
   }, []);
@@ -188,8 +225,9 @@ export function CaixaTab({
       return;
     }
     setLastClose(null);
+    setLastDay(null);
     setDraft(emptyDraft('abrir'));
-    setFeedback({ tone: 'ok', text: `Caixa aberto · fundo ${mt(current.amount)}` });
+    setFeedback({ tone: 'ok', text: `Turno aberto · fundo ${mt(current.amount)}` });
     void load();
   }, [busy, current.amount, load, storeId, supabase]);
 
@@ -245,6 +283,36 @@ export function CaixaTab({
     void load();
   }, [busy, cancel, current.amount, current.reason, current.typed, load, storeId, supabase]);
 
+  const closeDay = useCallback(async () => {
+    if (busy || !dayRequest) return;
+    setBusy(true);
+    const { data, error } = await supabase.rpc('close_cash_day', {
+      p_store: storeId,
+      p_request_id: dayRequest,
+    });
+    setBusy(false);
+    if (error) {
+      setFeedback({ tone: 'danger', text: cashErrorMessage(error.message) });
+      void load();
+      return;
+    }
+    const report = parseCashDayReport(data);
+    const dayCloseId = (data as { day_close_id?: string } | null)?.day_close_id;
+    // O talão do dia já está na fila (1091); o email é best-effort.
+    if (dayCloseId) {
+      void fetch('/api/emails/send-cash-day-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dayCloseId }),
+      }).catch(() => undefined);
+    }
+    setLastDay(report);
+    setLastClose(null);
+    setFeedback(report ? null : { tone: 'ok', text: 'Dia fechado. O talão do dia sai no balcão.' });
+    cancel();
+    void load();
+  }, [busy, cancel, dayRequest, load, storeId, supabase]);
+
   const submit = useCallback(() => {
     if (!online) return;
     if (modo === 'abrir') void openSession();
@@ -252,9 +320,10 @@ export function CaixaTab({
     else if (modo === 'fecho') void closeSession();
   }, [addMovement, closeSession, modo, online, openSession]);
 
-  // Num PC com teclado, os algarismos e o Enter também servem.
+  // Num PC com teclado, os algarismos e o Enter também servem. O fecho do dia
+  // fica de fora: um Enter perdido não fecha o dia.
   useEffect(() => {
-    if (!keyboardActive || reasonKeyboard || modo === null) return;
+    if (!keyboardActive || reasonKeyboard || modo === null || modo === 'dia') return;
     function onKey(event: KeyboardEvent) {
       const alvo = event.target as HTMLElement | null;
       if (alvo && (alvo.tagName === 'INPUT' || alvo.tagName === 'TEXTAREA' || alvo.isContentEditable)) return;
@@ -335,9 +404,62 @@ export function CaixaTab({
               className="pos-btn pos-btn--primary pos-btn--lg w-full"
             >
               <PosIcon name="cash" size={22} />
-              {busy ? 'A abrir…' : `Abrir caixa · ${mt(current.amount)}`}
+              {busy ? 'A abrir…' : `Abrir turno · ${mt(current.amount)}`}
             </button>
             <p className="text-sm text-ink-mute">Conta o troco que está na gaveta antes de abrir.</p>
+
+            {day?.pending && (
+              <section className="mt-2 rounded-2xl border border-[color:var(--pos-accent-line)] bg-bg2 p-4">
+                <p className="pos-eyebrow !text-gold">Fim do dia?</p>
+                <p className="mt-1 text-sm text-ink-mute">
+                  {dayShiftsLabel(day.pending.shifts_count)} à espera do fecho do dia ·{' '}
+                  {mt(day.pending.total_faturado_cents)} facturados.
+                </p>
+                <button
+                  type="button"
+                  disabled={busy || !online}
+                  onClick={startDay}
+                  className="pos-btn pos-btn--lg mt-3 w-full"
+                >
+                  <PosIcon name="lock" size={22} />
+                  Fecho do dia
+                </button>
+              </section>
+            )}
+            {!day && dayError && <p className="text-sm text-ink-mute">{dayError}</p>}
+          </>
+        )}
+
+        {modo === 'dia' && (
+          <>
+            <h3 className="text-lg font-bold">Fecho do dia</h3>
+            {day?.pending ? (
+              <p className="text-sm text-ink-mute">
+                Junta {dayShiftsLabel(day.pending.shifts_count)} desde {hora(day.pending.first_opened_at)} e fecha o
+                dia. Sai o talão do dia no balcão e o resumo vai por email ao dono.
+              </p>
+            ) : (
+              <p className="pos-note pos-note--warn">Não há turnos fechados à espera do fecho do dia.</p>
+            )}
+            {pendingSales > 0 && (
+              <p role="alert" className="pos-note pos-note--warn">
+                {pendingSales === 1 ? 'Há 1 venda offline' : `Há ${pendingSales} vendas offline`} por
+                sincronizar. Espera pela confirmação verde: sem isso, ficam fora do fecho do dia.
+              </p>
+            )}
+            <div className="flex gap-2">
+              <button type="button" disabled={busy} onClick={cancel} className="pos-btn pos-btn--quiet pos-btn--lg flex-1">
+                Cancelar
+              </button>
+              <button
+                type="button"
+                disabled={busy || !online || !day?.pending}
+                onClick={() => void closeDay()}
+                className="pos-btn pos-btn--primary pos-btn--lg flex-[2]"
+              >
+                {busy ? 'A fechar o dia…' : 'Confirmar fecho do dia'}
+              </button>
+            </div>
           </>
         )}
 
@@ -350,7 +472,7 @@ export function CaixaTab({
               className="pos-btn pos-btn--primary pos-btn--lg w-full"
             >
               <PosIcon name="check" size={22} />
-              Fechar caixa
+              Fechar turno
             </button>
             <button
               type="button"
@@ -361,6 +483,12 @@ export function CaixaTab({
               <PosIcon name="cash" size={22} />
               Sangria · reforço · despesa
             </button>
+            {day && (
+              <p className="text-sm text-ink-mute">
+                Troca de turno: fecha o teu turno e a pessoa seguinte abre o dela. O fecho do dia faz-se depois
+                do último turno.
+              </p>
+            )}
           </>
         )}
 
@@ -455,7 +583,7 @@ export function CaixaTab({
                 onClick={() => void closeSession()}
                 className="pos-btn pos-btn--primary pos-btn--lg flex-[2]"
               >
-                {busy ? 'A fechar…' : 'Confirmar fecho'}
+                {busy ? 'A fechar…' : 'Fechar turno'}
               </button>
             </div>
           </>
@@ -475,9 +603,17 @@ export function CaixaTab({
         {loadError && <p role="alert" className="pos-note pos-note--warn">{loadError}</p>}
         {loading && !store && online && <p className="py-10 text-center text-ink-mute">A carregar o caixa…</p>}
 
-        {lastClose && !session && (
+        {modo === 'dia' && day?.pending && (
+          <DaySummary report={day.pending} title={`Fecho do dia · ${businessDateLabel(day.pending.business_date)}`} />
+        )}
+
+        {lastDay && !session && modo !== 'dia' && (
+          <DaySummary report={lastDay} title={`Dia fechado · ${businessDateLabel(lastDay.business_date)}`} done />
+        )}
+
+        {lastClose && !session && modo !== 'dia' && (
           <section className="rounded-2xl border border-emerald-500/30 bg-emerald-500/[0.07] p-4">
-            <p className="pos-eyebrow !text-emerald-200">Caixa fechado · {lastClose.shift_label}</p>
+            <p className="pos-eyebrow !text-emerald-200">Turno fechado · {lastClose.shift_label}</p>
             <div className="mt-3 grid grid-cols-3 gap-2">
               <Metric label="Esperado" value={mt(lastClose.expected_cash_cents)} />
               <Metric label="Contado" value={mt(lastClose.counted_cash_cents)} />
@@ -491,12 +627,15 @@ export function CaixaTab({
               {lastClose.total_pedidos} pedidos · {mt(lastClose.total_faturado_cents)} facturados. O talão de
               fecho sai na impressora do balcão e o resumo vai por email ao dono.
             </p>
+            <p className="mt-2 text-sm text-ink">
+              A pessoa seguinte abre o turno dela à esquerda. No fim de tudo, faz-se o fecho do dia.
+            </p>
           </section>
         )}
 
-        {store && !session && !lastClose && (
+        {store && !session && !lastClose && !lastDay && modo !== 'dia' && (
           <p className="rounded-2xl border border-white/[0.07] bg-bg2 p-4 text-sm text-ink-mute">
-            Sem caixa aberto. Se venderes assim, a primeira venda abre o turno sem fundo — abre aqui primeiro,
+            Sem turno aberto. Se venderes assim, a primeira venda abre o turno sem fundo — abre aqui primeiro,
             com o troco contado.
           </p>
         )}
@@ -575,6 +714,65 @@ export function CaixaTab({
         />
       )}
     </div>
+  );
+}
+
+/** O dia: a soma dos turnos, e cada turno com quem o abriu e fechou. */
+function DaySummary({ report, title, done = false }: { report: CashDayReport; title: string; done?: boolean }) {
+  return (
+    <section
+      className={`rounded-2xl border p-4 ${
+        done ? 'border-emerald-500/30 bg-emerald-500/[0.07]' : 'border-white/[0.07] bg-bg2'
+      }`}
+    >
+      <p className={`pos-eyebrow ${done ? '!text-emerald-200' : ''}`}>{title}</p>
+      <p className="pos-num mt-1 text-4xl font-extrabold text-gold">{mt(report.total_faturado_cents)}</p>
+      <p className="text-sm text-ink-mute">
+        {report.total_pedidos} pedidos · {dayShiftsLabel(report.shifts_count)}
+      </p>
+      <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+        <Metric label="Dinheiro" value={mt(report.payments.cash)} />
+        <Metric label="M-Pesa" value={mt(report.payments.mpesa)} />
+        <Metric label="e-Mola" value={mt(report.payments.emola)} />
+        <Metric label="Cartão" value={mt(report.payments.credit_card)} />
+        <Metric label="Sangrias" value={mt(report.sangria_cents)} />
+        <Metric label="Despesas" value={mt(report.despesa_cents)} />
+        <Metric label="Na gaveta ao fechar" value={mt(report.closing_cash_cents)} />
+        <Metric
+          label="Diferença do dia"
+          value={differenceLabel(report.difference_cents)}
+          tone={report.difference_cents === 0 ? 'ok' : 'warn'}
+        />
+      </div>
+      <ul className="mt-3 divide-y divide-white/[0.07] rounded-xl bg-black/20">
+        {report.shifts.map((shift, index) => (
+          <li key={shift.session_id || index} className="flex items-center gap-3 px-3 py-2">
+            <span className="min-w-0 flex-1">
+              <span className="block text-sm font-semibold">
+                {index + 1}. {hora(shift.opened_at)}–{hora(shift.closed_at)}
+              </span>
+              <span className="block truncate text-xs text-ink-mute">
+                Abriu {shift.opened_by_name ?? '—'} · Fechou {shift.closed_by_name ?? '—'}
+                {shift.difference_reason ? ` · ${shift.difference_reason}` : ''}
+              </span>
+            </span>
+            <span
+              className={`pos-num shrink-0 text-sm font-bold ${
+                shift.difference_cents === 0 ? 'text-emerald-300' : 'text-amber-300'
+              }`}
+            >
+              {differenceLabel(shift.difference_cents)}
+            </span>
+          </li>
+        ))}
+      </ul>
+      {done && (
+        <p className="mt-3 text-sm text-ink-mute">
+          O talão do dia sai na impressora do balcão e o resumo vai por email ao dono.
+          {report.closed_by_name ? ` Fechado por ${report.closed_by_name}.` : ''}
+        </p>
+      )}
+    </section>
   );
 }
 
