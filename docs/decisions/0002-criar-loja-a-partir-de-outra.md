@@ -48,17 +48,17 @@ acontece **dentro** da RPC `SECURITY DEFINER`, e as colunas de segredo ficam for
 
 A 3.ª loja está fora do âmbito comercial fechado (`CLAUDE.md §0`) e faltam semanas para abrir duas. O que
 esta funcionalidade resolveria já — configurar a Matola — resolve-se desta vez **à mão**, com a rede de
-segurança que já existe: a checklist de abertura ([`RUNBOOK.md §7`](../RUNBOOK.md)) obriga a conferir os
+segurança que já existe: a checklist de abertura ([`RUNBOOK.md §7`](../operacao/runbook.md)) obriga a conferir os
 números M-Pesa/e-Mola da loja com um **teste de pagamento real de 1 MT**. É esse teste, e não o formulário,
 que apanha o dígito trocado.
 
 ## Fora de âmbito desta decisão
 
 **O perfil de hardware não entra em `stores`.** O que separa Maputo de Matola em equipamento (PC, SO,
-resolução, impressora integrada — [`HARDWARE.md §1.1`](../HARDWARE.md)) não tem nem deve ter coluna em
+resolução, impressora integrada — [`HARDWARE.md §1.1`](../operacao/hardware.md)) não tem nem deve ter coluna em
 `stores`: é o que permite trocar o PC de uma loja sem tocar em nada do sistema. Hardware pertence a
 `devices`. O que pode vir a valer a pena é a metade útil — a **checklist de abertura por perfil**, com o
-perfil Matola a acrescentar as mitigações do Windows 10 de [`HARDWARE.md §3`](../HARDWARE.md) — e isso é
+perfil Matola a acrescentar as mitigações do Windows 10 de [`HARDWARE.md §3`](../operacao/hardware.md) — e isso é
 uma decisão à parte, se e quando se justificar.
 
 ## Consequências

@@ -46,4 +46,4 @@ herdava o WAGYU.
   escreve Maputo; operador lê e não escreve; cada gravação fica no `event_log`.
 - `apps/web/lib/pos/__tests__/settings.test.ts`: lixo cai na fábrica sem levar o resto; nunca
   zero meios de pagamento.
-- Portabilidade e checklist de cópia: [`docs/POS-DEFINICOES.md`](../POS-DEFINICOES.md).
+- Portabilidade e checklist de cópia: [`docs/modulos/pos.md`](../modulos/pos.md).
