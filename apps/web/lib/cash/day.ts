@@ -6,6 +6,8 @@
  * O PDF e o email de turno ficam em `report.ts`, que puxa o `pdf-lib`.
  */
 
+import { parseCashSold, type CashSold } from '@delivery/receipt';
+
 export type CashDayShift = {
   session_id: string;
   shift_label: string;
@@ -43,6 +45,8 @@ export type CashDayReport = {
   troco_inicial_cents: number;
   difference_cents: number;
   shifts: CashDayShift[];
+  /** Os artigos do dia (1095); null nos fechos de antes, ou se a lista vier estragada. */
+  sold?: CashSold | null;
 };
 
 const MONEY = [
@@ -136,6 +140,8 @@ export function parseCashDayReport(raw: unknown): CashDayReport | null {
     troco_inicial_cents: raw.troco_inicial_cents as number,
     difference_cents: raw.difference_cents as number,
     shifts: shifts as CashDayShift[],
+    // A lista é informação: estragada, cai só ela — o dinheiro do dia fica.
+    sold: parseCashSold(raw.sold),
   };
 }
 

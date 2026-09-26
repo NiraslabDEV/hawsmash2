@@ -114,14 +114,18 @@ afterAll(async () => {
   }
 });
 
-async function createPaidOrder(amountCents: number, method: "cash" | "mpesa" | "emola" | "credit_card") {
+async function createPaidOrder(
+  amountCents: number,
+  method: "cash" | "mpesa" | "emola" | "credit_card",
+  status: "paid" | "cancelled" = "paid",
+) {
   const orderNumber = `DIA-${suffix}-${createdOrderIds.length + 1}`;
   const { data: order, error: orderError } = await admin
     .from("orders")
     .insert({
       store_id: maputoStoreId,
       order_number: orderNumber,
-      status: "paid",
+      status,
       flow: "manual",
       channel: "counter",
       fulfillment_type: "pickup",
@@ -147,6 +151,32 @@ async function createPaidOrder(amountCents: number, method: "cash" | "mpesa" | "
     idempotency_key: `dia:${suffix}:${createdOrderIds.length}`,
   });
   if (paymentError) throw new Error(`Criar pagamento — ${paymentError.message}`);
+  return order.id as string;
+}
+
+type Line = { name: string; variant?: string | null; qty: number; unitPriceCents: number };
+
+/** Uma venda com artigos: o subtotal é a soma das linhas, como no POS. */
+async function createPaidOrderWithItems(
+  lines: Line[],
+  method: "cash" | "mpesa" = "cash",
+  status: "paid" | "cancelled" = "paid",
+) {
+  const total = lines.reduce((sum, item) => sum + item.qty * item.unitPriceCents, 0);
+  const orderId = await createPaidOrder(total, method, status);
+  const { error } = await admin.from("order_items").insert(
+    lines.map((item) => ({
+      order_id: orderId,
+      store_id: maputoStoreId,
+      name_snapshot: item.name,
+      variant_name_snapshot: item.variant ?? null,
+      qty: item.qty,
+      unit_price_cents: item.unitPriceCents,
+      station: "kitchen",
+    })),
+  );
+  if (error) throw new Error(`Criar artigos — ${error.message}`);
+  return orderId;
 }
 
 async function openShift(client: SupabaseClient, floatCents: number) {
@@ -371,5 +401,104 @@ describe("1091 — fecho do dia", () => {
 
     const { data: kitchenRows } = await kitchen.from("cash_day_closes").select("id");
     expect(kitchenRows).toEqual([]);
+  });
+});
+
+type Sold = {
+  items: Array<{ name: string; variant: string | null; qty: number; total_cents: number }>;
+  items_total_cents: number;
+  delivery_fees_cents: number;
+  discounts_cents: number;
+};
+
+describe("1095 — artigos vendidos no fecho", () => {
+  it("o turno congela os artigos, por produto e variante, sem os anulados", async () => {
+    await openShift(manager, 0);
+    await createPaidOrderWithItems([
+      { name: "Classic Smash", variant: "WAGYU", qty: 2, unitPriceCents: 40000 },
+      { name: "Batata Frita", qty: 1, unitPriceCents: 15000 },
+    ]);
+    await createPaidOrderWithItems(
+      [
+        { name: "Classic Smash", variant: "WAGYU", qty: 1, unitPriceCents: 40000 },
+        { name: "Classic Smash", variant: "HAW", qty: 1, unitPriceCents: 30000 },
+      ],
+      "mpesa",
+    );
+    await createPaidOrderWithItems([{ name: "Prego", qty: 3, unitPriceCents: 50000 }], "cash", "cancelled");
+
+    const turno = (await closeShift(manager, 95000)) as unknown as { session_id: string; sold: Sold };
+    expect(turno.sold).toEqual({
+      items: [
+        { name: "Classic Smash", variant: "WAGYU", qty: 3, total_cents: 120000 },
+        { name: "Batata Frita", variant: null, qty: 1, total_cents: 15000 },
+        { name: "Classic Smash", variant: "HAW", qty: 1, total_cents: 30000 },
+      ],
+      items_total_cents: 165000,
+      delivery_fees_cents: 0,
+      discounts_cents: 0,
+    });
+
+    const { data: session } = await admin
+      .from("cash_sessions")
+      .select("report")
+      .eq("id", turno.session_id)
+      .single();
+    expect(session?.report.sold).toEqual(turno.sold);
+
+    // O talão do fecho de turno leva a mesma lista.
+    const { data: job } = await admin
+      .from("print_jobs")
+      .select("payload")
+      .eq("store_id", maputoStoreId)
+      .eq("request_id", turno.session_id)
+      .eq("kind", "cash_close")
+      .single();
+    expect(job?.payload.sold).toEqual(turno.sold);
+  });
+
+  it("o dia soma a lista dos turnos e recupera a de um turno antigo sem ela", async () => {
+    await openShift(manager, 0);
+    await createPaidOrderWithItems([{ name: "Classic Smash", variant: "WAGYU", qty: 2, unitPriceCents: 40000 }]);
+    const turno1 = await closeShift(manager, 80000);
+    // Um turno fechado antes da 1095 não tem `sold`: o dia conta-o dos pedidos.
+    const { data: antigo } = await admin.from("cash_sessions").select("report").eq("id", turno1.session_id).single();
+    const { sold: _sold, ...semLista } = antigo!.report as Record<string, unknown>;
+    await admin.from("cash_sessions").update({ report: semLista }).eq("id", turno1.session_id);
+
+    await openShift(cashier, 0);
+    await createPaidOrderWithItems([
+      { name: "Classic Smash", variant: "WAGYU", qty: 1, unitPriceCents: 40000 },
+      { name: "Coca-Cola", variant: "Normal", qty: 2, unitPriceCents: 10000 },
+    ]);
+    await closeShift(cashier, 60000);
+
+    const { data, error } = await closeDay(cashier);
+    expect(error).toBeNull();
+    const report = data as DayReport & { sold: Sold };
+    expect(report.sold).toEqual({
+      items: [
+        { name: "Classic Smash", variant: "WAGYU", qty: 3, total_cents: 120000 },
+        { name: "Coca-Cola", variant: "Normal", qty: 2, total_cents: 20000 },
+      ],
+      items_total_cents: 140000,
+      delivery_fees_cents: 0,
+      discounts_cents: 0,
+    });
+    expect(report.sold.items_total_cents).toBe(report.total_faturado_cents);
+
+    const { data: job } = await admin
+      .from("print_jobs")
+      .select("payload")
+      .eq("store_id", maputoStoreId)
+      .eq("request_id", report.day_close_id)
+      .single();
+    expect(job?.payload.sold).toEqual(report.sold);
+  });
+
+  it("um turno sem vendas fecha com a lista vazia", async () => {
+    await openShift(manager, 0);
+    const turno = (await closeShift(manager, 0)) as unknown as { sold: Sold };
+    expect(turno.sold).toEqual({ items: [], items_total_cents: 0, delivery_fees_cents: 0, discounts_cents: 0 });
   });
 });

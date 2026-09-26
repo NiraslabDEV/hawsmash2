@@ -1,4 +1,5 @@
 import { cents, formatMT } from '@delivery/core';
+import { parseCashSold, type CashSold } from '@delivery/receipt';
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 
 import { businessDateLabel, dayShiftsLabel, type CashDayReport } from './day';
@@ -23,6 +24,8 @@ export type CashCloseReport = {
   total_faturado_cents: number;
   payments: { cash: number; mpesa: number; emola: number; credit_card: number };
   closed_by_name?: string | null;
+  /** Os artigos que o turno congelou (1095); null nos fechos de antes. */
+  sold?: CashSold | null;
 };
 
 type CashSessionRow = {
@@ -85,6 +88,7 @@ export function cashCloseReportFromSession(
       credit_card: amount(payments.credit_card),
     },
     closed_by_name: closedByName,
+    sold: parseCashSold(raw.sold),
   };
 }
 
@@ -165,6 +169,23 @@ const escapeHtml = (value: string) =>
     '"': '&quot;',
   })[character]!);
 
+const cell = 'padding:8px;border-bottom:1px solid #332a22';
+
+/** Os artigos vendidos, depois do dinheiro; nada quando o fecho não traz lista. */
+function soldEmailHtml(sold: CashSold | null | undefined): string {
+  if (!sold) return '';
+  const title = '<h2 style="color:#e5a93c;font-size:16px">Artigos vendidos</h2>';
+  if (sold.items.length === 0) return `${title}<p>Nenhum artigo vendido.</p>`;
+  const rows = sold.items.map((item) => [
+    `${item.qty}× ${escapeHtml(item.name)}${item.variant ? ` ${escapeHtml(item.variant)}` : ''}`,
+    mt(item.total_cents),
+  ]);
+  rows.push(['<strong>Total artigos</strong>', mt(sold.items_total_cents)]);
+  if (sold.delivery_fees_cents > 0) rows.push(['Taxas de entrega', mt(sold.delivery_fees_cents)]);
+  if (sold.discounts_cents > 0) rows.push(['Descontos', `-${mt(sold.discounts_cents)}`]);
+  return `${title}<table style="width:100%;border-collapse:collapse">${rows.map(([label, value]) => `<tr><td style="${cell}">${label}</td><td style="${cell};text-align:right;white-space:nowrap"><strong>${value}</strong></td></tr>`).join('')}</table>`;
+}
+
 export function cashCloseEmailHtml(report: CashCloseReport, brandName: string): string {
   const rows = [
     ['Fundo inicial', mt(report.opening_float_cents)],
@@ -179,12 +200,10 @@ export function cashCloseEmailHtml(report: CashCloseReport, brandName: string): 
     ['e-Mola', mt(report.payments.emola)],
     ['Cartão', mt(report.payments.credit_card)],
   ];
-  return `<!doctype html><html lang="pt"><body style="font-family:Arial,sans-serif;background:#0a0807;color:#f6f1e6;padding:24px"><main style="max-width:560px;margin:auto;background:#151310;padding:24px;border-radius:16px"><h1 style="color:#e5a93c">${escapeHtml(brandName)} ${escapeHtml(report.store_short_name)} — Fecho de Caixa</h1><p>${escapeHtml(report.shift_label)} · ${dateTime(report.opened_at)} a ${dateTime(report.closed_at)}</p><table style="width:100%;border-collapse:collapse">${rows.map(([label, value]) => `<tr><td style="padding:8px;border-bottom:1px solid #332a22">${label}</td><td style="padding:8px;text-align:right;border-bottom:1px solid #332a22"><strong>${value}</strong></td></tr>`).join('')}</table>${report.difference_reason ? `<p><strong>Motivo da diferença:</strong> ${escapeHtml(report.difference_reason)}</p>` : ''}${report.closed_by_name ? `<p>Fechado por: ${escapeHtml(report.closed_by_name)}</p>` : ''}</main></body></html>`;
+  return `<!doctype html><html lang="pt"><body style="font-family:Arial,sans-serif;background:#0a0807;color:#f6f1e6;padding:24px"><main style="max-width:560px;margin:auto;background:#151310;padding:24px;border-radius:16px"><h1 style="color:#e5a93c">${escapeHtml(brandName)} ${escapeHtml(report.store_short_name)} — Fecho de Caixa</h1><p>${escapeHtml(report.shift_label)} · ${dateTime(report.opened_at)} a ${dateTime(report.closed_at)}</p><table style="width:100%;border-collapse:collapse">${rows.map(([label, value]) => `<tr><td style="padding:8px;border-bottom:1px solid #332a22">${label}</td><td style="padding:8px;text-align:right;border-bottom:1px solid #332a22"><strong>${value}</strong></td></tr>`).join('')}</table>${report.difference_reason ? `<p><strong>Motivo da diferença:</strong> ${escapeHtml(report.difference_reason)}</p>` : ''}${soldEmailHtml(report.sold)}${report.closed_by_name ? `<p>Fechado por: ${escapeHtml(report.closed_by_name)}</p>` : ''}</main></body></html>`;
 }
 
-const cell = 'padding:8px;border-bottom:1px solid #332a22';
-
-/** O resumo do fecho do dia para o dono: os turnos, quem os fez e a soma. */
+/** O resumo do fecho do dia para o dono: os turnos, quem os fez, a soma e os artigos. */
 export function cashDayEmailHtml(report: CashDayReport, storeShortName: string, brandName: string): string {
   const shifts = report.shifts
     .map((shift, index) => {
@@ -210,5 +229,5 @@ export function cashDayEmailHtml(report: CashDayReport, storeShortName: string, 
     ['Diferença do dia', signedMT(report.difference_cents)],
   ];
   const fechado = report.closed_by_name ? `<p>Fechado por: ${escapeHtml(report.closed_by_name)}</p>` : '';
-  return `<!doctype html><html lang="pt"><body style="font-family:Arial,sans-serif;background:#0a0807;color:#f6f1e6;padding:24px"><main style="max-width:560px;margin:auto;background:#151310;padding:24px;border-radius:16px"><h1 style="color:#e5a93c">${escapeHtml(brandName)} ${escapeHtml(storeShortName)} — Fecho do Dia</h1><p>${businessDateLabel(report.business_date)} · ${dayShiftsLabel(report.shifts_count)}</p><h2 style="color:#e5a93c;font-size:16px">Turnos</h2><table style="width:100%;border-collapse:collapse">${shifts}</table><h2 style="color:#e5a93c;font-size:16px">O dia</h2><table style="width:100%;border-collapse:collapse">${rows.map(([label, value]) => `<tr><td style="${cell}">${label}</td><td style="${cell};text-align:right"><strong>${value}</strong></td></tr>`).join('')}</table>${fechado}</main></body></html>`;
+  return `<!doctype html><html lang="pt"><body style="font-family:Arial,sans-serif;background:#0a0807;color:#f6f1e6;padding:24px"><main style="max-width:560px;margin:auto;background:#151310;padding:24px;border-radius:16px"><h1 style="color:#e5a93c">${escapeHtml(brandName)} ${escapeHtml(storeShortName)} — Fecho do Dia</h1><p>${businessDateLabel(report.business_date)} · ${dayShiftsLabel(report.shifts_count)}</p><h2 style="color:#e5a93c;font-size:16px">Turnos</h2><table style="width:100%;border-collapse:collapse">${shifts}</table><h2 style="color:#e5a93c;font-size:16px">O dia</h2><table style="width:100%;border-collapse:collapse">${rows.map(([label, value]) => `<tr><td style="${cell}">${label}</td><td style="${cell};text-align:right"><strong>${value}</strong></td></tr>`).join('')}</table>${soldEmailHtml(report.sold)}${fechado}</main></body></html>`;
 }

@@ -539,3 +539,16 @@ também: quem sai responde pelo seu dinheiro, quem entra abre o seu.
 - [x] TROCAR DE TURNO no topo do POS: abre a aba Caixa já na contagem da gaveta (1 de 2); fechado o turno, "PASSAR AO PRÓXIMO CAIXA" bloqueia e mostra os cartões; quem entra põe o PIN e vai direito a abrir o seu turno com o fundo (2 de 2). Cancelar a troca não fecha nada.
 - [x] O "Bloquear · trocar" fica para uma ausência curta, sem mexer no caixa.
 - [ ] ⏳ Ensaiar no POS com dois caixas reais (sem teste automático: é orquestração de ecrãs sobre as RPCs do caixa, já cobertas).
+
+## Artigos vendidos no fecho — 2026-09-26
+
+Pedido do dono: o talão do fecho de turno e do fecho do dia — e o email que vai com cada um — passam a trazer
+todos os artigos vendidos (1095).
+
+- [x] `close_cash_session` congela em `report.sold` os artigos do turno, por produto e variante, com quantidade e valor (com extras), mais taxas de entrega e descontos; mesmos pedidos e estados que o dinheiro do fecho — anulados não entram. Se a contagem falhar, o turno fecha sem lista.
+- [x] O fecho do dia soma a lista dos turnos; um turno fechado antes da 1095 conta-se dos pedidos do seu período.
+- [x] Talão: secção ARTIGOS VENDIDOS no fecho de turno e no do dia (`@delivery/receipt/cash-sold.ts`); sem lista, o papel sai byte a byte igual. Email: a mesma lista nos dois emails.
+- [x] Ensaio no staging numa transacção desfeita (nada gravado): o turno de Maputo de 25/09 dá 29 artigos que somam 61.660 MT, igual ao facturado; fecho de turno e do dia na Matola com a lista no talão da fila.
+- [x] ⏳ Gates: `packages/db/tests/cash-day.test.ts` (+3), `packages/receipt/src/__tests__/cash-sold.test.ts` (9), `apps/web/lib/cash/__tests__` (+5). O de BD não correu nesta máquina (Docker em baixo); corre no CI.
+- [ ] Aplicar a 1095 no staging (as lojas vendem lá) e fazer deploy do `dev` — o email passa a levar a lista.
+- [ ] Gerar o `.exe` do bridge e trocá-lo nas lojas; até lá o talão do fecho sai sem a lista (o bridge antigo ignora o campo).

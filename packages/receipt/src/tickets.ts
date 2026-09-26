@@ -35,6 +35,7 @@ import {
   type Op,
 } from './ops';
 import { buildCashDayReceipt, isCashDayPayload } from './cash-day';
+import { cashSoldSection } from './cash-sold';
 import { FACTORY_PRINT_LAYOUT, templateForVia, type PrintLayout, type TicketTemplate } from './layout';
 import {
   isCashClosePayload,
@@ -524,6 +525,7 @@ export function buildCashCloseReceipt(payload: CashClosePayload): Op[] {
     ops.push(line(rule('-')), BOLD_ON, line('MOTIVO DA DIFERENCA'), BOLD_OFF);
     for (const reasonLine of wrap(payload.difference_reason)) ops.push(line(reasonLine));
   }
+  ops.push(...cashSoldSection((payload as { sold?: unknown }).sold));
   if (payload.closed_by_name) ops.push(feed(1), line(`Fechado por: ${payload.closed_by_name}`));
   ops.push(feed(FEED_BEFORE_CUT), CUT);
   return ops;

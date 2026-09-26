@@ -26,6 +26,7 @@ import {
   wrap,
   type Op,
 } from './ops';
+import { cashSoldSection } from './cash-sold';
 import { isCashClosePayload, type CashClosePayload, type PrintPayload } from './types';
 
 export interface CashDayShift {
@@ -115,6 +116,7 @@ export function buildCashDayReceipt(payload: CashDayPayload, header: Op[]): Op[]
   ops.push(line(twoColumns('Na gaveta ao fechar', mt(cents(payload.closing_cash_cents)))));
   ops.push(BOLD_ON, line(twoColumns('DIFERENCA DO DIA', signedMT(cents(payload.difference_cents)))), BOLD_OFF);
 
+  ops.push(...cashSoldSection((payload as { sold?: unknown }).sold));
   if (payload.closed_by_name) ops.push(feed(1), line(`Fechado por: ${payload.closed_by_name}`));
   ops.push(feed(FEED_BEFORE_CUT), CUT);
   return ops;

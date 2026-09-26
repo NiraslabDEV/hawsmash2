@@ -99,4 +99,39 @@ describe('relatório do fecho do dia', () => {
     expect(html).not.toContain('<b>Bruno</b>');
     expect(html).not.toContain('undefined');
   });
+
+  it('lê os artigos do dia; uma lista estragada cai, o dia não', () => {
+    const sold = {
+      items: [{ name: 'Classic Smash', variant: 'WAGYU', qty: 3, total_cents: 120000 }],
+      items_total_cents: 120000,
+      delivery_fees_cents: 0,
+      discounts_cents: 0,
+    };
+    expect(parseCashDayReport({ ...relatorioDoDia, sold })?.sold).toEqual(sold);
+    expect(parseCashDayReport(relatorioDoDia)?.sold).toBeNull();
+    const estragada = parseCashDayReport({ ...relatorioDoDia, sold: { ...sold, items_total_cents: 1.5 } });
+    expect(estragada?.total_faturado_cents).toBe(1_150_000);
+    expect(estragada?.sold).toBeNull();
+  });
+
+  it('o email do dia leva os artigos vendidos', () => {
+    const dia = parseCashDayReport({
+      ...relatorioDoDia,
+      sold: {
+        items: [
+          { name: 'Classic Smash', variant: 'WAGYU', qty: 3, total_cents: 120000 },
+          { name: 'Coca-Cola', variant: 'Normal', qty: 2, total_cents: 20000 },
+        ],
+        items_total_cents: 140000,
+        delivery_fees_cents: 0,
+        discounts_cents: 5000,
+      },
+    })!;
+    const html = cashDayEmailHtml(dia, 'Maputo', 'Casa Teste');
+    expect(html).toContain('Artigos vendidos');
+    expect(html).toContain('3× Classic Smash WAGYU');
+    expect(html).toContain('2× Coca-Cola Normal');
+    expect(html).toContain('Descontos');
+    expect(html.indexOf('Diferença do dia')).toBeLessThan(html.indexOf('Artigos vendidos'));
+  });
 });
