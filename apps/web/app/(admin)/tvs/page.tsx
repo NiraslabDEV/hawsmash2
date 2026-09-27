@@ -11,13 +11,14 @@
  * O painel limpa o que grava com o mesmo `resolveTvConfig` com que a TV lê.
  */
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { TV_MEDIA_BUCKET } from '@/lib/tv/media';
 import {
   TV_LIMITS,
   TV_MODE_NAMES,
   isTvMode,
+  modeShowsVideos,
   nextFreeTvSlug,
   resolveTvConfig,
   tvScreenPath,
@@ -26,9 +27,10 @@ import {
 } from '@/lib/tv/settings';
 import { createClient } from '@/utils/supabase/client';
 
-import { MediaLibrary, type MediaUsage } from './media-library';
+import { MediaLibrary, type LibraryTv, type MediaUsage } from './media-library';
 import { TvEditor, type LibraryItem, type TvDraft } from './tv-editor';
 import { Banner, TvPreview, type Message } from './ui';
+import { uploadTvFiles } from './upload';
 
 type StoreRow = { id: string; slug: string; short_name: string };
 
@@ -89,7 +91,6 @@ export default function TvsPage() {
   const [userId, setUserId] = useState<string | null>(null);
   const [allTvs, setAllTvs] = useState<TvRow[]>([]);
   const [library, setLibrary] = useState<LibraryItem[]>([]);
-  const [libraryLoaded, setLibraryLoaded] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState<TvDraft | null>(null);
   const [busy, setBusy] = useState(false);
@@ -97,6 +98,11 @@ export default function TvsPage() {
   const [previewKey, setPreviewKey] = useState(0);
   const [now, setNow] = useState(() => new Date());
   const [origin, setOrigin] = useState('');
+  const [uploading, setUploading] = useState<string | null>(null);
+  /** A biblioteca e o rascunho mais recentes, para quem grava depois de um `await`. */
+  const libraryRef = useRef<LibraryItem[] | null>(null);
+  const draftRef = useRef<TvDraft | null>(null);
+  draftRef.current = draft;
 
   useEffect(() => setOrigin(window.location.origin), []);
 
@@ -129,13 +135,12 @@ export default function TvsPage() {
       setMessage({ tone: 'error', text: `Não foi possível ler a biblioteca: ${error.message}` });
       return;
     }
-    setLibrary(
-      (data ?? []).map((item) => ({
-        ...(item as Omit<LibraryItem, 'url'>),
-        url: supabase.storage.from(TV_MEDIA_BUCKET).getPublicUrl(item.storage_path as string).data.publicUrl,
-      })),
-    );
-    setLibraryLoaded(true);
+    const itens = (data ?? []).map((item) => ({
+      ...(item as Omit<LibraryItem, 'url'>),
+      url: supabase.storage.from(TV_MEDIA_BUCKET).getPublicUrl(item.storage_path as string).data.publicUrl,
+    }));
+    libraryRef.current = itens;
+    setLibrary(itens);
   }, [supabase]);
 
   useEffect(() => {
@@ -174,6 +179,15 @@ export default function TvsPage() {
     }
     return mapa;
   }, [allTvs, stores]);
+
+  // As TVs da loja escolhida, como a biblioteca as vê: a do editor com o rascunho.
+  const libraryTvs: LibraryTv[] = tvs.map((tv) => ({
+    id: tv.id,
+    name: tv.name,
+    mediaIds: new Set(
+      (tv.id === editingId && draft ? draft.config : resolveTvConfig(tv.config)).videos.playlist.map((item) => item.mediaId),
+    ),
+  }));
 
   function confirmLeave(): boolean {
     return !dirty || window.confirm('Há alterações por guardar nesta TV. Sair sem guardar?');
@@ -220,51 +234,121 @@ export default function TvsPage() {
     });
   }
 
-  async function saveTv() {
-    if (!draft || !editing || !selectedId || editing.store_id !== selectedId) return;
-    const erroSlug = tvSlugError(draft.slug);
+  /**
+   * Grava uma TV com este rascunho. É o caminho de Guardar, dos botões
+   * "+ TV" da biblioteca e de "Carregar para esta TV" — um só, com a mesma
+   * limpeza e as mesmas mensagens.
+   */
+  async function persist(tv: TvRow, next: TvDraft, okText: (gravada: TvRow) => string): Promise<boolean> {
+    if (!selectedId || tv.store_id !== selectedId) return false;
+    const erroSlug = tvSlugError(next.slug);
     if (erroSlug) {
       setMessage({ tone: 'error', text: erroSlug });
-      return;
+      return false;
     }
     // Ficheiros apagados da biblioteca saem da lista — só se a biblioteca foi lida.
-    const naBiblioteca = new Set(library.map((item) => item.id));
+    const biblioteca = libraryRef.current;
+    const naBiblioteca = new Set((biblioteca ?? []).map((item) => item.id));
     const config = resolveTvConfig({
-      ...draft.config,
+      ...next.config,
       videos: {
-        ...draft.config.videos,
-        playlist: libraryLoaded
-          ? draft.config.videos.playlist.filter((item) => naBiblioteca.has(item.mediaId))
-          : draft.config.videos.playlist,
+        ...next.config.videos,
+        playlist: biblioteca
+          ? next.config.videos.playlist.filter((item) => naBiblioteca.has(item.mediaId))
+          : next.config.videos.playlist,
       },
     });
     setBusy(true);
     setMessage(null);
     const { data, error } = await supabase.rpc('save_store_tv', {
       p_store_id: selectedId,
-      p_tv_id: editing.id,
-      p_name: draft.name.trim(),
-      p_slug: draft.slug,
-      p_mode: draft.mode,
-      p_active: draft.active,
+      p_tv_id: tv.id,
+      p_name: next.name.trim(),
+      p_slug: next.slug,
+      p_mode: next.mode,
+      p_active: next.active,
       p_config: config,
     });
     setBusy(false);
     if (error) {
       setMessage({ tone: 'error', text: saveErrorText(error.message) });
-      return;
+      return false;
     }
     const gravada = data as TvRow;
-    setAllTvs((lista) => lista.map((tv) => (tv.id === gravada.id ? { ...tv, ...gravada } : tv)));
-    setDraft(rowToDraft(gravada));
-    setPreviewKey((k) => k + 1);
-    setMessage({
-      tone: 'ok',
-      text:
-        gravada.slug !== editing.slug
-          ? `Guardado. O endereço mudou: a box tem de abrir ${tvScreenPath(store?.slug ?? '', gravada.slug)}.`
-          : 'Guardado. A TV actualiza em até 30 segundos.',
-    });
+    setAllTvs((lista) => lista.map((row) => (row.id === gravada.id ? { ...row, ...gravada } : row)));
+    if (gravada.id === editingId) {
+      setDraft(rowToDraft(gravada));
+      setPreviewKey((k) => k + 1);
+    }
+    setMessage({ tone: 'ok', text: okText(gravada) });
+    return true;
+  }
+
+  async function saveTv() {
+    if (!draft || !editing) return;
+    await persist(editing, draft, (gravada) =>
+      gravada.slug !== editing.slug
+        ? `Guardado. O endereço mudou: a box tem de abrir ${tvScreenPath(store?.slug ?? '', gravada.slug)}.`
+        : 'Guardado. A TV actualiza em até 30 segundos.',
+    );
+  }
+
+  /** A TV aberta no editor grava com o rascunho dela; as outras, com o que está gravado. */
+  function baseDraft(tv: TvRow): TvDraft {
+    return tv.id === editingId && draftRef.current ? draftRef.current : rowToDraft(tv);
+  }
+
+  function withPlaylist(base: TvDraft, playlist: TvDraft['config']['videos']['playlist']): TvDraft {
+    return { ...base, config: { ...base.config, videos: { ...base.config.videos, playlist } } };
+  }
+
+  function modeWarning(tv: TvRow, d: TvDraft): string {
+    if (modeShowsVideos(d.mode)) return '';
+    return ` Atenção: ${tv.name} está em “${TV_MODE_NAMES[d.mode].label}” — muda para “${TV_MODE_NAMES.senhas_videos.label}” ou “${TV_MODE_NAMES.videos.label}” para o ver.`;
+  }
+
+  async function togglePlaylist(item: LibraryItem, tvId: string, add: boolean) {
+    const tv = tvs.find((row) => row.id === tvId);
+    if (!tv) return;
+    const base = baseDraft(tv);
+    const lista = base.config.videos.playlist;
+    if (add && lista.length >= TV_LIMITS.playlistMax) {
+      setMessage({ tone: 'error', text: `${tv.name} já tem ${TV_LIMITS.playlistMax} ficheiros na lista.` });
+      return;
+    }
+    const playlist = add
+      ? lista.some((entry) => entry.mediaId === item.id)
+        ? lista
+        : [...lista, { mediaId: item.id, seconds: null }]
+      : lista.filter((entry) => entry.mediaId !== item.id);
+    const next = withPlaylist(base, playlist);
+    await persist(tv, next, () =>
+      add
+        ? `“${item.name}” está em ${tv.name}. Aparece na TV em até 30 segundos.${modeWarning(tv, next)}`
+        : `“${item.name}” saiu de ${tv.name}.`,
+    );
+  }
+
+  /** Carregar dentro da TV: vai para a biblioteca, entra na lista desta TV e grava. */
+  async function uploadHere(files: File[]) {
+    if (!editing) return;
+    const tv = editing;
+    const { ids, errors } = await uploadTvFiles(supabase, files, setUploading);
+    await loadLibrary();
+    if (ids.length === 0) {
+      if (errors.length > 0) setMessage({ tone: 'error', text: errors.join(' ') });
+      return;
+    }
+    const base = baseDraft(tv);
+    const lista = base.config.videos.playlist;
+    const novos = ids
+      .filter((id) => !lista.some((entry) => entry.mediaId === id))
+      .map((id) => ({ mediaId: id, seconds: null }));
+    const next = withPlaylist(base, [...lista, ...novos].slice(0, TV_LIMITS.playlistMax));
+    const ok = await persist(tv, next, () =>
+      `${ids.length === 1 ? 'Carregado e já' : `${ids.length} ficheiros carregados e já`} na lista de ${tv.name}. Aparece na TV em até 30 segundos.`,
+    );
+    if (ok && errors.length > 0) setMessage({ tone: 'error', text: `Alguns não carregaram: ${errors.join(' ')}` });
   }
 
   async function deleteTv(tv: TvRow) {
@@ -357,6 +441,7 @@ export default function TvsPage() {
           const url = `${origin}${tvScreenPath(store?.slug ?? '', tv.slug)}`;
           const aberta = tv.id === editingId;
           const modo = isTvMode(tv.mode) ? TV_MODE_NAMES[tv.mode].label : tv.mode;
+          const ficheiros = resolveTvConfig(tv.config).videos.playlist.length;
           return (
             <article
               key={tv.id}
@@ -368,6 +453,13 @@ export default function TvsPage() {
                 <div className="min-w-0">
                   <h2 className="truncate text-lg font-black text-white">{tv.name}</h2>
                   <p className="text-sm text-[#e5a93c]">{tv.active ? modo : 'Desligada no painel'}</p>
+                  {tv.active && isTvMode(tv.mode) && modeShowsVideos(tv.mode) && (
+                    <p className={`mt-0.5 text-xs ${ficheiros > 0 ? 'text-[#C9BCAC]' : 'text-[#ffb0b0]'}`}>
+                      {ficheiros > 0
+                        ? `${ficheiros} ${ficheiros === 1 ? 'vídeo/imagem' : 'vídeos/imagens'} a passar`
+                        : 'Sem vídeos nem imagens — “+ TV” na biblioteca'}
+                    </p>
+                  )}
                 </div>
                 <span className="flex shrink-0 items-center gap-2 text-xs font-bold">
                   <span
@@ -440,6 +532,8 @@ export default function TvsPage() {
           <TvEditor
             draft={draft}
             library={library}
+            onUploadHere={uploadHere}
+            uploading={uploading}
             onChange={(update) => {
               setDraft((current) => (current ? update(current) : current));
               setMessage(null);
@@ -485,6 +579,10 @@ export default function TvsPage() {
         supabase={supabase}
         library={library}
         usage={usage}
+        tvs={libraryTvs}
+        storeName={store?.short_name ?? null}
+        busy={busy || uploading !== null}
+        onToggleTv={togglePlaylist}
         canDelete={(item) => role === 'owner' || (!!userId && item.created_by === userId)}
         onChanged={loadLibrary}
         onMessage={setMessage}

@@ -118,11 +118,13 @@ export function MediaLoop({
   const current = playable.length > 0 ? playable[turn % playable.length] : null;
   const next = () => setTurn((n) => n + 1);
 
+  // Uma imagem sozinha fica no ecrã: trocá-la por ela própria só piscava.
+  const sozinha = playable.length === 1;
   useEffect(() => {
-    if (!current || current.kind !== 'image') return;
+    if (!current || current.kind !== 'image' || sozinha) return;
     const timer = window.setTimeout(() => setTurn((n) => n + 1), (current.seconds ?? 10) * 1000);
     return () => window.clearTimeout(timer);
-  }, [current?.id, current?.kind, current?.seconds, turn]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [current?.id, current?.kind, current?.seconds, turn, sozinha]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!current) return <>{fallback}</>;
 
@@ -146,7 +148,7 @@ export function MediaLoop({
       ) : (
         // eslint-disable-next-line @next/next/no-img-element -- blob: local, sem optimizador
         <img
-          key={`${current.id}-${turn}`}
+          key={`${current.id}-${sozinha ? 0 : turn}`}
           src={src}
           alt={current.name}
           className="tv-fade h-full w-full"

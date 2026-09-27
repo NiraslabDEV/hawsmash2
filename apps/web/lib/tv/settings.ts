@@ -72,11 +72,11 @@ export const TV_MODES: readonly TvMode[] = ['senhas_videos', 'senhas', 'videos',
 
 export const TV_MODE_NAMES: Record<TvMode, { label: string; hint: string }> = {
   senhas_videos: {
-    label: 'Senhas + vídeos',
-    hint: 'Os vídeos passam e as senhas prontas ficam numa coluna. Senha nova ocupa o ecrã.',
+    label: 'Senhas + vídeos/imagens',
+    hint: 'Os vídeos e imagens passam e as senhas prontas ficam numa coluna. Senha nova ocupa o ecrã.',
   },
   senhas: { label: 'Só senhas', hint: 'Pedidos prontos em grande e os que estão em preparo.' },
-  videos: { label: 'Só vídeos', hint: 'Passa a lista de vídeos e imagens em ciclo.' },
+  videos: { label: 'Só vídeos/imagens', hint: 'Passa a lista de vídeos e imagens em ciclo, em ecrã inteiro.' },
   menu: { label: 'Cardápio', hint: 'Preços e esgotados da loja, ao vivo.' },
 };
 

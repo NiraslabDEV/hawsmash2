@@ -1,6 +1,8 @@
 'use client';
 
-import { formatBytes } from '@/lib/tv/media';
+import { useRef } from 'react';
+
+import { TV_MEDIA_ACCEPT, formatBytes } from '@/lib/tv/media';
 import {
   TV_LIMITS,
   TV_MODES,
@@ -70,11 +72,17 @@ export function TvEditor({
   draft,
   onChange,
   library,
+  onUploadHere,
+  uploading,
 }: {
   draft: TvDraft;
   onChange: (update: (current: TvDraft) => TvDraft) => void;
   library: LibraryItem[];
+  /** Carrega para a biblioteca, põe na lista desta TV e grava. */
+  onUploadHere: (files: File[]) => Promise<void>;
+  uploading: string | null;
 }) {
+  const uploadInput = useRef<HTMLInputElement>(null);
   const config = draft.config;
   const slugError = tvSlugError(draft.slug);
   const porId = new Map(library.map((item) => [item.id, item]));
@@ -329,16 +337,44 @@ export function TvEditor({
 
       {modeShowsVideos(draft.mode) && (
         <Section
-          title="Vídeos desta TV"
+          title="Vídeos e imagens desta TV"
           hint={
             draft.mode === 'senhas_videos'
-              ? 'Passam em ciclo ao lado das senhas. Sem vídeos, a TV mostra só as senhas.'
-              : 'Passam em ciclo, em ecrã inteiro. Sem vídeos, a TV mostra o logótipo.'
+              ? 'Passam em ciclo ao lado das senhas. Sem nenhum, a TV mostra só as senhas.'
+              : 'Passam em ciclo, em ecrã inteiro. Sem nenhum, a TV mostra o logótipo.'
           }
         >
+          <div className="flex flex-wrap items-center gap-3">
+            <input
+              ref={uploadInput}
+              type="file"
+              multiple
+              accept={TV_MEDIA_ACCEPT}
+              className="hidden"
+              onChange={(event) => {
+                const files = Array.from(event.target.files ?? []);
+                event.target.value = '';
+                if (files.length > 0) void onUploadHere(files);
+              }}
+            />
+            <button
+              type="button"
+              disabled={uploading !== null || config.videos.playlist.length >= TV_LIMITS.playlistMax}
+              onClick={() => uploadInput.current?.click()}
+              className="rounded-xl bg-[#e5a93c] px-5 py-2.5 text-sm font-black text-black disabled:opacity-40"
+            >
+              Carregar vídeo ou imagem para esta TV
+            </button>
+            {uploading && (
+              <span role="status" className="animate-pulse text-sm text-[#C9BCAC]">
+                {uploading}
+              </span>
+            )}
+          </div>
+
           {config.videos.playlist.length === 0 ? (
             <p className="rounded-xl bg-white/[0.03] px-4 py-3 text-sm text-[#8b8378]">
-              Ainda sem vídeos. Escolhe da biblioteca abaixo.
+              Ainda sem vídeos nem imagens. Carrega um aqui, ou escolhe da biblioteca.
             </p>
           ) : (
             <ol className="space-y-2">
@@ -417,7 +453,7 @@ export function TvEditor({
 
           {library.some((item) => !naLista.has(item.id)) && (
             <div>
-              <span className={LABEL}>Juntar da biblioteca</span>
+              <span className={LABEL}>Juntar da biblioteca (depois carrega em Guardar)</span>
               <div className="mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
                 {library
                   .filter((item) => !naLista.has(item.id))
