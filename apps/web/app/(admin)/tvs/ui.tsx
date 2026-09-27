@@ -1,6 +1,8 @@
 'use client';
 
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+
+import { TV_PREVIEW_READY, previewDraftMessage, type TvPreviewDraft } from '@/lib/tv/preview';
 
 export const INPUT =
   'mt-1 w-full rounded-xl border border-white/10 bg-[#0f0e0c] px-4 py-3 text-sm text-white placeholder:text-[#6f6a62]';
@@ -135,11 +137,43 @@ export function Banner({ message }: { message: Message }) {
  * A TV a sério, em miniatura: um iframe da página da TV (com `?preview=1`,
  * que não conta como TV ligada), escalado para caber e rodado como a TV está
  * montada — uma TV ao alto aparece ao alto.
+ *
+ * Ao vivo: recebe o rascunho por `postMessage` a cada mudança, antes de
+ * Guardar (`lib/tv/preview.ts`). A TV da loja só muda quando se grava.
  */
-export function TvPreview({ src, rotation }: { src: string; rotation: 0 | 90 | 180 | 270 }) {
+export function TvPreview({
+  src,
+  rotation,
+  draft,
+}: {
+  src: string;
+  rotation: 0 | 90 | 180 | 270;
+  draft: TvPreviewDraft | null;
+}) {
   const box = useRef<HTMLDivElement>(null);
+  const frame = useRef<HTMLIFrameElement>(null);
   const [width, setWidth] = useState(0);
   const alto = rotation === 90 || rotation === 270;
+
+  const enviar = useCallback(() => {
+    const destino = frame.current?.contentWindow;
+    if (destino && draft) destino.postMessage(previewDraftMessage(draft), window.location.origin);
+  }, [draft]);
+
+  // Cada mudança no rascunho vai já para a miniatura.
+  useEffect(() => {
+    enviar();
+  }, [enviar]);
+
+  // O iframe carrega depois do painel: quando diz que está pronto, recebe o rascunho.
+  useEffect(() => {
+    const ouvir = (event: MessageEvent) => {
+      if (event.origin !== window.location.origin || event.source !== frame.current?.contentWindow) return;
+      if ((event.data as { type?: unknown } | null)?.type === TV_PREVIEW_READY) enviar();
+    };
+    window.addEventListener('message', ouvir);
+    return () => window.removeEventListener('message', ouvir);
+  }, [enviar]);
 
   useEffect(() => {
     const el = box.current;
@@ -158,6 +192,7 @@ export function TvPreview({ src, rotation }: { src: string; rotation: 0 | 90 | 1
     >
       {escala > 0 && (
         <iframe
+          ref={frame}
           title="Pré-visualização da TV"
           src={src}
           className="pointer-events-none absolute left-1/2 top-1/2 border-0"

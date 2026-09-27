@@ -13,6 +13,7 @@ import {
 } from '@/lib/pos/app-update';
 import { prepararSomDaTv, somDaTvBloqueado, tocarSenha } from '@/lib/tv/chime';
 import { TV_MEDIA_BUCKET } from '@/lib/tv/media';
+import { TV_PREVIEW_READY, readPreviewDraft, type TvPreviewDraft } from '@/lib/tv/preview';
 import {
   isTvMode,
   modeShowsSenhas,
@@ -106,6 +107,21 @@ export function TvScreen({
   const [configStale, setConfigStale] = useState(false);
   const [now, setNow] = useState(() => new Date());
   const [soundBlocked, setSoundBlocked] = useState(false);
+  /** Na pré-visualização do painel: o rascunho por guardar, por cima do gravado. */
+  const [draft, setDraft] = useState<TvPreviewDraft | null>(null);
+
+  // Só na pré-visualização, e só da mesma origem (o painel): nunca numa TV da loja.
+  useEffect(() => {
+    if (!preview) return;
+    const ouvir = (event: MessageEvent) => {
+      if (event.origin !== window.location.origin) return;
+      const lido = readPreviewDraft(event.data);
+      if (lido) setDraft(lido);
+    };
+    window.addEventListener('message', ouvir);
+    window.parent?.postMessage({ type: TV_PREVIEW_READY }, window.location.origin);
+    return () => window.removeEventListener('message', ouvir);
+  }, [preview]);
 
   const refresh = useCallback(async () => {
     const { data, error } = await supabase.rpc('get_tv_screen', {
@@ -140,8 +156,12 @@ export function TvScreen({
     return () => window.clearInterval(timer);
   }, []);
 
-  const tv = screen?.tv ?? null;
-  const config = useMemo(() => resolveTvConfig(tv?.config), [tv?.config]);
+  const gravada = screen?.tv ?? null;
+  // O rascunho do painel manda no que se vê; a TV continua a ser a gravada.
+  const tv = gravada && draft ? { ...gravada, mode: draft.mode, active: draft.active } : gravada;
+  const savedConfig = useMemo(() => resolveTvConfig(gravada?.config), [gravada?.config]);
+  const config = draft?.config ?? savedConfig;
+  const media = useMemo(() => draft?.media ?? screen?.media ?? [], [draft?.media, screen?.media]);
   const mode = tv && isTvMode(tv.mode) ? tv.mode : 'senhas';
   const showsSenhas = !!tv?.active && modeShowsSenhas(mode);
   const sound = config.senhas.sound && !preview;
@@ -201,13 +221,14 @@ export function TvScreen({
     return () => window.clearInterval(timer);
   }, [preview]);
 
+  const temTv = !!tv;
   const playlist: LoopItem[] = useMemo(() => {
-    if (!tv) return [];
-    return resolvePlaylist(config, screen?.media ?? []).map((item) => ({
+    if (!temTv) return [];
+    return resolvePlaylist(config, media).map((item) => ({
       ...item,
       url: supabase.storage.from(TV_MEDIA_BUCKET).getPublicUrl(item.path).data.publicUrl,
     }));
-  }, [config, screen?.media, supabase, tv]);
+  }, [config, media, supabase, temTv]);
 
   const idle = (texto?: string) => (
     <div className="grid h-full place-items-center p-8 text-center">
@@ -254,27 +275,34 @@ export function TvScreen({
     );
   } else if (mode === 'videos') {
     body = (
-      <MediaLoop items={playlist} muted={config.videos.muted} fit={config.videos.fit} pruneDisk={!preview} fallback={idle()} />
+      <MediaLoop
+        items={playlist}
+        muted={config.videos.muted}
+        fit={config.videos.fit}
+        pruneDisk={!preview}
+        fallback={idle(preview ? 'Ainda sem vídeos nem imagens nesta TV' : undefined)}
+      />
     );
-  } else if (mode === 'senhas_videos' && playlist.length > 0) {
+  } else if (mode === 'senhas_videos') {
+    // Sempre dividido, como se escolheu: sem vídeos nem imagens na lista, o
+    // lado deles mostra a marca até haver um.
     const panel = <SenhasPanel ready={ready} preparing={preparing} options={config.senhas} />;
     body = (
       <div className="flex h-full">
         {config.senhas.panelSide === 'left' && panel}
-        <div className="h-full min-w-0 flex-1">
+        <div className="h-full min-w-0 flex-1" style={{ background: 'var(--tv-card)' }}>
           <MediaLoop
             items={playlist}
             muted={config.videos.muted}
             fit={config.videos.fit}
             pruneDisk={!preview}
-            fallback={<SenhasFull ready={ready} preparing={preparing} options={config.senhas} />}
+            fallback={idle(preview ? 'Ainda sem vídeos nem imagens nesta TV' : undefined)}
           />
         </div>
         {config.senhas.panelSide === 'right' && panel}
       </div>
     );
   } else {
-    // Só senhas — ou senhas + vídeos ainda sem vídeos na lista.
     body = <SenhasFull ready={ready} preparing={preparing} options={config.senhas} />;
   }
 

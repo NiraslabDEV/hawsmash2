@@ -107,14 +107,20 @@ export function SenhasFull({
           <h2 className="text-2xl font-bold uppercase tracking-wide" style={{ color: 'var(--tv-muted)' }}>
             {options.preparingTitle}
           </h2>
-          <PreparingList preparing={preparing} size="lg" />
+          <PreparingList preparing={preparing} size="lg" max={20} />
         </footer>
       )}
     </div>
   );
 }
 
-function PreparingList({ preparing, size }: { preparing: QueueEntry[]; size: 'lg' | 'sm' }) {
+/**
+ * Em preparo: os mais recentes, com tecto. Um pedido esquecido de manhã (que
+ * ninguém pôs pronto) não pode encher a TV de números às oito da noite.
+ */
+function PreparingList({ preparing, size, max }: { preparing: QueueEntry[]; size: 'lg' | 'sm'; max: number }) {
+  const escondidos = Math.max(0, preparing.length - max);
+  const visiveis = escondidos > 0 ? preparing.slice(-max) : preparing;
   return (
     <ul className={`mt-4 flex flex-wrap ${size === 'lg' ? 'gap-4' : 'gap-2'}`}>
       {preparing.length === 0 && (
@@ -122,7 +128,7 @@ function PreparingList({ preparing, size }: { preparing: QueueEntry[]; size: 'lg
           —
         </li>
       )}
-      {preparing.map((entry) => (
+      {visiveis.map((entry) => (
         <li
           key={entry.order_number}
           className={`rounded-2xl font-black ${size === 'lg' ? 'px-6 py-3 text-4xl' : 'px-4 py-2 text-2xl'}`}
@@ -131,6 +137,14 @@ function PreparingList({ preparing, size }: { preparing: QueueEntry[]; size: 'lg
           {entry.daily_number}
         </li>
       ))}
+      {escondidos > 0 && (
+        <li
+          className={`rounded-2xl font-bold ${size === 'lg' ? 'px-6 py-3 text-3xl' : 'px-4 py-2 text-xl'}`}
+          style={{ color: 'var(--tv-muted-2)' }}
+        >
+          +{escondidos}
+        </li>
+      )}
     </ul>
   );
 }
@@ -184,7 +198,7 @@ export function SenhasPanel({
           <h3 className="text-lg font-bold uppercase tracking-wide" style={{ color: 'var(--tv-muted)' }}>
             {options.preparingTitle}
           </h3>
-          <PreparingList preparing={preparing.slice(0, 12)} size="sm" />
+          <PreparingList preparing={preparing} size="sm" max={10} />
         </footer>
       )}
     </aside>

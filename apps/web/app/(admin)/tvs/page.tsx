@@ -14,6 +14,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { TV_MEDIA_BUCKET } from '@/lib/tv/media';
+import type { TvPreviewDraft } from '@/lib/tv/preview';
 import {
   TV_LIMITS,
   TV_MODE_NAMES,
@@ -179,6 +180,20 @@ export default function TvsPage() {
     }
     return mapa;
   }, [allTvs, stores]);
+
+  // O que a miniatura desenha: o rascunho, com os ficheiros da lista dele.
+  const previewDraft = useMemo<TvPreviewDraft | null>(() => {
+    if (!draft) return null;
+    const naLista = new Set(draft.config.videos.playlist.map((item) => item.mediaId));
+    return {
+      mode: draft.mode,
+      active: draft.active,
+      config: draft.config,
+      media: library
+        .filter((item) => naLista.has(item.id))
+        .map(({ id, kind, storage_path, name }) => ({ id, kind, storage_path, name })),
+    };
+  }, [draft, library]);
 
   // As TVs da loja escolhida, como a biblioteca as vê: a do editor com o rascunho.
   const libraryTvs: LibraryTv[] = tvs.map((tv) => ({
@@ -542,15 +557,18 @@ export default function TvsPage() {
           <aside className="space-y-4 xl:sticky xl:top-20 xl:self-start">
             <div className="rounded-2xl border border-white/[0.08] p-4">
               <p className="mb-3 text-xs font-bold uppercase tracking-wide text-[#8b8378]">
-                Pré-visualização {dirty ? '(o que está gravado)' : ''}
+                Pré-visualização ao vivo
               </p>
               <TvPreview
                 key={`${editing.id}-${previewKey}`}
                 src={`${tvScreenPath(store.slug, editing.slug)}?preview=1`}
-                rotation={resolveTvConfig(editing.config).screen.rotation}
+                rotation={draft.config.screen.rotation}
+                draft={previewDraft}
               />
-              <p className="mt-2 text-xs text-[#8b8378]">
-                É a página da TV, ao vivo. Os vídeos descarregam na primeira vez.
+              <p className={`mt-2 text-xs ${dirty ? 'font-bold text-[#e5a93c]' : 'text-[#8b8378]'}`}>
+                {dirty
+                  ? 'Assim fica depois de guardar. A TV da loja só muda quando carregares em Guardar.'
+                  : 'É o que a TV da loja está a mostrar (as senhas são as de agora).'}
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
@@ -592,9 +610,16 @@ export default function TvsPage() {
       {editing && draft && (
         <div className="fixed inset-x-0 bottom-0 z-20 border-t border-white/10 bg-[#0f0e0c]/95 px-4 py-3 backdrop-blur lg:left-64">
           <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-3">
-            <span className="text-xs text-[#8b8378]">
-              {editing.name} ·{' '}
-              {dirty ? 'Alterações por guardar' : `Guardado ${new Date(editing.updated_at).toLocaleString('pt-PT')}`}
+            {/* O resultado aparece aqui também: com a página a descer, o aviso do topo não se vê. */}
+            <span
+              role={message ? (message.tone === 'error' ? 'alert' : 'status') : undefined}
+              className={`max-w-xl text-xs ${
+                message ? (message.tone === 'error' ? 'font-bold text-[#ffb0b0]' : 'font-bold text-[#a8e0b6]') : dirty ? 'font-bold text-[#e5a93c]' : 'text-[#8b8378]'
+              }`}
+            >
+              {message
+                ? message.text
+                : `${editing.name} · ${dirty ? 'Alterações por guardar — a TV só muda depois de Guardar' : `Guardado ${new Date(editing.updated_at).toLocaleString('pt-PT')}`}`}
             </span>
             <div className="flex gap-2">
               <button
