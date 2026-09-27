@@ -1,14 +1,14 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { formatMT, type Cents } from '@delivery/core';
 
 import { parseMTInput } from '@/lib/cash/input';
 import { addCashMovement, movementRequestKeeper } from '@/lib/cash/movement';
 import { createClient } from '@/utils/supabase/client';
-import { downloadStaffFile, staffFetch } from '@/lib/admin/staff-fetch';
+import { staffFetch } from '@/lib/admin/staff-fetch';
 
-import { DayClosesSection } from './day-closes';
+import { CashHistory } from './history';
+import { Card, CardTitle, DifferenceBadge, DrawerMath, PaymentSplit, Stat, dateTime, duration, mt, time } from './ui';
 
 type MovementType = 'sangria' | 'reforco' | 'despesa' | 'troco_inicial';
 type CashMovement = {
@@ -17,16 +17,6 @@ type CashMovement = {
   amount_cents: number;
   reason: string;
   created_at: string;
-};
-type CashHistory = {
-  id: string;
-  shift_label: string;
-  opened_at: string;
-  closed_at: string;
-  expected_cash_cents: number;
-  counted_cash_cents: number;
-  difference_cents: number;
-  difference_reason: string | null;
 };
 type StoreCash = {
   store_id: string;
@@ -51,7 +41,6 @@ type StoreCash = {
   despesa_cents: number;
   expected_cash_cents: number;
   movements: CashMovement[];
-  history: CashHistory[];
 };
 type Dashboard = {
   can_consolidate: boolean;
@@ -68,31 +57,37 @@ type Dashboard = {
   };
 };
 
-const mt = (value: number) => {
-  const absolute = formatMT(Math.abs(value) as Cents);
-  return value < 0 ? `-${absolute}` : absolute;
-};
-const dateTime = (iso: string) =>
-  new Intl.DateTimeFormat('pt-PT', {
-    timeZone: 'Africa/Maputo',
-    day: '2-digit',
-    month: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-  }).format(new Date(iso));
 const movementLabels: Record<MovementType, string> = {
   sangria: 'Sangria',
   reforco: 'Reforço',
   despesa: 'Despesa',
   troco_inicial: 'Troco inicial adicional',
 };
+const movementHints: Record<MovementType, string> = {
+  sangria: 'Dinheiro que sai da gaveta para o cofre.',
+  reforco: 'Dinheiro que entra na gaveta.',
+  despesa: 'Pagamento feito com dinheiro da gaveta.',
+  troco_inicial: 'Mais troco depois da abertura.',
+};
+const movementOut = (type: MovementType) => type === 'sangria' || type === 'despesa';
+
+/** O separador "Todas as lojas" — só para quem consolida e tem mais de uma loja. */
+const OVERVIEW = 'all';
+const STORE_KEY = 'caixa:store';
+
+const paymentsOf = (row: { cash_sales_cents: number; mpesa_cents: number; emola_cents: number; credit_card_cents: number }) => ({
+  cash: row.cash_sales_cents,
+  mpesa: row.mpesa_cents,
+  emola: row.emola_cents,
+  credit_card: row.credit_card_cents,
+});
+const ticket = (faturado: number, pedidos: number) => (pedidos > 0 ? mt(Math.round(faturado / pedidos)) : '—');
 
 export default function CaixaPage() {
   const supabase = useMemo(() => createClient(), []);
   const movementKey = useRef(movementRequestKeeper());
   const [dashboard, setDashboard] = useState<Dashboard | null>(null);
-  const [selectedStoreId, setSelectedStoreId] = useState('all');
+  const [selectedStoreId, setSelectedStoreId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [dialog, setDialog] = useState<'open' | 'movement' | 'close' | null>(null);
@@ -100,6 +95,7 @@ export default function CaixaPage() {
   const [reason, setReason] = useState('');
   const [movementType, setMovementType] = useState<MovementType>('sangria');
   const [message, setMessage] = useState<{ tone: 'ok' | 'error'; text: string } | null>(null);
+  const [historyKey, setHistoryKey] = useState(0);
 
   const refresh = useCallback(async () => {
     const { data, error } = await supabase.rpc('get_cash_dashboard', { p_store: null });
@@ -108,9 +104,16 @@ export default function CaixaPage() {
     } else {
       const next = data as Dashboard;
       setDashboard(next);
-      if (!next.can_consolidate || next.stores.length === 1) {
-        setSelectedStoreId(next.stores[0]?.store_id ?? 'all');
-      }
+      // Cada loja no seu separador: abre na última escolhida, ou na primeira.
+      setSelectedStoreId((current) => {
+        const valid = (id: string | null) =>
+          !!id && (next.stores.some((store) => store.store_id === id)
+            || (id === OVERVIEW && next.can_consolidate && next.stores.length > 1));
+        if (valid(current)) return current;
+        let remembered: string | null = null;
+        try { remembered = window.localStorage.getItem(STORE_KEY); } catch { /* sem armazenamento */ }
+        return valid(remembered) ? remembered : next.stores[0]?.store_id ?? null;
+      });
     }
     setLoading(false);
   }, [supabase]);
@@ -121,8 +124,13 @@ export default function CaixaPage() {
     return () => window.clearInterval(timer);
   }, [refresh]);
 
+  function selectStore(id: string) {
+    setSelectedStoreId(id);
+    setMessage(null);
+    try { window.localStorage.setItem(STORE_KEY, id); } catch { /* sem armazenamento */ }
+  }
+
   const selectedStore = dashboard?.stores.find((store) => store.store_id === selectedStoreId) ?? null;
-  const summary = selectedStore ?? dashboard?.consolidated ?? null;
   const closeDifference = selectedStore
     ? (parseMTInput(amountInput) ?? 0) - selectedStore.expected_cash_cents
     : 0;
@@ -214,11 +222,15 @@ export default function CaixaPage() {
     }).catch(() => undefined);
     resetDialog();
     setMessage({ tone: 'ok', text: `Caixa de ${selectedStore.store_name} fechado. Talão em fila e relatório disponível.` });
+    setHistoryKey((value) => value + 1);
     await refresh();
   }
 
   if (loading) return <p className="py-20 text-center font-bold text-[#F5A623]">A carregar caixa…</p>;
-  if (!dashboard || !summary) return <p className="py-20 text-center text-red-300">Caixa indisponível.</p>;
+  if (!dashboard || dashboard.stores.length === 0) return <p className="py-20 text-center text-red-300">Caixa indisponível.</p>;
+
+  const showOverviewTab = dashboard.can_consolidate && dashboard.stores.length > 1;
+  const storeNames = Object.fromEntries(dashboard.stores.map((store) => [store.store_id, store.store_name]));
 
   return (
     <div className="space-y-6">
@@ -226,123 +238,89 @@ export default function CaixaPage() {
         <div>
           <p className="text-xs font-black uppercase tracking-[0.2em] text-[#F5A623]">Operação por turno</p>
           <h1 className="mt-1 text-3xl font-black text-white">Caixa</h1>
-          <p className="mt-1 text-sm text-[#A99C8C]">Valores em tempo real desde o último fecho de cada loja.</p>
+          <p className="mt-1 text-sm text-[#A99C8C]">O turno de cada loja ao vivo e tudo o que já fechou, com o que se vendeu.</p>
         </div>
-        <div className="flex flex-wrap gap-2">
-          {dashboard.can_consolidate && (
-            <select
-              aria-label="Loja do caixa"
-              value={selectedStoreId}
-              onChange={(event) => setSelectedStoreId(event.target.value)}
-              className="min-h-12 rounded-xl border border-white/10 bg-[#1A1511] px-4 font-bold text-white"
-            >
-              <option value="all">Todas as lojas</option>
-              {dashboard.stores.map((store) => <option key={store.store_id} value={store.store_id}>{store.store_name}</option>)}
-            </select>
-          )}
-          <button type="button" onClick={() => void refresh()} className="min-h-12 rounded-xl border border-white/10 px-4 font-bold text-[#E8DDCF]">Actualizar</button>
-        </div>
+        <button type="button" onClick={() => void refresh()} className="min-h-11 self-start rounded-xl border border-white/10 px-4 text-sm font-bold text-[#E8DDCF] hover:bg-white/[0.04] lg:self-auto">
+          Actualizar
+        </button>
       </header>
 
-      {message && (
-        <div role="status" className={`rounded-xl border px-4 py-3 text-sm font-bold ${message.tone === 'ok' ? 'border-emerald-400/30 bg-emerald-500/10 text-emerald-200' : 'border-red-400/30 bg-red-500/10 text-red-200'}`}>
-          {message.text}
-        </div>
+      {dashboard.stores.length > 1 && (
+        <nav aria-label="Lojas" className="flex gap-2 overflow-x-auto pb-1">
+          {dashboard.stores.map((store) => (
+            <StoreTab key={store.store_id} active={store.store_id === selectedStoreId} onClick={() => selectStore(store.store_id)}>
+              <span className={`h-2 w-2 rounded-full ${store.has_open_session ? 'bg-emerald-400' : 'bg-white/25'}`} />
+              {store.store_name}
+            </StoreTab>
+          ))}
+          {showOverviewTab && (
+            <StoreTab active={selectedStoreId === OVERVIEW} onClick={() => selectStore(OVERVIEW)}>
+              Todas as lojas
+            </StoreTab>
+          )}
+        </nav>
       )}
 
-      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <Metric label="Facturado" value={mt(summary.total_faturado_cents)} accent />
-        <Metric label="Dinheiro vendido" value={mt(summary.cash_sales_cents)} />
-        <Metric label="Esperado nas gavetas" value={mt(summary.expected_cash_cents)} />
-        <Metric label="Pedidos" value={String(summary.total_pedidos)} />
-      </section>
-
-      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <Payment label="M-Pesa" value={summary.mpesa_cents} />
-        <Payment label="e-Mola" value={summary.emola_cents} />
-        <Payment label="Cartão" value={summary.credit_card_cents} />
-        <Payment label="Dinheiro" value={summary.cash_sales_cents} />
-      </section>
+      {message && (
+        <div role="status" className={`flex items-start justify-between gap-3 rounded-xl border px-4 py-3 text-sm font-bold ${message.tone === 'ok' ? 'border-emerald-400/30 bg-emerald-500/10 text-emerald-200' : 'border-red-400/30 bg-red-500/10 text-red-200'}`}>
+          <span>{message.text}</span>
+          <button type="button" aria-label="Fechar aviso" onClick={() => setMessage(null)} className="opacity-70 hover:opacity-100">×</button>
+        </div>
+      )}
 
       {selectedStore ? (
         <>
-          <section className="rounded-2xl border border-white/10 bg-white/[0.04] p-5">
-            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-              <div>
-                <h2 className="text-xl font-black text-white">{selectedStore.store_name}</h2>
-                {selectedStore.open_session ? (
-                  <p className="mt-1 text-sm text-emerald-300">{selectedStore.open_session.shift_label} · aberto às {dateTime(selectedStore.open_session.opened_at)}</p>
-                ) : <p className="mt-1 text-sm text-amber-300">Sem turno aberto</p>}
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {!selectedStore.has_open_session ? (
-                  <button type="button" onClick={() => setDialog('open')} className="min-h-12 rounded-xl bg-[#F5A623] px-5 font-black text-[#24150D]">Abrir caixa</button>
-                ) : (
-                  <>
-                    <button type="button" onClick={() => setDialog('movement')} className="min-h-12 rounded-xl border border-[#F5A623]/40 px-5 font-bold text-[#F5A623]">Movimento</button>
-                    <button type="button" onClick={() => setDialog('close')} className="min-h-12 rounded-xl bg-[#F5A623] px-5 font-black text-[#24150D]">Fechar caixa</button>
-                  </>
-                )}
-              </div>
-            </div>
-            <div className="mt-5 grid gap-3 sm:grid-cols-4">
-              <SmallMetric label="Fundo" value={mt(selectedStore.open_session?.opening_float_cents ?? 0)} />
-              <SmallMetric label="Sangrias" value={mt(selectedStore.sangria_cents)} />
-              <SmallMetric label="Reforços" value={mt(selectedStore.reforco_cents)} />
-              <SmallMetric label="Despesas" value={mt(selectedStore.despesa_cents)} />
-            </div>
-          </section>
-
-          <section className="grid gap-4 xl:grid-cols-2">
-            <ListSection title="Movimentos do turno" empty="Sem movimentos neste turno.">
-              {selectedStore.movements.map((movement) => (
-                <div key={movement.id} className="flex items-center justify-between gap-4 border-b border-white/5 py-3 last:border-0">
-                  <div><p className="font-bold text-white">{movementLabels[movement.type]}</p><p className="text-xs text-[#938779]">{movement.reason} · {dateTime(movement.created_at)}</p></div>
-                  <strong className="text-[#F5A623]">{mt(movement.amount_cents)}</strong>
-                </div>
-              ))}
-            </ListSection>
-            <ListSection title="Fechos de turno" empty="Ainda não existem fechos de turno.">
-              {selectedStore.history.map((item) => (
-                <div key={item.id} className="flex items-center gap-3 border-b border-white/5 py-3 last:border-0">
-                  <div className="min-w-0 flex-1"><p className="truncate font-bold text-white">{item.shift_label}</p><p className="text-xs text-[#938779]">{dateTime(item.closed_at)}</p></div>
-                  <div className="text-right"><p className="font-bold text-white">{mt(item.expected_cash_cents)}</p><p className={item.difference_cents === 0 ? 'text-xs text-[#938779]' : 'text-xs text-amber-300'}>{mt(item.difference_cents)}</p></div>
-                  <button type="button" onClick={() => { void downloadStaffFile(`/api/cash-sessions/${item.id}/report`, 'fecho.pdf').catch(() => undefined); }} className="rounded-lg border border-white/10 px-3 py-2 text-xs font-bold text-[#F5A623]">PDF</button>
-                </div>
-              ))}
-            </ListSection>
-          </section>
+          <CurrentShift
+            store={selectedStore}
+            onOpen={() => setDialog('open')}
+            onMovement={() => setDialog('movement')}
+            onClose={() => setDialog('close')}
+          />
+          <CashHistory storeId={selectedStore.store_id} storeNames={storeNames} refreshKey={historyKey} />
         </>
       ) : (
-        <section className="grid gap-4 lg:grid-cols-2">
-          {dashboard.stores.map((store) => (
-            <button key={store.store_id} type="button" onClick={() => setSelectedStoreId(store.store_id)} className="rounded-2xl border border-white/10 bg-white/[0.04] p-5 text-left transition hover:border-[#F5A623]/40">
-              <div className="flex items-center justify-between"><h2 className="text-xl font-black text-white">{store.store_name}</h2><span className={store.has_open_session ? 'text-xs font-black text-emerald-300' : 'text-xs font-black text-amber-300'}>{store.has_open_session ? 'ABERTO' : 'FECHADO'}</span></div>
-              <div className="mt-5 grid grid-cols-2 gap-3"><SmallMetric label="Facturado" value={mt(store.total_faturado_cents)} /><SmallMetric label="Esperado" value={mt(store.expected_cash_cents)} /></div>
-            </button>
-          ))}
-        </section>
+        <>
+          <Overview dashboard={dashboard} onPick={selectStore} />
+          <CashHistory storeId={null} storeNames={storeNames} refreshKey={historyKey} />
+        </>
       )}
-
-      <DayClosesSection
-        storeId={selectedStore?.store_id ?? null}
-        storeNames={Object.fromEntries(dashboard.stores.map((store) => [store.store_id, store.store_name]))}
-      />
 
       {dialog && selectedStore && (
         <div className="fixed inset-0 z-50 grid place-items-center bg-black/80 p-4">
           <section role="dialog" aria-modal="true" className="w-full max-w-lg rounded-2xl border border-white/10 bg-[#17120E] p-6 shadow-2xl">
-            <h2 className="text-2xl font-black text-white">{dialog === 'open' ? 'Abrir caixa' : dialog === 'movement' ? 'Registar movimento' : 'Fechar caixa'}</h2>
-            <p className="mt-1 text-sm text-[#A99C8C]">{selectedStore.store_name}</p>
+            <p className="text-xs font-black uppercase tracking-wider text-[#F5A623]">{selectedStore.store_name}</p>
+            <h2 className="mt-1 text-2xl font-black text-white">{dialog === 'open' ? 'Abrir caixa' : dialog === 'movement' ? 'Registar movimento' : 'Fechar caixa'}</h2>
+
             {dialog === 'movement' && (
-              <select aria-label="Tipo de movimento" value={movementType} onChange={(event) => setMovementType(event.target.value as MovementType)} className="mt-5 min-h-12 w-full rounded-xl border border-white/10 bg-black/30 px-4 text-white">
-                {Object.entries(movementLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-              </select>
+              <div className="mt-5">
+                <div role="radiogroup" aria-label="Tipo de movimento" className="grid grid-cols-2 gap-2">
+                  {(Object.keys(movementLabels) as MovementType[]).map((type) => (
+                    <button
+                      key={type}
+                      type="button"
+                      role="radio"
+                      aria-checked={movementType === type}
+                      onClick={() => setMovementType(type)}
+                      className={`min-h-12 rounded-xl border px-3 text-sm font-bold transition ${movementType === type ? 'border-[#F5A623] bg-[#F5A623]/15 text-[#F5A623]' : 'border-white/10 text-[#C9BCAC] hover:bg-white/[0.04]'}`}
+                    >
+                      {movementOut(type) ? '− ' : '+ '}{movementLabels[type]}
+                    </button>
+                  ))}
+                </div>
+                <p className="mt-2 text-xs text-[#8F8376]">{movementHints[movementType]}</p>
+              </div>
             )}
-            {dialog === 'close' && <p className="mt-5 rounded-xl bg-black/25 p-4 text-sm text-[#C9BCAC]">Esperado na gaveta: <strong className="text-white">{mt(selectedStore.expected_cash_cents)}</strong></p>}
-            <label className="mt-5 block text-sm font-bold text-[#C9BCAC]" htmlFor="cash-amount">{dialog === 'open' ? 'Fundo inicial (MT)' : dialog === 'close' ? 'Valor contado (MT)' : 'Valor (MT)'}</label>
-            <input id="cash-amount" inputMode="decimal" value={amountInput} onChange={(event) => setAmountInput(event.target.value)} placeholder="0,00" className="mt-2 min-h-14 w-full rounded-xl border border-white/10 bg-black/30 px-4 text-xl font-black text-white outline-none focus:border-[#F5A623]" />
-            {dialog === 'close' && amountInput && <p className="mt-3 text-sm text-[#C9BCAC]">Diferença: <strong className={closeDifference === 0 ? 'text-emerald-300' : 'text-amber-300'}>{mt(closeDifference)}</strong></p>}
+            {dialog === 'close' && (
+              <div className="mt-5 flex items-center justify-between rounded-xl bg-black/25 p-4">
+                <span className="text-sm text-[#C9BCAC]">Esperado na gaveta</span>
+                <strong className="text-xl font-black text-white">{mt(selectedStore.expected_cash_cents)}</strong>
+              </div>
+            )}
+            <label className="mt-5 block text-sm font-bold text-[#C9BCAC]" htmlFor="cash-amount">{dialog === 'open' ? 'Fundo inicial (MT)' : dialog === 'close' ? 'Valor contado na gaveta (MT)' : 'Valor (MT)'}</label>
+            <input id="cash-amount" autoFocus inputMode="decimal" value={amountInput} onChange={(event) => setAmountInput(event.target.value)} placeholder="0,00" className="mt-2 min-h-14 w-full rounded-xl border border-white/10 bg-black/30 px-4 text-xl font-black text-white outline-none focus:border-[#F5A623]" />
+            {dialog === 'close' && amountInput && (
+              <p className="mt-3 flex items-center gap-2 text-sm text-[#C9BCAC]">Diferença: <DifferenceBadge cents={closeDifference} /></p>
+            )}
             {dialog !== 'open' && (
               <><label className="mt-5 block text-sm font-bold text-[#C9BCAC]" htmlFor="cash-reason">Motivo {dialog === 'movement' ? '(obrigatório)' : '(obrigatório acima da tolerância)'}</label><textarea id="cash-reason" value={reason} onChange={(event) => setReason(event.target.value)} rows={3} className="mt-2 w-full rounded-xl border border-white/10 bg-black/30 p-4 text-white outline-none focus:border-[#F5A623]" /></>
             )}
@@ -354,16 +332,149 @@ export default function CaixaPage() {
   );
 }
 
-function Metric({ label, value, accent = false }: { label: string; value: string; accent?: boolean }) {
-  return <article className="rounded-2xl border border-white/10 bg-white/[0.04] p-5"><p className="text-xs font-black uppercase tracking-wide text-[#8F8376]">{label}</p><p className={`mt-2 text-2xl font-black ${accent ? 'text-[#F5A623]' : 'text-white'}`}>{value}</p></article>;
+function StoreTab({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button
+      type="button"
+      aria-current={active ? 'page' : undefined}
+      onClick={onClick}
+      className={`flex min-h-11 shrink-0 items-center gap-2 rounded-xl border px-5 text-sm font-black transition ${active ? 'border-[#F5A623] bg-[#F5A623] text-[#24150D]' : 'border-white/10 bg-white/[0.03] text-[#C9BCAC] hover:border-[#F5A623]/40 hover:text-white'}`}
+    >
+      {children}
+    </button>
+  );
 }
-function Payment({ label, value }: { label: string; value: number }) {
-  return <article className="rounded-xl border border-white/5 bg-black/20 px-4 py-3"><p className="text-xs text-[#8F8376]">{label}</p><p className="mt-1 font-black text-[#E8DDCF]">{mt(value)}</p></article>;
+
+/** O turno de agora: estado, vendas, meios de pagamento, movimentos e a conta da gaveta. */
+function CurrentShift({ store, onOpen, onMovement, onClose }: {
+  store: StoreCash;
+  onOpen: () => void;
+  onMovement: () => void;
+  onClose: () => void;
+}) {
+  const session = store.open_session;
+  return (
+    <Card className={session ? 'border-emerald-400/20' : ''}>
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex items-center gap-4">
+          <span className={`relative grid h-12 w-12 shrink-0 place-items-center rounded-2xl ${session ? 'bg-emerald-500/15' : 'bg-white/[0.06]'}`}>
+            <span className={`h-3 w-3 rounded-full ${session ? 'bg-emerald-400' : 'bg-white/30'}`} />
+            {session && <span className="absolute h-3 w-3 animate-ping rounded-full bg-emerald-400/60 motion-reduce:hidden" />}
+          </span>
+          <div>
+            <h2 className="text-2xl font-black text-white">{store.store_name}</h2>
+            {session ? (
+              <p className="text-sm text-emerald-300">
+                Turno aberto às {time(session.opened_at)} · há {duration(session.opened_at, new Date().toISOString())}
+                <span className="text-[#8F8376]"> · {session.shift_label}</span>
+              </p>
+            ) : (
+              <p className="text-sm text-[#A99C8C]">Sem turno aberto · valores desde o último fecho ({dateTime(store.period_start)})</p>
+            )}
+          </div>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {!store.has_open_session ? (
+            <button type="button" onClick={onOpen} className="min-h-12 rounded-xl bg-[#F5A623] px-6 font-black text-[#24150D]">Abrir caixa</button>
+          ) : (
+            <>
+              <button type="button" onClick={onMovement} className="min-h-12 rounded-xl border border-[#F5A623]/40 px-5 font-bold text-[#F5A623] hover:bg-[#F5A623]/10">Sangria / movimento</button>
+              <button type="button" onClick={onClose} className="min-h-12 rounded-xl bg-[#F5A623] px-6 font-black text-[#24150D]">Fechar caixa</button>
+            </>
+          )}
+        </div>
+      </div>
+
+      <div className="mt-6 grid gap-6 lg:grid-cols-5">
+        <div className="space-y-6 lg:col-span-3">
+          <div className="grid grid-cols-3 gap-4 rounded-xl border border-white/10 p-4">
+            <Stat label="Facturado" value={mt(store.total_faturado_cents)} accent />
+            <Stat label="Pedidos" value={store.total_pedidos} />
+            <Stat label="Ticket médio" value={ticket(store.total_faturado_cents, store.total_pedidos)} />
+          </div>
+          <div>
+            <p className="mb-3 text-xs font-black uppercase tracking-wider text-[#8F8376]">Como pagaram</p>
+            <PaymentSplit payments={paymentsOf(store)} />
+          </div>
+          <div>
+            <p className="mb-2 text-xs font-black uppercase tracking-wider text-[#8F8376]">Movimentos do turno</p>
+            {store.movements.length === 0 ? (
+              <p className="rounded-xl border border-dashed border-white/10 py-5 text-center text-sm text-[#8F8376]">Sem sangrias, reforços ou despesas.</p>
+            ) : (
+              <ul className="divide-y divide-white/5 rounded-xl border border-white/10">
+                {store.movements.map((movement) => (
+                  <li key={movement.id} className="flex items-center gap-3 px-4 py-3">
+                    <span className={`grid h-8 w-8 shrink-0 place-items-center rounded-full text-sm font-black ${movementOut(movement.type) ? 'bg-red-500/15 text-red-300' : 'bg-emerald-500/15 text-emerald-300'}`}>
+                      {movementOut(movement.type) ? '−' : '+'}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="font-bold text-white">{movementLabels[movement.type]}</p>
+                      <p className="truncate text-xs text-[#938779]">{movement.reason} · {time(movement.created_at)}</p>
+                    </div>
+                    <strong className="text-[#E8DDCF]">{mt(movement.amount_cents)}</strong>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </div>
+        <div className="lg:col-span-2">
+          <p className="mb-3 text-xs font-black uppercase tracking-wider text-[#8F8376]">Gaveta agora</p>
+          <DrawerMath
+            totalLabel="Esperado na gaveta"
+            total={store.expected_cash_cents}
+            rows={[
+              { label: 'Fundo inicial', value: session?.opening_float_cents ?? 0, sign: '+' },
+              { label: 'Vendas em dinheiro', value: store.cash_sales_cents, sign: '+' },
+              { label: 'Reforços', value: store.reforco_cents, sign: '+' },
+              { label: 'Sangrias', value: store.sangria_cents, sign: '−' },
+              { label: 'Despesas', value: store.despesa_cents, sign: '−' },
+            ]}
+          />
+          <p className="mt-3 text-xs leading-relaxed text-[#8F8376]">
+            É o que deve estar na gaveta. Ao fechar, conta-se o dinheiro e o sistema mostra se falta ou sobra.
+            Os artigos vendidos ficam no turno assim que ele fecha.
+          </p>
+        </div>
+      </div>
+    </Card>
+  );
 }
-function SmallMetric({ label, value }: { label: string; value: string }) {
-  return <div className="rounded-xl bg-black/20 p-3"><p className="text-xs text-[#8F8376]">{label}</p><p className="mt-1 font-black text-white">{value}</p></div>;
-}
-function ListSection({ title, empty, children }: { title: string; empty: string; children: React.ReactNode }) {
-  const hasChildren = Array.isArray(children) ? children.length > 0 : Boolean(children);
-  return <section className="rounded-2xl border border-white/10 bg-white/[0.04] p-5"><h2 className="text-lg font-black text-white">{title}</h2><div className="mt-3">{hasChildren ? children : <p className="py-8 text-center text-sm text-[#8F8376]">{empty}</p>}</div></section>;
+
+/** Todas as lojas lado a lado; tocar numa abre o separador dela. */
+function Overview({ dashboard, onPick }: { dashboard: Dashboard; onPick: (id: string) => void }) {
+  const total = dashboard.consolidated;
+  return (
+    <>
+      <Card>
+        <CardTitle aside={<span className="text-xs text-[#8F8376]">Desde o último fecho de cada loja</span>}>Todas as lojas</CardTitle>
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
+          <Stat label="Facturado" value={mt(total.total_faturado_cents)} accent />
+          <Stat label="Pedidos" value={total.total_pedidos} />
+          <Stat label="Ticket médio" value={ticket(total.total_faturado_cents, total.total_pedidos)} />
+          <Stat label="Esperado nas gavetas" value={mt(total.expected_cash_cents)} />
+        </div>
+        <div className="mt-5"><PaymentSplit payments={paymentsOf(total)} /></div>
+      </Card>
+      <div className="grid gap-4 lg:grid-cols-2">
+        {dashboard.stores.map((store) => (
+          <button key={store.store_id} type="button" onClick={() => onPick(store.store_id)} className="rounded-2xl border border-white/10 bg-white/[0.04] p-5 text-left transition hover:border-[#F5A623]/40">
+            <div className="flex items-center justify-between gap-3">
+              <h2 className="text-xl font-black text-white">{store.store_name}</h2>
+              <span className={`rounded-full px-2.5 py-1 text-xs font-black ${store.open_session ? 'bg-emerald-500/15 text-emerald-300' : 'bg-white/10 text-[#A99C8C]'}`}>
+                {store.open_session ? `Aberto desde ${time(store.open_session.opened_at)}` : 'Fechado'}
+              </span>
+            </div>
+            <div className="mt-5 grid grid-cols-3 gap-4">
+              <Stat label="Facturado" value={mt(store.total_faturado_cents)} accent />
+              <Stat label="Pedidos" value={store.total_pedidos} />
+              <Stat label="Na gaveta" value={mt(store.expected_cash_cents)} />
+            </div>
+            <div className="mt-5"><PaymentSplit payments={paymentsOf(store)} /></div>
+            <p className="mt-4 text-xs font-bold text-[#F5A623]">Abrir o caixa desta loja ›</p>
+          </button>
+        ))}
+      </div>
+    </>
+  );
 }
