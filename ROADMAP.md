@@ -242,6 +242,9 @@ O estoque de produto final não descreve a cozinha: o que acaba é a carne, não
 - [x] Alertas automáticos (email + WhatsApp deep link) da lista de `CLAUDE.md §11.5` — `/api/cron/alerts`, com arrefecimento de 30 min
 - [x] Digest diário ao dono — `/api/cron/digest` + `get_daily_digest`
 - [~] Resumo mensal ao dono com a loja no Google (1096) — `/api/cron/monthly` + `get_monthly_digest`; B-114 (scheduler, chave Places, Place IDs, acesso à API do Perfil)
+  - [x] 27/09: migrations 1096/1101 aplicadas e resumo mensal publicado em staging; Maputo ligado ao perfil Google.
+  - [x] ⏳ Diário às 08h de Maputo (dia anterior) e mensal no dia 1 às 08h instalados no Supabase; CRON_SECRET/Vault e OWNER_EMAIL configurados. HTTP ensaiado; primeiro disparo natural por observar.
+  - [~] B-114/B-022 — falta SMTP, chave Places com facturação e ambiente LIVE configurado. Matola sem perfil próprio confirmado; nenhum email entregue nesta etapa.
 - [~] B-014 `pg_dump` nocturno (script pronto e ensaiado; destino externo B-008) + **teste de restauro** por correr
 - [x] ⏳ B-013 Sentry (web + bridge) ligado — inerte até haver DSN
 

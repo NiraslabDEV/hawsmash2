@@ -6,6 +6,7 @@ import { formatMT, type Cents } from '@delivery/core';
 import { parseMTInput } from '@/lib/cash/input';
 import { createClient } from '@/utils/supabase/client';
 
+import { GoogleSection } from './google-section';
 import { PaymentSection } from './payment-section';
 
 type StoreConfig = {
@@ -517,6 +518,12 @@ export default function LojasPage() {
           </div>
 
           <PaymentSection storeId={config.store.id} storeName={config.store.short_name} />
+
+          <GoogleSection
+            key={config.store.id}
+            storeId={config.store.id}
+            storeName={config.store.short_name}
+          />
 
           <section className="rounded-2xl border border-white/[0.08] p-5">
             <h2 className="font-black text-white">Horário da semana</h2>

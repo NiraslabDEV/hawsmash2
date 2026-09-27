@@ -707,6 +707,31 @@ As 16 violações da spec permanecem no relatório, separadas dos IDs histórico
 
 ### B-114 · [Resumo mensal] Google e agendador para o email do dia 1
 
+**Actualização verificada em 27/09/2026:** 1096 aplicada em staging; 1101 corrige
+o regex `{10,512}` que o PostgreSQL rejeitava. Teste SQL reproduziu a falha e passou
+após a correcção. Railway staging publicou o resumo e a secção Google (deploy
+`a35a9bdd-39c1-4964-81e6-1466b2ae38ea`, base `5e2f54c` com os ficheiros do resumo
+e autenticação dos crons; restantes alterações locais preservadas).
+`CRON_SECRET` está no Railway/Vault e `OWNER_EMAIL=haw@hawsmash.com` no Railway.
+Jobs `app-digest` (`0 6 * * *`, dia anterior de Maputo) e `app-monthly`
+(`0 6 1 * *`) activos. Pedidos HTTP reais chegaram à aplicação com 200;
+**ambos omitiram email por falta de SMTP**. Disparo natural do relógio por observar.
+O instalador está em `scripts/sql/install-report-crons.sql`; usa `http` síncrono no
+cron para não colocar o Bearer na fila `pg_net`, cujos grants a PUBLIC pertencem
+a `supabase_admin` nesta instalação. A fila não é usada pelos jobs finais.
+
+Maputo: Place ID `ChIJ582Y7VKb5h4RAj_5ZLpRQrI`, perfil do Elite Padel Club / Hotel
+Glória, confirmado no Google Maps. Matola: pesquisa só devolveu Maputo; não usar
+o mesmo ID nas duas lojas. Nenhum projecto HAWSMASH apareceu na conta Google Cloud
+aberta; nenhuma facturação, subscrição ou chamada paga foi activada.
+
+**Falta nesta instalação:** `SMTP_USER`/`SMTP_PASS` (a documentação do 1.0 indica um
+segredo de Edge Function; não está nas variáveis Railway consultadas), projecto Google Cloud
+autorizado com facturação e Places API (New), chave restrita à API. O ambiente
+Railway production continua sem variáveis Supabase/SMTP (B-022); não foi ligado à
+base de staging nem ao 1.0. A recepção do email e a leitura da API Google não foram
+validadas. Os requisitos GBP abaixo continuam fora da parcela Places instalada.
+
 - Estado: **aberto**. Categoria: **acesso/infraestrutura**. Desbloqueia: Gabriel (com o dono, para o acesso ao perfil).
 - Pedido do dono: no dia 1 de cada mês, o email da casa recebe o resumo do mês e, no mesmo email, a loja no Google.
 - O que já faz (1096): `/api/cron/monthly` monta e envia o resumo — vendas por loja face ao mês anterior,
@@ -1140,3 +1165,36 @@ Verificação final desta continuação: 963 testes de domínio/integração loc
 - Contagem desta entrega: cliente 0, acesso/infraestrutura 0, hardware 0; mantêm-se as duas pendências anteriores de validação/fornecedor.
 
 Verificação adicional desta entrega: 973 testes unitários, 60 testes de base de dados e 12 Playwright aprovados, lint/typecheck e build aprovados. Leitura autenticada de staging com totais reconciliados. Segunda revisão preservou a origem online de pedidos via QR de mesa.
+
+## PACOTE FINAL — agendamento dos relatórios · 2026-09-27
+
+- **Funciona em staging:** deploy do resumo, migrations 1096/1101, ligação de Maputo
+  na aba Lojas, CRON_SECRET/Vault e OWNER_EMAIL. Dois jobs activos: diário às 08h
+  com o dia anterior de Maputo, mensal no dia 1 às 08h com o último mês fechado.
+- **Verificado:** lint/typecheck e 1160 testes unitários na passagem final; build Railway; 401 sem
+  segredo; HTTP autenticado de ambos os relatórios; RPC mensal exclusiva do servidor;
+  ensaio da constraint SQL falhou antes da 1101 e passou depois, incluindo 10/256/512
+  caracteres e rejeição de limites inválidos; guardar o perfil pela UI gerou sucesso.
+- **Não verificado:** entrega de email (resultado real `skipped_no_key`), API Places,
+  disparo natural do relógio e promoção a LIVE. A suite completa de integração de BD
+  não foi executada contra staging, pois cria/apaga vendas de ensaio.
+- **Cliente — mensagem pronta:** 1. A Matola já tem um perfil próprio no Google Maps?
+  Se tiver, envie o link. Se não tiver, o resumo continua sem métricas Google dessa loja.
+- **Gabriel:** configurar a caixa SMTP autorizada, sem colocar a senha no Git/chat;
+  disponibilizar projecto Google com facturação/Places API (New) e chave restrita;
+  completar B-022 antes da promoção. Desactivar os jobs de staging antes de activar LIVE.
+- **Hardware:** nenhum requisito, 0 horas adicionais.
+- **Decisões:** Supabase Cron existente, sem outro serviço contratado; HTTP síncrono
+  isolado no cron, timeout 120s, falha visível quando email não foi enviado, sem retries
+  automáticos. Nenhum segredo em comandos de jobs ou no repositório.
+- **Segunda passagem:** scheduler, migration e Place ID de Maputo resolvidos;
+  SMTP/Google/LIVE continuam dependentes de configuração externa. Matola é opcional.
+- **Bloqueios desta entrega:** 2 IDs abertos de Gabriel/infraestrutura (B-114 e B-022),
+  correspondentes a SMTP, Google e preparação LIVE; 0 de hardware e 0 impedimentos
+  obrigatórios do cliente. GBP continua uma parcela anterior de B-114.
+
+| Impacto | ID | Sem isto… |
+|---|---|---|
+| Ambiente que envia vendas reais | B-022 | os relatórios instalados mostram staging; não o negócio que ainda corre no 1.0 |
+| Envio do relatório | B-114 — SMTP | nenhum email diário/mensal é enviado |
+| Métricas Google | B-114 — Places | o relatório pode sair por SMTP, mas sem nota/avaliações |
