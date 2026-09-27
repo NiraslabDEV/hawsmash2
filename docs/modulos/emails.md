@@ -106,3 +106,11 @@ automática de contactos cancelados nesta entrega.
 Staging verificado em 28/09: funil de boas-vindas guardado como rascunho (5 minutos
 e 1 dia), preview móvel, reabertura, configurações, 401 sem autorização e execução
 natural do cron. Nenhum contacto inscrito e nenhum envio real realizado.
+
+Complemento 1105 verificado no navegador: nove emissores em Maputo/Matola,
+biblioteca de 12 modelos, escolha/gravação/reabertura e reposição do modelo
+original; duas gerações WebGPU reais (a segunda com cache). Orientações guardadas
+em Maputo e 25 produtos do menu no contexto. Exemplo «Convite para voltar —
+rascunho IA» revisto e guardado com três etapas, ainda sem activar ou inscrever.
+Texto gerado requer revisão humana: a última etapa repetia a anterior e foi editada.
+Deploy final do código: 91c7eea; 1190 testes, lint/typecheck, build e SQL aprovados.

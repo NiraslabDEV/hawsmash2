@@ -1248,6 +1248,12 @@ Verificação adicional desta entrega: 973 testes unitários, 60 testes de base 
   e editor operacional sem controlos de espera que não se aplicam.
 - Revisão do gerador: exemplos de copy para clientes e instruções de tom pt-PT;
   emails globais assinados pela marca em vez de uma loja. 1190 testes aprovados.
+- Validação final: deploy `d29ccad1-a909-4ef0-978b-bb2d34f87329` (91c7eea) com
+  sucesso. Segunda geração real reutilizou o modelo em cache. Notas da marca
+  guardadas e reabertas; contexto mostrou 25 produtos. Funil «Convite para voltar
+  — rascunho IA» guardado com três etapas; última mensagem revista para retirar
+  repetição e melhorar a escrita. Esperas 0/2880/10080 minutos; continua rascunho,
+  sem contactos inscritos ou envios. A IA local produz rascunhos sujeitos a revisão.
 - Cliente: nenhuma decisão necessária para editar. Confirmar os factos/oferta antes
   de activar uma campanha gerada. Nenhum contacto inscrito automaticamente.
 - Gabriel: B-114 (SMTP/recepção e Places) e B-022 (LIVE) mantêm-se; não foi obtida

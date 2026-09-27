@@ -626,3 +626,7 @@ Pedido do dono: um botão "Reimprimir" nos fechos do dia, no Caixa do painel e n
   no editor como rascunho. Modelo descarregado e em cache no navegador.
 - [x] Revisão: emails globais usam a marca; contexto do menu e exemplos de copy
   reforçam o gerador. Regra da marca global reproduzida em teste antes da correcção.
+- [x] Versão 91c7eea publicada e ensaiada: segunda geração com cache, 25 produtos
+  de Maputo no contexto, notas da marca guardadas/reabertas. Funil de três etapas
+  «Convite para voltar — rascunho IA» revisto e gravado, esperas 0/2880/10080 minutos.
+  Sem activar campanha, inscrever contactos ou enviar mensagens. 1190 testes verdes.
