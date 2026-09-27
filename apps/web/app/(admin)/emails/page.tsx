@@ -39,7 +39,12 @@ type Data = {
   previews: Record<SystemEmailKey, { subject: string; html: string }>;
   globalStoreName: string;
   knowledge: string;
-  brandContext: { name: string; store: string; tagline?: string; products?: string[] };
+  brandContext: {
+    name: string;
+    store: string;
+    tagline?: string;
+    products?: string[];
+  };
   delivery: {
     id: string;
     event: string;
@@ -305,6 +310,7 @@ export default function EmailsPage() {
               previews={data.previews}
               storeName={stores.find((s) => s.id === store)?.name ?? ''}
               globalStoreName={data.globalStoreName}
+              brandName={data.brandContext.name}
               flows={data.flows}
               busy={busy}
               onSave={(v) => action('system', v)}

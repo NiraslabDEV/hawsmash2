@@ -16,6 +16,7 @@ export function SystemPanel({
   previews,
   storeName,
   globalStoreName,
+  brandName,
   flows,
   busy,
   onSave,
@@ -25,6 +26,7 @@ export function SystemPanel({
   previews: Record<SystemEmailKey, { subject: string; html: string }>;
   storeName: string;
   globalStoreName: string;
+  brandName: string;
   flows: EmailFlow[];
   busy: boolean;
   onSave: (v: SystemTemplate) => Promise<unknown>;
@@ -37,7 +39,7 @@ export function SystemPanel({
     const valid = systemTemplateSchema.safeParse(editing);
     const preview = valid.success
       ? applySystemTemplate(editing, previews[editing.key], {
-          loja: storeName,
+          loja: item.scope === 'global' ? brandName : storeName,
           nome: 'Cliente de exemplo',
           pedido: 'EXEMPLO',
           total: '450 MT',
@@ -118,7 +120,7 @@ export function SystemPanel({
               }
             }}
             busy={busy}
-            storeName={storeName}
+            storeName={item.scope === 'global' ? brandName : storeName}
             operational={previews[editing.key]}
           />
         ) : (

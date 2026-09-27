@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   CAMPAIGN_JSON_SCHEMA,
+  CAMPAIGN_EXAMPLE,
   campaignPrompt,
   campaignToFlow,
   generatedCampaignSchema,
@@ -80,7 +81,9 @@ export function CampaignGenerator({
         {
           initProgressCallback: (p) => {
             if (current === generation.current)
-              setProgress(`A carregar o modelo local… ${Math.round(p.progress * 100)}%`);
+              setProgress(
+                `A carregar o modelo local… ${Math.round(p.progress * 100)}%`,
+              );
           },
         },
         { context_window_size: 8192 },
@@ -98,6 +101,12 @@ export function CampaignGenerator({
       const response = await engine.chat.completions.create({
         messages: [
           { role: 'system', content: prompt.system },
+          {
+            role: 'user',
+            content:
+              'Exemplo de formato e tom: cria 2 emails para um restaurante, convidando a consultar o menu, sem promoção.',
+          },
+          { role: 'assistant', content: JSON.stringify(CAMPAIGN_EXAMPLE) },
           { role: 'user', content: prompt.user },
         ],
         temperature: 0.6,
@@ -234,7 +243,8 @@ export function CampaignGenerator({
               intervalos após o envio anterior; português de Portugal;
               consentimento e cancelamento de subscrição; sem inventar
               descontos, produtos, testemunhos ou urgência. Marca ligada:{' '}
-              {brand.name} · {brand.store}. {brand.products?.length ?? 0} produtos disponíveis do menu incluídos.
+              {brand.name} · {brand.store}. {brand.products?.length ?? 0}{' '}
+              produtos disponíveis do menu incluídos.
             </p>
           </details>
           <div className="flex gap-3">

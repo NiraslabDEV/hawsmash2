@@ -622,4 +622,7 @@ Pedido do dono: um botão "Reimprimir" nos fechos do dia, no Caixa do painel e n
 - [x] Publicação 09fdbbf verificada no navegador: nove emissores, 12 modelos,
   gravação e reabertura de personalização. Execução natural de `app-alerts` e
   `app-emails` observada com sucesso.
-- [ ] Validar geração real com WebGPU no navegador (descarga inicial em curso).
+- [x] Geração real WebGPU: três emails e esperas 0/1440/2880 minutos abertos
+  no editor como rascunho. Modelo descarregado e em cache no navegador.
+- [x] Revisão: emails globais usam a marca; contexto do menu e exemplos de copy
+  reforçam o gerador. Regra da marca global reproduzida em teste antes da correcção.

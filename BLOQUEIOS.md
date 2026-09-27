@@ -1241,10 +1241,13 @@ Verificação adicional desta entrega: 973 testes unitários, 60 testes de base 
 - Verificado: migration 1105 em staging, SQL em rollback, 1189 testes, lint/typecheck
   e build local. Deploy `7405b752-a401-4c6a-9a8d-c27ec2322afa` com sucesso; catálogo
   dos nove emissores, escolha entre 12 modelos, gravação e reabertura no navegador.
-  Modelo original reposto após o ensaio. IA WebGPU em descarga inicial.
+  Modelo original reposto após o ensaio. IA WebGPU gerou três emails reais e abriu
+  o editor com esperas 0/1440/2880 minutos, como rascunho manual. Nenhum envio.
 - Segunda revisão: contexto inclui até 30 produtos disponíveis do menu da loja,
   sem preços/dados de pagamento; correcção de acentos, contraste do modelo antigo
   e editor operacional sem controlos de espera que não se aplicam.
+- Revisão do gerador: exemplos de copy para clientes e instruções de tom pt-PT;
+  emails globais assinados pela marca em vez de uma loja. 1190 testes aprovados.
 - Cliente: nenhuma decisão necessária para editar. Confirmar os factos/oferta antes
   de activar uma campanha gerada. Nenhum contacto inscrito automaticamente.
 - Gabriel: B-114 (SMTP/recepção e Places) e B-022 (LIVE) mantêm-se; não foi obtida
