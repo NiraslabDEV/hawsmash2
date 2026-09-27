@@ -1,4 +1,5 @@
 import nodemailer, { type Transporter } from 'nodemailer';
+import { studioSmtp, sendStudioMail } from './studio-transport';
 
 /**
  * Envio transacional por SMTP (Hostinger) — ADR 0004. Substitui o Resend: o
@@ -11,8 +12,8 @@ import nodemailer, { type Transporter } from 'nodemailer';
 
 let transporter: Transporter | null = null;
 
-export function isEmailConfigured(): boolean {
-  return Boolean(process.env.SMTP_USER && process.env.SMTP_PASS);
+export async function isEmailConfigured(): Promise<boolean> {
+  return Boolean(process.env.SMTP_USER && process.env.SMTP_PASS) || Boolean(await studioSmtp());
 }
 
 function getTransporter(): Transporter {
@@ -34,12 +35,18 @@ export type SendMailInput = {
   to: string | string[];
   subject: string;
   html: string;
+  storeId?: string;
 };
 
 export type SendMailResult = { ok: true } | { ok: false; error: string };
 
-export async function sendMail({ to, subject, html }: SendMailInput): Promise<SendMailResult> {
-  if (!isEmailConfigured()) return { ok: false, error: 'smtp_not_configured' };
+export async function sendMail({ to, subject, html, storeId }: SendMailInput): Promise<SendMailResult> {
+  const configured = await studioSmtp(storeId);
+  if (configured) {
+    const results = await Promise.all((Array.isArray(to) ? to : [to]).map(recipient => sendStudioMail(configured, { to: recipient, subject, html })));
+    return results.find(result => !result.ok) ?? { ok: true };
+  }
+  if (!(process.env.SMTP_USER && process.env.SMTP_PASS)) return { ok: false, error: 'smtp_not_configured' };
 
   // Sem EMAIL_FROM sai o endereço nu, sem nome de exibição. O nome que estava
   // aqui era o de um cliente: outra instalação mandava emails assinados com a

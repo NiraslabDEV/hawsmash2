@@ -591,3 +591,16 @@ Pedido do dono: um botão "Reimprimir" nos fechos do dia, no Caixa do painel e n
   mesmo commit renderiza o fecho real de 26/09 de Maputo com FECHO DO DIA, REIMPRESSÃO e os 31 artigos.
 - [ ] Trocar o `.exe` em Maputo **mantendo o mesmo nome de ficheiro e a mesma tarefa** (parar a tarefa, substituir,
   arrancar): reinstalar com outro nome criaria uma segunda bridge (B-117).
+
+## Emails no admin — 2026-09-28
+
+- [x] `/emails`, exclusivo do dono e por loja: transaccionais, promoções/funis,
+  contactos, histórico e configuração SMTP/Vault. Destinatário adicional dos relatórios.
+- [x] Editor por blocos, preview computador/telemóvel, variáveis, etapas e esperas
+  em minutos/horas/dias. Criar, editar, duplicar, activar, pausar e arquivar.
+- [x] Migration 1104 aplicada em staging: outbox por evento, snapshots, consentimento,
+  idempotência, claim atómico, cancelamento de subscrição, auditoria e RLS.
+- [x] 1175 testes unitários, lint/typecheck, build local e ensaio SQL em rollback.
+- [ ] Publicar em staging, validar UI e instalar `app-emails` de minuto a minuto.
+- [~] B-114: inserir credenciais SMTP no painel e validar recepção real.
+- [~] B-022: promover apenas depois da preparação de LIVE; nenhum envio do 1.0 alterado.

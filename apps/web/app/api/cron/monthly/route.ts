@@ -77,7 +77,7 @@ export async function GET(request: Request) {
   let delivery: 'sent' | 'skipped_no_key' | 'skipped_no_recipient' | 'failed' = 'sent';
 
   const brandName = (await getBrand()).name;
-  if (!isEmailConfigured()) delivery = 'skipped_no_key';
+  if (!(await isEmailConfigured())) delivery = 'skipped_no_key';
   else if (recipients.length === 0) delivery = 'skipped_no_recipient';
   else {
     const result = await sendMail({

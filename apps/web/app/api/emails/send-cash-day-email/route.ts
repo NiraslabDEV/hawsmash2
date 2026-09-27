@@ -11,7 +11,7 @@ import { cashClientFromRequest } from '@/lib/cash/server-client';
  * espera — o fecho já está gravado e o talão já está na fila.
  */
 export async function POST(request: Request) {
-  if (!isEmailConfigured()) {
+  if (!(await isEmailConfigured())) {
     return NextResponse.json({ error: 'Serviço de email não configurado.' }, { status: 503 });
   }
 

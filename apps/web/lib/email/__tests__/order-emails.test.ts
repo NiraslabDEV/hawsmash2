@@ -60,6 +60,16 @@ describe('conteúdo dos emails de pedido', () => {
 });
 
 describe('envio: destinatário sai do pedido gravado', () => {
+  it('não duplica um email já entregue à sequência configurada', async () => {
+    const chain = { select: vi.fn(), eq: vi.fn(), limit: vi.fn(), maybeSingle: vi.fn() };
+    chain.select.mockReturnValue(chain); chain.eq.mockReturnValue(chain); chain.limit.mockReturnValue(chain);
+    chain.maybeSingle.mockResolvedValue({ data: { id: 'job' }, error: null });
+    const svc = svcWith({ ...base, store_id: '00000000-0000-4000-8000-000000000101' });
+    const original = svc.from.bind(svc);
+    vi.spyOn(svc, 'from').mockImplementation((table: string) => (table === 'email_jobs' ? chain : original(table)) as ReturnType<SupabaseClient['from']>);
+    expect(await sendApprovalEmailForOrder(svc, orderId)).toEqual({ ok: true });
+    expect(state.sendMail).not.toHaveBeenCalled();
+  });
   it('aprovação vai para o customer_email do pedido', async () => {
     const svc = svcWith(base);
     expect(await sendApprovalEmailForOrder(svc, orderId)).toEqual({ ok: true });

@@ -62,7 +62,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ channel: 'none' });
   }
 
-  if (!isEmailConfigured()) return NextResponse.json({ channel: 'none' });
+  if (!(await isEmailConfigured())) return NextResponse.json({ channel: 'none' });
 
   const brand = await getBrand();
   const result = await sendMail({

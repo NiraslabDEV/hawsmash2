@@ -18,6 +18,7 @@ import { createClient } from '@/utils/supabase/client';
 // ─── Ícones (SVG inline, leves) ───────────────────────────────────────────────
 function Icon({ name }: { name: string }) {
   const p: Record<string, React.ReactNode> = {
+    emails: <path d="M3 5h18v14H3zM3 6l9 7 9-7" />,
     pedidos: <path d="M6 2h9l5 5v15a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1Zm8 1v5h5M8 12h8M8 16h8M8 8h3" />,
     cardapio: <path d="M3 4h18M3 12h18M3 20h18" />,
     caixa: <path d="M3 7h18v12H3zM3 7l2-3h14l2 3M8 13h.01M16 13a2 2 0 1 1-4 0 2 2 0 0 1 4 0Z" />,

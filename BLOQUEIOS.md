@@ -1198,3 +1198,28 @@ Verificação adicional desta entrega: 973 testes unitários, 60 testes de base 
 | Ambiente que envia vendas reais | B-022 | os relatórios instalados mostram staging; não o negócio que ainda corre no 1.0 |
 | Envio do relatório | B-114 — SMTP | nenhum email diário/mensal é enviado |
 | Métricas Google | B-114 — Places | o relatório pode sair por SMTP, mas sem nota/avaliações |
+
+## PACOTE FINAL — módulo de emails · 2026-09-28
+
+- Implementado: editor por blocos, transaccionais por evento, promoções/funis por
+  loja, sequência com intervalos, SMTP/Vault, consentimento e cancelamento, histórico.
+- Validado: 1175 testes, lint/typecheck, build local; migration 1104 em staging e SQL
+  com rollback (não cria pedidos nem envia): isolamento, permissões, duplicação,
+  claim exclusivo, pausa, intervalo desde envio real, cancelamento.
+- Publicação/UI/agendador: validação em curso; não confundida com envio real.
+- Para o cliente: nenhuma decisão pendente para usar o editor. Registar a origem do
+  consentimento dos contactos que vão receber promoções.
+- Para Gabriel: B-114 — inserir a credencial da caixa SMTP autorizada no painel,
+  testar a ligação e depois validar uma recepção autorizada. B-022 — preparar LIVE
+  antes de promover; jobs de staging não devem coexistir a enviar para clientes LIVE.
+- Hardware: nenhum requisito adicional.
+- Decisões: apenas owner gere emails; fila congela versões; SMTP sem retry automático
+  para não duplicar mensagens após falha de rede; relatórios/OTP conservam conteúdo
+  operacional. Ver `docs/modulos/emails.md`.
+- Bloqueios desta entrega: 2 IDs anteriores de acesso/infraestrutura (B-114, B-022),
+  0 novos do cliente, 0 de hardware.
+
+| Impacto | Quem / ID | Sem isto… |
+|---|---|---|
+| Enviar mensagens | Gabriel — B-114 / SMTP | editor e fila funcionam, mas nenhum email sai |
+| Operação LIVE | Gabriel — B-022 | módulo fica validado em staging, sem alterar o 1.0 |

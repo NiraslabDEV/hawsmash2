@@ -28,7 +28,7 @@ export async function POST(request: Request) {
   const { data: visible } = await staff.client.from('orders').select('id').eq('id', parsed.data.orderId).maybeSingle();
   if (!visible) return NextResponse.json({ error: 'Pedido não encontrado.' }, { status: 404 });
 
-  if (!isEmailConfigured()) return NextResponse.json({ error: 'SMTP not configured' }, { status: 503 });
+  if (!(await isEmailConfigured())) return NextResponse.json({ error: 'SMTP not configured' }, { status: 503 });
   const result = await sendRejectionEmailForOrder(serviceClient(), parsed.data.orderId, parsed.data.reason);
   if (!result.ok) {
     const status = result.error === 'invalid_state' || result.error === 'no_recipient' ? 409 : 500;

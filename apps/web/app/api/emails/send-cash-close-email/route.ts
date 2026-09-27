@@ -6,7 +6,7 @@ import { getBrand } from '@/lib/brand/server';
 import { cashClientFromRequest } from '@/lib/cash/server-client';
 
 export async function POST(request: Request) {
-  if (!isEmailConfigured()) {
+  if (!(await isEmailConfigured())) {
     return NextResponse.json({ error: 'Serviço de email não configurado.' }, { status: 503 });
   }
 

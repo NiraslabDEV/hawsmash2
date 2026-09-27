@@ -36,6 +36,7 @@ O [README raiz](../README.md) explica arranque. Complementos: [formato de cardá
 | [Conta do cliente](modulos/conta-cliente.md) | Dispositivo, moradas e recuperação |
 | [Aparência](modulos/aparencia.md) | Marca como dado e fábrica |
 | [Marketing](modulos/marketing.md) | Atribuição, consentimento, campanhas e upsells |
+| [Emails](modulos/emails.md) | Editor por blocos, transaccionais, funis, SMTP e fila |
 | [Relatórios](modulos/relatorios.md) | Vendas, CSV, digest e Google |
 | [Agentes](modulos/agentes.md) | MCP/WebMCP e revisão humana |
 | [Mesas](modulos/mesas.md) | QR/balcão e conta conjunta |

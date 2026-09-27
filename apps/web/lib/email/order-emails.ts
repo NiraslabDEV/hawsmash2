@@ -103,6 +103,7 @@ export function ownerProofEmail(o: OrderEmailData & { fulfillmentType: string | 
 }
 
 interface OrderRow {
+  store_id: string;
   status: string;
   customer_email: string | null;
   customer_name: string | null;
@@ -117,7 +118,7 @@ export type OrderEmailOutcome = SendMailResult | { ok: false; error: 'order_not_
 async function loadOrder(svc: SupabaseClient, orderId: string): Promise<OrderRow | null> {
   try {
     const { data, error } = await svc.from('orders')
-      .select('status,customer_email,customer_name,order_number,total_cents,payment_method,stores(name,phone)')
+      .select('store_id,status,customer_email,customer_name,order_number,total_cents,payment_method,stores(name,phone)')
       .eq('id', orderId).maybeSingle();
     if (error || !data) return null;
     return data as unknown as OrderRow;
@@ -137,14 +138,22 @@ function emailData(order: OrderRow): OrderEmailData {
   };
 }
 
+async function hasSequence(svc: SupabaseClient, order: OrderRow, orderId: string, event: string) {
+  if (!order.store_id) return false;
+  const { data } = await svc.from('email_jobs').select('id').eq('store_id', order.store_id)
+    .eq('event_key', `${orderId}:${event}`).limit(1).maybeSingle();
+  return Boolean(data);
+}
+
 /** Email "pagamento confirmado" ao cliente do pedido — só se o pedido estiver aprovado/pago. */
 export async function sendApprovalEmailForOrder(svc: SupabaseClient, orderId: string): Promise<OrderEmailOutcome> {
   const order = await loadOrder(svc, orderId);
   if (!order) return { ok: false, error: 'order_not_found' };
   if (!order.customer_email) return { ok: false, error: 'no_recipient' };
   if (!(PAID_STATES as readonly string[]).includes(order.status)) return { ok: false, error: 'invalid_state' };
+  if (await hasSequence(svc, order, orderId, 'paid')) return { ok: true };
   const { subject, html } = approvalEmail(emailData(order));
-  return sendMail({ to: order.customer_email, subject, html });
+  return sendMail({ to: order.customer_email, subject, html, storeId: order.store_id });
 }
 
 /** Email "pagamento não confirmado" ao cliente do pedido — só se o pedido estiver cancelado. */
@@ -155,6 +164,7 @@ export async function sendRejectionEmailForOrder(
   if (!order) return { ok: false, error: 'order_not_found' };
   if (!order.customer_email) return { ok: false, error: 'no_recipient' };
   if (order.status !== 'cancelled') return { ok: false, error: 'invalid_state' };
+  if (await hasSequence(svc, order, orderId, 'cancelled')) return { ok: true };
   const { subject, html } = rejectionEmail({ ...emailData(order), reason });
-  return sendMail({ to: order.customer_email, subject, html });
+  return sendMail({ to: order.customer_email, subject, html, storeId: order.store_id });
 }
