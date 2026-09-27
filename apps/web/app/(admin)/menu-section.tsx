@@ -973,7 +973,16 @@ function OptionsEditor({ itemId }: { itemId: string }) {
     refetch();
   }
 
+  // Mudar o preço sem apagar: apagar o tamanho leva a ficha técnica em cascata.
+  async function setVariantPrice(id: string, priceCents: number) {
+    setErr('');
+    const { error } = await supabase.from('menu_item_variants').update({ price_cents: priceCents }).eq('id', id);
+    if (error) { setErr(`Erro: ${error.message}`); return; }
+    refetch();
+  }
+
   async function deleteVariant(id: string) {
+    setErr('');
     const { error } = await supabase.from('menu_item_variants').delete().eq('id', id);
     if (error) { setErr(`Erro: ${error.message}`); return; }
     refetch();
@@ -1025,7 +1034,7 @@ function OptionsEditor({ itemId }: { itemId: string }) {
                 {v.is_default ? '★ Padrão' : 'Tornar padrão'}
               </button>
               <span className="flex-1 text-white">{v.name}</span>
-              <span className="text-[#F5A623] font-semibold">{formatMT(v.price_cents)}</span>
+              <PriceEdit cents={v.price_cents} label={`Preço de ${v.name}`} onSave={(c) => setVariantPrice(v.id, c)} />
               <button type="button" onClick={() => deleteVariant(v.id)} className="text-red-400 px-1">✕</button>
             </li>
           ))}
@@ -1052,6 +1061,52 @@ function OptionsEditor({ itemId }: { itemId: string }) {
         <OptionAddRow placeholder="ex: Chantilly" onAdd={addAddon} />
       </div>
     </div>
+  );
+}
+
+/** Preço clicável: toca para editar, Enter ou sair do campo grava. */
+function PriceEdit({ cents, label, onSave }: { cents: number; label: string; onSave: (cents: number) => void }) {
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState('');
+
+  function start() {
+    setValue(String(cents / 100));
+    setEditing(true);
+  }
+
+  function commit() {
+    setEditing(false);
+    let next: number;
+    try {
+      next = decimalStringToCents(value.replace(',', '.'));
+    } catch {
+      return;
+    }
+    if (next !== cents) onSave(next);
+  }
+
+  if (!editing) {
+    return (
+      <button type="button" onClick={start} title="Editar preço" aria-label={label}
+        className="text-[#F5A623] font-semibold hover:underline">
+        {formatMT(cents)}
+      </button>
+    );
+  }
+  return (
+    <input
+      autoFocus
+      value={value}
+      onChange={(e) => setValue(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') { e.preventDefault(); commit(); }
+        if (e.key === 'Escape') setEditing(false);
+      }}
+      inputMode="decimal"
+      aria-label={label}
+      className="w-20 bg-black/20 border border-[#F5A623] rounded-lg px-2 py-1 text-sm text-white focus:outline-none"
+    />
   );
 }
 
