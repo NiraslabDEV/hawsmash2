@@ -57,7 +57,7 @@ export async function GET(request: Request) {
   const store = z.string().uuid().safeParse(url.searchParams.get('store'));
   const offset = Math.max(
     0,
-    Math.min(1000000, Number(url.searchParams.get('offset')) || 0),
+    Math.min(1000000, Math.floor(Number(url.searchParams.get('offset')) || 0)),
   );
   if (!store.success) {
     const { data, error } = await staff.client
@@ -85,6 +85,7 @@ export async function GET(request: Request) {
       })
       .eq('store_id', store.data)
       .order('consent_at', { ascending: false })
+      .order('id')
       .range(offset, offset + 49),
     staff.client
       .from('email_jobs')
@@ -94,6 +95,7 @@ export async function GET(request: Request) {
       )
       .eq('store_id', store.data)
       .order('created_at', { ascending: false })
+      .order('id')
       .range(offset, offset + 49),
     staff.client
       .from('stores')

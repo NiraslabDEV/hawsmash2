@@ -65,3 +65,7 @@ suspende sempre a fila dos novos funis.
 Sem credenciais SMTP a edição funciona e o envio fica pendente (B-114). Não há
 tracking de aberturas/cliques, importação CSV, editor de HTML livre ou reactivação
 automática de contactos cancelados nesta entrega.
+
+Staging verificado em 28/09: funil de boas-vindas guardado como rascunho (5 minutos
+e 1 dia), preview móvel, reabertura, configurações, 401 sem autorização e execução
+natural do cron. Nenhum contacto inscrito e nenhum envio real realizado.

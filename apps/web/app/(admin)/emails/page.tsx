@@ -293,7 +293,7 @@ export default function EmailsPage() {
               + {kind === 'marketing' ? 'Criar funil' : 'Nova sequência'}
             </button>
           </div>
-          {!data.settings?.enabled && (
+          {!(data.settings?.enabled && data.settings?.password_configured) && (
             <div className="flex flex-wrap justify-between gap-3 rounded-xl border border-[#e5a93c]/25 bg-[#e5a93c]/5 p-4 text-sm">
               <span>
                 Configura o remetente para começar a enviar. Podes preparar os

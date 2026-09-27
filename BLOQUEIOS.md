@@ -1206,13 +1206,20 @@ Verificação adicional desta entrega: 973 testes unitários, 60 testes de base 
 - Validado: 1175 testes, lint/typecheck, build local; migration 1104 em staging e SQL
   com rollback (não cria pedidos nem envia): isolamento, permissões, duplicação,
   claim exclusivo, pausa, intervalo desde envio real, cancelamento.
-- Publicação/UI/agendador: validação em curso; não confundida com envio real.
+- Publicado e verificado em staging (`11022d9e-76d7-4099-af4a-aeb4e6ee3dd9`):
+  editor, gravação/reabertura de duas etapas, preview móvel e configuração.
+  `app-emails` activo, execução natural `succeeded` às 00h17 de Maputo de 28/09.
+  HTTP 401 sem sessão/segredo. Nenhum email enviado; funil de boas-vindas em rascunho.
+- Corrigidos `APP_BASE_URL` e `NEXT_PUBLIC_APP_BASE_URL` do Railway para o domínio
+  real `https://hawsmash2-staging.up.railway.app`; antes apontavam para domínio retirado.
 - Para o cliente: nenhuma decisão pendente para usar o editor. Registar a origem do
   consentimento dos contactos que vão receber promoções.
 - Para Gabriel: B-114 — inserir a credencial da caixa SMTP autorizada no painel,
   testar a ligação e depois validar uma recepção autorizada. B-022 — preparar LIVE
   antes de promover; jobs de staging não devem coexistir a enviar para clientes LIVE.
 - Hardware: nenhum requisito adicional.
+- Segunda passagem: publicação e scheduler desbloqueados; credenciais SMTP/recepção
+  real e preparação LIVE continuam pendentes, sem nova dependência de hardware.
 - Decisões: apenas owner gere emails; fila congela versões; SMTP sem retry automático
   para não duplicar mensagens após falha de rede; relatórios/OTP conservam conteúdo
   operacional. Ver `docs/modulos/emails.md`.

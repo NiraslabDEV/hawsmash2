@@ -16,6 +16,14 @@ begin
   insert into public.email_flows(store_id,name,kind,trigger,status,steps)
   values(s,'PLACEHOLDER_ENSAIO','marketing','manual','active',
     '[{"subject":"Ensaio","preheader":"","delay_minutes":0,"blocks":[{"type":"text","text":"Ensaio"}]},{"subject":"Segundo","preheader":"","delay_minutes":15,"blocks":[{"type":"text","text":"Ensaio"}]}]') returning id into f;
+  perform public.email_save(s,'flow',(select to_jsonb(e) from public.email_flows e where id=f));
+  if not exists(select 1 from public.event_log where store_id=s and actor_user_id=owner_id and type='email.flow' and payload->>'id'=f::text) then raise exception 'Sem auditoria'; end if;
+  begin
+    perform public.email_save(other_store,'flow',(select to_jsonb(e) from public.email_flows e where id=f));
+    raise exception 'Mudou loja do funil pelo ID';
+  exception when raise_exception then if SQLERRM<>'flow_conflict' then raise; end if; end;
+  perform public.email_save(s,'settings','{"enabled":true,"host":"smtp.example.test","port":465,"username":"PLACEHOLDER_SMTP","password":"PLACEHOLDER_ENSAIO_NAO_E_SEGREDO","from_name":"Ensaio","from_email":"sender@example.test","reply_to":""}');
+  if public.email_smtp(s)->>'password' <> 'PLACEHOLDER_ENSAIO_NAO_E_SEGREDO' then raise exception 'Vault não recupera configuração'; end if;
   if public.email_enrol(f,'PLACEHOLDER@example.test','Ensaio','manual') <> 0 then raise exception 'Sem consentimento não pode entrar'; end if;
   insert into public.email_contacts(store_id,email,name,consent_source) values(s,'placeholder@example.test','Ensaio','Ensaio SQL');
   n := public.email_enrol(f,'PLACEHOLDER@example.test','Ensaio','manual');
