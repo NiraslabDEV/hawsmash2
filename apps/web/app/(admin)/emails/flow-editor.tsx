@@ -127,7 +127,7 @@ export function FlowEditor({
             className={primaryClass + ' whitespace-nowrap'}
             onClick={onSave}
           >
-            {busy ? 'A guardar…' : 'Guardar funil'}
+            {busy ? 'A guardar…' : operational ? 'Guardar email' : 'Guardar funil'}
           </button>
         </div>
       </div>
@@ -167,8 +167,8 @@ export function FlowEditor({
           </label>
         </div>
       )}
-      <div className="grid items-start gap-5 xl:grid-cols-[210px_minmax(0,1fr)_minmax(300px,.85fr)]">
-        <aside className="rounded-2xl border border-white/10 bg-[#1c1915] p-3 space-y-2">
+      <div className={`grid items-start gap-5 ${operational ? 'xl:grid-cols-2' : 'xl:grid-cols-[210px_minmax(0,1fr)_minmax(300px,.85fr)]'}`}>
+        {!operational && <aside className="rounded-2xl border border-white/10 bg-[#1c1915] p-3 space-y-2">
           <p className="px-2 py-2 text-xs uppercase tracking-wider text-[#b4aa9c]">
             Sequência
           </p>
@@ -217,7 +217,7 @@ export function FlowEditor({
             A primeira espera conta desde o evento. As seguintes contam desde o
             envio anterior.
           </p>
-        </aside>
+        </aside>}
         <div className="rounded-2xl border border-white/10 bg-[#1c1915] p-4 md:p-5 space-y-5">
           <div className="flex items-center justify-between">
             <h3 className="font-bold">Email {selected + 1}</h3>
@@ -254,7 +254,7 @@ export function FlowEditor({
               Remover etapa
             </button>
           </div>
-          <label className="block space-y-2 text-sm">
+          <label hidden={!!operational} className={operational ? 'hidden' : 'block space-y-2 text-sm'}>
             <span>Enviar após</span>
             <div className="flex gap-2">
               <input
@@ -361,7 +361,7 @@ export function FlowEditor({
                 </div>
                 {block.type === 'system' && (
                   <p className="text-xs text-[#b4aa9c]">
-                    Conte?do original: pedido, c?digo ou relat?rio. Preenchido
+                    Conteúdo original: pedido, código ou relatório. Preenchido
                     automaticamente em cada envio.
                   </p>
                 )}
@@ -450,8 +450,7 @@ export function FlowEditor({
             style={{ width: mobile ? 375 : '100%' }}
           />
           <p className="text-xs leading-relaxed text-[#b4aa9c]">
-            Dados de exemplo. Guardar mudanças afecta novas inscrições;
-            mensagens já na fila mantêm a versão original.
+            {operational ? 'Dados de exemplo. O email sai no evento com o pedido, código ou relatório preenchido automaticamente.' : 'Dados de exemplo. Guardar mudanças afecta novas inscrições; mensagens já na fila mantêm a versão original.'}
           </p>
         </aside>
       </div>

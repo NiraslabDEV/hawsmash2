@@ -15,7 +15,7 @@ export function CampaignGenerator({
   onKnowledgeSave,
   onGenerated,
 }: {
-  brand: { name: string; store: string; tagline?: string };
+  brand: { name: string; store: string; tagline?: string; products?: string[] };
   knowledge: string;
   onKnowledgeSave: (notes: string) => Promise<unknown>;
   onGenerated: (flow: EmailFlow) => void;
@@ -79,7 +79,8 @@ export function CampaignGenerator({
         'Qwen2.5-1.5B-Instruct-q4f16_1-MLC',
         {
           initProgressCallback: (p) => {
-            if (current === generation.current) setProgress(p.text);
+            if (current === generation.current)
+              setProgress(`A carregar o modelo local… ${Math.round(p.progress * 100)}%`);
           },
         },
         { context_window_size: 8192 },
@@ -233,7 +234,7 @@ export function CampaignGenerator({
               intervalos após o envio anterior; português de Portugal;
               consentimento e cancelamento de subscrição; sem inventar
               descontos, produtos, testemunhos ou urgência. Marca ligada:{' '}
-              {brand.name} · {brand.store}.
+              {brand.name} · {brand.store}. {brand.products?.length ?? 0} produtos disponíveis do menu incluídos.
             </p>
           </details>
           <div className="flex gap-3">

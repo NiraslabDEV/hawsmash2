@@ -39,7 +39,7 @@ type Data = {
   previews: Record<SystemEmailKey, { subject: string; html: string }>;
   globalStoreName: string;
   knowledge: string;
-  brandContext: { name: string; store: string; tagline?: string };
+  brandContext: { name: string; store: string; tagline?: string; products?: string[] };
   delivery: {
     id: string;
     event: string;
@@ -324,7 +324,7 @@ export default function EmailsPage() {
               <h2 className="text-xl font-bold">
                 {kind === 'marketing'
                   ? 'Os teus funis'
-                  : 'Sequ?ncias de acompanhamento'}
+                  : 'Sequências de acompanhamento'}
               </h2>
               <p className="mt-1 max-w-2xl text-sm text-[#b4aa9c]">
                 {kind === 'marketing'
@@ -517,14 +517,14 @@ export default function EmailsPage() {
             Emails do sistema ? {data.deliveryCount}
           </h3>
           <p className="text-xs text-[#b4aa9c]">
-            Registo a partir da liga??o ao m?dulo. Emails globais aparecem na
+            Registo a partir da ligação ao módulo. Emails globais aparecem na
             loja {data.globalStoreName}.
           </p>
           <div className="overflow-x-auto rounded-2xl border border-white/10">
             <table className="w-full text-sm text-left">
               <thead className="bg-white/5">
                 <tr>
-                  {['Email', 'Destinat?rio', 'Estado', 'Data'].map((h) => (
+                  {['Email', 'Destinatário', 'Estado', 'Data'].map((h) => (
                     <th key={h} className="p-3">
                       {h}
                     </th>
@@ -550,7 +550,7 @@ export default function EmailsPage() {
               </tbody>
             </table>
           </div>
-          <h3 className="font-bold">Sequ?ncias e campanhas</h3>
+          <h3 className="font-bold">Sequências e campanhas</h3>
           <div className="overflow-x-auto rounded-2xl border border-white/10">
             <table className="w-full text-left text-sm">
               <thead className="bg-white/5 text-[#b4aa9c]">

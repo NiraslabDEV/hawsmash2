@@ -151,11 +151,17 @@ export async function GET(request: Request) {
     return NextResponse.json(
       {
         error:
-          "N?o foi poss?vel carregar os emails do sistema. Verifica a migration 1105.",
+          "Não foi possível carregar os emails do sistema. Verifica a migration 1105.",
       },
       { status: 503 },
     );
-  const brand = await getBrand();
+  const [brand, menu] = await Promise.all([
+    getBrand(),
+    staff.client.rpc('get_menu', { p_store_slug: queries[4].data?.slug, p_channel: 'delivery' }),
+  ]);
+  const catalogue = z.object({ categories: z.array(z.object({ items: z.array(z.object({ name: z.string(), available: z.boolean().optional() })) })) }).safeParse(menu.data);
+  // Contexto público e limitado para o modelo local; nunca preços, clientes ou dados de pagamento.
+  const products = catalogue.success ? catalogue.data.categories.flatMap(c => c.items).filter(i => i.available !== false).slice(0,30).map(i => i.name) : [];
   return NextResponse.json({
     systemTemplates: SYSTEM_EMAILS.map(
       (e) =>
@@ -172,6 +178,7 @@ export async function GET(request: Request) {
       name: brand.name,
       tagline: brand.tagline,
       store: queries[4].data?.name ?? "",
+      products,
     },
     settings: queries[0].data,
     flows: queries[1].data,
@@ -231,7 +238,7 @@ export async function POST(request: Request) {
     const parsed = schema.safeParse(envelope.data.data);
     if (!parsed.success)
       return NextResponse.json(
-        { error: parsed.error.issues.map((i) => i.message).join(" ? ") },
+        { error: parsed.error.issues.map((i) => i.message).join(" · ") },
         { status: 400 },
       );
     const result =
@@ -246,7 +253,7 @@ export async function POST(request: Request) {
           });
     return NextResponse.json(
       result.error
-        ? { error: "N?o foi poss?vel guardar a configura??o." }
+        ? { error: "Não foi possível guardar a configuração." }
         : { ok: true },
       { status: result.error ? 400 : 200 },
     );

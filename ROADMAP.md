@@ -619,4 +619,7 @@ Pedido do dono: um botão "Reimprimir" nos fechos do dia, no Caixa do painel e n
 - [x] Migration 1105 aplicada em staging e ensaio SQL com rollback aprovado.
   `app-alerts` instalado a cada cinco minutos; fila mantém execução por minuto.
 - [x] 1189 testes unitários, lint/typecheck e build local aprovados.
-- [ ] Validar a publicação e geração real com WebGPU no navegador.
+- [x] Publicação 09fdbbf verificada no navegador: nove emissores, 12 modelos,
+  gravação e reabertura de personalização. Execução natural de `app-alerts` e
+  `app-emails` observada com sucesso.
+- [ ] Validar geração real com WebGPU no navegador (descarga inicial em curso).

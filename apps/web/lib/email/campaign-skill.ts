@@ -15,7 +15,7 @@ export type CampaignBrief = {
   offer: string;
   notes: string;
   count: number;
-  brand: { name: string; store: string; tagline?: string };
+  brand: { name: string; store: string; tagline?: string; products?: string[] };
 };
 export function campaignPrompt(brief: CampaignBrief) {
   return {

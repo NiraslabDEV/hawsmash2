@@ -40,7 +40,9 @@ no navegador, num worker. Requer WebGPU, memória gráfica e descarga inicial de
 cerca de 1 GB; sem chave ou fornecedor pago. O conhecimento editorial versionado
 em `campaign-skill.ts` cobre sequência, copy, CTA, consentimento e veracidade.
 As notas da marca ficam por loja em `email_campaign_knowledge`. Marca/loja são
-carregadas do sistema; oferta e outros factos são fornecidos no briefing.
+carregadas do sistema, assim como uma selecção de até 30 produtos disponíveis no
+menu da loja; oferta e outros factos são fornecidos no briefing. Não inclui preços
+ou dados de pagamento no contexto da IA.
 
 O modelo gera 2–5 emails em JSON validado. O resultado abre como rascunho manual:
 não publica, activa nem inscreve contactos. Rever factos, condições e textos.

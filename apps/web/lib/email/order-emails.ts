@@ -63,7 +63,7 @@ export function approvalEmail(o: OrderEmailData): {
         <h1 style="color: #e5a93c;">Pagamento Confirmado!</h1>
         <p>Olá ${escapeHtml(o.customerName)},</p>
         <p>O seu pagamento foi confirmado com sucesso.</p>
-        <div style="background: #1a1614; padding: 20px; border-radius: 8px; margin: 20px 0;">
+        <div style="background: #1a1614; color: #e5e5e5; padding: 20px; border-radius: 8px; margin: 20px 0;">
           <p><strong>Número do Pedido:</strong> ${escapeHtml(o.orderNumber)}</p>
           ${store}
           <p><strong>Total Pago:</strong> ${money(o.totalCents)}</p>
@@ -87,7 +87,7 @@ export function rejectionEmail(o: OrderEmailData & { reason: string }): {
         <h1 style="color: #e5a93c;">Pagamento Não Confirmado</h1>
         <p>Olá ${escapeHtml(o.customerName)},</p>
         <p>Lamentamos informar que o seu pagamento não foi confirmado.</p>
-        <div style="background: #1a1614; padding: 20px; border-radius: 8px; margin: 20px 0;">
+        <div style="background: #1a1614; color: #e5e5e5; padding: 20px; border-radius: 8px; margin: 20px 0;">
           <p><strong>Número do Pedido:</strong> ${escapeHtml(o.orderNumber)}</p>
           <p><strong>Método de Pagamento:</strong> ${escapeHtml(String(o.paymentMethod ?? "").toUpperCase())}</p>
           <p><strong>Motivo:</strong> ${escapeHtml(o.reason)}</p>
