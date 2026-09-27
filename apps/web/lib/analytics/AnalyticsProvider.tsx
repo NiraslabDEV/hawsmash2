@@ -1,7 +1,9 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import { usePathname } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
+import { marketingAllowedOn } from './surfaces';
 import {
   consentDecided,
   denyConsent,
@@ -20,6 +22,8 @@ import {
 export function AnalyticsProvider() {
   const [decided, setDecided] = useState(true); // evita flash até montar
   const [consented, setConsented] = useState(false);
+  // TVs e KDS: sem aviso de cookies e sem etiquetas (ver ./surfaces.ts).
+  const permitido = marketingAllowedOn(usePathname());
 
   const { data } = useQuery({
     queryKey: ['menu'],
@@ -29,6 +33,7 @@ export function AnalyticsProvider() {
       return res.json();
     },
     staleTime: 5 * 60_000,
+    enabled: permitido,
   });
 
   const config: MarketingConfig | null = data?.marketing ?? null;
@@ -49,8 +54,8 @@ export function AnalyticsProvider() {
 
   // Inicializa quando há consentimento + config.
   useEffect(() => {
-    if (consented && config) initTracking(config);
-  }, [consented, config]);
+    if (permitido && consented && config) initTracking(config);
+  }, [permitido, consented, config]);
 
   function accept() {
     grantConsent();
@@ -64,7 +69,7 @@ export function AnalyticsProvider() {
     setDecided(true);
   }
 
-  if (decided || !hasAnyTag) return null;
+  if (!permitido || decided || !hasAnyTag) return null;
 
   return (
     // O atributo é o gancho para cada pele o levantar do fundo quando tem
