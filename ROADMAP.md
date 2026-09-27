@@ -582,3 +582,9 @@ Pedido do dono: um botão "Reimprimir" nos fechos do dia, no Caixa do painel e n
 - [ ] Aplicar a 1100 no staging e fazer deploy do `dev` (o botão depende dos dois).
 - [ ] Com o `.exe` antigo, a reimpressão sai no formato do turno, marcada REIMPRESSÃO mas **sem** os artigos. A lista
   no papel precisa do `.exe` novo (item acima).
+- [x] `.exe` do bridge gerado a partir do `d530fe2`, de uma cópia limpa (sem trabalho por commitar de outras sessões):
+  `services/print-bridge/build/hawsmash-print-bridge-d530fe2.exe` (fora do git), SHA-256
+  `6fb127018e88190485296d575b05fe1bcb016ed54da832af05275fd8aa451895`. Arranca e recusa sem `STORE_ID`; o recibo do
+  mesmo commit renderiza o fecho real de 26/09 de Maputo com FECHO DO DIA, REIMPRESSÃO e os 31 artigos.
+- [ ] Trocar o `.exe` em Maputo **mantendo o mesmo nome de ficheiro e a mesma tarefa** (parar a tarefa, substituir,
+  arrancar): reinstalar com outro nome criaria uma segunda bridge (B-117).
