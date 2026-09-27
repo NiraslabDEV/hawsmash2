@@ -119,3 +119,30 @@ describe('talão do fecho do dia', () => {
     expect(papel).not.toContain('FECHO DO DIA');
   });
 });
+
+describe('reimpressão do fecho do dia (1100)', () => {
+  it('sai marcada REIMPRESSÃO por baixo do título, e só quando o é', () => {
+    const original = texto(buildPrintDocument('cash_close', dia));
+    expect(original).not.toContain('REIMPRESS');
+    const reimpresso: CashDayPayload = { ...dia, reprint: true, shift_label: `REIMPRESSÃO - ${dia.shift_label}` };
+    const segunda = texto(buildPrintDocument('cash_close', reimpresso));
+    expect(segunda).toContain('FECHO DO DIA');
+    expect(segunda).toContain('REIMPRESSÃO');
+    expect(segunda.indexOf('REIMPRESSÃO')).toBeLessThan(segunda.indexOf('25/09/2026'));
+  });
+
+  it('com os artigos vendidos, a lista sai na reimpressão', () => {
+    const segunda = texto(buildPrintDocument('cash_close', {
+      ...dia,
+      reprint: true,
+      sold: {
+        items: [{ name: 'Classic Smash', variant: 'WAGYU', qty: 33, total_cents: 1_320_000 }],
+        items_total_cents: 1_320_000,
+        delivery_fees_cents: 0,
+        discounts_cents: 0,
+      },
+    } as CashDayPayload));
+    expect(segunda).toContain('ARTIGOS VENDIDOS');
+    expect(segunda).toContain('Classic Smash');
+  });
+});

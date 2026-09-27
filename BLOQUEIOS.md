@@ -738,7 +738,9 @@ As 16 violações da spec permanecem no relatório, separadas dos IDs histórico
 
 ### B-115 · [Segurança] Aplicar 1097–1099 e o código das correcções da auditoria
 
-- Estado: **aberto**. Categoria: **acesso/infraestrutura**. Desbloqueia: Gabriel.
+- Estado: **aberto — parcela SQL feita**. Categoria: **acesso/infraestrutura**. Desbloqueia: Gabriel.
+- **27/09:** 1095 e 1097–1099 aplicadas no staging pelo Gabriel (`migration list` confirma); `fix/violacoes-spec`
+  mesclado em `dev` localmente. Faltam os passos 2–6 abaixo. A 1100 (reimprimir o fecho do dia) segue o mesmo caminho.
 - O que é: o branch `fix/violacoes-spec` corrige 13 violações e 4 riscos da auditoria de 26/09
   ([§5.1](docs/AUDITORIA-DOCUMENTACAO.md)). Três migrations (`1097_estado_e_pagamento_por_perfil`,
   `1098_sangria_idempotente`, `1099_isolamento_de_dados`) e código do painel, POS e rotas. Provado numa BD

@@ -4,7 +4,7 @@
 
 Retrato estático da **árvore de trabalho**, incluindo ficheiros ainda não commitados. Não comprova aplicação em staging/produção, grants efectivos da instalação ou resultados de testes. Não executa SQL.
 
-152 ficheiros; 34 141 linhas. A ordem é o timestamp do nome, não o sufixo de assunto. A 1080 precede intencionalmente 1077–1079. A cadeia canónica está em [supabase/migrations](../../supabase/migrations); os dois SQL de [packages/db/migrations](../../packages/db/migrations) são legado e não entram nesta contagem.
+153 ficheiros; 34 287 linhas. A ordem é o timestamp do nome, não o sufixo de assunto. A 1080 precede intencionalmente 1077–1079. A cadeia canónica está em [supabase/migrations](../../supabase/migrations); os dois SQL de [packages/db/migrations](../../packages/db/migrations) são legado e não entram nesta contagem.
 
 | Ficheiro / assunto | Tabelas em DDL directo | Funções declaradas/alteradas/removidas | Limite |
 | --- | --- | --- | --- |
@@ -160,6 +160,7 @@ Retrato estático da **árvore de trabalho**, incluindo ficheiros ainda não com
 | [supabase/migrations/20260926180000_1097_estado_e_pagamento_por_perfil.sql:1](../../supabase/migrations/20260926180000_1097_estado_e_pagamento_por_perfil.sql#L1) | — | `public.advance_order`, `public.confirm_payment` | Leitura estática |
 | [supabase/migrations/20260926180100_1098_sangria_idempotente.sql:1](../../supabase/migrations/20260926180100_1098_sangria_idempotente.sql#L1) | `public.cash_movements` | `public.add_cash_movement` | Leitura estática |
 | [supabase/migrations/20260926180200_1099_isolamento_de_dados.sql:1](../../supabase/migrations/20260926180200_1099_isolamento_de_dados.sql#L1) | — | `private.can_read_payment_proof` | Leitura estática |
+| [supabase/migrations/20260927100000_1100_reimprimir_fecho_do_dia.sql:1](../../supabase/migrations/20260927100000_1100_reimprimir_fecho_do_dia.sql#L1) | — | `public.reprint_cash_day` | Leitura estática |
 
 ## SQL dinâmico e limites
 

@@ -61,7 +61,21 @@ async function createStaff(role: "manager" | "cashier" | "kitchen", fullName: st
   return { client, userId };
 }
 
+/**
+ * Travão: esta suite começa por apagar TODO o caixa das duas lojas (turnos,
+ * movimentos, fechos do dia e talões de fecho) — não só o que ela cria. Numa
+ * base local descartável é o que se quer; no staging, onde as lojas vendem,
+ * apagava o histórico real. Fora de localhost recusa, salvo pedido explícito.
+ */
+const BASE_LOCAL = /^https?:\/\/(localhost|127\.0\.0\.1)(:|\/|$)/.test(SUPABASE_URL);
+
 async function cleanCash() {
+  if (!BASE_LOCAL && process.env.ALLOW_CASH_WIPE !== "1") {
+    throw new Error(
+      `cash-day.test.ts apaga o caixa inteiro das duas lojas e recusa correr contra ${SUPABASE_URL}. ` +
+        "Corre numa base local (supabase start) ou, numa base de ensaio descartável, com ALLOW_CASH_WIPE=1.",
+    );
+  }
   await admin.from("print_jobs").delete().eq("kind", "cash_close").in("store_id", [maputoStoreId, matolaStoreId]);
   await admin.from("cash_movements").delete().in("store_id", [maputoStoreId, matolaStoreId]);
   await admin.from("cash_sessions").delete().in("store_id", [maputoStoreId, matolaStoreId]);

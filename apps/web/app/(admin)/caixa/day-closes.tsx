@@ -11,6 +11,7 @@ import {
 } from '@/lib/cash/day';
 import { createClient } from '@/utils/supabase/client';
 import { downloadStaffFile } from '@/lib/admin/staff-fetch';
+import { reprintCashDay } from '@/lib/cash/reprint-day';
 
 /** Os últimos fechos do dia — é o que se consulta; o resto está no email e no papel. */
 const LIMIT = 20;
@@ -38,8 +39,9 @@ const time = (iso: string) =>
 
 /**
  * Os fechos do dia (1091) na aba Caixa do painel: um por linha, com os turnos
- * por baixo — quem abriu, quem fechou e a diferença de cada um. Só leitura:
- * o fecho do dia faz-se no POS, depois do último turno.
+ * por baixo — quem abriu, quem fechou e a diferença de cada um. O fecho do
+ * dia faz-se no POS, depois do último turno; aqui só se consulta e reimprime
+ * (1100: sai no balcão da loja, marcado REIMPRESSÃO, com os artigos vendidos).
  */
 export function DayClosesSection({
   storeId,
@@ -52,6 +54,18 @@ export function DayClosesSection({
   const supabase = useMemo(() => createClient(), []);
   const [rows, setRows] = useState<DayCloseRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [reprinting, setReprinting] = useState<string | null>(null);
+  const [notice, setNotice] = useState<{ id: string; ok: boolean; text: string } | null>(null);
+
+  const reprint = useCallback(async (row: DayCloseRow) => {
+    if (reprinting) return;
+    setReprinting(row.id);
+    const result = await reprintCashDay(supabase, row.id);
+    setReprinting(null);
+    setNotice(result.ok
+      ? { id: row.id, ok: true, text: 'Na fila da impressora do balcão da loja, marcado REIMPRESSÃO.' }
+      : { id: row.id, ok: false, text: result.message });
+  }, [reprinting, supabase]);
 
   const load = useCallback(async () => {
     let query = supabase
@@ -112,6 +126,9 @@ export function DayClosesSection({
                       ? `${dayShiftsLabel(row.report.shifts_count)} · ${row.report.total_pedidos} pedidos · fechado às ${time(row.closed_at)}${row.report.closed_by_name ? ` por ${row.report.closed_by_name}` : ''}`
                       : 'Relatório ilegível'}
                   </p>
+                  {notice?.id === row.id && (
+                    <p role="status" className={`mt-1 text-xs ${notice.ok ? 'text-emerald-300' : 'text-red-300'}`}>{notice.text}</p>
+                  )}
                 </div>
                 {row.report && (
                   <div className="text-right">
@@ -121,6 +138,14 @@ export function DayClosesSection({
                     </p>
                   </div>
                 )}
+                <button
+                  type="button"
+                  disabled={reprinting !== null}
+                  onClick={(event) => { event.preventDefault(); event.stopPropagation(); void reprint(row); }}
+                  className="shrink-0 rounded-lg border border-white/10 px-2.5 py-1.5 text-xs font-bold text-[#F5A623] hover:bg-white/[0.06] disabled:opacity-50"
+                >
+                  {reprinting === row.id ? 'A enviar…' : 'Reimprimir'}
+                </button>
                 <span aria-hidden className="text-[#8F8376] transition group-open:rotate-90">›</span>
               </summary>
               {row.report && <DayDetail report={row.report} />}

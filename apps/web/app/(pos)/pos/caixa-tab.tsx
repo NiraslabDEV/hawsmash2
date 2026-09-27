@@ -5,6 +5,7 @@ import { formatMT, type Cents } from '@delivery/core';
 import { createClient } from '@/utils/supabase/client';
 import { staffFetch } from '@/lib/admin/staff-fetch';
 import { addCashMovement, movementRequestKeeper } from '@/lib/cash/movement';
+import { reprintCashDay } from '@/lib/cash/reprint-day';
 import {
   CASH_MOVEMENT_HINTS,
   CASH_MOVEMENT_LABELS,
@@ -131,6 +132,18 @@ export function CaixaTab({
   const [lastClose, setLastClose] = useState<CashCloseReport | null>(null);
   const [tablesNotice, setTablesNotice] = useState<ReturnType<typeof openTablesNotice>>(null);
   const [day, setDay] = useState<CashDay | null>(null);
+  const [reprintBusy, setReprintBusy] = useState(false);
+
+  // 1100: o talão do dia volta à impressora do balcão, marcado REIMPRESSÃO.
+  const reprintDay = useCallback(async (dayCloseId: string) => {
+    if (reprintBusy) return;
+    setReprintBusy(true);
+    const result = await reprintCashDay(supabase, dayCloseId);
+    setReprintBusy(false);
+    setFeedback(result.ok
+      ? { tone: 'ok', text: 'Fecho do dia reimpresso · sai na impressora do balcão' }
+      : { tone: 'danger', text: result.message });
+  }, [reprintBusy, supabase]);
   const [dayError, setDayError] = useState<string | null>(null);
   /** A chave do fecho do dia em curso: repetir o toque devolve o mesmo fecho. */
   const [dayRequest, setDayRequest] = useState<string | null>(null);
@@ -671,7 +684,30 @@ export function CaixaTab({
         )}
 
         {lastDay && !session && modo !== 'dia' && (
-          <DaySummary report={lastDay} title={`Dia fechado · ${businessDateLabel(lastDay.business_date)}`} done />
+          <DaySummary
+            report={lastDay}
+            title={`Dia fechado · ${businessDateLabel(lastDay.business_date)}`}
+            done
+            reprintBusy={reprintBusy}
+            onReprint={lastDay.day_close_id ? () => void reprintDay(lastDay.day_close_id!) : undefined}
+          />
+        )}
+
+        {!lastDay && day?.lastDayClose && !session && modo !== 'dia' && (
+          <section className="flex items-center gap-3 rounded-2xl border border-white/[0.07] bg-bg2 p-4">
+            <span className="min-w-0 flex-1">
+              <span className="pos-eyebrow block">Último fecho do dia</span>
+              <span className="block text-lg font-bold">{businessDateLabel(day.lastDayClose.business_date)}</span>
+            </span>
+            <button
+              type="button"
+              disabled={reprintBusy}
+              onClick={() => void reprintDay(day.lastDayClose!.id)}
+              className="pos-btn pos-btn--quiet !min-h-12 shrink-0"
+            >
+              {reprintBusy ? 'A ENVIAR…' : 'REIMPRIMIR'}
+            </button>
+          </section>
         )}
 
         {lastClose && !session && modo !== 'dia' && (
@@ -781,7 +817,15 @@ export function CaixaTab({
 }
 
 /** O dia: a soma dos turnos, e cada turno com quem o abriu e fechou. */
-function DaySummary({ report, title, done = false }: { report: CashDayReport; title: string; done?: boolean }) {
+function DaySummary({
+  report, title, done = false, onReprint, reprintBusy = false,
+}: {
+  report: CashDayReport;
+  title: string;
+  done?: boolean;
+  onReprint?: () => void;
+  reprintBusy?: boolean;
+}) {
   return (
     <section
       className={`rounded-2xl border p-4 ${
@@ -834,6 +878,16 @@ function DaySummary({ report, title, done = false }: { report: CashDayReport; ti
           O talão do dia sai na impressora do balcão e o resumo vai por email ao dono.
           {report.closed_by_name ? ` Fechado por ${report.closed_by_name}.` : ''}
         </p>
+      )}
+      {done && onReprint && (
+        <button
+          type="button"
+          disabled={reprintBusy}
+          onClick={onReprint}
+          className="pos-btn pos-btn--quiet !min-h-12 mt-3"
+        >
+          {reprintBusy ? 'A ENVIAR…' : 'REIMPRIMIR'}
+        </button>
       )}
     </section>
   );

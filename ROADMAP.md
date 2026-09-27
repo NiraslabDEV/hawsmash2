@@ -563,5 +563,22 @@ todos os artigos vendidos (1095).
 - [x] Talão: secção ARTIGOS VENDIDOS no fecho de turno e no do dia (`@delivery/receipt/cash-sold.ts`); sem lista, o papel sai byte a byte igual. Email: a mesma lista nos dois emails.
 - [x] Ensaio no staging numa transacção desfeita (nada gravado): o turno de Maputo de 25/09 dá 29 artigos que somam 61.660 MT, igual ao facturado; fecho de turno e do dia na Matola com a lista no talão da fila.
 - [x] ⏳ Gates: `packages/db/tests/cash-day.test.ts` (+3), `packages/receipt/src/__tests__/cash-sold.test.ts` (9), `apps/web/lib/cash/__tests__` (+5). O de BD não correu nesta máquina (Docker em baixo); corre no CI.
-- [ ] Aplicar a 1095 no staging (as lojas vendem lá) e fazer deploy do `dev` — o email passa a levar a lista.
+- [x] Aplicar a 1095 no staging (as lojas vendem lá) — aplicada a 27/09 com a 1097–1099. Falta o deploy do `dev` para o email levar a lista.
 - [ ] Gerar o `.exe` do bridge e trocá-lo nas lojas; até lá o talão do fecho sai sem a lista (o bridge antigo ignora o campo).
+
+## Reimprimir o fecho do dia — 2026-09-27
+
+Pedido do dono: um botão "Reimprimir" nos fechos do dia, no Caixa do painel e no POS (1100).
+
+- [x] `reprint_cash_day(p_day_close_id, p_request_id)`: owner/manager/cashier da loja (não a cozinha) e o
+  service_role (suporte); talão na impressora do balcão marcado REIMPRESSÃO (também no `shift_label`, que o bridge
+  antigo imprime); idempotente por chave; `event_log` `cash.day_close_reprinted`. Um fecho de antes da 1095 sai com os
+  artigos vendidos, calculados pela mesma regra, sem reescrever o relatório gravado.
+- [x] Painel → Caixa → Fechos do dia: botão "Reimprimir" em cada dia. POS → Caixa: REIMPRIMIR no cartão do dia
+  acabado de fechar e no "Último fecho do dia".
+- [x] Provado numa BD local (PGlite): 8 cenários vermelhos sem a 1100, 14/14 com ela, reaplicação sem erro, conjunto
+  igual ao do staging. Gate supabase-js em `packages/db/tests/reimprimir-fecho-do-dia.test.ts` (por correr).
+- [x] `cash-day.test.ts` passa a recusar correr fora de localhost: começava por apagar o caixa inteiro das duas lojas.
+- [ ] Aplicar a 1100 no staging e fazer deploy do `dev` (o botão depende dos dois).
+- [ ] Com o `.exe` antigo, a reimpressão sai no formato do turno, marcada REIMPRESSÃO mas **sem** os artigos. A lista
+  no papel precisa do `.exe` novo (item acima).

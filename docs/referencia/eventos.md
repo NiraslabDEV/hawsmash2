@@ -4,7 +4,7 @@
 
 Retrato estático da **árvore de trabalho**, incluindo ficheiros ainda não commitados. Não comprova aplicação em staging/produção, grants efectivos da instalação ou resultados de testes. Não executa SQL.
 
-96 locais de INSERT reconhecidos: corpos de funções que permanecem na cadeia e escrita directa de runtime em web/bridge. Repetições representam produtores diferentes, não eventos duplicados observados. Não inclui testes, seeds de dados ou corpos substituídos.
+97 locais de INSERT reconhecidos: corpos de funções que permanecem na cadeia e escrita directa de runtime em web/bridge. Repetições representam produtores diferentes, não eventos duplicados observados. Não inclui testes, seeds de dados ou corpos substituídos.
 
 **Dinâmico** conserva a expressão do código; não inventa nomes possíveis. Actor e loja podem ser preenchidos por `private.enforce_event_context`; uma operação de sistema pode não ter actor humano. A tabela regista a forma do INSERT, não prova conformidade completa da auditoria. SQL INSERT com SELECT, wrappers e expressões não reconhecidas permanecem assinalados.
 
@@ -20,6 +20,7 @@ Retrato estático da **árvore de trabalho**, incluindo ficheiros ainda não com
 | `case when v_next_status = 'failed' then 'print.watchdog_failed' else 'print.watchdog_requeued' end` | dinâmico — expressão | `public.recover_stale_print_jobs(uuid)` | [supabase/migrations/20260819203000_f3_bridge_operations.sql:125](../../supabase/migrations/20260819203000_f3_bridge_operations.sql#L125) | coluna explícita; coluna explícita |
 | `cash.close_print_failed` | literal | `private.enqueue_cash_close_print()` | [supabase/migrations/20260819221000_f5_cash_close_print.sql:45](../../supabase/migrations/20260819221000_f5_cash_close_print.sql#L45) | coluna explícita; coluna explícita |
 | `cash.day_close_print_failed` | literal | `public.close_cash_day(uuid,uuid)` | [supabase/migrations/20260925100000_1091_fecho_do_dia.sql:437](../../supabase/migrations/20260925100000_1091_fecho_do_dia.sql#L437) | coluna explícita; coluna explícita |
+| `cash.day_close_reprinted` | literal | `public.reprint_cash_day(uuid,uuid)` | [supabase/migrations/20260927100000_1100_reimprimir_fecho_do_dia.sql:122](../../supabase/migrations/20260927100000_1100_reimprimir_fecho_do_dia.sql#L122) | coluna explícita; coluna explícita |
 | `cash.day_closed` | literal | `public.close_cash_day(uuid,uuid)` | [supabase/migrations/20260925100000_1091_fecho_do_dia.sql:447](../../supabase/migrations/20260925100000_1091_fecho_do_dia.sql#L447) | coluna explícita; coluna explícita |
 | `cash.drawer_enqueue_failed` | literal | `public.create_counter_sale_without_recipe(jsonb)` | [supabase/migrations/20260819193000_f3_cash_drawer.sql:84](../../supabase/migrations/20260819193000_f3_cash_drawer.sql#L84) | coluna explícita; coluna explícita |
 | `cash.drawer_opened_outside_sale` | literal | `public.open_cash_drawer(uuid,uuid,text)` | [supabase/migrations/20260819193000_f3_cash_drawer.sql:190](../../supabase/migrations/20260819193000_f3_cash_drawer.sql#L190) | coluna explícita; coluna explícita |

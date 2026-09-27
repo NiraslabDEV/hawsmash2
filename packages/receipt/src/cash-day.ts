@@ -56,6 +56,8 @@ export interface CashDayPayload extends CashClosePayload {
   total_faturado_cents: number;
   troco_inicial_cents: number;
   shifts: CashDayShift[];
+  /** Reimpressão pedida no painel ou no POS (1100). */
+  reprint?: boolean;
 }
 
 export function isCashDayPayload(p: PrintPayload): p is CashDayPayload {
@@ -78,6 +80,8 @@ export function buildCashDayReceipt(payload: CashDayPayload, header: Op[]): Op[]
   const ops: Op[] = [...header];
   const turnos = payload.shifts.length === 1 ? '1 turno' : `${payload.shifts.length} turnos`;
   ops.push(SIZE_DOUBLE, BOLD_ON, line('FECHO DO DIA'), BOLD_OFF, SIZE_NORMAL);
+  // Uma segunda folha do mesmo dia nunca passa pela original (CLAUDE §7.4).
+  if (payload.reprint === true) ops.push(BOLD_ON, line('REIMPRESSÃO'), BOLD_OFF);
   ops.push(line(`${businessDate(payload.business_date)} - ${turnos}`));
   ops.push(line(`${maputoTime(payload.first_opened_at)} - ${maputoTime(payload.closed_at)}`));
   ops.push(ALIGN_LEFT, line(rule('=')), BOLD_ON, line('TURNOS'), BOLD_OFF);

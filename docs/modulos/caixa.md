@@ -24,7 +24,9 @@ Fontes: [1007 caixa](../../supabase/migrations/20260819220000_1007_cash.sql), [d
 
 O dia soma os relatórios congelados dos turnos; não recalcula as vendas. Cada turno pertence a um único fecho do dia. Repetir a mesma loja e `p_request_id` devolve o mesmo relatório com indicação de duplicado. Uma nova chave não permite incorporar novamente os mesmos turnos. O papel usa `kind=cash_close` com informação `day`, mantendo compatibilidade com o formato anterior do bridge. A listagem de artigos vendidos foi acrescentada pela 1095; fechos históricos sem esse bloco não ganham retrospectivamente dados inventados.
 
-Fonte: [migration 1091](../../supabase/migrations/20260925100000_1091_fecho_do_dia.sql), [day.ts](../../apps/web/lib/cash/day.ts) e [day-closes.tsx](../../apps/web/app/(admin)/caixa/day-closes.tsx).
+**Reimprimir (1100).** `reprint_cash_day(p_day_close_id, p_request_id)` volta a pôr um fecho do dia na impressora do balcão, marcado REIMPRESSÃO. Botão "Reimprimir" em Painel → Caixa → Fechos do dia e REIMPRIMIR no POS (dia acabado de fechar e "Último fecho do dia"). Pode owner, manager e cashier da loja, e o service_role (suporte); a cozinha não. A mesma chave não gasta mais papel; cada reimpressão fica em `event_log` como `cash.day_close_reprinted`. Num fecho de antes da 1095, o papel leva os artigos vendidos calculados pela regra do fecho do dia — o relatório gravado não muda. O bridge anterior à 1091 imprime-o no formato de turno e ignora a lista.
+
+Fonte: [migration 1091](../../supabase/migrations/20260925100000_1091_fecho_do_dia.sql), [migration 1100](../../supabase/migrations/20260927100000_1100_reimprimir_fecho_do_dia.sql), [day.ts](../../apps/web/lib/cash/day.ts), [reprint-day.ts](../../apps/web/lib/cash/reprint-day.ts) e [day-closes.tsx](../../apps/web/app/(admin)/caixa/day-closes.tsx).
 
 ## Internet, mesas e repetição
 
