@@ -1,3 +1,4 @@
+import { createClient as createServiceClient } from '@supabase/supabase-js';
 import { createClient } from '@/utils/supabase/server';
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
@@ -41,7 +42,12 @@ export async function POST(request: Request) {
         paymentMethod: data?.payment_method ?? null,
         fulfillmentType: data?.fulfillment_type ?? null,
       });
-      await sendMail({ to: ownerEmail, subject, html })
+      await (async () => {
+        const svc = createServiceClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, { auth: { persistSession: false } });
+        const { data: order } = await svc.from('orders').select('store_id').eq('id', orderId).single();
+        if (!order) return { ok: false, error: 'store_not_found' };
+        return sendMail({ to: ownerEmail, subject, html, event: 'proof', storeId: order.store_id });
+      })()
         .then((r) => { if (!r.ok) console.error('owner email failed:', r.error); })
         .catch((e) => console.error('owner email failed:', e));
     }

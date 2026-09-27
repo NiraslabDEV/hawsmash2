@@ -1,6 +1,6 @@
 # Emails no painel
 
-`/emails`, só para o dono, com selector de loja. Migration **1104**.
+`/emails`, só para o dono, com selector de loja. Migrations **1104 e 1105**.
 
 ## Utilização
 
@@ -9,7 +9,13 @@
    A palavra-passe fica no Vault, não regressa ao painel e não entra em `event_log`.
    O destinatário adicional dos relatórios edita o `stores.owner_email` existente.
    `OWNER_EMAIL` continua o destinatário central configurado no Railway.
-2. **Transaccionais:** uma sequência por evento (pagamento confirmado, pronto,
+2. **Transaccionais:** os nove emails existentes aparecem automaticamente: pagamento,
+   recusa, comprovativo, código de acesso, fecho de turno, fecho do dia, resumo diário,
+   mensal e alertas. Escolher modelo actual ou personalizar; o bloco de dados mantém
+   os valores/código/relatório originais. Preview usa os renderers reais com exemplos.
+   Os emails globais partilham configuração na primeira loja. O código de acesso
+   não pode ser desligado nem adiado. As sequências permitem esperas e acompanhamento:
+   uma sequência por evento (pagamento confirmado, pronto,
    entregue, cancelado). Editar assunto, pré-visualização e blocos de título,
    texto, imagem HTTPS, botão HTTPS e separador. Variáveis: `{{nome}}`, `{{loja}}`,
    `{{pedido}}`, `{{total}}`. Reordenar blocos e etapas, acrescentar até 12 emails.
@@ -20,6 +26,30 @@
    Não se reactiva um cancelado por adicionar o mesmo endereço.
 5. **Histórico:** fila, envio em curso, aceite pelo SMTP, falha, cancelado ou incerto.
    Páginas de 50, horários de Maputo. Aceite pelo SMTP não prova entrega/leitura.
+   Inclui os novos envios dos nove emissores antigos; não guarda HTML ou códigos.
+
+## Biblioteca e IA gratuita
+
+12 modelos: Essencial, Assinatura dourada, Noite e dourado, Carta da equipa,
+Boas-vindas, Obrigado pela visita, Convite para voltar, Comunidade, Menu,
+Fim-de-semana, Novidade e Lembrete. Quatro temas visuais, texto e blocos editáveis
+por etapa. Os botões de menu resolvem `/l/[slug]` da loja no servidor.
+
+Em Promoções e funis, **Criar com IA gratuita** executa Qwen2.5-1.5B com WebLLM
+no navegador, num worker. Requer WebGPU, memória gráfica e descarga inicial de
+cerca de 1 GB; sem chave ou fornecedor pago. O conhecimento editorial versionado
+em `campaign-skill.ts` cobre sequência, copy, CTA, consentimento e veracidade.
+As notas da marca ficam por loja em `email_campaign_knowledge`. Marca/loja são
+carregadas do sistema; oferta e outros factos são fornecidos no briefing.
+
+O modelo gera 2–5 emails em JSON validado. O resultado abre como rascunho manual:
+não publica, activa nem inscreve contactos. Rever factos, condições e textos.
+Sem GPU/ligação compatível, a biblioteca e o editor continuam disponíveis.
+Cancelar termina o worker. Nenhum destinatário ou dado de cliente entra no prompt.
+
+DECISÃO: IA local evita credenciais e custos por geração; a capacidade depende do
+computador. Modelos operacionais preservam exactamente um bloco de dados. Mudar
+o modelo não muda o relógio de um código/fecho; os atrasos ficam nas sequências.
 
 ## Sequências e segurança
 
@@ -53,11 +83,14 @@ suspende sempre a fila dos novos funis.
 
 ## Instalação e ensaios
 
-- Aplicar 1104 primeiro em staging; publicar o código.
+- Aplicar 1104 e 1105 primeiro em staging; publicar o código.
 - `APP_BASE_URL`: origem HTTPS do ambiente, para os links de cancelamento.
 - Vault: `app_cron_base_url` e `app_cron_secret`, iguais aos do ambiente.
 - `scripts/sql/install-email-cron.sql`: `app-emails`, de minuto a minuto,
   `/api/cron/emails`, Bearer `CRON_SECRET`. HTTP síncrono no scheduler, nunca na venda.
+  Também instala `app-alerts` a cada cinco minutos para o emissor existente.
+- `scripts/sql/test-system-email-templates.sql`: gravação, protecção do código,
+  preservação dos dados e permissões, em rollback.
 - `scripts/sql/test-email-studio.sql`: transacção desfeita; consentimento, isolamento,
   idempotência, pausa, claim, intervalo, cancelamento e permissões. Não cria/apaga
   pedidos nem chama SMTP.

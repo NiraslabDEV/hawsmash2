@@ -1,5 +1,7 @@
 'use client';
 import { useState } from 'react';
+import { TemplatePicker } from './template-picker';
+import { applyLibraryTemplate } from '@/lib/email/template-library';
 import {
   defaultStep,
   renderMessage,
@@ -15,6 +17,7 @@ const blockLabels = {
   image: 'Imagem',
   button: 'Botão',
   divider: 'Separador',
+  system: 'Dados do sistema',
 };
 export function FlowEditor({
   value,
@@ -23,6 +26,7 @@ export function FlowEditor({
   onClose,
   busy,
   storeName,
+  operational,
 }: {
   value: EmailFlow;
   onChange: (value: EmailFlow) => void;
@@ -30,6 +34,7 @@ export function FlowEditor({
   onClose: () => void;
   busy: boolean;
   storeName: string;
+  operational?: { subject: string; html: string };
 }) {
   const [selected, setSelected] = useState(0);
   const [mobile, setMobile] = useState(false);
@@ -48,12 +53,20 @@ export function FlowEditor({
     });
   const preview = renderMessage(
     step,
-    { nome: 'Cliente', loja: storeName, pedido: 'EXEMPLO', total: '450 MT' },
+    {
+      nome: 'Cliente',
+      loja: storeName,
+      pedido: 'EXEMPLO',
+      total: '450 MT',
+      assunto_original: operational?.subject ?? '',
+      menu_url: 'https://example.com/menu',
+    },
     value.kind === 'marketing' ? 'https://example.com/cancelar' : undefined,
+    operational?.html,
   );
   function addBlock(type: EmailBlock['type']) {
     const block: EmailBlock =
-      type === 'divider'
+      type === 'divider' || type === 'system'
         ? { type }
         : type === 'button' || type === 'image'
           ? {
@@ -91,22 +104,24 @@ export function FlowEditor({
           ← Voltar à lista
         </button>
         <div className="flex gap-2">
-          <select
-            aria-label="Estado do funil"
-            value={value.status}
-            onChange={(e) =>
-              onChange({
-                ...value,
-                status: e.target.value as EmailFlow['status'],
-              })
-            }
-            className={fieldClass}
-          >
-            <option value="draft">Rascunho</option>
-            <option value="active">Activo</option>
-            <option value="paused">Pausado</option>
-            <option value="archived">Arquivado — cancelar fila</option>
-          </select>
+          {!operational && (
+            <select
+              aria-label="Estado do funil"
+              value={value.status}
+              onChange={(e) =>
+                onChange({
+                  ...value,
+                  status: e.target.value as EmailFlow['status'],
+                })
+              }
+              className={fieldClass}
+            >
+              <option value="draft">Rascunho</option>
+              <option value="active">Activo</option>
+              <option value="paused">Pausado</option>
+              <option value="archived">Arquivado — cancelar fila</option>
+            </select>
+          )}
           <button
             disabled={busy}
             className={primaryClass + ' whitespace-nowrap'}
@@ -116,40 +131,42 @@ export function FlowEditor({
           </button>
         </div>
       </div>
-      <div className="grid gap-4 md:grid-cols-2">
-        <label className="space-y-2 text-sm">
-          <span>Nome da sequência</span>
-          <input
-            className={fieldClass}
-            maxLength={120}
-            value={value.name}
-            onChange={(e) => onChange({ ...value, name: e.target.value })}
-          />
-        </label>
-        <label className="space-y-2 text-sm">
-          <span>Começa quando…</span>
-          <select
-            className={fieldClass}
-            disabled={!!value.id}
-            value={value.trigger}
-            onChange={(e) =>
-              onChange({
-                ...value,
-                trigger: e.target.value as EmailFlow['trigger'],
-              })
-            }
-          >
-            {(value.kind === 'marketing'
-              ? (['manual', 'subscribed'] as const)
-              : (['paid', 'ready', 'delivered', 'cancelled'] as const)
-            ).map((t) => (
-              <option key={t} value={t}>
-                {triggerLabels[t]}
-              </option>
-            ))}
-          </select>
-        </label>
-      </div>
+      {!operational && (
+        <div className="grid gap-4 md:grid-cols-2">
+          <label className="space-y-2 text-sm">
+            <span>Nome da sequência</span>
+            <input
+              className={fieldClass}
+              maxLength={120}
+              value={value.name}
+              onChange={(e) => onChange({ ...value, name: e.target.value })}
+            />
+          </label>
+          <label className="space-y-2 text-sm">
+            <span>Começa quando…</span>
+            <select
+              className={fieldClass}
+              disabled={!!value.id}
+              value={value.trigger}
+              onChange={(e) =>
+                onChange({
+                  ...value,
+                  trigger: e.target.value as EmailFlow['trigger'],
+                })
+              }
+            >
+              {(value.kind === 'marketing'
+                ? (['manual', 'subscribed'] as const)
+                : (['paid', 'ready', 'delivered', 'cancelled'] as const)
+              ).map((t) => (
+                <option key={t} value={t}>
+                  {triggerLabels[t]}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+      )}
       <div className="grid items-start gap-5 xl:grid-cols-[210px_minmax(0,1fr)_minmax(300px,.85fr)]">
         <aside className="rounded-2xl border border-white/10 bg-[#1c1915] p-3 space-y-2">
           <p className="px-2 py-2 text-xs uppercase tracking-wider text-[#b4aa9c]">
@@ -180,7 +197,7 @@ export function FlowEditor({
             </div>
           ))}
           <button
-            disabled={value.steps.length >= 12}
+            disabled={!!operational || value.steps.length >= 12}
             className={buttonClass + ' w-full mt-3'}
             onClick={() => {
               onChange({
@@ -243,6 +260,7 @@ export function FlowEditor({
               <input
                 aria-label="Tempo de espera"
                 type="number"
+                disabled={!!operational}
                 min={0}
                 step={1}
                 value={step.delay_minutes / unit}
@@ -265,6 +283,11 @@ export function FlowEditor({
               </select>
             </div>
           </label>
+          <TemplatePicker
+            onSelect={(id) =>
+              changeStep(applyLibraryTemplate(id, step, !!operational))
+            }
+          />
           <label className="block space-y-2 text-sm">
             <span>Assunto</span>
             <input
@@ -323,7 +346,9 @@ export function FlowEditor({
                     <button
                       className="h-11 w-9 text-red-300 disabled:opacity-25"
                       aria-label={`Remover bloco ${i + 1}`}
-                      disabled={step.blocks.length === 1}
+                      disabled={
+                        step.blocks.length === 1 || block.type === 'system'
+                      }
                       onClick={() =>
                         changeStep({
                           blocks: step.blocks.filter((_, j) => j !== i),
@@ -334,7 +359,13 @@ export function FlowEditor({
                     </button>
                   </div>
                 </div>
-                {block.type !== 'divider' && (
+                {block.type === 'system' && (
+                  <p className="text-xs text-[#b4aa9c]">
+                    Conte?do original: pedido, c?digo ou relat?rio. Preenchido
+                    automaticamente em cada envio.
+                  </p>
+                )}
+                {block.type !== 'divider' && block.type !== 'system' && (
                   <label className="block">
                     <span className="sr-only">
                       {blockLabels[block.type]} do bloco {i + 1}
@@ -382,8 +413,9 @@ export function FlowEditor({
           <div className="border-t border-white/10 pt-4">
             <p className="mb-3 text-xs text-[#b4aa9c]">ADICIONAR BLOCO</p>
             <div className="flex flex-wrap gap-2">
-              {(Object.keys(blockLabels) as EmailBlock['type'][]).map(
-                (type) => (
+              {(Object.keys(blockLabels) as EmailBlock['type'][])
+                .filter((type) => type !== 'system')
+                .map((type) => (
                   <button
                     key={type}
                     disabled={step.blocks.length >= 40}
@@ -392,8 +424,7 @@ export function FlowEditor({
                   >
                     + {blockLabels[type]}
                   </button>
-                ),
-              )}
+                ))}
             </div>
           </div>
         </div>

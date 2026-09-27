@@ -1,5 +1,7 @@
-import nodemailer, { type Transporter } from 'nodemailer';
-import { studioSmtp, sendStudioMail } from './studio-transport';
+import { prepareSystemEmail, logSystemEmail } from "./system-runtime";
+import type { SystemEmailKey } from "./system-catalog";
+import nodemailer, { type Transporter } from "nodemailer";
+import { studioSmtp, sendStudioMail } from "./studio-transport";
 
 /**
  * Envio transacional por SMTP (Hostinger) — ADR 0004. Substitui o Resend: o
@@ -13,13 +15,16 @@ import { studioSmtp, sendStudioMail } from './studio-transport';
 let transporter: Transporter | null = null;
 
 export async function isEmailConfigured(): Promise<boolean> {
-  return Boolean(process.env.SMTP_USER && process.env.SMTP_PASS) || Boolean(await studioSmtp());
+  return (
+    Boolean(process.env.SMTP_USER && process.env.SMTP_PASS) ||
+    Boolean(await studioSmtp())
+  );
 }
 
 function getTransporter(): Transporter {
   if (!transporter) {
     transporter = nodemailer.createTransport({
-      host: process.env.SMTP_HOST || 'smtp.hostinger.com',
+      host: process.env.SMTP_HOST || "smtp.hostinger.com",
       port: Number(process.env.SMTP_PORT) || 465,
       secure: true,
       auth: {
@@ -36,17 +41,42 @@ export type SendMailInput = {
   subject: string;
   html: string;
   storeId?: string;
+  event?: SystemEmailKey;
+  variables?: Record<string, string>;
 };
 
 export type SendMailResult = { ok: true } | { ok: false; error: string };
 
-export async function sendMail({ to, subject, html, storeId }: SendMailInput): Promise<SendMailResult> {
+export async function sendMail(input: SendMailInput): Promise<SendMailResult> {
+  const prepared = await prepareSystemEmail(input);
+  const result = prepared.enabled
+    ? await deliver({ ...input, ...prepared, storeId: input.storeId })
+    : { ok: false as const, error: "email_disabled" };
+  await logSystemEmail(
+    input.event,
+    prepared.storeId,
+    Array.isArray(input.to) ? input.to : [input.to],
+    !prepared.enabled ? "disabled" : result.ok ? "sent" : "failed",
+  );
+  return result;
+}
+async function deliver({
+  to,
+  subject,
+  html,
+  storeId,
+}: SendMailInput): Promise<SendMailResult> {
   const configured = await studioSmtp(storeId);
   if (configured) {
-    const results = await Promise.all((Array.isArray(to) ? to : [to]).map(recipient => sendStudioMail(configured, { to: recipient, subject, html })));
-    return results.find(result => !result.ok) ?? { ok: true };
+    const results = await Promise.all(
+      (Array.isArray(to) ? to : [to]).map((recipient) =>
+        sendStudioMail(configured, { to: recipient, subject, html }),
+      ),
+    );
+    return results.find((result) => !result.ok) ?? { ok: true };
   }
-  if (!(process.env.SMTP_USER && process.env.SMTP_PASS)) return { ok: false, error: 'smtp_not_configured' };
+  if (!(process.env.SMTP_USER && process.env.SMTP_PASS))
+    return { ok: false, error: "smtp_not_configured" };
 
   // Sem EMAIL_FROM sai o endereço nu, sem nome de exibição. O nome que estava
   // aqui era o de um cliente: outra instalação mandava emails assinados com a
@@ -56,6 +86,9 @@ export async function sendMail({ to, subject, html, storeId }: SendMailInput): P
     await getTransporter().sendMail({ from, to, subject, html });
     return { ok: true };
   } catch (error) {
-    return { ok: false, error: error instanceof Error ? error.message : String(error) };
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : String(error),
+    };
   }
 }

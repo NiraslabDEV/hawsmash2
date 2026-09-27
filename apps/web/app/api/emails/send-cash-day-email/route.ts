@@ -45,17 +45,18 @@ export async function POST(request: Request) {
   }
 
   const [{ data: store }, { data: settings }] = await Promise.all([
-    supabase.from('stores').select('short_name').eq('id', day.store_id).single(),
+    supabase.from('stores').select('short_name,owner_email').eq('id', day.store_id).single(),
     supabase.from('settings').select('owner_email').eq('id', 1).single(),
   ]);
-  if (!settings?.owner_email) {
+  const ownerEmail = store?.owner_email || process.env.OWNER_EMAIL || settings?.owner_email;
+  if (!ownerEmail) {
     return NextResponse.json({ error: 'Email do dono não configurado.' }, { status: 503 });
   }
 
   const storeShortName = store?.short_name ?? 'Loja';
   const brandName = (await getBrand()).name;
-  const result = await sendMail({
-    to: settings.owner_email,
+  const result = await sendMail({ event: 'cash_day', storeId: day.store_id,
+    to: ownerEmail,
     subject: `Fecho do Dia — ${brandName} ${storeShortName}`,
     html: cashDayEmailHtml(report, storeShortName, brandName),
   });

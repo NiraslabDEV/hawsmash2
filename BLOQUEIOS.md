@@ -1232,3 +1232,28 @@ Verificação adicional desta entrega: 973 testes unitários, 60 testes de base 
 |---|---|---|
 | Enviar mensagens | Gabriel — B-114 / SMTP | editor e fila funcionam, mas nenhum email sai |
 | Operação LIVE | Gabriel — B-022 | módulo fica validado em staging, sem alterar o 1.0 |
+
+## PACOTE FINAL — emails existentes, modelos e IA · 2026-09-28
+
+- Implementado: nove emissores ligados às configurações do admin; modelo original
+  ou blocos personalizados com dados preservados; 12 modelos; gerador gratuito
+  WebLLM/Qwen local com conhecimento editorial e notas por loja; histórico operacional.
+- Verificado: migration 1105 em staging, SQL em rollback, 1189 testes, lint/typecheck
+  e build local. Publicação e geração WebGPU aguardam ensaio no navegador.
+- Cliente: nenhuma decisão necessária para editar. Confirmar os factos/oferta antes
+  de activar uma campanha gerada. Nenhum contacto inscrito automaticamente.
+- Gabriel: B-114 (SMTP/recepção e Places) e B-022 (LIVE) mantêm-se; não foi obtida
+  uma palavra-passe SMTP nem activada facturação Google nesta entrega.
+- Hardware: a IA local requer navegador WebGPU e memória gráfica; edição e modelos
+  funcionam sem GPU. Não afecta vendas nem impressão.
+- Decisões: IA no computador evita chave/custo por geração; emails operacionais
+  preservam um bloco de dados e saem no evento, esperas nas sequências. Globais
+  partilham configuração, sem duplicar configurações contraditórias entre lojas.
+- Segunda passagem: scheduler e ligação dos emissores resolvidos em staging;
+  permanecem 2 IDs de acesso/infraestrutura, 0 novos do cliente e 0 de hardware
+  obrigatório para abertura. Envio real continua por validar.
+
+| Impacto | Quem / ID | Sem isto… |
+|---|---|---|
+| Enviar emails | Gabriel — B-114 / SMTP | o editor funciona, mas a caixa não está autenticada |
+| Operação LIVE | Gabriel — B-022 | mudanças continuam em staging, sem alterar o 1.0 |

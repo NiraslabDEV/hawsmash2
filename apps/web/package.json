@@ -13,6 +13,7 @@
     "@delivery/core": "workspace:^",
     "@delivery/payments": "workspace:^",
     "@delivery/receipt": "workspace:^",
+    "@mlc-ai/web-llm": "0.2.85",
     "@modelcontextprotocol/sdk": "1.30.0",
     "@sentry/nextjs": "^10.70.0",
     "@supabase/ssr": "^0.12.0",

@@ -80,7 +80,7 @@ export async function GET(request: Request) {
   if (!(await isEmailConfigured())) delivery = 'skipped_no_key';
   else if (recipients.length === 0) delivery = 'skipped_no_recipient';
   else {
-    const result = await sendMail({
+    const result = await sendMail({ event: 'monthly',
       to: recipients,
       subject: monthlySubject(brandName, digest.month),
       html: monthlyEmailHtml({ brandName, digest, google }),

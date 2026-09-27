@@ -1,19 +1,19 @@
-import { NextResponse } from 'next/server';
-import { formatMT, type Cents } from '@delivery/core';
-import { cronUnauthorized } from '@/lib/cron/auth';
-import { serviceClient } from '@/lib/payments/direct';
-import { renderMessage, stepSchema } from '@/lib/email/studio';
-import { studioSmtp, sendStudioMail } from '@/lib/email/studio-transport';
+import { NextResponse } from "next/server";
+import { formatMT, type Cents } from "@delivery/core";
+import { cronUnauthorized } from "@/lib/cron/auth";
+import { serviceClient } from "@/lib/payments/direct";
+import { renderMessage, stepSchema } from "@/lib/email/studio";
+import { studioSmtp, sendStudioMail } from "@/lib/email/studio-transport";
 
-export const dynamic = 'force-dynamic';
+export const dynamic = "force-dynamic";
 export async function GET(request: Request) {
   const denied = cronUnauthorized(request);
   if (denied) return denied;
   const svc = serviceClient();
-  const { data: jobs, error } = await svc.rpc('email_claim');
+  const { data: jobs, error } = await svc.rpc("email_claim");
   if (error)
     return NextResponse.json(
-      { error: 'Não foi possível ler a fila.' },
+      { error: "Não foi possível ler a fila." },
       { status: 503 },
     );
   let sent = 0;
@@ -32,39 +32,39 @@ export async function GET(request: Request) {
         try {
           const [{ data: flow }, smtp, { data: contact }] = await Promise.all([
             svc
-              .from('email_flows')
-              .select('kind,status')
-              .eq('store_id', job.store_id)
-              .eq('id', job.flow_id)
+              .from("email_flows")
+              .select("kind,status")
+              .eq("store_id", job.store_id)
+              .eq("id", job.flow_id)
               .single(),
             studioSmtp(job.store_id),
             svc
-              .from('email_contacts')
-              .select('unsubscribe_token,unsubscribed_at')
-              .eq('store_id', job.store_id)
-              .eq('email', job.recipient)
+              .from("email_contacts")
+              .select("unsubscribe_token,unsubscribed_at")
+              .eq("store_id", job.store_id)
+              .eq("email", job.recipient)
               .maybeSingle(),
           ]);
           if (
             !flow ||
-            flow.status === 'archived' ||
-            (flow.kind === 'marketing' && (!contact || contact.unsubscribed_at))
+            flow.status === "archived" ||
+            (flow.kind === "marketing" && (!contact || contact.unsubscribed_at))
           ) {
             await svc
-              .from('email_jobs')
-              .update({ status: 'cancelled' })
-              .eq('store_id', job.store_id)
-              .eq('id', job.id)
-              .eq('status', 'sending');
+              .from("email_jobs")
+              .update({ status: "cancelled" })
+              .eq("store_id", job.store_id)
+              .eq("id", job.id)
+              .eq("status", "sending");
             return;
           }
-          if (flow.status !== 'active' || !smtp) {
+          if (flow.status !== "active" || !smtp) {
             await svc
-              .from('email_jobs')
-              .update({ status: 'queued', claimed_at: null })
-              .eq('store_id', job.store_id)
-              .eq('id', job.id)
-              .eq('status', 'sending');
+              .from("email_jobs")
+              .update({ status: "queued", claimed_at: null })
+              .eq("store_id", job.store_id)
+              .eq("id", job.id)
+              .eq("status", "sending");
             return;
           }
           const step = stepSchema.parse(job.message);
@@ -81,29 +81,36 @@ export async function GET(request: Request) {
           const base =
             process.env.APP_BASE_URL || process.env.NEXT_PUBLIC_APP_BASE_URL;
           if (
-            flow.kind === 'marketing' &&
-            (!base || !base.startsWith('https://'))
+            flow.kind === "marketing" &&
+            (!base || !base.startsWith("https://"))
           )
-            throw new Error('site_url');
+            throw new Error("site_url");
+          const { data: store } = await svc
+            .from("stores")
+            .select("slug")
+            .eq("id", job.store_id)
+            .single();
+          if (base && store)
+            variables.menu_url = `${base.replace(/\/$/, "")}/l/${encodeURIComponent(store.slug)}`;
           const unsubscribeUrl =
-            flow.kind === 'marketing'
-              ? `${base!.replace(/\/$/, '')}/email/subscricao?t=${contact!.unsubscribe_token}`
+            flow.kind === "marketing"
+              ? `${base!.replace(/\/$/, "")}/email/subscricao?t=${contact!.unsubscribe_token}`
               : undefined;
           const content = renderMessage(step, variables, unsubscribeUrl);
           const result = smtp
             ? await sendStudioMail(smtp, {
                 to: job.recipient,
                 ...content,
-                messageId: `<${job.id}@${smtp.from_email.split('@')[1]}>`,
+                messageId: `<${job.id}@${smtp.from_email.split("@")[1]}>`,
                 unsubscribeUrl,
               })
-            : { ok: false, error: 'SMTP desligado ou não configurado.' };
-          const finished = await svc.rpc('email_finish', {
+            : { ok: false, error: "SMTP desligado ou não configurado." };
+          const finished = await svc.rpc("email_finish", {
             p_id: job.id,
             p_ok: result.ok,
             p_error: result.ok ? null : result.error,
           });
-          if (finished.error) throw new Error('finish_failed');
+          if (finished.error) throw new Error("finish_failed");
           if (result.ok) sent++;
           else failed++;
         } catch {

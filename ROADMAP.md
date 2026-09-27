@@ -608,3 +608,15 @@ Pedido do dono: um botão "Reimprimir" nos fechos do dia, no Caixa do painel e n
   a minuto e execução natural `succeeded` observada. Rotas recusam chamadas sem sessão/segredo.
 - [~] B-114: inserir credenciais SMTP no painel e validar recepção real.
 - [~] B-022: promover apenas depois da preparação de LIVE; nenhum envio do 1.0 alterado.
+
+### Ligação dos emails existentes, biblioteca e IA — 2026-09-28
+
+- [x] Nove emissores existentes ligados ao admin, modelo actual/personalizado,
+  previews com os renderers reais, histórico por loja e protecção de OTP/relatórios.
+- [x] 12 modelos e quatro temas; escolha por etapa, mantendo intervalos.
+- [x] Gerador local WebLLM/Qwen, conhecimento de campanhas versionado e notas por
+  loja. JSON validado, 2–5 etapas, sempre rascunho manual sem inscrição automática.
+- [x] Migration 1105 aplicada em staging e ensaio SQL com rollback aprovado.
+  `app-alerts` instalado a cada cinco minutos; fila mantém execução por minuto.
+- [x] 1189 testes unitários, lint/typecheck e build local aprovados.
+- [ ] Validar a publicação e geração real com WebGPU no navegador.

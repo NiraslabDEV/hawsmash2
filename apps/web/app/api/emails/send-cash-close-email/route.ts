@@ -35,13 +35,14 @@ export async function POST(request: Request) {
   }
 
   const [{ data: store }, { data: closer }, { data: settings }] = await Promise.all([
-    supabase.from('stores').select('short_name').eq('id', session.store_id).single(),
+    supabase.from('stores').select('short_name,owner_email').eq('id', session.store_id).single(),
     session.closed_by
       ? supabase.from('staff_profiles').select('full_name').eq('user_id', session.closed_by).maybeSingle()
       : Promise.resolve({ data: null }),
     supabase.from('settings').select('owner_email').eq('id', 1).single(),
   ]);
-  if (!settings?.owner_email) {
+  const ownerEmail = store?.owner_email || process.env.OWNER_EMAIL || settings?.owner_email;
+  if (!ownerEmail) {
     return NextResponse.json({ error: 'Email do dono não configurado.' }, { status: 503 });
   }
 
@@ -51,8 +52,8 @@ export async function POST(request: Request) {
     closer?.full_name,
   );
   const brandName = (await getBrand()).name;
-  const result = await sendMail({
-    to: settings.owner_email,
+  const result = await sendMail({ event: 'cash_close', storeId: session.store_id,
+    to: ownerEmail,
     subject: `Fecho de Caixa — ${brandName} ${report.store_short_name}`,
     html: cashCloseEmailHtml(report, brandName),
   });

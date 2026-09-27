@@ -8,6 +8,12 @@ import {
   triggerLabels,
   type EmailFlow,
 } from '@/lib/email/studio';
+import { SystemPanel } from './system-panel';
+import { CampaignGenerator } from './campaign-generator';
+import type {
+  SystemTemplate,
+  SystemEmailKey,
+} from '@/lib/email/system-catalog';
 import { FlowEditor } from './flow-editor';
 import { SettingsPanel } from './settings-panel';
 import { ContactsPanel } from './contacts-panel';
@@ -29,6 +35,19 @@ type Job = {
   error: string | null;
 };
 type Data = {
+  systemTemplates: SystemTemplate[];
+  previews: Record<SystemEmailKey, { subject: string; html: string }>;
+  globalStoreName: string;
+  knowledge: string;
+  brandContext: { name: string; store: string; tagline?: string };
+  delivery: {
+    id: string;
+    event: string;
+    recipient: string;
+    status: string;
+    created_at: string;
+  }[];
+  deliveryCount: number;
   ownerEmail: string;
   centralOwnerEmail: string;
   settings: Settings | null;
@@ -55,6 +74,7 @@ const statuses: Record<string, string> = {
   failed: 'Falhou',
   cancelled: 'Cancelado',
   uncertain: 'Por confirmar',
+  disabled: 'Desligado',
 };
 const date = (s: string | null) =>
   s
@@ -278,10 +298,33 @@ export default function EmailsPage() {
         />
       ) : tab === 'transactional' || tab === 'marketing' ? (
         <>
+          {kind === 'transactional' ? (
+            <SystemPanel
+              key={store}
+              templates={data.systemTemplates}
+              previews={data.previews}
+              storeName={stores.find((s) => s.id === store)?.name ?? ''}
+              globalStoreName={data.globalStoreName}
+              flows={data.flows}
+              busy={busy}
+              onSave={(v) => action('system', v)}
+              onOpenFlow={setEditor}
+            />
+          ) : (
+            <CampaignGenerator
+              key={store}
+              brand={data.brandContext}
+              knowledge={data.knowledge}
+              onKnowledgeSave={(notes) => action('knowledge', { notes })}
+              onGenerated={setEditor}
+            />
+          )}
           <div className="flex flex-wrap justify-between items-center gap-4">
             <div>
               <h2 className="text-xl font-bold">
-                {kind === 'marketing' ? 'Os teus funis' : 'Mensagens do pedido'}
+                {kind === 'marketing'
+                  ? 'Os teus funis'
+                  : 'Sequ?ncias de acompanhamento'}
               </h2>
               <p className="mt-1 max-w-2xl text-sm text-[#b4aa9c]">
                 {kind === 'marketing'
@@ -307,7 +350,8 @@ export default function EmailsPage() {
               </button>
             </div>
           )}
-          {flows.length === 0 ? (
+          {flows.length === 0 &&
+          kind === 'transactional' ? null : flows.length === 0 ? (
             <div className="rounded-2xl border border-dashed border-white/20 py-16 px-6 text-center">
               <div className="mx-auto mb-5 grid h-14 w-14 place-items-center rounded-2xl bg-[#e5a93c]/10 text-[#e5a93c]">
                 <svg
@@ -435,13 +479,6 @@ export default function EmailsPage() {
               ))}
             </div>
           )}
-          {kind === 'transactional' && (
-            <p className="text-xs text-[#b4aa9c]">
-              Códigos de acesso, comprovativos ao dono e relatórios de caixa
-              mantêm o conteúdo operacional do sistema. Estas sequências
-              personalizam os eventos dos pedidos.
-            </p>
-          )}
         </>
       ) : tab === 'settings' ? (
         <SettingsPanel
@@ -476,6 +513,44 @@ export default function EmailsPage() {
               Actualizar
             </button>
           </div>
+          <h3 className="font-bold">
+            Emails do sistema ? {data.deliveryCount}
+          </h3>
+          <p className="text-xs text-[#b4aa9c]">
+            Registo a partir da liga??o ao m?dulo. Emails globais aparecem na
+            loja {data.globalStoreName}.
+          </p>
+          <div className="overflow-x-auto rounded-2xl border border-white/10">
+            <table className="w-full text-sm text-left">
+              <thead className="bg-white/5">
+                <tr>
+                  {['Email', 'Destinat?rio', 'Estado', 'Data'].map((h) => (
+                    <th key={h} className="p-3">
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {data.delivery.map((d) => (
+                  <tr key={d.id} className="border-t border-white/10">
+                    <td className="p-3">{d.event}</td>
+                    <td className="p-3">{d.recipient}</td>
+                    <td className="p-3">{statuses[d.status]}</td>
+                    <td className="p-3">{date(d.created_at)}</td>
+                  </tr>
+                ))}
+                {!data.delivery.length && (
+                  <tr>
+                    <td className="p-5 text-[#b4aa9c]" colSpan={4}>
+                      Ainda sem novos envios operacionais.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+          <h3 className="font-bold">Sequ?ncias e campanhas</h3>
           <div className="overflow-x-auto rounded-2xl border border-white/10">
             <table className="w-full text-left text-sm">
               <thead className="bg-white/5 text-[#b4aa9c]">
@@ -530,7 +605,9 @@ export default function EmailsPage() {
           <button
             disabled={
               offset + 50 >=
-              (tab === 'contacts' ? data.contactCount : data.jobCount)
+              (tab === 'contacts'
+                ? data.contactCount
+                : Math.max(data.jobCount, data.deliveryCount))
             }
             className={buttonClass}
             onClick={() => setOffset((x) => x + 50)}

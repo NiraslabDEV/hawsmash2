@@ -19,5 +19,16 @@ begin
       if response.status<>200 then raise exception 'Fila de emails: HTTP %',response.status; end if;
     end $run$;
   $job$);
+  perform cron.schedule('app-alerts','*/5 * * * *',$job$
+    do $run$
+    declare base text; secret text; response extensions.http_response;
+    begin
+      select decrypted_secret into strict base from vault.decrypted_secrets where name='app_cron_base_url';
+      select decrypted_secret into strict secret from vault.decrypted_secrets where name='app_cron_secret';
+      perform extensions.http_set_curlopt('CURLOPT_TIMEOUT_MS','55000');
+      select * into response from extensions.http(('GET',base||'/api/cron/alerts',array[extensions.http_header('Authorization','Bearer '||secret)],null,null)::extensions.http_request);
+      if response.status<>200 then raise exception 'Alertas: HTTP %',response.status; end if;
+    end $run$;
+  $job$);
 end $install$;
 commit;

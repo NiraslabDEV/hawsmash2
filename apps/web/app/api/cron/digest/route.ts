@@ -1,71 +1,12 @@
-import { createClient } from '@supabase/supabase-js';
-import { NextResponse } from 'next/server';
-import { isEmailConfigured, sendMail } from '@/lib/email/transport';
-import { formatMT, type Cents } from '@delivery/core';
-import { getBrand } from '@/lib/brand/server';
-import { cronUnauthorized } from '@/lib/cron/auth';
+import { createClient } from "@supabase/supabase-js";
+import { NextResponse } from "next/server";
+import { isEmailConfigured, sendMail } from "@/lib/email/transport";
+import { digestHtml, type DigestStore } from "@/lib/email/daily-template";
+import { getBrand } from "@/lib/brand/server";
+import { cronUnauthorized } from "@/lib/cron/auth";
 
-export const dynamic = 'force-dynamic';
+export const dynamic = "force-dynamic";
 
-type DigestStore = {
-  store_id: string;
-  store_name: string;
-  owner_email: string | null;
-  orders_count: number;
-  revenue_cents: number;
-  payments: Record<string, number>;
-  cancelled_count: number;
-  cash_closes: Array<{
-    closed_at: string;
-    expected_cash_cents: number;
-    counted_cash_cents: number;
-    difference_cents: number;
-    difference_reason: string | null;
-  }>;
-  incidents: number;
-};
-
-const mt = (value: number) => formatMT(value as Cents);
-
-const METHOD_LABELS: Record<string, string> = {
-  cash: 'Dinheiro',
-  mpesa: 'M-Pesa',
-  emola: 'e-Mola',
-  credit_card: 'Cartão',
-};
-
-function digestHtml(day: string, stores: DigestStore[], brandName: string): string {
-  const blocks = stores.map((store) => {
-    const payments = Object.entries(store.payments)
-      .map(([method, total]) => `<li>${METHOD_LABELS[method] ?? method}: ${mt(total)}</li>`)
-      .join('');
-    const closes = store.cash_closes
-      .map(
-        (close) =>
-          `<li>Fecho: esperado ${mt(close.expected_cash_cents)} · contado ${mt(
-            close.counted_cash_cents,
-          )} · diferença ${mt(close.difference_cents)}${
-            close.difference_reason ? ` (${close.difference_reason})` : ''
-          }</li>`,
-      )
-      .join('');
-
-    return `<h2 style="color:#e5a93c;font-size:16px;margin:24px 0 8px">${store.store_name}</h2>
-      <p><strong>${store.orders_count}</strong> pedidos · <strong>${mt(store.revenue_cents)}</strong> facturado
-      ${store.cancelled_count > 0 ? ` · ${store.cancelled_count} anulado(s)` : ''}</p>
-      <ul>${payments || '<li>Sem pagamentos registados</li>'}</ul>
-      <ul>${closes || '<li>Sem fecho de caixa neste dia</li>'}</ul>
-      <p style="color:#847e72;font-size:12px">Incidentes registados: ${store.incidents}</p>`;
-  });
-
-  return `<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto">
-      <h1 style="color:#e5a93c;font-size:20px">${brandName} · resumo de ${day}</h1>
-      ${blocks.join('')}
-      <p style="color:#847e72;font-size:12px">Email automático do sistema.</p>
-    </div>`;
-}
-
-/** Digest diário ao dono: vendas por loja, fecho de caixa e incidentes. */
 export async function GET(request: Request) {
   const denied = cronUnauthorized(request);
   if (denied) return denied;
@@ -73,7 +14,10 @@ export async function GET(request: Request) {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!url || !serviceKey) {
-    return NextResponse.json({ ok: false, error: 'supabase_not_configured' }, { status: 503 });
+    return NextResponse.json(
+      { ok: false, error: "supabase_not_configured" },
+      { status: 503 },
+    );
   }
 
   const supabase = createClient(url, serviceKey, {
@@ -81,44 +25,54 @@ export async function GET(request: Request) {
   });
 
   const { searchParams } = new URL(request.url);
-  const day = searchParams.get('day');
+  const day = searchParams.get("day");
 
-  const { data, error } = await supabase.rpc('get_daily_digest', { p_day: day });
+  const { data, error } = await supabase.rpc("get_daily_digest", {
+    p_day: day,
+  });
   if (error) {
-    console.error('[cron/digest]', error.message);
-    return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
+    console.error("[cron/digest]", error.message);
+    return NextResponse.json(
+      { ok: false, error: error.message },
+      { status: 500 },
+    );
   }
 
   const payload = data as { day: string; stores: DigestStore[] };
   const recipients = Array.from(
     new Set(
-      [process.env.OWNER_EMAIL, ...payload.stores.map((store) => store.owner_email)].filter(
-        (value): value is string => Boolean(value && value.includes('@')),
+      [
+        process.env.OWNER_EMAIL,
+        ...payload.stores.map((store) => store.owner_email),
+      ].filter((value): value is string =>
+        Boolean(value && value.includes("@")),
       ),
     ),
   );
 
-  let delivery: 'sent' | 'skipped_no_key' | 'skipped_no_recipient' | 'failed' = 'sent';
+  let delivery: "sent" | "skipped_no_key" | "skipped_no_recipient" | "failed" =
+    "sent";
 
   const brandName = (await getBrand()).name;
-  if (!(await isEmailConfigured())) delivery = 'skipped_no_key';
-  else if (recipients.length === 0) delivery = 'skipped_no_recipient';
+  if (!(await isEmailConfigured())) delivery = "skipped_no_key";
+  else if (recipients.length === 0) delivery = "skipped_no_recipient";
   else {
     const result = await sendMail({
+      event: "digest",
       to: recipients,
       subject: `${brandName} · resumo de ${payload.day}`,
       html: digestHtml(payload.day, payload.stores, brandName),
     });
     if (!result.ok) {
-      console.error('[cron/digest] envio falhou:', result.error);
-      delivery = 'failed';
+      console.error("[cron/digest] envio falhou:", result.error);
+      delivery = "failed";
     }
   }
 
-  await supabase.from('event_log').insert(
+  await supabase.from("event_log").insert(
     payload.stores.map((store) => ({
       store_id: store.store_id,
-      type: 'digest.sent',
+      type: "digest.sent",
       payload: {
         day: payload.day,
         orders_count: store.orders_count,
@@ -128,5 +82,10 @@ export async function GET(request: Request) {
     })),
   );
 
-  return NextResponse.json({ ok: true, day: payload.day, stores: payload.stores.length, delivery });
+  return NextResponse.json({
+    ok: true,
+    day: payload.day,
+    stores: payload.stores.length,
+    delivery,
+  });
 }
