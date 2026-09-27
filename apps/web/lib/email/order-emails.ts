@@ -142,7 +142,11 @@ async function hasSequence(svc: SupabaseClient, order: OrderRow, orderId: string
   if (!order.store_id) return false;
   const { data } = await svc.from('email_jobs').select('id').eq('store_id', order.store_id)
     .eq('event_key', `${orderId}:${event}`).limit(1).maybeSingle();
-  return Boolean(data);
+  if (data) return true;
+  // Pausar não pode fazer o transporte antigo contornar a decisão do dono.
+  const { data: paused } = await svc.from('email_flows').select('id').eq('store_id', order.store_id)
+    .eq('kind', 'transactional').eq('trigger', event).eq('status', 'paused').limit(1).maybeSingle();
+  return Boolean(paused);
 }
 
 /** Email "pagamento confirmado" ao cliente do pedido — só se o pedido estiver aprovado/pago. */

@@ -601,6 +601,8 @@ Pedido do dono: um botão "Reimprimir" nos fechos do dia, no Caixa do painel e n
 - [x] Migration 1104 aplicada em staging: outbox por evento, snapshots, consentimento,
   idempotência, claim atómico, cancelamento de subscrição, auditoria e RLS.
 - [x] 1175 testes unitários, lint/typecheck, build local e ensaio SQL em rollback.
+- [x] Pausa transaccional também suspende o envio antigo; regressão reproduzida
+  em teste antes da correcção. Total final: 1176 testes unitários.
 - [x] Publicado em staging: cinco abas verificadas, rascunho de boas-vindas gravado
   e reaberto (5 minutos + 1 dia), preview móvel. `app-emails` instalado de minuto
   a minuto e execução natural `succeeded` observada. Rotas recusam chamadas sem sessão/segredo.

@@ -1212,6 +1212,8 @@ Verificação adicional desta entrega: 973 testes unitários, 60 testes de base 
   HTTP 401 sem sessão/segredo. Nenhum email enviado; funil de boas-vindas em rascunho.
 - Corrigidos `APP_BASE_URL` e `NEXT_PUBLIC_APP_BASE_URL` do Railway para o domínio
   real `https://hawsmash2-staging.up.railway.app`; antes apontavam para domínio retirado.
+- Revisão final: pausa das sequências também impede o transporte antigo de enviar;
+  regressão reproduzida antes da correcção, total final de 1176 testes unitários.
 - Para o cliente: nenhuma decisão pendente para usar o editor. Registar a origem do
   consentimento dos contactos que vão receber promoções.
 - Para Gabriel: B-114 — inserir a credencial da caixa SMTP autorizada no painel,

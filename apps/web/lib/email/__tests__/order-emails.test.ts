@@ -60,6 +60,17 @@ describe('conteúdo dos emails de pedido', () => {
 });
 
 describe('envio: destinatário sai do pedido gravado', () => {
+  it('pausar uma sequência também suspende a confirmação antiga', async () => {
+    const svc = { from: vi.fn((table: string) => {
+      const chain = {
+        select: vi.fn(() => chain), eq: vi.fn(() => chain), limit: vi.fn(() => chain),
+        maybeSingle: vi.fn(async () => ({ data: table === 'orders' ? { ...base, store_id: 'store' } : table === 'email_flows' ? { id: 'paused-flow' } : null, error: null })),
+      };
+      return chain;
+    }) } as unknown as SupabaseClient;
+    expect(await sendApprovalEmailForOrder(svc, orderId)).toEqual({ ok: true });
+    expect(state.sendMail).not.toHaveBeenCalled();
+  });
   it('não duplica um email já entregue à sequência configurada', async () => {
     const chain = { select: vi.fn(), eq: vi.fn(), limit: vi.fn(), maybeSingle: vi.fn() };
     chain.select.mockReturnValue(chain); chain.eq.mockReturnValue(chain); chain.limit.mockReturnValue(chain);

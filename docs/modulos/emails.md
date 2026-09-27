@@ -31,7 +31,9 @@ mensagens ainda na fila. Um envio SMTP já iniciado pode terminar.
 
 O trigger dos pedidos só escreve na fila e é best-effort: nunca chama SMTP nem
 reverte uma venda por falha de email. Aprovações/recusas antigas não enviam uma
-segunda mensagem quando o evento já foi entregue à fila. Códigos de acesso,
+segunda mensagem quando o evento já foi entregue à fila ou a sequência está
+pausada. Eventos ocorridos durante a pausa não inscrevem novos destinatários.
+Códigos de acesso,
 comprovativos ao dono e relatórios conservam o conteúdo operacional do sistema.
 
 Chave única `(flow_id,event_key,recipient,step_index)` impede inscrições duplicadas.
