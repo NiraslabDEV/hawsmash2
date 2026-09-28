@@ -432,6 +432,16 @@ As 16 violações da spec permanecem no relatório, separadas dos IDs histórico
 
 ### B-022 · [F0] O ambiente `production` do Railway está vazio e segue o ramo `dev`
 
+**Promoção em 28/09/2026 (~17:30):** a 1100 foi aplicada primeiro no staging
+(estava em `dev` sem estar lá). Depois, as 34 migrations `1062`…`1105` de `dev`
+foram aplicadas no LIVE `hmutptcbusxncnofinrw` com `supabase db push`, sem erros
+(referência PITR: `2026-09-28T15:29:32Z`). Ficaram de fora a `1077`, a `1078` e a
+`1102`, que não estão commitadas, e as quatro do `codex/vendedora-virtual` já
+aplicadas no staging. `main` avançou para `dev` (`ee4b967`). O primeiro build foi
+travado pela guarda por causa da zona da Matola, `PLACEHOLDER_ZONA`, que foi
+renomeada para `Matola` (150 MT) por decisão do Gabriel. O LIVE continua sem
+equipa, e o domínio continua no 1.0.
+
 **Actualização verificada em 28/09/2026 (preparação LIVE):** as cinco variáveis
 Supabase de `production` apontam agora apenas para `hawsmash2`
 (`hmutptcbusxncnofinrw`), nunca para staging. Foram também preparados
