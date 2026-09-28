@@ -707,6 +707,15 @@ As 16 violações da spec permanecem no relatório, separadas dos IDs histórico
 
 ### B-114 · [Resumo mensal] Google e agendador para o email do dia 1
 
+**Actualização verificada em 28/09/2026:** a caixa `haw@hawsmash.com` está activa
+na Hostinger. Uma palavra-passe de aplicação foi configurada como `SMTP_PASS` no
+serviço `web` do Railway **staging**, com `SMTP_USER=haw@hawsmash.com`. O deploy
+das duas variáveis terminou, `/api/health` respondeu 200 e a autenticação SMTP
+em `smtp.hostinger.com:465` passou (`SMTP_OK`). Ainda **não foi enviado nem
+recebido um email de teste**; os envios dos relatórios e o disparo natural do cron
+continuam por validar. Produção, Places API e perfil da Matola continuam pendentes.
+As notas de 27/09 abaixo descrevem o estado anterior à configuração SMTP.
+
 **Actualização verificada em 27/09/2026:** 1096 aplicada em staging; 1101 corrige
 o regex `{10,512}` que o PostgreSQL rejeitava. Teste SQL reproduziu a falha e passou
 após a correcção. Railway staging publicou o resumo e a secção Google (deploy
