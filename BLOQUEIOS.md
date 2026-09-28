@@ -104,6 +104,9 @@ As 16 violações da spec permanecem no relatório, separadas dos IDs histórico
 ---
 
 ### B-002 · [F7] Zonas e taxas de entrega da Matola
+- Verificação LIVE (28/09/2026): `scripts/check-placeholders.mjs` encontrou
+  `PLACEHOLDER_ZONA` na base `hawsmash2`; `RELEASE_GUARD=1` impede o próximo build
+  de produção enquanto a zona não for substituída por dados aprovados.
 - Estado: aberto
 - Desbloqueia: cliente
 - Pergunta exacta: que zonas entrega a Matola e a que preço cada uma?
@@ -429,6 +432,19 @@ As 16 violações da spec permanecem no relatório, separadas dos IDs histórico
 
 ### B-022 · [F0] O ambiente `production` do Railway está vazio e segue o ramo `dev`
 
+**Actualização verificada em 28/09/2026 (preparação LIVE):** as cinco variáveis
+Supabase de `production` apontam agora apenas para `hawsmash2`
+(`hmutptcbusxncnofinrw`), nunca para staging. Foram também preparados
+`APP_BASE_URL`, `NEXT_PUBLIC_APP_BASE_URL`, `BRAND_NAME`, `PAYMENT_PROVIDER=manual`,
+`EMAIL_FROM`, `RELEASE_GUARD=1` e um `CRON_SECRET` próprio. Estas alterações foram
+feitas com `--skip-deploys`: **a versão publicada ainda não as usa**. As chaves
+permitiram uma leitura autenticada da base LIVE; a migration 1096 não está lá
+(`google_profile_snapshots` e `get_monthly_digest` ausentes). Última migration
+LIVE `1061`, enquanto staging já avançou além da 1105. O commit LIVE `07fec24`
+responde 404 em `/api/cron/monthly`. Não promover antes de reconciliar a cadeia
+de migrations, validar staging e resolver B-002; o domínio `hawsmash.com` continua
+no 1.0.
+
 **Actualização verificada em 28/09/2026:** o serviço `hawsmash2` no ambiente
 Railway `production` segue agora `main`. Foram configurados `SMTP_USER`,
 `SMTP_PASS` e `OWNER_EMAIL=haw@hawsmash.com`; a autenticação SMTP com a Hostinger
@@ -715,6 +731,14 @@ documentam a evolução do bloqueio.
 ---
 
 ### B-114 · [Resumo mensal] Google e agendador para o email do dia 1
+
+**Actualização 28/09/2026 (separação dos ambientes):** os jobs `app-digest` e
+`app-monthly` foram removidos do Supabase staging e a ausência foi confirmada,
+para não enviar dados de teste ao dono após activar o SMTP. O LIVE ainda não tem
+`pg_cron` instalado, a migration 1096 nem a rota publicada. O `CRON_SECRET` LIVE
+já foi preparado no Railway, sem deploy; o Vault e os jobs LIVE serão configurados
+depois da promoção segura. O SMTP está autenticado nos dois ambientes, mas a
+entrega de um email real ainda não foi confirmada.
 
 **Actualização verificada em 28/09/2026:** a caixa `haw@hawsmash.com` está activa
 na Hostinger. Uma palavra-passe de aplicação foi configurada como `SMTP_PASS` no

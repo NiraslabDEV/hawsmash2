@@ -12,7 +12,13 @@
 
 ## Instalação verificada em staging — 27/09/2026
 
-O Supabase de staging tem dois jobs activos, instalados por
+**Estado em 28/09/2026:** os dois jobs foram removidos de staging, e a consulta a
+`cron.job` devolveu zero linhas para ambos. O SMTP foi autenticado nos dois
+ambientes. O LIVE ainda não tem a rota mensal publicada, a migration 1096 ou
+`pg_cron`; as variáveis Railway LIVE estão preparadas sem deploy. A instalação
+descrita abaixo é o ensaio histórico de 27/09, não o agendamento actual.
+
+O Supabase de staging tinha dois jobs activos, instalados por
 [`install-report-crons.sql`](../../scripts/sql/install-report-crons.sql):
 
 | Job | UTC | Maputo | Período |
