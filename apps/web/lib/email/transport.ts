@@ -31,6 +31,11 @@ function getTransporter(): Transporter {
         user: process.env.SMTP_USER,
         pass: process.env.SMTP_PASS,
       },
+      // Sem isto o nodemailer espera 2 min pela ligação — e quem chama fica
+      // preso (checkout do comprovativo encravado a 28/09 com SMTP bloqueado).
+      connectionTimeout: 10000,
+      greetingTimeout: 10000,
+      socketTimeout: 20000,
     });
   }
   return transporter;

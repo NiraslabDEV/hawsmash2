@@ -31,8 +31,9 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: error.message }, { status: 400 });
     }
 
-    // Email ao dono — best-effort, não bloqueia a resposta ao cliente. A RPC só
-    // aceita o primeiro comprovativo de cada pedido: sai no máximo um email.
+    // Email ao dono — best-effort, não bloqueia a resposta ao cliente: não se
+    // espera por ele (servidor Node, a promessa corre depois da resposta). A RPC
+    // só aceita o primeiro comprovativo de cada pedido: sai no máximo um email.
     const ownerEmail = data?.owner_email || process.env.OWNER_EMAIL;
     if (ownerEmail) {
       const { subject, html } = ownerProofEmail({
@@ -42,7 +43,7 @@ export async function POST(request: Request) {
         paymentMethod: data?.payment_method ?? null,
         fulfillmentType: data?.fulfillment_type ?? null,
       });
-      await (async () => {
+      void (async () => {
         const svc = createServiceClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, { auth: { persistSession: false } });
         const { data: order } = await svc.from('orders').select('store_id').eq('id', orderId).single();
         if (!order) return { ok: false, error: 'store_not_found' };
