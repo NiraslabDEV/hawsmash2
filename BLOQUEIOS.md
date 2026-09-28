@@ -429,6 +429,15 @@ As 16 violações da spec permanecem no relatório, separadas dos IDs histórico
 
 ### B-022 · [F0] O ambiente `production` do Railway está vazio e segue o ramo `dev`
 
+**Actualização verificada em 28/09/2026:** o serviço `hawsmash2` no ambiente
+Railway `production` segue agora `main`. Foram configurados `SMTP_USER`,
+`SMTP_PASS` e `OWNER_EMAIL=haw@hawsmash.com`; a autenticação SMTP com a Hostinger
+passou e `/api/health` respondeu 200. Continuam ausentes as variáveis Supabase e
+`CRON_SECRET`. O commit publicado (`07fec24`) não contém `/api/cron/monthly`.
+Logo, o email mensal LIVE ainda não funciona; a configuração SMTP não significa
+que o ambiente esteja pronto para vendas ou relatórios. As notas antigas abaixo
+documentam a evolução do bloqueio.
+
 **Revisão documental (26/09):** o registo de 24/09 em `docs/modulos/relatorios.md`/ROADMAP informa que o trigger Railway passou para main. Essa parcela deixou de estar pendente; credenciais, equipa, DNS e validação de produção não foram reconsultados nesta auditoria. As notas de Agosto abaixo são história, não retrato actual.
 
 
@@ -713,7 +722,9 @@ serviço `web` do Railway **staging**, com `SMTP_USER=haw@hawsmash.com`. O deplo
 das duas variáveis terminou, `/api/health` respondeu 200 e a autenticação SMTP
 em `smtp.hostinger.com:465` passou (`SMTP_OK`). Ainda **não foi enviado nem
 recebido um email de teste**; os envios dos relatórios e o disparo natural do cron
-continuam por validar. Produção, Places API e perfil da Matola continuam pendentes.
+continuam por validar. O SMTP foi também configurado e autenticado no Railway
+`production`, mas o resumo mensal LIVE depende ainda do B-022. Places API e o
+perfil da Matola continuam pendentes.
 As notas de 27/09 abaixo descrevem o estado anterior à configuração SMTP.
 
 **Actualização verificada em 27/09/2026:** 1096 aplicada em staging; 1101 corrige
