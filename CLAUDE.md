@@ -50,11 +50,14 @@ Cada decisão neste ficheiro que parecer "trabalho a mais" existe para não gera
 
 | Ambiente | Onde | Branch | Supabase |
 |---|---|---|---|
-| **LIVE** | `hawsmash.com` | `main` | projecto `hawsmash2` (**Pro** — PITR + backups) |
-| **STAGING** | `*-staging.up.railway.app` | `dev` | projecto `hawsmash2-staging` (Free) |
+| **LIVE** | `hawsmash.com` | `main` | projecto `hawsmash2-staging` (`pqjoan…`) — a base onde a loja vende desde 22/09 ([ADR 0008](docs/decisions/0008-staging-passa-a-live.md)); **a passar para a org Pro** (PITR + backups) |
+| **STAGING** | `*-staging.up.railway.app` | `dev` | **por recriar** — até os terminais passarem para `hawsmash.com/pos`, este endereço serve a base do LIVE |
 | **POS / bridge** | mini-PC em cada loja | — | fala com o LIVE + LAN local |
 
-Esta é a topologia exigida. A revisão documental não inspeccionou os ambientes remotos; o estado de configuração e as evidências anteriores estão em [BLOQUEIOS](BLOQUEIOS.md), B-022, e no [plano LIVE](docs/planos/live.md).
+> ⚠️ **Desde 29/09 o `supabase` CLI deste repositório está ligado ao LIVE.** `supabase db push` aplica na
+> loja. Até haver staging novo, migration nova passa por revisão e dry-run, fora do horário de loja.
+
+Topologia decidida na [ADR 0008](docs/decisions/0008-staging-passa-a-live.md), que substitui o plano original (LIVE no `hawsmash2`, hoje sem uso). Evidências anteriores em [BLOQUEIOS](BLOQUEIOS.md), B-010 e B-022, e no [plano LIVE](docs/planos/live.md), agora histórico.
 
 ### Regra de ouro
 ```
@@ -64,7 +67,8 @@ NUNCA editar main directamente. NUNCA correr SQL à mão em produção — só m
 
 > **Diferença deliberada face ao HAWSMASH 1.0:** o 1.0 partilhava um único projecto Supabase entre staging e
 > live — qualquer migration ia a produção no instante. **No 2.0 isso acaba.** Staging tem BD própria; migrations
-> correm primeiro lá. É a condição para poder mexer no sistema com duas lojas a vender.
+> correm primeiro lá. É a condição para poder mexer no sistema com duas lojas a vender. *(Temporariamente
+> suspenso desde 29/09 — ADR 0008: recriar o staging é o próximo passo.)*
 
 ---
 

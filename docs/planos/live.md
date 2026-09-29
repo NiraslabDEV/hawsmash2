@@ -1,5 +1,9 @@
 # Plano LIVE — pôr o LIVE do HAWSMASH 2.0 redondo
 
+> **Superado a 29/09/2026 pela [ADR 0008](../decisions/0008-staging-passa-a-live.md):** a loja já vendia no
+> `hawsmash2-staging`, e foi esse projecto que passou a LIVE. O `hawsmash2` (`hmutpt…`) descrito abaixo
+> ficou sem uso. Este plano fica como registo histórico.
+
 > **O que é:** o plano de infraestrutura que leva o `hawsmash2` (LIVE) de "base de dados com cardápio"
 > a "sistema que a equipa consegue usar". Termina onde o [runbook §6](../operacao/runbook.md) começa — o ensaio
 > geral e a checklist de abertura não se repetem aqui.

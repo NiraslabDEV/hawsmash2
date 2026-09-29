@@ -243,7 +243,16 @@ As 16 violações da spec permanecem no relatório, separadas dos IDs histórico
 ---
 
 ### B-010 · [F9] Data do cutover e DNS
-- Estado: aberto
+
+**Cutover em 29/09/2026 (~23:10, loja fechada), por decisão do Gabriel ([ADR 0008](docs/decisions/0008-staging-passa-a-live.md)):**
+`hawsmash.com` e `www` saíram do projecto Railway do 1.0 e foram para o `hawsmash2 / production`,
+que já serve a base da loja (`pqjoan…`). Alvos novos: `@` → `lhe2xb8u.up.railway.app`,
+`www` → `nf5vpac8.up.railway.app`, mais os TXT `_railway-verify` e `_railway-verify.www` com os
+valores novos. **Falta mudar o DNS na Hostinger** (MX e SPF não se tocam): até lá o domínio responde
+sem certificado. O 1.0 continua no endereço Railway dele. Importação de pedidos e clientes do 1.0
+preparada (`--sem-cardapio`, pendentes como cancelados, trava de emails) e por correr.
+
+- Estado: aberto — domínio movido, DNS pendente
 - Desbloqueia: cliente + Gabriel
 - Pergunta exacta: em que dia exacto o `hawsmash.com` passa a apontar para o 2.0?
 - Como avancei: o 1.0 continua intocado; o 2.0 vive em staging até haver data.
@@ -431,6 +440,16 @@ As 16 violações da spec permanecem no relatório, separadas dos IDs histórico
 ---
 
 ### B-022 · [F0] O ambiente `production` do Railway está vazio e segue o ramo `dev`
+
+**Troca em 29/09/2026:** a loja de Maputo já vendia no staging (`pqjoan…`) desde 22/09 — 340 pedidos,
+POS e bridge ligados. Em vez de copiar tudo para o `hawsmash2`, esse projecto passou a ser o LIVE
+([ADR 0008](docs/decisions/0008-staging-passa-a-live.md)). As cinco variáveis Supabase e o
+`CRON_SECRET` de `production` são agora as do staging; `APP_BASE_URL` e `NEXT_PUBLIC_APP_BASE_URL`
+passaram a `https://hawsmash.com`. `main` avançou para `dfd79e4` e o deploy saiu verde: o bundle
+contém `pqjoan…` e nenhuma referência ao `hmutpt…`, o cardápio é igual ao do staging (5 categorias,
+26 itens) e a guarda de placeholders passou. Antes disso, a 1077/1078/1106 foram aplicadas nesta base
+(a 1106 repõe a variante no nome do talão — sem ela a bridge da loja imprimia um WAGYU como o HAW).
+Pendentes: transferir o projecto da org "QR Mesas" (gratuita) para a org Pro e recriar o staging.
 
 **Promoção em 28/09/2026 (~17:30):** a 1100 foi aplicada primeiro no staging
 (estava em `dev` sem estar lá). Depois, as 34 migrations `1062`…`1105` de `dev`
