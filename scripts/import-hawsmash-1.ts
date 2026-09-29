@@ -13,7 +13,11 @@
  * Uso:
  *   LEGACY_SUPABASE_URL=… LEGACY_SERVICE_KEY=… \
  *   NEXT_PUBLIC_SUPABASE_URL=… SUPABASE_SERVICE_ROLE_KEY=… \
- *   pnpm tsx scripts/import-hawsmash-1.ts [--apply [--i-know-this-is-live]] [--store maputo]
+ *   pnpm tsx scripts/import-hawsmash-1.ts [--apply [--i-know-this-is-live]] [--store maputo] [--sem-cardapio]
+ *
+ * `--sem-cardapio`: só pedidos e clientes. Depois de o cardápio viver no 2.0,
+ * reimportar o do 1.0 repunha preços antigos e os caminhos de foto relativos
+ * que a 1052 corrigiu.
  */
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
@@ -35,6 +39,7 @@ const args = process.argv.slice(2);
 const apply = args.includes('--apply');
 const storeIndex = args.indexOf('--store');
 const storeSlug = storeIndex >= 0 ? args[storeIndex + 1] : 'maputo';
+const skipMenu = args.includes('--sem-cardapio');
 
 const PAGE_SIZE = 1000;
 
@@ -124,10 +129,12 @@ async function main(): Promise<void> {
     .single();
   if (storeError || !store) throw new Error(`Loja de destino ${storeSlug} não encontrada.`);
 
+  if (skipMenu) log('--sem-cardapio: categorias e produtos ficam como estão no 2.0');
+
   // Nem menu_categories nem menu_items têm unique constraint em `name` — não há
   // onConflict possível. Faz-se select-then-insert-or-update à mão.
   const categoryIdByLegacy = new Map<string, string>();
-  for (const category of categories) {
+  for (const category of skipMenu ? [] : categories) {
     const mapped = mapCategory(category);
     const { data: existing, error: findError } = await target
       .from('menu_categories')
@@ -157,7 +164,7 @@ async function main(): Promise<void> {
   log(`categorias importadas: ${categoryIdByLegacy.size}`);
 
   let importedProducts = 0;
-  for (const product of products) {
+  for (const product of skipMenu ? [] : products) {
     const mapped = mapProduct(product, categoryIdByLegacy);
     const { data: existingItem, error: findItemError } = await target
       .from('menu_items')
