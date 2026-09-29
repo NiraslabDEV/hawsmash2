@@ -120,16 +120,20 @@ export function mapProduct(product: LegacyProduct, categoryIdByLegacy: Map<strin
  * `paid` e `delivered` históricos entram ambos como `delivered`: o pedido já foi
  * entregue, e deixá-lo em `paid`/`awaiting_approval` punha pedidos antigos a
  * aparecer como activos no painel no dia 1.
+ *
+ * `pending` entra como `cancelled`: à data da troca não é venda, e em
+ * `awaiting_approval` caía na fila de aprovação do POS como um pedido novo. Se
+ * o 1.0 ainda o confirmar, repetir a importação actualiza o estado — o pedido é
+ * encontrado pelo número.
  */
-export function mapOrderStatus(status: string | null): 'awaiting_approval' | 'delivered' | 'cancelled' {
+export function mapOrderStatus(status: string | null): 'delivered' | 'cancelled' {
   switch ((status ?? '').toLowerCase()) {
     case 'paid':
     case 'delivered':
       return 'delivered';
     case 'cancelled':
-      return 'cancelled';
     case 'pending':
-      return 'awaiting_approval';
+      return 'cancelled';
     default:
       throw new ImportDataError(`Estado desconhecido no 1.0: ${status}`);
   }
@@ -202,7 +206,17 @@ export type CustomerAggregate = {
   last_order_at: string;
 };
 
-/** Clientes do 2.0 são agregados por telefone a partir do histórico do 1.0. */
+/** Pedido do 1.0 que conta como venda: pago ou já entregue. */
+function isSale(order: LegacyOrder): boolean {
+  const status = (order.status ?? '').toLowerCase();
+  return status === 'paid' || status === 'delivered';
+}
+
+/**
+ * Clientes do 2.0 são agregados por telefone a partir do histórico do 1.0.
+ * Um pendente faz do telefone um contacto, mas não é compra: não conta nem
+ * soma, e só dá a data a quem ainda não comprou.
+ */
 export function aggregateCustomers(orders: LegacyOrder[]): CustomerAggregate[] {
   const byPhone = new Map<string, CustomerAggregate>();
 
@@ -211,22 +225,26 @@ export function aggregateCustomers(orders: LegacyOrder[]): CustomerAggregate[] {
     if (!phone) continue;
     if ((order.status ?? '').toLowerCase() === 'cancelled') continue;
 
+    const sale = isSale(order);
     const current = byPhone.get(phone);
-    const total = mtToCents(order.total_mt);
     if (!current) {
       byPhone.set(phone, {
         phone,
         name: order.customer_name?.trim() || 'Cliente',
-        orders_count: 1,
-        total_spent_cents: total,
+        orders_count: sale ? 1 : 0,
+        total_spent_cents: sale ? mtToCents(order.total_mt) : 0,
         last_order_at: order.created_at,
       });
       continue;
     }
 
-    current.orders_count += 1;
-    current.total_spent_cents += total;
-    if (new Date(order.created_at) > new Date(current.last_order_at)) {
+    const hadSales = current.orders_count > 0;
+    if (sale) {
+      current.orders_count += 1;
+      current.total_spent_cents += mtToCents(order.total_mt);
+    }
+    const newer = new Date(order.created_at) > new Date(current.last_order_at);
+    if (sale ? !hadSales || newer : !hadSales && newer) {
       current.last_order_at = order.created_at;
       current.name = order.customer_name?.trim() || current.name;
     }
@@ -254,7 +272,7 @@ export function buildReport(input: {
   skipped?: string[];
 }): ImportReport {
   const revenue = input.orders
-    .filter((order) => (order.status ?? '').toLowerCase() === 'paid')
+    .filter(isSale)
     .reduce((sum, order) => sum + mtToCents(order.total_mt), 0);
 
   return {

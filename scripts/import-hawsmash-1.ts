@@ -42,6 +42,15 @@ const storeSlug = storeIndex >= 0 ? args[storeIndex + 1] : 'maputo';
 const skipMenu = args.includes('--sem-cardapio');
 
 const PAGE_SIZE = 1000;
+const CUSTOMER_CHUNK = 50;
+
+/** Os estados que a identify_customer conta como compra (1038). */
+const CONFIRMED_STATUSES = ['approved', 'paid', 'in_preparation', 'ready', 'delivered'];
+
+/** A mais recente de duas datas ISO, comparadas como datas e não como texto. */
+function latest(a: string, b: string): string {
+  return new Date(b) > new Date(a) ? b : a;
+}
 
 function log(message: string) {
   process.stdout.write(`[import] ${message}\n`);
@@ -68,6 +77,30 @@ async function fetchAll<T>(client: SupabaseClient, table: string, columns: strin
       .range(from, from + PAGE_SIZE - 1);
     if (error) throw new Error(`Leitura de ${table} falhou: ${error.message}`);
     const batch = (data ?? []) as T[];
+    rows.push(...batch);
+    if (batch.length < PAGE_SIZE) return rows;
+  }
+}
+
+type ConfirmedOrder = { customer_phone: string; total_cents: number; created_at: string };
+
+/** Compras confirmadas destes telefones no 2.0, página a página. */
+async function fetchConfirmedOrders(
+  client: SupabaseClient,
+  phones: string[],
+): Promise<ConfirmedOrder[]> {
+  const rows: ConfirmedOrder[] = [];
+  for (let page = 0; ; page += 1) {
+    const from = page * PAGE_SIZE;
+    const { data, error } = await client
+      .from('orders')
+      .select('customer_phone,total_cents,created_at')
+      .in('customer_phone', phones)
+      .in('status', CONFIRMED_STATUSES)
+      .order('id')
+      .range(from, from + PAGE_SIZE - 1);
+    if (error) throw new Error(`Compras dos clientes: ${error.message}`);
+    const batch = (data ?? []) as ConfirmedOrder[];
     rows.push(...batch);
     if (batch.length < PAGE_SIZE) return rows;
   }
@@ -104,9 +137,14 @@ async function main(): Promise<void> {
   log(`  categorias:      ${report.categories}`);
   log(`  produtos:        ${report.products}`);
   log(`  pedidos:         ${report.orders}`);
+  log(
+    `    pendentes (entram como cancelados): ${
+      orders.filter((order) => (order.status ?? '').toLowerCase() === 'pending').length
+    }`,
+  );
   log(`  linhas de item:  ${report.order_items}`);
   log(`  clientes únicos: ${report.customers}`);
-  log(`  facturado (pagos): ${(report.revenue_cents / 100).toFixed(2)} MT`);
+  log(`  facturado (pagos e entregues): ${(report.revenue_cents / 100).toFixed(2)} MT`);
 
   if (!apply) {
     log('dry-run terminado — nada foi escrito. Repetir com --apply depois de conferir.');
@@ -128,6 +166,23 @@ async function main(): Promise<void> {
     .eq('slug', storeSlug)
     .single();
   if (storeError || !store) throw new Error(`Loja de destino ${storeSlug} não encontrada.`);
+
+  // Cada pedido inserido passa pelo trigger email_order_event (1104): com um
+  // fluxo transaccional activo, centenas de pedidos antigos virariam emails
+  // "o teu pedido foi entregue" a clientes do 1.0.
+  const { data: flows, error: flowsError } = await target
+    .from('email_flows')
+    .select('name,trigger')
+    .eq('store_id', store.id)
+    .eq('kind', 'transactional')
+    .eq('status', 'active');
+  if (flowsError) throw new Error(`Não foi possível confirmar os emails da loja: ${flowsError.message}`);
+  if ((flows ?? []).length > 0) {
+    const nomes = (flows ?? []).map((flow) => `${flow.name} (${flow.trigger})`).join(', ');
+    throw new Error(
+      `Há emails transaccionais activos em ${storeSlug}: ${nomes}. Pausa-os antes de importar e reactiva depois.`,
+    );
+  }
 
   if (skipMenu) log('--sem-cardapio: categorias e produtos ficam como estão no 2.0');
 
@@ -239,19 +294,48 @@ async function main(): Promise<void> {
   }
   log(`pedidos importados: ${importedOrders}`);
 
+  // Os totais são os que a identify_customer calcularia: todas as compras
+  // confirmadas daquele telefone no 2.0 — as do 1.0 acabadas de importar e as
+  // que o 2.0 já tinha. Escrever só as do 1.0 apagava as outras. Quem já era
+  // cliente no 2.0 mantém o nome, e a última visita nunca recua.
   const customers = aggregateCustomers(orders);
-  for (const customer of customers) {
-    const { error } = await target.from('customers').upsert(
-      {
+  for (let start = 0; start < customers.length; start += CUSTOMER_CHUNK) {
+    const chunk = customers.slice(start, start + CUSTOMER_CHUNK);
+    const phones = chunk.map((customer) => customer.phone);
+    const { data: existing, error: existingError } = await target
+      .from('customers')
+      .select('phone,name,last_seen_at')
+      .in('phone', phones);
+    if (existingError) throw new Error(`Clientes existentes: ${existingError.message}`);
+    const existingByPhone = new Map((existing ?? []).map((row) => [row.phone as string, row]));
+
+    const sales = new Map<string, { count: number; total: number; last: string }>();
+    for (const sale of await fetchConfirmedOrders(target, phones)) {
+      const current = sales.get(sale.customer_phone);
+      if (!current) {
+        sales.set(sale.customer_phone, { count: 1, total: sale.total_cents, last: sale.created_at });
+        continue;
+      }
+      current.count += 1;
+      current.total += sale.total_cents;
+      current.last = latest(current.last, sale.created_at);
+    }
+
+    const rows = chunk.map((customer) => {
+      const before = existingByPhone.get(customer.phone);
+      const sold = sales.get(customer.phone);
+      return {
         phone: customer.phone,
-        name: customer.name,
-        orders_count: customer.orders_count,
-        total_spent_cents: customer.total_spent_cents,
-        last_seen_at: customer.last_order_at,
-      },
-      { onConflict: 'phone' },
-    );
-    if (error) throw new Error(`Cliente ${customer.phone}: ${error.message}`);
+        name: (before?.name as string | null) || customer.name,
+        orders_count: sold?.count ?? 0,
+        total_spent_cents: sold?.total ?? 0,
+        last_seen_at: [before?.last_seen_at as string | null, sold?.last, customer.last_order_at]
+          .filter((value): value is string => Boolean(value))
+          .reduce(latest),
+      };
+    });
+    const { error } = await target.from('customers').upsert(rows, { onConflict: 'phone' });
+    if (error) throw new Error(`Clientes ${phones[0]}…: ${error.message}`);
   }
   log(`clientes agregados: ${customers.length}`);
   log('importação concluída.');

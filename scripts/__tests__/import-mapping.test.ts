@@ -76,7 +76,9 @@ describe('importação do HAWSMASH 1.0', () => {
   });
 
   it('traduz os estados sem inventar nenhum', () => {
-    expect(mapOrderStatus('pending')).toBe('awaiting_approval');
+    // Pendente à data da troca não é venda: em awaiting_approval caía na fila
+    // de aprovação do POS no primeiro dia, como se fosse um pedido novo.
+    expect(mapOrderStatus('pending')).toBe('cancelled');
     expect(mapOrderStatus('paid')).toBe('delivered');
     expect(mapOrderStatus('delivered')).toBe('delivered');
     expect(mapOrderStatus('cancelled')).toBe('cancelled');
@@ -137,22 +139,39 @@ describe('importação do HAWSMASH 1.0', () => {
       { ...order, id: 'ord-2', created_at: '2026-07-05T12:00:00Z', total_mt: 300, subtotal_mt: 150, delivery_fee_mt: 150 },
       { ...order, id: 'ord-3', status: 'cancelled' },
       { ...order, id: 'ord-4', customer_phone: null },
+      { ...order, id: 'ord-5', status: 'pending', created_at: '2026-07-09T12:00:00Z' },
+      { ...order, id: 'ord-6', status: 'delivered', created_at: '2026-07-03T12:00:00Z' },
     ]);
 
     expect(customers).toHaveLength(1);
     expect(customers[0]).toMatchObject({
       phone: '841234567',
-      orders_count: 2,
-      total_spent_cents: 75000,
+      orders_count: 3,
+      total_spent_cents: 120000,
       last_order_at: '2026-07-05T12:00:00Z',
     });
+  });
+
+  it('um cliente só com pedidos pendentes fica como contacto, sem compras', () => {
+    const customers = aggregateCustomers([
+      { ...order, id: 'ord-7', customer_phone: '84 765 4321', status: 'pending' },
+    ]);
+
+    expect(customers).toEqual([
+      expect.objectContaining({ phone: '847654321', orders_count: 0, total_spent_cents: 0 }),
+    ]);
   });
 
   it('produz o relatório de contagens que se confere com o 1.0', () => {
     const report = buildReport({
       categories: [{ id: 'cat-1', name: 'Burgers', sort: 1, active: true }],
       products: [product],
-      orders: [order, { ...order, id: 'ord-2', status: 'cancelled' }],
+      orders: [
+        order,
+        { ...order, id: 'ord-2', status: 'cancelled' },
+        { ...order, id: 'ord-3', status: 'delivered' },
+        { ...order, id: 'ord-4', status: 'pending' },
+      ],
       items: [
         {
           order_id: 'ord-1',
@@ -168,10 +187,11 @@ describe('importação do HAWSMASH 1.0', () => {
     expect(report).toMatchObject({
       categories: 1,
       products: 1,
-      orders: 2,
+      orders: 4,
       order_items: 1,
       customers: 1,
-      revenue_cents: 45000,
+      // Pagos e entregues são faturamento; cancelados e pendentes não.
+      revenue_cents: 90000,
     });
   });
 });
