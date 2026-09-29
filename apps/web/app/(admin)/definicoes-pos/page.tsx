@@ -479,7 +479,15 @@ export default function DefinicoesPosPage() {
                         className={`${INPUT} font-normal normal-case tracking-normal`}
                       />
                     </label>
-                    {menu?.storeId === selectedId ? (
+                    {stepId === 'extras' ? (
+                      // Os extras não se escolhem aqui: são os Adicionais de cada
+                      // lanche, no Cardápio. Um sítio só para os preços (Regra 2).
+                      <p className="mt-3 text-xs text-[#8b8378]">
+                        Os extras de cada lanche (queijo, bacon…) e os preços são os{' '}
+                        <strong className="text-[#C9BCAC]">Adicionais</strong> do produto, no Cardápio. O
+                        passo só aparece quando o carrinho tem um lanche com adicionais.
+                      </p>
+                    ) : menu?.storeId === selectedId ? (
                       (() => {
                         const outro: PosUpsellStepId = stepId === 'companion' ? 'dessert' : 'companion';
                         const passoOutro = draft.upsell.steps[outro];

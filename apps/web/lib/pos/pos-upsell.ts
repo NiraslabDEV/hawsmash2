@@ -24,9 +24,12 @@ import {
   type PosUpsellStepSetting,
 } from './settings';
 
+/** Um produto do cardápio como o funil o vê: com os extras que aceita. */
+export type PosUpsellItem = UpsellItem & { addons?: readonly unknown[] };
+
 export interface PosUpsellCategory {
   name: string;
-  items: UpsellItem[];
+  items: PosUpsellItem[];
 }
 
 export interface PosUpsellStep {
@@ -35,7 +38,20 @@ export interface PosUpsellStep {
   title: string;
   /** A frase que o operador diz ao cliente. */
   script: string;
+  /**
+   * Os produtos a oferecer. Vazio no passo Extras: aí o que se mostra são os
+   * lanches do carrinho, cada um com os seus extras (o ecrã lê-os do carrinho).
+   */
   items: UpsellItem[];
+}
+
+/**
+ * Algum lanche do carrinho aceita extras? É a condição do passo Extras — sem
+ * isso seria um ecrã vazio entre o operador e o pagamento.
+ */
+export function cartHasExtras(cart: UpsellCartLine[], items: PosUpsellItem[]): boolean {
+  const byId = new Map(items.map((item) => [item.id, item]));
+  return cart.some((line) => (byId.get(line.menuItemId)?.addons?.length ?? 0) > 0);
 }
 
 /**
@@ -123,6 +139,18 @@ export function buildPosUpsellFunnel(input: {
       .filter((item) => disponiveis.has(item.id));
 
   const passos: PosUpsellStep[] = [];
+
+  // Extras primeiro (pedido do dono, 24 Set): o queijo a mais põe-se enquanto
+  // o lanche ainda está na conversa, antes de se falar de batata e bebida.
+  const extras = steps.extras;
+  if (extras?.enabled && cartHasExtras(cart, todos)) {
+    passos.push({
+      kind: 'extras',
+      title: extras.title,
+      script: pickScript(extras.scripts, seed),
+      items: [],
+    });
+  }
 
   // A loja escolheu os produtos deste passo na aba POS: são esses, por essa
   // ordem — mesmo que não estejam marcados no Cardápio. Continua a valer o

@@ -1,9 +1,11 @@
 /**
  * Os formatos do papel da casa, como instruções (`ops.ts`).
  *
- * Vieram do `escpos.ts` do print-bridge, onde foram validados em papel. Com o
- * layout de fábrica produzem exactamente os mesmos bytes de antes — guardado
- * por `services/print-bridge/src/__tests__/talao-bytes.test.ts`. Os modelos
+ * Vieram do `escpos.ts` do print-bridge, onde foram validados em papel. Os
+ * bytes de cada formato estão guardados por
+ * `services/print-bridge/src/__tests__/talao-bytes.test.ts`; mudaram de
+ * propósito uma vez, na 1077 (EXTRAS e observações a dobrar, a pedido do
+ * dono), e qualquer outra mudança nesse retrato é o papel das lojas a mudar. Os modelos
  * Compacto e Cozinha (aba POS) são variações do talão completo; os outros
  * formatos (comanda curta, talão curto, fecho de caixa, mesa) não mudam.
  */
@@ -135,6 +137,39 @@ function firstName(full: string | null | undefined): string {
   return palavra ? palavra.charAt(0).toUpperCase() + palavra.slice(1).toLowerCase() : '';
 }
 
+type TicketItem = KitchenTicketPayload['items'][number];
+
+/**
+ * O nome do artigo como a cozinha o lê: "Classic Smash WAGYU". A variante
+ * chega à parte (1077) — sem ela um WAGYU saía como o HAW. Se o nome já a
+ * traz (pedidos antigos, venda offline), não se repete.
+ */
+function itemName(item: Pick<TicketItem, 'name' | 'variant'>): string {
+  const variante = item.variant?.trim();
+  if (!variante || item.name.toLowerCase().includes(variante.toLowerCase())) return item.name;
+  return `${item.name} ${variante}`;
+}
+
+/**
+ * EXTRAS e OBS de um artigo: é o que estraga o prato se passar ao lado.
+ * `big` = altura e largura a dobrar (24 colunas) — pedido do dono (24 Set).
+ * Em maiúsculas, para se lerem de relance na chapa.
+ */
+function itemDetails(item: Pick<TicketItem, 'extras' | 'notes'>, big: boolean): Op[] {
+  const ops: Op[] = [];
+  const width = big ? WIDTH_DOUBLE : undefined;
+  const bloco = (texto: string) => {
+    ops.push(...(big ? [SIZE_DOUBLE, BOLD_ON] : [BOLD_ON]));
+    for (const textoLinha of wrap(texto.toLocaleUpperCase('pt-PT'), width)) ops.push(line(textoLinha));
+    ops.push(...(big ? [BOLD_OFF, SIZE_NORMAL] : [BOLD_OFF]));
+  };
+  const extras = (item.extras ?? []).map((extra) => extra.trim()).filter(Boolean);
+  if (extras.length > 0) bloco(`EXTRAS: ${extras.join(', ')}`);
+  const nota = item.notes?.trim();
+  if (nota) bloco(`OBS: ${nota}`);
+  return ops;
+}
+
 const VIA_LABEL: Record<string, string> = {
   controlo: '*** VIA DE CONTROLO ***',
   cliente: '*** VIA DO CLIENTE ***',
@@ -169,6 +204,8 @@ interface FullTicketOptions {
   bigItems: boolean;
   /** Artigos e notas a dobrar, sem preço (Cozinha). */
   kitchenItems: boolean;
+  /** EXTRAS e observações a dobrar. Só o Compacto os poupa (é o do dinheiro). */
+  bigDetails: boolean;
   thanks: boolean;
   qr: boolean;
   footer: boolean;
@@ -178,13 +215,13 @@ function optionsFor(template: TicketTemplate, layout: PrintLayout): FullTicketOp
   if (template === 'cozinha') {
     return {
       brand: false, contacts: false, prices: false, bigItems: false,
-      kitchenItems: true, thanks: false, qr: false, footer: false,
+      kitchenItems: true, bigDetails: true, thanks: false, qr: false, footer: false,
     };
   }
   if (template === 'compacto') {
     return {
       brand: false, contacts: false, prices: true, bigItems: false,
-      kitchenItems: false, thanks: false, qr: false, footer: layout.show.footer,
+      kitchenItems: false, bigDetails: false, thanks: false, qr: false, footer: layout.show.footer,
     };
   }
   return {
@@ -193,6 +230,7 @@ function optionsFor(template: TicketTemplate, layout: PrintLayout): FullTicketOp
     prices: true,
     bigItems: layout.bigItems,
     kitchenItems: false,
+    bigDetails: true,
     thanks: layout.show.thanks,
     qr: layout.show.qr,
     footer: layout.show.footer,
@@ -284,13 +322,9 @@ export function buildFullTicket(payload: KitchenTicketPayload, layout: PrintLayo
     // dobrar, como na comanda do varão; a dobrar só cabem 24 colunas.
     for (const item of payload.items) {
       ops.push(SIZE_DOUBLE, BOLD_ON);
-      for (const itemLinha of wrap(`${item.quantity}x ${item.name}`, WIDTH_DOUBLE)) ops.push(line(itemLinha));
+      for (const itemLinha of wrap(`${item.quantity}x ${itemName(item)}`, WIDTH_DOUBLE)) ops.push(line(itemLinha));
       ops.push(BOLD_OFF, SIZE_NORMAL);
-      if (item.notes) {
-        ops.push(SIZE_DOUBLE, BOLD_ON);
-        for (const notaLinha of wrap(`NOTA: ${item.notes}`, WIDTH_DOUBLE)) ops.push(line(notaLinha));
-        ops.push(BOLD_OFF, SIZE_NORMAL);
-      }
+      ops.push(...itemDetails(item, true));
       ops.push(feed(1));
     }
   } else {
@@ -298,26 +332,27 @@ export function buildFullTicket(payload: KitchenTicketPayload, layout: PrintLayo
     ops.push(line(rule('-')));
     for (const item of payload.items) {
       const total = item.line_total_cents != null ? mt(item.line_total_cents) : '';
-      const artigo = line(twoColumns(`${item.quantity}x ${item.name}`, total));
+      const artigo = line(twoColumns(`${item.quantity}x ${itemName(item)}`, total));
       if (o.bigItems) ops.push(BOLD_ON, SIZE_TALL, artigo, SIZE_NORMAL, BOLD_OFF);
       else ops.push(BOLD_ON, artigo, BOLD_OFF);
-      if (item.notes) {
-        for (const notaLinha of wrap(`  > ${item.notes}`)) ops.push(line(notaLinha));
-      }
+      ops.push(...itemDetails(item, o.bigDetails));
     }
   }
   ops.push(line(rule('=')));
 
+  // As observações do pedido — o campo "Observações" do POS e a nota do
+  // cliente online. Grandes, como as do artigo: a cozinha lê o talão inteiro
+  // de pé, e uma observação em letra miúda é uma observação que não existiu.
   if (payload.notes) {
-    if (o.kitchenItems) {
+    ops.push(BOLD_ON, line('** OBSERVAÇÕES **'), BOLD_OFF);
+    if (o.bigDetails) {
       ops.push(SIZE_DOUBLE, BOLD_ON);
-      for (const notaLinha of wrap(`NOTA DO PEDIDO: ${payload.notes}`, WIDTH_DOUBLE)) ops.push(line(notaLinha));
-      ops.push(BOLD_OFF, SIZE_NORMAL, line(rule('=')));
+      for (const notaLinha of wrap(payload.notes.toLocaleUpperCase('pt-PT'), WIDTH_DOUBLE)) ops.push(line(notaLinha));
+      ops.push(BOLD_OFF, SIZE_NORMAL);
     } else {
-      ops.push(BOLD_ON, line('** NOTA DO CLIENTE **'), BOLD_OFF);
       for (const notaLinha of wrap(payload.notes)) ops.push(line(notaLinha));
-      ops.push(line(rule('=')));
     }
+    ops.push(line(rule('=')));
   }
 
   if (o.prices) {
@@ -422,17 +457,13 @@ export function buildKitchenTicket(payload: KitchenTicketPayload, layout: PrintL
 
   for (const item of payload.items) {
     ops.push(SIZE_DOUBLE, BOLD_ON);
-    for (const itemLine of wrap(`${item.quantity}x ${item.name}`, WIDTH_DOUBLE)) {
+    for (const itemLine of wrap(`${item.quantity}x ${itemName(item)}`, WIDTH_DOUBLE)) {
       ops.push(line(itemLine));
     }
     ops.push(BOLD_OFF, SIZE_NORMAL);
-    // "SEM JALAPENO" é a linha que estraga o prato se passar ao lado. Sai do
-    // mesmo tamanho do artigo a que pertence.
-    if (item.notes) {
-      ops.push(SIZE_DOUBLE, BOLD_ON);
-      for (const noteLine of wrap(`NOTA: ${item.notes}`, WIDTH_DOUBLE)) ops.push(line(noteLine));
-      ops.push(BOLD_OFF, SIZE_NORMAL);
-    }
+    // "SEM JALAPENO" e o queijo extra são as linhas que estragam o prato se
+    // passarem ao lado. Saem do mesmo tamanho do artigo a que pertencem.
+    ops.push(...itemDetails(item, true));
     ops.push(feed(1));
   }
   if (payload.notes) {
@@ -467,6 +498,10 @@ export function buildCustomerReceipt(payload: CustomerReceiptPayload): Op[] {
 
   for (const item of payload.items) {
     ops.push(line(twoColumns(`${item.quantity}x ${item.name}`, mt(item.line_total_cents))));
+    const extras = (item.extras ?? []).map((extra) => extra.trim()).filter(Boolean);
+    if (extras.length > 0) {
+      for (const extraLine of wrap(`  + ${extras.join(', ')}`)) ops.push(line(extraLine));
+    }
     if (item.notes) {
       for (const noteLine of wrap(`  Nota: ${item.notes}`)) ops.push(line(noteLine));
     }

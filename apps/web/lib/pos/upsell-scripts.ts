@@ -29,7 +29,7 @@
 
 import { FACTORY_POS_SETTINGS } from './settings';
 
-export type PosUpsellStepKind = 'upgrade' | 'companion' | 'dessert';
+export type PosUpsellStepKind = 'upgrade' | 'extras' | 'companion' | 'dessert';
 
 export const UPSELL_SCRIPTS: Record<PosUpsellStepKind, readonly string[]> = {
   // Subir de gama: o cliente já quer o produto. Só falta perguntar.
@@ -37,6 +37,7 @@ export const UPSELL_SCRIPTS: Record<PosUpsellStepKind, readonly string[]> = {
     'Quer provar a versão especial? A diferença é pequena.',
     'Por mais um pouco leva o nosso melhor.',
   ],
+  extras: FACTORY_POS_SETTINGS.upsell.steps.extras.scripts,
   companion: FACTORY_POS_SETTINGS.upsell.steps.companion.scripts,
   dessert: FACTORY_POS_SETTINGS.upsell.steps.dessert.scripts,
 };

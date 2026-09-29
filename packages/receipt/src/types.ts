@@ -65,6 +65,10 @@ export interface KitchenTicketPayload {
   scheduled_for?: string | null;
   items: Array<{
     name: string;
+    /** "WAGYU". Vem à parte do nome desde a 1077; o talão junta os dois. */
+    variant?: string | null;
+    /** Os adicionais da linha ("Queijo", "Bacon"). Saem grandes, como EXTRAS. */
+    extras?: string[] | null;
     quantity: number;
     notes?: string | null;
     /** Só nos pedidos online (via): o talão completo leva o preço de cada linha. */
@@ -126,6 +130,7 @@ export interface CustomerReceiptPayload {
     quantity: number;
     unit_price_cents: number;
     line_total_cents: number;
+    extras?: string[] | null;
     notes?: string | null;
   }>;
   subtotal_cents: number;

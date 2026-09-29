@@ -14,6 +14,8 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 export type TableOrigin = 'qr' | 'pos';
 
 export type TableOrderItem = {
+  /** A linha, para a poder retirar (1102). Falta num servidor anterior. */
+  id?: string;
   name: string;
   variant: string | null;
   qty: number;
@@ -131,6 +133,13 @@ export function tableErrorMessage(message?: string): string {
   if (message.includes('table_bill_changed')) {
     return 'Entrou um pedido novo nesta mesa. Confere a conta e cobra outra vez.';
   }
+  if (message.includes('table_order_already_paid')) {
+    return 'Esta conta já foi paga. Retirar agora é uma anulação — chama o gerente.';
+  }
+  if (message.includes('table_order_not_open') || message.includes('order_item_not_found')) {
+    return 'Este artigo já não está na conta. A lista foi actualizada.';
+  }
+  if (message.includes('reason_required')) return 'Escolhe o motivo antes de retirar.';
   if (message.includes('table_has_no_open_orders')) {
     return 'Esta mesa não tem nada por pagar.';
   }
@@ -157,4 +166,33 @@ export async function fetchTableOverview(
   const { data, error } = await supabase.rpc('pos_table_overview', { p_device_id: deviceId });
   if (error || !data) throw new Error(error?.message ?? 'pos_table_overview');
   return data as TableOverview;
+}
+
+/** Os motivos de um toque; o servidor exige um (fica no registo). */
+export const REMOVE_ITEM_REASONS = [
+  'Cliente desistiu',
+  'Lançado por engano',
+  'Esgotou',
+  'Demorou demais',
+] as const;
+
+export type RemoveTableItemResult = {
+  removed_cents: number;
+  order_total_cents: number;
+  order_cancelled: boolean;
+  duplicate: boolean;
+};
+
+/**
+ * Retira `qty` unidades de uma linha de um pedido da mesa ainda por pagar
+ * (1102). O servidor recalcula o total, repõe o stock e avisa a cozinha; o
+ * `requestId` é o que impede que dois toques retirem dois.
+ */
+export async function removeTableItem(
+  supabase: SupabaseClient,
+  input: { requestId: string; deviceId: string; orderItemId: string; qty: number; reason: string },
+): Promise<RemoveTableItemResult> {
+  const { data, error } = await supabase.rpc('remove_table_item', { p_payload: input });
+  if (error || !data) throw new Error(error?.message ?? 'remove_table_item');
+  return data as RemoveTableItemResult;
 }

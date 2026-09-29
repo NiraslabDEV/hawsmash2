@@ -26,6 +26,16 @@ const rawMenuVariantSchema = z.object({
   is_default: z.boolean().optional(),
 });
 
+// Os extras ("Queijo", "Bacon") são os adicionais do produto (menu_addons).
+// O get_menu já os trazia; o Zod é que os deitava fora (1077).
+const rawMenuAddonSchema = z.object({
+  id: z.string().min(1),
+  name: z.string().min(1),
+  price_cents: z.number().int().nonnegative(),
+  // A foto do botão (1078). Opcional: sem ela o botão fica só com texto.
+  photo_url: z.string().nullable().optional(),
+});
+
 const rawMenuItemSchema = z.object({
   id: z.string().min(1),
   name: z.string().min(1),
@@ -40,6 +50,7 @@ const rawMenuItemSchema = z.object({
   // teve fotos. Ficam também na cache IndexedDB, logo o funil funciona offline.
   is_upsell: z.boolean().optional(),
   variants: z.array(rawMenuVariantSchema).optional(),
+  addons: z.array(rawMenuAddonSchema).optional(),
 });
 
 const rawMenuCategorySchema = z.object({
@@ -100,6 +111,10 @@ export type OfflineSaleDraft = {
      * caminho que ninguém olha.
      */
     variantId?: string;
+    /** Extras da linha (menu_addons). O preço deles já está em `unitPriceCents`. */
+    addonIds?: string[];
+    /** Os nomes dos extras, para a comanda impressa na LAN sem rede. */
+    extras?: string[];
     name: string;
     qty: number;
     unitPriceCents: number;
@@ -132,6 +147,8 @@ const offlineSaleDraftSchema: z.ZodType<OfflineSaleDraft> = z.object({
     menuItemId: z.string().uuid(),
     upsell: z.object({ kind: z.enum(['companion','upgrade']), qty: z.number().int().positive(), placement: z.string().max(60), fromVariantId: z.string().uuid().optional() }).optional().catch(undefined),
     variantId: z.string().uuid().optional(),
+    addonIds: z.array(z.string().uuid()).max(20).optional(),
+    extras: z.array(z.string().min(1).max(80)).max(20).optional(),
     name: z.string().min(1),
     qty: z.number().int().positive(),
     unitPriceCents: z.number().int().nonnegative(),

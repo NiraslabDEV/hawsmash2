@@ -128,6 +128,10 @@ describe('mesas · mensagens para o caixa', () => {
     ['out_of_stock:e086dd3d', 'esgotou'],
     ['device_locked', 'bloqueado'],
     ['Failed to fetch', 'Sem ligação'],
+    // 1102: retirar um artigo da conta.
+    ['table_order_already_paid', 'gerente'],
+    ['order_item_not_found', 'já não está na conta'],
+    ['reason_required', 'motivo'],
   ])('%s', (codigo, esperado) => {
     expect(tableErrorMessage(codigo)).toContain(esperado);
   });

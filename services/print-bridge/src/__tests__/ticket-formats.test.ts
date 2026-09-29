@@ -75,7 +75,7 @@ describe('formatos de talao de 80 mm', () => {
     expect(text).toContain('Nº 42');
     expect(text).toContain('BALCÃO');
     expect(text).toContain('2x Classic Smash');
-    expect(text).toContain('NOTA: Sem cebola');
+    expect(text).toContain('OBS: SEM CEBOLA');
     expect(text).not.toContain('MT');
     expect(text).not.toContain('TOTAL');
     expect(text).not.toContain('300');
@@ -228,8 +228,8 @@ describe('talão do pedido online (o do 1.0, em vias)', () => {
       'HORARIO:',
       'AGORA',
       '2x Classic Smash',
-      '> Sem cebola',
-      '** NOTA DO CLIENTE **',
+      'OBS: SEM CEBOLA',
+      '** OBSERVAÇÕES **',
       'TOTAL:',
       '[ PAGO VIA M-PESA ]',
       'Obrigado! Bom apetite, Maria!',

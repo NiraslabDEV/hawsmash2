@@ -80,6 +80,24 @@ interface Addon {
   price_cents: number;
   sort: number;
   active: boolean;
+  photo_url: string | null;
+}
+
+/**
+ * Fotos genéricas de ingredientes para os extras do balcão (1078). São do
+ * produto, não de um cliente: qual vai para qual extra decide-o a loja aqui.
+ */
+const EXTRA_PHOTOS = [
+  { label: 'Queijo', url: '/assets/storefront/extras/queijo.webp', match: /queijo|cheese|cheddar/i },
+  { label: 'Bacon / Macon', url: '/assets/storefront/extras/bacon.webp', match: /bacon|macon/i },
+  { label: 'Carne', url: '/assets/storefront/extras/carne.webp', match: /carne|burger|hamb|patty|smash/i },
+  { label: 'Jalapeño', url: '/assets/storefront/extras/jalapeno.webp', match: /jalape|pimenta|chili/i },
+  { label: 'Picles', url: '/assets/storefront/extras/picles.webp', match: /picle|pickle/i },
+] as const;
+
+/** A foto que o nome do extra sugere ("Queijo extra" → queijo). Null = nenhuma. */
+function suggestExtraPhoto(name: string): string | null {
+  return EXTRA_PHOTOS.find((foto) => foto.match.test(name))?.url ?? null;
 }
 
 const STATIONS = [
@@ -953,7 +971,7 @@ function OptionsEditor({ itemId }: { itemId: string }) {
         .select('id, menu_item_id, name, price_cents, sort, is_default, active')
         .eq('menu_item_id', itemId).order('sort'),
       supabase.from('menu_addons')
-        .select('id, menu_item_id, name, price_cents, sort, active')
+        .select('id, menu_item_id, name, price_cents, sort, active, photo_url')
         .eq('menu_item_id', itemId).order('sort'),
     ]);
     setVariants((vs ?? []) as Variant[]);
@@ -1002,7 +1020,15 @@ function OptionsEditor({ itemId }: { itemId: string }) {
     const sort = Math.max(0, ...addons.map((a) => a.sort)) + 1;
     const { error } = await supabase.from('menu_addons').insert({
       menu_item_id: itemId, name, price_cents: priceCents, sort, active: true,
+      photo_url: suggestExtraPhoto(name),
     });
+    if (error) { setErr(`Erro: ${error.message}`); return; }
+    refetch();
+  }
+
+  async function setAddonPhoto(id: string, photoUrl: string | null) {
+    setErr('');
+    const { error } = await supabase.from('menu_addons').update({ photo_url: photoUrl }).eq('id', id);
     if (error) { setErr(`Erro: ${error.message}`); return; }
     refetch();
   }
@@ -1011,6 +1037,50 @@ function OptionsEditor({ itemId }: { itemId: string }) {
     const { error } = await supabase.from('menu_addons').delete().eq('id', id);
     if (error) { setErr(`Erro: ${error.message}`); return; }
     refetch();
+  }
+
+  const [copyInfo, setCopyInfo] = useState('');
+
+  /**
+   * Os extras do balcão (queijo, bacon…) são os mesmos em todos os lanches,
+   * mas vivem em cada produto. Isto copia os deste para os outros da mesma
+   * categoria, sem duplicar um que já lá esteja com o mesmo nome e sem mexer
+   * nos preços dos que já existem.
+   */
+  async function copyAddonsToCategory() {
+    setErr(''); setCopyInfo('');
+    const ativos = addons.filter((a) => a.active);
+    if (ativos.length === 0) return;
+    const { data: self, error: selfError } = await supabase
+      .from('menu_items').select('category_id').eq('id', itemId).single();
+    if (selfError || !self) { setErr(`Erro: ${selfError?.message ?? 'produto não encontrado'}`); return; }
+    const { data: irmaos, error: irmaosError } = await supabase
+      .from('menu_items').select('id').eq('category_id', self.category_id).neq('id', itemId);
+    if (irmaosError) { setErr(`Erro: ${irmaosError.message}`); return; }
+    const ids = (irmaos ?? []).map((i) => i.id as string);
+    if (ids.length === 0) { setCopyInfo('Não há outros produtos nesta categoria.'); return; }
+    if (!confirm(`Copiar ${ativos.length} adicionais para ${ids.length} produtos desta categoria?`)) return;
+    const { data: existentes, error: existentesError } = await supabase
+      .from('menu_addons').select('menu_item_id, name').in('menu_item_id', ids);
+    if (existentesError) { setErr(`Erro: ${existentesError.message}`); return; }
+    const chave = (menuItemId: string, name: string) => `${menuItemId}|${name.trim().toLocaleLowerCase('pt-PT')}`;
+    const ja = new Set((existentes ?? []).map((e) => chave(e.menu_item_id as string, e.name as string)));
+    const novos = ids.flatMap((id) =>
+      ativos
+        .filter((a) => !ja.has(chave(id, a.name)))
+        .map((a) => ({
+          menu_item_id: id, name: a.name, price_cents: a.price_cents, sort: a.sort, active: true, photo_url: a.photo_url,
+        })),
+    );
+    if (novos.length > 0) {
+      const { error } = await supabase.from('menu_addons').insert(novos);
+      if (error) { setErr(`Erro: ${error.message}`); return; }
+    }
+    setCopyInfo(
+      novos.length > 0
+        ? `${novos.length} adicionais copiados. Os que já existiam ficaram como estavam.`
+        : 'Os outros produtos já tinham estes adicionais.',
+    );
   }
 
   return (
@@ -1051,6 +1121,27 @@ function OptionsEditor({ itemId }: { itemId: string }) {
         <ul className="space-y-1.5 mb-2">
           {addons.map((a) => (
             <li key={a.id} className="flex items-center gap-2 text-sm">
+              {/* A foto do botão no POS (1078). */}
+              {a.photo_url ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={a.photo_url} alt="" className="h-8 w-8 shrink-0 object-contain" />
+              ) : (
+                <span className="h-8 w-8 shrink-0 rounded bg-white/[0.06]" />
+              )}
+              <select
+                value={a.photo_url ?? ''}
+                onChange={(e) => setAddonPhoto(a.id, e.target.value || null)}
+                aria-label={`Foto de ${a.name}`}
+                className="rounded bg-white/[0.06] px-1 py-0.5 text-xs text-[#C9BCAC]"
+              >
+                <option value="">Sem foto</option>
+                {EXTRA_PHOTOS.map((foto) => (
+                  <option key={foto.url} value={foto.url}>{foto.label}</option>
+                ))}
+                {a.photo_url && !EXTRA_PHOTOS.some((foto) => foto.url === a.photo_url) && (
+                  <option value={a.photo_url}>Outra</option>
+                )}
+              </select>
               <span className="flex-1 text-white">{a.name}</span>
               <span className="text-[#F5A623] font-semibold">+{formatMT(a.price_cents)}</span>
               <button type="button" onClick={() => deleteAddon(a.id)} className="text-red-400 px-1">✕</button>
@@ -1058,7 +1149,20 @@ function OptionsEditor({ itemId }: { itemId: string }) {
           ))}
           {addons.length === 0 && <li className="text-xs text-[#C9BCAC]">Sem adicionais.</li>}
         </ul>
-        <OptionAddRow placeholder="ex: Chantilly" onAdd={addAddon} />
+        <OptionAddRow placeholder="ex: Queijo extra" onAdd={addAddon} />
+        <p className="mt-2 text-xs text-[#8b8378]">
+          No balcão, são estes os EXTRAS que o POS oferece para este produto — e saem grandes na comanda.
+        </p>
+        {addons.length > 0 && (
+          <button
+            type="button"
+            onClick={copyAddonsToCategory}
+            className="mt-2 text-xs font-semibold text-[#F5A623] hover:underline"
+          >
+            Copiar estes adicionais para os outros produtos da categoria
+          </button>
+        )}
+        {copyInfo && <p className="mt-1 text-xs text-emerald-400">{copyInfo}</p>}
       </div>
     </div>
   );

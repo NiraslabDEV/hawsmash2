@@ -4,14 +4,17 @@ import { useCallback, useEffect, useState } from 'react';
 import { formatMT, type Cents } from '@delivery/core';
 import { createClient } from '@/utils/supabase/client';
 import {
+  REMOVE_ITEM_REASONS,
   TABLE_ORDER_STATUS_LABEL,
   fetchTableOverview,
   itemLabel,
   minutesOpen,
+  removeTableItem,
   tableErrorMessage,
   tableName,
   tableTotalCents,
   type PosTable,
+  type TableOrderItem,
   type TableRef,
 } from '@/lib/pos/tables';
 import { PosIcon } from './pos-icons';
@@ -20,6 +23,15 @@ const mt = (cents: number) => formatMT(cents as Cents);
 
 /** Sem realtime, a aba anda sozinha a este ritmo (CLAUDE §11.3). */
 const POLL_MS = 10_000;
+
+/** O artigo que se está a retirar. O `requestId` nasce ao abrir: dois toques em "Retirar" são uma só remoção. */
+type Retirada = {
+  itemId: string;
+  item: TableOrderItem;
+  qty: number;
+  reason: string | null;
+  requestId: string;
+};
 
 function hora(iso: string): string {
   return new Date(iso).toLocaleTimeString('pt-PT', {
@@ -36,6 +48,10 @@ function hora(iso: string): string {
  * ordem de chegada. Daqui pede-se mais para a mesa (volta ao cardápio com a
  * mesa escolhida) ou fecha-se a conta (abre o pagamento do POS com o total da
  * mesa). A conta é a do servidor: esta aba só a mostra.
+ *
+ * Um artigo que a mesa ainda não pagou pode sair da conta (1102): a caixa
+ * toca em "Retirar", escolhe quantos e o motivo. O servidor recalcula, repõe o
+ * stock e manda "ANULAR" à cozinha.
  */
 export function MesasTab({
   deviceId,
@@ -58,6 +74,10 @@ export function MesasTab({
   const [loadError, setLoadError] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [now, setNow] = useState(() => new Date());
+  const [retirada, setRetirada] = useState<Retirada | null>(null);
+  const [retirando, setRetirando] = useState(false);
+  const [retiradaErro, setRetiradaErro] = useState<string | null>(null);
+  const [retiradaFeita, setRetiradaFeita] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -100,6 +120,40 @@ export function MesasTab({
 
   const selected = tables?.find((table) => table.id === selectedId) ?? null;
 
+  function abrirRetirada(item: TableOrderItem) {
+    if (!item.id) return;
+    setRetiradaErro(null);
+    setRetiradaFeita(null);
+    setRetirada({ itemId: item.id, item, qty: 1, reason: null, requestId: crypto.randomUUID() });
+  }
+
+  async function confirmarRetirada() {
+    if (!retirada?.reason || retirando) return;
+    setRetirando(true);
+    setRetiradaErro(null);
+    try {
+      const result = await removeTableItem(supabase, {
+        requestId: retirada.requestId,
+        deviceId,
+        orderItemId: retirada.itemId,
+        qty: retirada.qty,
+        reason: retirada.reason,
+      });
+      setRetiradaFeita(
+        `Retirado: ${retirada.qty}× ${itemLabel(retirada.item)} (−${mt(result.removed_cents)}).` +
+          (result.order_cancelled ? ' O pedido ficou vazio e saiu da conta.' : ''),
+      );
+      setRetirada(null);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : undefined;
+      setRetiradaErro(tableErrorMessage(message));
+      if (message && /not_found|not_open|already_paid/.test(message)) setRetirada(null);
+    } finally {
+      setRetirando(false);
+      void load();
+    }
+  }
+
   if (tables === null) {
     return (
       <div className="mx-auto w-full max-w-5xl">
@@ -141,7 +195,12 @@ export function MesasTab({
                   <button
                     type="button"
                     aria-pressed={selectedId === table.id}
-                    onClick={() => setSelectedId(table.id)}
+                    onClick={() => {
+                      setSelectedId(table.id);
+                      setRetirada(null);
+                      setRetiradaErro(null);
+                      setRetiradaFeita(null);
+                    }}
                     className={`flex min-h-32 w-full flex-col items-start justify-between rounded-2xl border p-3 text-left active:bg-white/10 ${
                       selectedId === table.id
                         ? 'border-gold bg-gold/[0.08]'
@@ -202,6 +261,9 @@ export function MesasTab({
               </span>
             </div>
 
+            {retiradaFeita && <p role="status" className="pos-note pos-note--ok">{retiradaFeita}</p>}
+            {retiradaErro && <p role="alert" className="pos-note pos-note--danger">{retiradaErro}</p>}
+
             {selected.orders.length === 0 ? (
               <p className="text-sm text-ink-mute">
                 Mesa livre. Pede para ela aqui ao balcão, ou o cliente pede pelo QR.
@@ -218,23 +280,111 @@ export function MesasTab({
                       <span>{(TABLE_ORDER_STATUS_LABEL[order.status] ?? order.status).toUpperCase()}</span>
                     </p>
                     <ul className="mt-2 space-y-1">
-                      {order.items.map((item, index) => (
-                        <li key={`${order.id}-${index}`} className="text-[0.9375rem] font-medium">
-                          <span className="flex items-baseline justify-between gap-3">
-                            <span className="min-w-0">
-                              <span className="pos-num font-bold text-gold">{item.qty}×</span> {itemLabel(item)}
+                      {order.items.map((item, index) => {
+                        const aRetirar = retirada && item.id && retirada.itemId === item.id ? retirada : null;
+                        return (
+                          <li key={item.id ?? `${order.id}-${index}`} className="text-[0.9375rem] font-medium">
+                            <span className="flex items-center justify-between gap-3">
+                              <span className="min-w-0">
+                                <span className="pos-num font-bold text-gold">{item.qty}×</span> {itemLabel(item)}
+                              </span>
+                              <span className="flex shrink-0 items-center gap-2">
+                                <span className="pos-num text-ink-dim">{mt(item.qty * item.unit_price_cents)}</span>
+                                {item.id && !aRetirar && (
+                                  <button
+                                    type="button"
+                                    onClick={() => abrirRetirada(item)}
+                                    aria-label={`Retirar ${itemLabel(item)}`}
+                                    className="pos-btn pos-btn--danger !min-h-11 !px-3 !py-1 text-sm"
+                                  >
+                                    <PosIcon name="close" size={16} />
+                                    Retirar
+                                  </button>
+                                )}
+                              </span>
                             </span>
-                            <span className="pos-num shrink-0 text-ink-dim">
-                              {mt(item.qty * item.unit_price_cents)}
-                            </span>
-                          </span>
-                          {(item.notes || item.person) && (
-                            <span className="block text-xs text-ink-mute">
-                              {[item.person, item.notes].filter(Boolean).join(' · ')}
-                            </span>
-                          )}
-                        </li>
-                      ))}
+                            {(item.notes || item.person) && (
+                              <span className="block text-xs text-ink-mute">
+                                {[item.person, item.notes].filter(Boolean).join(' · ')}
+                              </span>
+                            )}
+                            {aRetirar && (
+                              <div className="mt-2 flex flex-col gap-3 rounded-xl border border-red-400/30 bg-red-400/[0.06] p-3">
+                                <p className="text-sm font-bold">Retirar da conta: {itemLabel(item)}</p>
+                                {item.qty > 1 && (
+                                  <div className="flex items-center justify-between gap-3">
+                                    <span className="text-sm text-ink-mute">Quantos?</span>
+                                    <span className="flex items-center gap-2">
+                                      <button
+                                        type="button"
+                                        aria-label="Menos um"
+                                        disabled={aRetirar.qty <= 1 || retirando}
+                                        onClick={() => setRetirada({ ...aRetirar, qty: aRetirar.qty - 1 })}
+                                        className="pos-btn !min-h-11 !px-3"
+                                      >
+                                        <PosIcon name="minus" size={18} />
+                                      </button>
+                                      <span className="pos-num w-10 text-center text-xl font-extrabold">
+                                        {aRetirar.qty}
+                                      </span>
+                                      <button
+                                        type="button"
+                                        aria-label="Mais um"
+                                        disabled={aRetirar.qty >= item.qty || retirando}
+                                        onClick={() => setRetirada({ ...aRetirar, qty: aRetirar.qty + 1 })}
+                                        className="pos-btn !min-h-11 !px-3"
+                                      >
+                                        <PosIcon name="plus" size={18} />
+                                      </button>
+                                      <span className="text-sm text-ink-mute">de {item.qty}</span>
+                                    </span>
+                                  </div>
+                                )}
+                                <div className="flex flex-wrap gap-2" role="group" aria-label="Motivo">
+                                  {REMOVE_ITEM_REASONS.map((reason) => (
+                                    <button
+                                      key={reason}
+                                      type="button"
+                                      aria-pressed={aRetirar.reason === reason}
+                                      disabled={retirando}
+                                      onClick={() => setRetirada({ ...aRetirar, reason })}
+                                      className={`pos-btn !min-h-11 !px-3 text-sm ${
+                                        aRetirar.reason === reason ? 'pos-btn--accent-outline' : 'pos-btn--quiet'
+                                      }`}
+                                    >
+                                      {reason}
+                                    </button>
+                                  ))}
+                                </div>
+                                <div className="grid grid-cols-2 gap-2">
+                                  <button
+                                    type="button"
+                                    disabled={retirando}
+                                    onClick={() => {
+                                      setRetirada(null);
+                                      setRetiradaErro(null);
+                                    }}
+                                    className="pos-btn"
+                                  >
+                                    Voltar
+                                  </button>
+                                  <button
+                                    type="button"
+                                    disabled={!aRetirar.reason || retirando}
+                                    onClick={() => void confirmarRetirada()}
+                                    className="pos-btn pos-btn--danger-solid"
+                                  >
+                                    {retirando ? 'A retirar…' : `Retirar −${mt(aRetirar.qty * item.unit_price_cents)}`}
+                                  </button>
+                                </div>
+                                {!aRetirar.reason && (
+                                  <p className="text-xs text-ink-mute">Escolhe o motivo — fica registado.</p>
+                                )}
+                              </div>
+                            )}
+                          </li>
+                        );
+                      })}
                     </ul>
                     {order.notes && <p className="mt-2 text-xs text-ink-mute">Nota: {order.notes}</p>}
                   </li>

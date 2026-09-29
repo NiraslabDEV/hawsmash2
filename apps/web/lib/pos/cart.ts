@@ -22,6 +22,8 @@ import { capUpsell, reduceUpsell, mergeUpsell, type UpsellAttribution } from '..
 import type { PosMenuItem } from './offline-store';
 
 export type PosVariant = NonNullable<PosMenuItem['variants']>[number];
+/** Um extra do lanche ("Queijo", "Bacon"): um adicional do produto (menu_addons). */
+export type PosAddon = NonNullable<PosMenuItem['addons']>[number];
 
 export type CartLine = {
   upsell?: UpsellAttribution;
@@ -41,6 +43,12 @@ export type CartLine = {
   photo_url: string | null;
   /** "SEM JALAPENO", "bem passado". Sai na comanda e no talão. */
   notes: string | null;
+  /**
+   * Extras deste lanche (1077), pela ordem do Cardápio. O preço deles já está
+   * em `price_cents`. Entram na identidade da linha: um Classic com queijo e
+   * um sem são dois pratos, não `2x Classic`.
+   */
+  addons?: PosAddon[];
   qty: number;
 };
 
@@ -51,10 +59,25 @@ export function cartKey(
   menuItemId: string,
   variantId?: string | null,
   notes?: string | null,
+  addonIds?: readonly string[] | null,
 ): string {
-  const base = variantId ? `${menuItemId}:${variantId}` : menuItemId;
+  let base = variantId ? `${menuItemId}:${variantId}` : menuItemId;
+  // Ordenados: o mesmo queijo+bacon tocado por outra ordem é a mesma linha.
+  if (addonIds && addonIds.length > 0) base += `+${[...addonIds].sort().join(',')}`;
   const nota = notes?.trim();
   return nota ? `${base}#${nota.toLowerCase()}` : base;
+}
+
+const addonIdsOf = (line: Pick<CartLine, 'addons'>): string[] => (line.addons ?? []).map((addon) => addon.id);
+
+/** O preço dos extras de uma linha, somado ao do lanche. */
+function addonsCents(addons: readonly PosAddon[] | undefined): number {
+  return (addons ?? []).reduce((soma, addon) => soma + addon.price_cents, 0);
+}
+
+/** Os extras que se podem pôr neste produto. Vazio = o produto não tem. */
+export function addonsOf(item: Pick<PosMenuItem, 'addons'>): PosAddon[] {
+  return item.addons ?? [];
 }
 
 /**
@@ -100,6 +123,56 @@ export function resolveSellable(
     station: item.station,
     photo_url: escolhida?.photo_url ?? item.photo_url ?? null,
   };
+}
+
+/**
+ * Pôr ou tirar um extra de UM lanche da linha (1077).
+ *
+ * É o que o passo "Extras" do funil faz: o cliente tem dois Classic e quer
+ * queijo num só. Tira-se um da linha e ele passa a ser uma linha própria, com
+ * o extra — as duas contas continuam certas e a cozinha vê dois pratos.
+ * Numa linha de um só, o lanche muda de linha inteiro. Se já houver uma linha
+ * igual (outro Classic com queijo), soma-se a ela.
+ *
+ * `catalog` são os extras do produto, pela ordem do Cardápio: é essa a ordem
+ * que sai no talão, seja qual for a ordem dos toques.
+ *
+ * Devolve o carrinho novo e o id da linha onde o lanche ficou, para o ecrã
+ * continuar a apontar para ele no toque seguinte.
+ */
+export function toggleLineAddon(
+  cart: Cart,
+  line: CartLine,
+  addon: PosAddon,
+  catalog: readonly PosAddon[],
+): { cart: Cart; lineId: string } {
+  const actual = cart[line.id];
+  if (!actual) return { cart, lineId: line.id };
+
+  const tinha = addonIdsOf(actual).includes(addon.id);
+  const escolhidos = new Set(addonIdsOf(actual));
+  if (tinha) escolhidos.delete(addon.id);
+  else escolhidos.add(addon.id);
+  // Pela ordem do Cardápio; um extra que saiu do Cardápio entretanto fica.
+  const conhecidos = [...catalog, ...(actual.addons ?? []).filter((a) => !catalog.some((c) => c.id === a.id))];
+  const addons = conhecidos.filter((a) => escolhidos.has(a.id));
+  if (!tinha && !addons.some((a) => a.id === addon.id)) addons.push(addon);
+
+  const id = cartKey(actual.menuItemId, actual.variantId, actual.notes, addons.map((a) => a.id));
+  // O preço do lanche sem extras, e depois os extras novos por cima.
+  const price_cents = actual.price_cents - addonsCents(actual.addons) + addonsCents(addons);
+
+  const seguinte = changeQty(cart, { ...actual, upsell: undefined }, -1);
+  const existente = seguinte[id];
+  seguinte[id] = {
+    ...actual,
+    id,
+    addons,
+    price_cents,
+    upsell: existente?.upsell,
+    qty: (existente?.qty ?? 0) + 1,
+  };
+  return { cart: seguinte, lineId: id };
 }
 
 export function changeQty(cart: Cart, sellable: Sellable, delta: number): Cart {
@@ -160,12 +233,21 @@ export function removeOneOfItem(cart: Cart, menuItemId: string): Cart {
  */
 export function salePayloadItems(
   lines: CartLine[],
-): Array<{ menuItemId: string; qty: number; variantId?: string; notes?: string; upsell?: UpsellAttribution }> {
+): Array<{
+  menuItemId: string;
+  qty: number;
+  variantId?: string;
+  addonIds?: string[];
+  notes?: string;
+  upsell?: UpsellAttribution;
+}> {
   return lines.map((linha) => ({
     menuItemId: linha.menuItemId,
     qty: linha.qty,
     ...(linha.upsell ? { upsell: capUpsell(linha.upsell, linha.qty) } : {}),
     ...(linha.variantId ? { variantId: linha.variantId } : {}),
+    // Só os ids: o preço dos extras é o servidor que o põe (1077, Regra 2).
+    ...(linha.addons && linha.addons.length > 0 ? { addonIds: addonIdsOf(linha) } : {}),
     ...(linha.notes ? { notes: linha.notes } : {}),
   }));
 }
@@ -183,7 +265,7 @@ export function setLineNotes(cart: Cart, line: CartLine, notes: string | null): 
   if (nota === line.notes) return cart;
   const seguinte = { ...cart };
   delete seguinte[line.id];
-  const id = cartKey(line.menuItemId, line.variantId, nota);
+  const id = cartKey(line.menuItemId, line.variantId, nota, addonIdsOf(line));
   const existente = seguinte[id];
   seguinte[id] = {
     ...line,

@@ -1253,3 +1253,177 @@ describe("F2 — agendamento no balcão", () => {
     await admin.from("orders").delete().eq("id", sale.data.order_id);
   });
 });
+
+// ─── 1077: extras no lanche ──────────────────────────────────────────────────
+//
+// Pedido do dono (24 Set): o upsell do balcão abre com os extras (queijo,
+// bacon…) e o extra entra NUM dos lanches. Os extras são os menu_addons do
+// produto; o preço é do servidor. Dois Classic, um com queijo, são duas linhas
+// do mesmo produto — o que o balcão recusava (`duplicate_item`) até aqui.
+describe("1077 — extras no balcão", () => {
+  const addonIds: string[] = [];
+  let queijoId: string;
+  let baconId: string;
+  let inativoId: string;
+  let deOutroProdutoId: string;
+
+  beforeAll(async () => {
+    const { data: double } = await admin.from("menu_items").select("id").eq("name", "Double Smash").single();
+    const { data, error } = await admin
+      .from("menu_addons")
+      .insert([
+        { menu_item_id: classicSmashId, name: "Queijo teste 1077", price_cents: 5000, sort: 901, active: true },
+        { menu_item_id: classicSmashId, name: "Bacon teste 1077", price_cents: 8000, sort: 902, active: true },
+        { menu_item_id: classicSmashId, name: "Inactivo teste 1077", price_cents: 1000, sort: 903, active: false },
+        { menu_item_id: double?.id, name: "Do Double teste 1077", price_cents: 100, sort: 904, active: true },
+      ])
+      .select("id,name");
+    if (error || !data) throw new Error(`Setup 1077: adicionais — ${error?.message}`);
+    addonIds.push(...data.map((row) => row.id));
+    const porNome = (nome: string) => data.find((row) => row.name === nome)!.id;
+    queijoId = porNome("Queijo teste 1077");
+    baconId = porNome("Bacon teste 1077");
+    inativoId = porNome("Inactivo teste 1077");
+    deOutroProdutoId = porNome("Do Double teste 1077");
+
+    const { error: stockError } = await admin
+      .from("store_items")
+      .update({ available: true, track_stock: false })
+      .eq("store_id", maputoStoreId)
+      .eq("menu_item_id", classicSmashId);
+    if (stockError) throw stockError;
+  });
+
+  afterAll(async () => {
+    if (addonIds.length > 0) await admin.from("menu_addons").delete().in("id", addonIds);
+  });
+
+  const venda = (items: unknown[], amountCents: number) =>
+    manager.rpc("create_counter_sale", {
+      p_payload: {
+        clientSaleId: crypto.randomUUID(),
+        deviceId: posDeviceId,
+        items,
+        payments: [{ method: "mpesa", amountCents }],
+      },
+    });
+
+  it("dois WAGYU, um com queijo e bacon: duas linhas, extras cobrados pelo servidor", async () => {
+    const sale = await venda(
+      [
+        { menuItemId: classicSmashId, qty: 1, variantId: wagyuVariantId, addonIds: [queijoId, baconId] },
+        { menuItemId: classicSmashId, qty: 1, variantId: wagyuVariantId },
+      ],
+      93000,
+    );
+    expect(sale.error).toBeNull();
+    createdOrderIds.push(sale.data.order_id);
+    // 400 + 50 + 80, e 400: o extra soma ao preço da variante.
+    expect(sale.data.total_cents).toBe(93000);
+
+    const { data: items } = await admin
+      .from("order_items")
+      .select("unit_price_cents,variant_name_snapshot,addons")
+      .eq("order_id", sale.data.order_id)
+      .order("unit_price_cents", { ascending: false });
+    expect(items).toHaveLength(2);
+    expect(items?.[0]).toMatchObject({
+      unit_price_cents: 53000,
+      variant_name_snapshot: "WAGYU",
+      addons: [
+        { name: "Queijo teste 1077", price_cents: 5000 },
+        { name: "Bacon teste 1077", price_cents: 8000 },
+      ],
+    });
+    expect(items?.[1]).toMatchObject({ unit_price_cents: 40000, addons: [] });
+  });
+
+  it("o talão leva a variante e os extras do artigo — é o que a cozinha lê", async () => {
+    const sale = await venda(
+      [{ menuItemId: classicSmashId, qty: 1, variantId: wagyuVariantId, addonIds: [baconId], notes: "Sem cebola" }],
+      48000,
+    );
+    expect(sale.error).toBeNull();
+    createdOrderIds.push(sale.data.order_id);
+
+    const { data: jobs } = await admin
+      .from("print_jobs")
+      .select("payload")
+      .eq("order_id", sale.data.order_id)
+      .eq("kind", "order");
+    expect(jobs?.length).toBeGreaterThan(0);
+    for (const job of jobs ?? []) {
+      expect(job.payload.items).toEqual([
+        expect.objectContaining({
+          name: "Classic Smash",
+          variant: "WAGYU",
+          extras: ["Bacon teste 1077"],
+          notes: "Sem cebola",
+          line_total_cents: 48000,
+        }),
+      ]);
+    }
+  });
+
+  it("um preço de extra mandado pelo POS é ignorado (Regra 2)", async () => {
+    const sale = await venda(
+      [{ menuItemId: classicSmashId, qty: 1, addonIds: [queijoId], price_cents: 1, unitPriceCents: 1 }],
+      1,
+    );
+    expect(sale.error?.message).toContain("payment_total_mismatch");
+  });
+
+  it.each([
+    ["de outro produto", () => [deOutroProdutoId], "invalid_addon"],
+    ["inactivo", () => [inativoId], "invalid_addon"],
+    ["repetido", () => [queijoId, queijoId], "duplicate_addon"],
+    ["que não é um id", () => ["queijo"], "invalid_addon"],
+  ])("recusa um extra %s, sem deixar meia venda", async (_nome, ids, erro) => {
+    const clientSaleId = crypto.randomUUID();
+    const sale = await manager.rpc("create_counter_sale", {
+      p_payload: {
+        clientSaleId,
+        deviceId: posDeviceId,
+        items: [{ menuItemId: classicSmashId, qty: 1, addonIds: ids() }],
+        payments: [{ method: "mpesa", amountCents: 35000 }],
+      },
+    });
+    expect(sale.error?.message).toContain(erro);
+    const { data: orders } = await admin.from("orders").select("id").eq("client_sale_id", clientSaleId);
+    expect(orders ?? []).toHaveLength(0);
+  });
+
+  it("o stock do mesmo produto em duas linhas desconta as duas", async () => {
+    const { error: stockError } = await admin
+      .from("store_items")
+      .update({ track_stock: true, stock_qty: 3 })
+      .eq("store_id", maputoStoreId)
+      .eq("menu_item_id", classicSmashId);
+    expect(stockError).toBeNull();
+
+    const sale = await venda(
+      [
+        { menuItemId: classicSmashId, qty: 2, addonIds: [queijoId] },
+        { menuItemId: classicSmashId, qty: 2 },
+      ],
+      130000,
+    );
+    // Quatro Classic com três em stock: a segunda linha tem de ver o que a
+    // primeira deixou, e a venda inteira reverte.
+    expect(sale.error?.message).toContain("out_of_stock");
+
+    const { data: row } = await admin
+      .from("store_items")
+      .select("stock_qty")
+      .eq("store_id", maputoStoreId)
+      .eq("menu_item_id", classicSmashId)
+      .single();
+    expect(row?.stock_qty).toBe(3);
+
+    await admin
+      .from("store_items")
+      .update({ track_stock: false })
+      .eq("store_id", maputoStoreId)
+      .eq("menu_item_id", classicSmashId);
+  });
+});

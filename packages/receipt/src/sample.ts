@@ -21,11 +21,18 @@ export interface SampleItem {
   name: string;
   quantity: number;
   unitPriceCents: number;
+  extras?: string[] | null;
   notes?: string | null;
 }
 
 const ARTIGOS_DE_EXEMPLO: SampleItem[] = [
-  { name: 'Hambúrguer da casa', quantity: 2, unitPriceCents: 30000, notes: 'SEM CEBOLA, SEM MOLHO' },
+  {
+    name: 'Hambúrguer da casa',
+    quantity: 2,
+    unitPriceCents: 35000,
+    extras: ['Queijo'],
+    notes: 'SEM CEBOLA, SEM MOLHO',
+  },
   { name: 'Batata frita', quantity: 1, unitPriceCents: 15000 },
   { name: 'Refrigerante', quantity: 2, unitPriceCents: 10000 },
 ];
@@ -60,6 +67,7 @@ export function sampleTicket(input: {
     items: artigos.map((artigo) => ({
       name: artigo.name,
       quantity: artigo.quantity,
+      extras: artigo.extras ?? null,
       notes: artigo.notes ?? null,
       line_total_cents: artigo.unitPriceCents * artigo.quantity,
     })),

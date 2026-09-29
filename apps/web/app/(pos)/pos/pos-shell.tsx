@@ -76,6 +76,7 @@ import {
   type PosSettings,
 } from '@/lib/pos/settings';
 import {
+  addonsOf,
   cartCount,
   cartLines,
   cartTotalCents,
@@ -87,8 +88,10 @@ import {
   resolveSellable,
   salePayloadItems,
   setLineNotes,
+  toggleLineAddon,
   type Cart,
   type CartLine,
+  type PosAddon,
   type PosVariant,
 } from '@/lib/pos/cart';
 import {
@@ -683,6 +686,7 @@ export function PosShell() {
                 qty: item.qty,
                 ...(item.upsell ? { upsell: item.upsell } : {}),
                 ...(item.variantId ? { variantId: item.variantId } : {}),
+                ...(item.addonIds?.length ? { addonIds: item.addonIds } : {}),
                 ...(item.notes ? { notes: item.notes } : {}),
               })),
               payments: sale.payments,
@@ -1072,6 +1076,31 @@ export function PosShell() {
   const [lastTouched, setLastTouched] = useState<{ id: string; name: string } | null>(null);
 
   /**
+   * Passo Extras (1077): o lanche a que os toques se aplicam. Quando um extra
+   * separa um lanche de uma linha de dois, passa a apontar para a linha nova —
+   * é esse o lanche que o cliente escolheu, e o próximo extra vai para ele.
+   */
+  const [extrasLineId, setExtrasLineId] = useState<string | null>(null);
+  const itemById = useMemo(() => {
+    const mapa = new Map<string, MenuItem>();
+    for (const category of categories) for (const item of category.items) mapa.set(item.id, item);
+    return mapa;
+  }, [categories]);
+  const extrasLines = useMemo(
+    () => lines.filter((line) => addonsOf(itemById.get(line.menuItemId) ?? {}).length > 0),
+    [itemById, lines],
+  );
+  const extrasLine = extrasLines.find((line) => line.id === extrasLineId) ?? extrasLines[0] ?? null;
+
+  function toggleExtra(line: CartLine, addon: PosAddon) {
+    const catalogo = addonsOf(itemById.get(line.menuItemId) ?? {});
+    const resultado = toggleLineAddon(cart, line, addon, catalogo);
+    setCart(resultado.cart);
+    setExtrasLineId(resultado.lineId);
+    setLastTouched({ id: resultado.lineId, name: line.name });
+  }
+
+  /**
    * O carrinho não vai directo ao pagamento: passa pelo funil de upsell.
    * `buildPosUpsellFunnel` devolve lista vazia quando não há nada a oferecer
    * (pedido já completo, só uma bebida, upsell desligado) — e aí não se perde
@@ -1091,6 +1120,7 @@ export function PosShell() {
       concluirPedido();
       return;
     }
+    setExtrasLineId(null);
     setFunnel(passos);
     setFunnelIndex(0);
   }
@@ -1535,6 +1565,11 @@ export function PosShell() {
           // Sem o variantId aqui, um WAGYU vendido sem rede sincronizava ao
           // preco base: cobrado 400 ao cliente, lancado 300 no servidor.
           ...(line.variantId ? { variantId: line.variantId } : {}),
+          // O mesmo para os extras: sem os ids, o queijo cobrado sem rede
+          // nunca chegava ao servidor. `unitPriceCents` já os inclui.
+          ...(line.addons?.length
+            ? { addonIds: line.addons.map((addon) => addon.id), extras: line.addons.map((addon) => addon.name) }
+            : {}),
           name: line.name,
           qty: line.qty,
           ...(line.upsell ? { upsell: line.upsell } : {}),
@@ -2377,6 +2412,11 @@ export function PosShell() {
                   <li key={line.id} className="flex items-center gap-2 py-1.5">
                     <div className="min-w-0 flex-1">
                       <h3 className="truncate text-[0.8125rem] font-semibold leading-tight">{line.name}</h3>
+                      {line.addons && line.addons.length > 0 && (
+                        <p className="truncate text-[0.6875rem] font-bold uppercase tracking-wide text-gold">
+                          + {line.addons.map((addon) => addon.name).join(', ')}
+                        </p>
+                      )}
                       <div className="mt-1 flex min-w-0 items-center gap-1.5">
                         <span className="pos-num shrink-0 text-[0.8125rem] font-bold text-gold">
                           {mt(line.price_cents * line.qty)}
@@ -2636,6 +2676,79 @@ export function PosShell() {
           </header>
 
           <div className="min-h-0 flex-1 overflow-y-auto p-5">
+            {funnelStep.kind === 'extras' ? (
+              // Passo Extras (1077): à esquerda os lanches do carrinho, à direita
+              // os extras do que está escolhido. Cada toque põe ou tira o extra
+              // de UM lanche — numa linha de dois, esse passa a linha própria.
+              <div className="mx-auto grid w-full max-w-5xl gap-5 md:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
+                <section>
+                  <p className="pos-eyebrow mb-2">EM QUE LANCHE?</p>
+                  <div className="grid gap-2">
+                    {extrasLines.map((line) => (
+                      <button
+                        key={line.id}
+                        type="button"
+                        aria-pressed={line.id === extrasLine?.id}
+                        onClick={() => setExtrasLineId(line.id)}
+                        className="pos-choice !block !min-h-20 !px-4 !py-3 !text-left !text-ink aria-pressed:!text-[color:var(--pos-on-accent)]"
+                      >
+                        <span className="block text-lg font-bold leading-tight">
+                          {line.qty}x {line.name}
+                        </span>
+                        <span className="mt-1 block text-sm font-bold uppercase tracking-wide opacity-80">
+                          {line.addons?.length
+                            ? `+ ${line.addons.map((addon) => addon.name).join(', ')}`
+                            : 'Sem extras'}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </section>
+
+                {extrasLine && (
+                  <section>
+                    <p className="pos-eyebrow mb-2">EXTRAS · {extrasLine.name.toUpperCase()}</p>
+                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                      {addonsOf(itemById.get(extrasLine.menuItemId) ?? {}).map((addon) => {
+                        const posto = extrasLine.addons?.some((escolhido) => escolhido.id === addon.id) ?? false;
+                        return (
+                          <button
+                            key={addon.id}
+                            type="button"
+                            aria-pressed={posto}
+                            onClick={() => toggleExtra(extrasLine, addon)}
+                            className="pos-choice !min-h-24 !flex-col !gap-1 !py-3 !text-ink aria-pressed:!text-[color:var(--pos-on-accent)]"
+                          >
+                            {/* A foto reconhece-se antes de se ler o nome (1078). */}
+                            {addon.photo_url && (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img
+                                src={addon.photo_url}
+                                alt=""
+                                loading="lazy"
+                                draggable={false}
+                                className="h-20 w-20 object-contain drop-shadow-[0_8px_12px_rgba(0,0,0,.45)]"
+                              />
+                            )}
+                            <span className="text-lg font-bold leading-tight">
+                              {posto ? `✓ ${addon.name}` : addon.name}
+                            </span>
+                            <span className="pos-num text-base font-bold opacity-80">
+                              +{mt(addon.price_cents)}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                    {extrasLine.qty > 1 && (
+                      <p className="mt-3 text-sm text-ink-mute">
+                        São {extrasLine.qty} iguais: o extra vai só para um deles.
+                      </p>
+                    )}
+                  </section>
+                )}
+              </div>
+            ) : (
             <div className="mx-auto flex w-full max-w-5xl flex-wrap justify-center gap-3">
               {funnelStep.items.map((item) => {
                 const posItem = item as (typeof visibleItems)[number];
@@ -2709,6 +2822,7 @@ export function PosShell() {
                 );
               })}
             </div>
+            )}
           </div>
 
           <footer className="shrink-0 border-t border-white/[0.07] bg-bg1 p-4">

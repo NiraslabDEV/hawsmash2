@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   FACTORY_PRINT_LAYOUT,
   buildFullTicket,
+  buildKitchenTicket,
   encodeEscPos,
   renderPreview,
   resolvePrintLayout,
@@ -89,8 +90,10 @@ describe('modelos do talão', () => {
     expect(t).toContain('SENHA');
     expect(t).toContain('HORARIO:');
     expect(t).toContain('** ENTREGA **');
-    expect(t).toContain('NOTA: SEM CEBOLA, SEM');
-    expect(t).toContain('NOTA DO PEDIDO: Tocar');
+    expect(t).toContain('EXTRAS: QUEIJO');
+    expect(t).toContain('OBS: SEM CEBOLA, SEM');
+    expect(t).toContain('** OBSERVAÇÕES **');
+    expect(t).toContain('TOCAR À CAMPAINHA');
     for (const fora of ['TOTAL', 'Subtotal', 'PAGO', 'Obrigado', 'NUIT', ' MT']) expect(t, fora).not.toContain(fora);
     expect(tem(ops, 'qr')).toBe(false);
     expect(tem(ops, 'brand')).toBe(false);
@@ -175,5 +178,70 @@ describe('pré-visualização e bytes a partir das mesmas instruções', () => {
 
   it('acentos em CP1252', () => {
     expect(Array.from(encodeEscPos([{ t: 'text', value: 'ção€' }]))).toEqual([0xe7, 0xe3, 0x6f, 0x80]);
+  });
+});
+
+describe('extras, variante e observações (1077)', () => {
+  const comExtras = {
+    ...sampleTicket({ store: loja, via: 'cliente', fulfillment: 'counter' }),
+    items: [
+      { name: 'Classic Smash', variant: 'WAGYU', extras: ['Queijo', 'Bacon'], quantity: 1, notes: 'sem cebola', line_total_cents: 50000 },
+      { name: 'Classic Smash', variant: 'HAW', extras: [], quantity: 1, notes: null, line_total_cents: 30000 },
+    ],
+    notes: 'bem passado',
+  };
+
+  /** Os textos que saem entre um SIZE_DOUBLE e o SIZE_NORMAL seguinte. */
+  function aDobrar(ops: Op[]): string {
+    let dentro = false;
+    const partes: string[] = [];
+    for (const op of ops) {
+      if (op.t === 'size') dentro = op.value === 'double';
+      else if (dentro && op.t === 'text') partes.push(op.value);
+    }
+    return partes.join('');
+  }
+
+  it('o nome leva a variante: a cozinha distingue o WAGYU do HAW', () => {
+    const t = texto(buildFullTicket(comExtras));
+    expect(t).toContain('1x Classic Smash WAGYU');
+    expect(t).toContain('1x Classic Smash HAW');
+  });
+
+  it('não repete a variante que o nome já traz', () => {
+    const t = texto(buildFullTicket({ ...comExtras, items: [{ name: 'Classic Smash WAGYU', variant: 'WAGYU', quantity: 1 }] }));
+    expect(t).toContain('1x Classic Smash WAGYU');
+    expect(t).not.toContain('WAGYU WAGYU');
+  });
+
+  it('Completo: EXTRAS e OBS saem a dobrar, por baixo do artigo a que pertencem', () => {
+    const ops = buildFullTicket(comExtras);
+    const grande = aDobrar(ops);
+    expect(grande).toContain('EXTRAS: QUEIJO, BACON');
+    expect(grande).toContain('OBS: SEM CEBOLA');
+    expect(grande).toContain('BEM PASSADO');
+    const t = texto(ops);
+    expect(t.indexOf('EXTRAS: QUEIJO')).toBeGreaterThan(t.indexOf('Classic Smash WAGYU'));
+    expect(t.indexOf('EXTRAS: QUEIJO')).toBeLessThan(t.indexOf('Classic Smash HAW'));
+  });
+
+  it('um artigo sem extras nem nota não imprime rótulos vazios', () => {
+    const t = texto(buildFullTicket({ ...comExtras, items: [comExtras.items[1]], notes: null }));
+    expect(t).not.toContain('EXTRAS');
+    expect(t).not.toContain('OBS');
+  });
+
+  it('Compacto poupa papel: EXTRAS a negrito, sem dobrar', () => {
+    const ops = buildFullTicket(comExtras, layout({ templates: { controlo: 'compacto', cliente: 'compacto', cozinha: 'compacto' } }));
+    expect(texto(ops)).toContain('EXTRAS: QUEIJO, BACON');
+    expect(aDobrar(ops)).not.toContain('EXTRAS');
+  });
+
+  it('a comanda curta (POS sem rede) também leva os EXTRAS a dobrar', () => {
+    const { formato: _formato, ...curta } = comExtras;
+    const grande = aDobrar(buildKitchenTicket(curta));
+    expect(grande).toContain('Classic Smash WAGYU');
+    expect(grande).toContain('EXTRAS: QUEIJO, BACON');
+    expect(grande).toContain('OBS: SEM CEBOLA');
   });
 });

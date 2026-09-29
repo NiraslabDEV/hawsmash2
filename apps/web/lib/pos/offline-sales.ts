@@ -93,6 +93,7 @@ export async function printOfflineSale(
         items: items.map((item) => ({
           name: item.name,
           quantity: item.qty,
+          extras: item.extras ?? null,
           notes: item.notes ?? null,
         })),
         notes: 'VENDA OFFLINE',
@@ -119,6 +120,7 @@ export async function printOfflineSale(
           quantity: item.qty,
           unit_price_cents: item.unitPriceCents,
           line_total_cents: item.unitPriceCents * item.qty,
+          extras: item.extras ?? null,
           notes: item.notes ?? null,
         })),
         subtotal_cents: sale.totalCents,

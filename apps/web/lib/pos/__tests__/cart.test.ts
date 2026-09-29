@@ -12,6 +12,7 @@ import {
   resolveSellable,
   salePayloadItems,
   setLineNotes,
+  toggleLineAddon,
   type Cart,
 } from '../cart';
 import type { PosMenuItem } from '../offline-store';
@@ -214,4 +215,71 @@ it('atribui só unidades adicionadas pela oferta e preserva notas',()=>{
  const reduced=changeQty(normal,product,-1);
  expect(cartLines(reduced)[0].upsell).toBeUndefined();
  expect(cartTotalCents(normal)).toBe(90000);
+});
+
+describe('extras no lanche (1077)', () => {
+  const queijo = { id: 'add-queijo', name: 'Queijo', price_cents: 5_000 };
+  const bacon = { id: 'add-bacon', name: 'Bacon', price_cents: 8_000 };
+  const comExtras: PosMenuItem = { ...classic, addons: [queijo, bacon] };
+  const wagyu = comExtras.variants![1];
+
+  function doisClassic(): Cart {
+    return changeQty({}, resolveSellable(comExtras, wagyu), 2);
+  }
+
+  it('o extra vai para UM lanche: dois WAGYU viram um com queijo e um sem', () => {
+    const cart = doisClassic();
+    const [linha] = cartLines(cart);
+    const { cart: seguinte, lineId } = toggleLineAddon(cart, linha, queijo, comExtras.addons!);
+    const linhas = cartLines(seguinte);
+    expect(linhas).toHaveLength(2);
+    const comQueijo = seguinte[lineId];
+    expect(comQueijo.qty).toBe(1);
+    expect(comQueijo.addons?.map((a) => a.name)).toEqual(['Queijo']);
+    expect(comQueijo.price_cents).toBe(45_000);
+    expect(linhas.find((l) => l.id !== lineId)?.qty).toBe(1);
+    // 400 + (400 + 50): o extra soma ao preço da variante, não ao do item base.
+    expect(cartTotalCents(seguinte)).toBe(85_000);
+    expect(cartCount(seguinte)).toBe(2);
+  });
+
+  it('tocar outra vez tira o extra e o lanche volta a juntar-se ao igual', () => {
+    const cart = doisClassic();
+    const { cart: comQueijo, lineId } = toggleLineAddon(cart, cartLines(cart)[0], queijo, comExtras.addons!);
+    const { cart: semQueijo } = toggleLineAddon(comQueijo, comQueijo[lineId], queijo, comExtras.addons!);
+    expect(cartLines(semQueijo)).toHaveLength(1);
+    expect(cartLines(semQueijo)[0].qty).toBe(2);
+    expect(cartTotalCents(semQueijo)).toBe(80_000);
+  });
+
+  it('a ordem dos extras é a do Cardápio, seja qual for a ordem dos toques', () => {
+    const cart = changeQty({}, resolveSellable(comExtras, wagyu), 1);
+    const a = toggleLineAddon(cart, cartLines(cart)[0], bacon, comExtras.addons!);
+    const b = toggleLineAddon(a.cart, a.cart[a.lineId], queijo, comExtras.addons!);
+    expect(b.cart[b.lineId].addons?.map((x) => x.name)).toEqual(['Queijo', 'Bacon']);
+    expect(b.cart[b.lineId].price_cents).toBe(53_000);
+  });
+
+  it('manda só os ids dos extras ao servidor, nunca o preço (Regra 2)', () => {
+    const cart = changeQty({}, resolveSellable(comExtras, wagyu), 1);
+    const { cart: seguinte } = toggleLineAddon(cart, cartLines(cart)[0], bacon, comExtras.addons!);
+    const [item] = salePayloadItems(cartLines(seguinte));
+    expect(item).toEqual({ menuItemId: 'item-classic', qty: 1, variantId: 'var-wagyu', addonIds: ['add-bacon'] });
+    expect(JSON.stringify(item)).not.toContain('price');
+  });
+
+  it('mudar a nota de um lanche com extra não lhe tira o extra', () => {
+    const cart = changeQty({}, resolveSellable(comExtras, wagyu), 1);
+    const { cart: comQueijo, lineId } = toggleLineAddon(cart, cartLines(cart)[0], queijo, comExtras.addons!);
+    const comNota = setLineNotes(comQueijo, comQueijo[lineId], 'sem cebola');
+    const [linha] = cartLines(comNota);
+    expect(linha.addons?.map((a) => a.name)).toEqual(['Queijo']);
+    expect(linha.notes).toBe('sem cebola');
+    expect(linha.price_cents).toBe(45_000);
+  });
+
+  it('a chave não muda para quem não tem extras (carrinhos e testes antigos)', () => {
+    expect(cartKey('x', 'v', null, [])).toBe(cartKey('x', 'v', null));
+    expect(cartKey('x', null, null, ['b', 'a'])).toBe(cartKey('x', null, null, ['a', 'b']));
+  });
 });

@@ -666,3 +666,158 @@ describe("1092 · o nome da conta", () => {
     expect(seguinte.data.customer_name).toBe(`Mesa ${NUMERO} · Ana`);
   });
 });
+
+describe("1102 · retirar um artigo da mesa por pagar", () => {
+  let mesaRetirarId: string;
+  let pedidoId: string;
+  const NUMERO = 99;
+
+  type Linha = { id: string; name: string; variant: string | null; qty: number };
+
+  async function linhasDoPedido(): Promise<Linha[]> {
+    const { data, error } = await caixa.rpc("pos_table_overview", { p_device_id: deviceId });
+    if (error) throw new Error(`pos_table_overview — ${error.message}`);
+    const mesa = (data.tables as Array<{ id: string; orders: Array<{ id: string; items: Linha[] }> }>).find(
+      (m) => m.id === mesaRetirarId,
+    );
+    return mesa?.orders.find((o) => o.id === pedidoId)?.items ?? [];
+  }
+
+  function retirar(payload: Record<string, unknown>, cliente: SupabaseClient = caixa) {
+    return cliente.rpc("remove_table_item", {
+      p_payload: { requestId: crypto.randomUUID(), deviceId, reason: "Cliente desistiu", ...payload },
+    });
+  }
+
+  beforeAll(async () => {
+    await admin
+      .from("store_items")
+      .update({ stock_qty: 50 })
+      .eq("store_id", matolaStoreId)
+      .eq("menu_item_id", classicId);
+    const { data, error } = await admin
+      .from("tables")
+      .insert({ store_id: matolaStoreId, number: NUMERO })
+      .select("id")
+      .single();
+    if (error || !data) throw new Error(`Setup 1102: mesa — ${error?.message}`);
+    mesaRetirarId = data.id as string;
+    criadasMesas.push(mesaRetirarId);
+
+    const lancado = await caixa.rpc("launch_table_order", {
+      p_payload: {
+        clientSaleId: crypto.randomUUID(),
+        deviceId,
+        tableId: mesaRetirarId,
+        items: [
+          { menuItemId: classicId, qty: 2, variantId: hawId },
+          { menuItemId: classicId, qty: 1, variantId: wagyuId },
+        ],
+      },
+    });
+    if (lancado.error) throw new Error(`Setup 1102: lançar — ${lancado.error.message}`);
+    pedidoId = lancado.data.order_id as string;
+    criadosPedidos.push(pedidoId);
+  });
+
+  it("retira um de dois: a conta desce ao preço gravado, o stock volta e a cozinha é avisada", async () => {
+    const stockAntesDeRetirar = await stockDoClassic();
+    const haw = (await linhasDoPedido()).find((l) => l.variant === "HAW")!;
+    expect(haw.id).toBeTruthy();
+
+    const requestId = crypto.randomUUID();
+    const { data, error } = await retirar({ requestId, orderItemId: haw.id, qty: 1 });
+    expect(error).toBeNull();
+    expect(data).toMatchObject({
+      removed_cents: precoHaw,
+      order_total_cents: precoHaw + precoWagyu,
+      order_cancelled: false,
+      duplicate: false,
+    });
+
+    expect((await linhasDoPedido()).find((l) => l.id === haw.id)?.qty).toBe(1);
+    expect(await stockDoClassic()).toBe(stockAntesDeRetirar + 1);
+
+    const { data: evento } = await admin
+      .from("event_log")
+      .select("payload")
+      .eq("order_id", pedidoId)
+      .eq("type", "table.item_removed")
+      .single();
+    expect(evento?.payload).toMatchObject({ reason: "Cliente desistiu", removed_cents: precoHaw });
+
+    const { data: papel } = await admin
+      .from("print_jobs")
+      .select("station,payload")
+      .eq("order_id", pedidoId)
+      .eq("kind", "order")
+      .eq("payload->>customer_name", "*** ANULAR ***");
+    expect(papel).toHaveLength(1);
+    expect(papel![0]).toMatchObject({ station: "kitchen", payload: { table_number: NUMERO } });
+
+    // Tocar outra vez não retira outro.
+    const repetido = await retirar({ requestId, orderItemId: haw.id, qty: 1 });
+    expect(repetido.error).toBeNull();
+    expect(repetido.data.duplicate).toBe(true);
+    expect((await linhasDoPedido()).find((l) => l.id === haw.id)?.qty).toBe(1);
+    expect(await stockDoClassic()).toBe(stockAntesDeRetirar + 1);
+  });
+
+  it("sem motivo, ou com o terminal de outra loja, é recusado", async () => {
+    const [linha] = await linhasDoPedido();
+    const semMotivo = await retirar({ orderItemId: linha.id, reason: " " });
+    expect(semMotivo.error?.message).toContain("reason_required");
+
+    const deMaputo = await retirar({ orderItemId: linha.id }, caixaMaputo);
+    expect(deMaputo.error?.message).toContain("invalid_or_unauthorised_device");
+  });
+
+  it("retirar tudo cancela o pedido e a mesa fica livre", async () => {
+    const stockAntesDeRetirar = await stockDoClassic();
+    for (const linha of await linhasDoPedido()) {
+      const { error } = await retirar({ orderItemId: linha.id });
+      expect(error).toBeNull();
+    }
+    const { data: pedido } = await admin
+      .from("orders")
+      .select("status,total_cents")
+      .eq("id", pedidoId)
+      .single();
+    expect(pedido).toMatchObject({ status: "cancelled", total_cents: 0 });
+    expect(await stockDoClassic()).toBe(stockAntesDeRetirar + 2);
+
+    const { data } = await caixa.rpc("pos_table_overview", { p_device_id: deviceId });
+    const mesa = (data.tables as Array<{ id: string; orders: unknown[] }>).find((m) => m.id === mesaRetirarId);
+    expect(mesa?.orders).toHaveLength(0);
+  });
+
+  it("depois de a conta estar paga, já não se retira no balcão", async () => {
+    const lancado = await caixa.rpc("launch_table_order", {
+      p_payload: {
+        clientSaleId: crypto.randomUUID(),
+        deviceId,
+        tableId: mesaRetirarId,
+        items: [{ menuItemId: classicId, qty: 1, variantId: hawId }],
+      },
+    });
+    expect(lancado.error).toBeNull();
+    pedidoId = lancado.data.order_id as string;
+    criadosPedidos.push(pedidoId);
+    const [linha] = await linhasDoPedido();
+
+    const fecho = await caixa.rpc("close_table_bill", {
+      p_payload: {
+        clientCloseId: crypto.randomUUID(),
+        deviceId,
+        tableId: mesaRetirarId,
+        expectedTotalCents: precoHaw,
+        payments: [{ method: "emola", amountCents: precoHaw }],
+      },
+    });
+    expect(fecho.error).toBeNull();
+    criadasContas.push(fecho.data.bill_id as string);
+
+    const { error } = await retirar({ orderItemId: linha.id });
+    expect(error?.message).toContain("table_order_already_paid");
+  });
+});

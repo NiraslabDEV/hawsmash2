@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
   buildPosUpsellFunnel,
+  cartHasExtras,
   cardapioStepProducts,
   hasMainItem,
   type PosUpsellCategory,
 } from '../pos-upsell';
 import { upsellScript, upsellScripts } from '../upsell-scripts';
+import { FACTORY_POS_SETTINGS } from '../settings';
 
 const burger = { id: 'b1', name: 'Classic Smash', price_cents: 30000 };
 const chips = { id: 'c1', name: "Joe's Chips", price_cents: 15000, is_upsell: true };
@@ -78,6 +80,7 @@ describe('funil do balcão', () => {
       cart: [{ menuItemId: 'b1', qty: 1 }],
       seed: 0,
       steps: {
+        extras: FACTORY_POS_SETTINGS.upsell.steps.extras,
         companion: { enabled: true, title: 'Com batata?', scripts: ['Leva batata?'], productIds: [] },
         dessert: { enabled: false, title: 'Doce?', scripts: ['Um doce?'], productIds: [] },
       },
@@ -110,7 +113,7 @@ describe('funil do balcão', () => {
         categories,
         cart,
         seed: 0,
-        steps: { companion: passo(companion), dessert: passo(dessert) },
+        steps: { extras: FACTORY_POS_SETTINGS.upsell.steps.extras, companion: passo(companion), dessert: passo(dessert) },
       });
 
     it('oferece exactamente os escolhidos, pela ordem da loja', () => {
@@ -188,5 +191,40 @@ describe('frases de balcão', () => {
 
   it('a mesma venda vê sempre a mesma frase', () => {
     expect(upsellScript('dessert', 42)).toBe(upsellScript('dessert', 42));
+  });
+});
+
+describe('passo Extras (1077)', () => {
+  const comExtras = { ...burger, addons: [{ id: 'q', name: 'Queijo', price_cents: 5000 }] };
+  const categoriasComExtras: PosUpsellCategory[] = [
+    { name: 'Burgers', items: [comExtras] },
+    { name: 'Acompanhamentos', items: [chips] },
+    { name: 'Bebidas', items: [coca] },
+    { name: 'Sobremesas', items: [natas] },
+  ];
+
+  it('abre o funil, antes de acompanhar, quando um lanche tem extras', () => {
+    const passos = buildPosUpsellFunnel({
+      enabled: true, categories: categoriasComExtras, cart: [{ menuItemId: 'b1', qty: 1 }], seed: 0,
+    });
+    expect(passos.map((p) => p.kind)).toEqual(['extras', 'companion', 'dessert']);
+    expect(passos[0].items).toEqual([]);
+    expect(passos[0].script).toBeTruthy();
+  });
+
+  it('não aparece quando nenhum lanche do carrinho aceita extras', () => {
+    expect(funil([{ menuItemId: 'b1', qty: 1 }]).map((p) => p.kind)).not.toContain('extras');
+    expect(cartHasExtras([{ menuItemId: 'c1', qty: 1 }], categoriasComExtras.flatMap((c) => c.items))).toBe(false);
+  });
+
+  it('a loja pode desligá-lo na aba POS', () => {
+    const passos = buildPosUpsellFunnel({
+      enabled: true, categories: categoriasComExtras, cart: [{ menuItemId: 'b1', qty: 1 }], seed: 0,
+      steps: {
+        ...FACTORY_POS_SETTINGS.upsell.steps,
+        extras: { ...FACTORY_POS_SETTINGS.upsell.steps.extras, enabled: false },
+      },
+    });
+    expect(passos.map((p) => p.kind)).toEqual(['companion', 'dessert']);
   });
 });

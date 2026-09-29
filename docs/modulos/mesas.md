@@ -20,6 +20,14 @@ A conta aberta usa uma definição comum: pedidos da mesa e loja **criados desde
 
 Desde a 1092, o nome é da conta aberta, não um atributo permanente da mesa. Um nome introduzido num pedido é herdado pelos seguintes da mesma conta, incluindo o QR. O pedido guarda `Mesa N · Nome`; o cartão mostra esse nome. Depois de fechar, a próxima conta não deve herdar a anterior.
 
+## Retirar um artigo da conta aberta
+
+Desde a 1102, a caixa (cashier, manager ou owner) retira um artigo de um pedido da mesa **ainda por pagar**, seja do QR ou do balcão: botão "Retirar" na linha, quantos (se a linha tem mais de um) e um motivo de um toque. `remove_table_item(p_payload)` recebe `requestId`, `deviceId`, `orderItemId`, `qty` e `reason` (obrigatório).
+
+Na mesma transacção: a linha perde a quantidade (ou sai, a zero), o pedido desce ao preço gravado na linha, produto e matéria-prima dessa quantidade voltam ao stock (movimento `void`) e `event_log` grava `table.item_removed` com artigo, quantidade, valor, motivo e actor. Um pedido sem artigos passa a `cancelled` e sai da conta. A cozinha recebe um papel "*** ANULAR ***" no formato herdado da comanda (best-effort; falha vira `print.table_item_removed_failed`); não sai papel se o pedido já está `delivered`. Repetir o `requestId` devolve a primeira resposta.
+
+Conta já liquidada (`table_bill_id`) recusa com `table_order_already_paid`: isso é anulação, de gerente. Com a 1102, `restore_order_stock`/`restore_order_ingredients` repõem só o que ainda falta devolver (`sale` menos `void`), para que uma anulação posterior do pedido inteiro não reponha duas vezes o que já foi retirado.
+
 ## Liquidar a conta
 
 `close_table_bill(p_payload)` recebe `clientCloseId`, dispositivo, mesa, `expectedTotalCents`, parcelas de pagamento e dinheiro recebido quando aplicável. O total esperado do cliente é apenas uma comparação de concorrência: o servidor soma os pedidos, não adopta esse valor como preço.
@@ -44,7 +52,7 @@ Ver [Impressão](impressao.md) para layout, destino de vias e diferença entre j
 | Conta | `table_bills`: chave única de fecho, dispositivo, pedidos, total, pagamentos, recebido/troco, operador e data |
 | Pedido | `orders.table_id`, `orders.table_bill_id`, `order_items`; numeração e stock comuns |
 | POS | [mesas-tab.tsx](../../apps/web/app/(pos)/pos/mesas-tab.tsx), [tables.ts](../../apps/web/lib/pos/tables.ts) e chamadas em [pos-shell.tsx](../../apps/web/app/(pos)/pos/pos-shell.tsx) |
-| SQL | [1081 mesas](../../supabase/migrations/20260924060000_1081_mesas_no_balcao.sql), [1092 nome/senha](../../supabase/migrations/20260925110000_1092_mesa_com_nome_e_senha.sql) |
+| SQL | [1081 mesas](../../supabase/migrations/20260924060000_1081_mesas_no_balcao.sql), [1092 nome/senha](../../supabase/migrations/20260925110000_1092_mesa_com_nome_e_senha.sql), [1102 retirar artigo](../../supabase/migrations/20260927200000_1102_retirar_item_da_mesa.sql) |
 | Integração pública | `create_order`, `get_table_by_token`, ligação do QR à loja e hook `private.after_qr_table_order` |
 
 Eventos de operação incluem `table.order_launched`, `table.bill_closed`, `print.table_comanda_queued`, `print.table_senha_queued`, `print.table_comanda_failed` e `print.table_bill_failed`. A gestão do painel usa mutações directas à tabela `tables`, protegidas por RLS; não inventar uma RPC `save_table` ou prometer um evento de configuração que esse caminho não grava. As chamadas de update/delete do painel filtram por ID; o âmbito depende também da policy e merece leitura conjunta com a [auditoria](../AUDITORIA-DOCUMENTACAO.md).

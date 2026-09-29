@@ -29,7 +29,7 @@ import { FACTORY_PRINT_LAYOUT, resolvePrintLayout, type PrintLayout } from '@del
 
 export type PosPaymentMethodId = 'cash' | 'mpesa' | 'emola' | 'credit_card';
 export type PosFulfillment = 'counter' | 'pickup' | 'delivery';
-export type PosUpsellStepId = 'companion' | 'dessert';
+export type PosUpsellStepId = 'extras' | 'companion' | 'dessert';
 
 export type PosPaymentMethodSetting = {
   id: PosPaymentMethodId;
@@ -47,6 +47,7 @@ export type PosUpsellStepSetting = {
   /**
    * Os produtos deste passo, por ordem, escolhidos para esta loja.
    * Vazio = os marcados como upsell no Cardápio (o comportamento de sempre).
+   * O passo Extras não usa isto: oferece os adicionais de cada lanche.
    */
   productIds: string[];
 };
@@ -107,6 +108,7 @@ export const POS_FULFILLMENT_NAMES: Record<PosFulfillment, string> = {
 };
 
 export const POS_UPSELL_STEP_NAMES: Record<PosUpsellStepId, string> = {
+  extras: 'Extras no lanche (o primeiro)',
   companion: 'Acompanhar (batata, bebida)',
   dessert: 'Sobremesa (no fim)',
 };
@@ -136,6 +138,18 @@ export const FACTORY_POS_SETTINGS: PosSettings = {
   upsell: {
     enabled: true,
     steps: {
+      // Primeiro de propósito (pedido do dono, 24 Set): o extra só se põe
+      // enquanto o lanche ainda está na conversa. Os extras são os
+      // Adicionais de cada produto, no Cardápio — aqui só o ecrã e as frases.
+      extras: {
+        enabled: true,
+        title: 'Algum extra no lanche?',
+        scripts: [
+          'Quer adicionar algum extra no seu lanche?',
+          'Vai um extra no lanche? Fica ainda melhor.',
+        ],
+        productIds: [],
+      },
       companion: {
         enabled: true,
         title: 'Falta acompanhar?',
@@ -299,6 +313,9 @@ export function resolvePosSettings(raw: unknown): PosSettings {
     upsell: {
       enabled: bool(upsell.enabled, f.upsell.enabled),
       steps: {
+        // Uma loja que gravou as definições antes da 1077 não tem este passo:
+        // entra o de fábrica, ligado. É o que o dono pediu para todas.
+        extras: resolveStep(steps.extras, f.upsell.steps.extras),
         companion: resolveStep(steps.companion, f.upsell.steps.companion),
         dessert: resolveStep(steps.dessert, f.upsell.steps.dessert),
       },
