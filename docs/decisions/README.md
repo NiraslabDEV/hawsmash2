@@ -12,5 +12,6 @@ Decisões aceites não se reescrevem para acomodar divergências de implementaç
 | [0006](0006-definicoes-do-pos-por-loja.md) | Definições POS como dados por loja | Aceite; cadência divergente, V-11 |
 | [0007](0007-modelos-do-talao.md) | Modelos prontos e layout como dado | Aceite; hardware depende da versão instalada |
 | [0008](0008-staging-passa-a-live.md) | A base onde a loja já vende passa a ser o LIVE | Aceite; transição em curso |
+| [0009](0009-email-por-https-resend.md) | Resend por HTTPS quando o alojamento bloqueia SMTP; SMTP fica de reserva | Aceite; activo quando houver `RESEND_API_KEY` |
 
 [Candidatas a novas decisões](../AUDITORIA-DOCUMENTACAO.md#114-decisões-fortes-candidatas-a-adr) permanecem propostas. Nenhum ADR novo foi inventado.

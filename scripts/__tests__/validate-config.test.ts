@@ -59,6 +59,20 @@ describe('validateEnv', () => {
     expect(errors).toEqual([]);
     expect(warnings.some((w: string) => w.includes('SMTP_USER'))).toBe(true);
   });
+
+  it('com RESEND_API_KEY e EMAIL_FROM, o SMTP deixa de ser preciso (ADR 0009)', () => {
+    const { errors, warnings } = validateEnv({
+      ...validEnv, SMTP_USER: '', SMTP_PASS: '',
+      RESEND_API_KEY: 're_123', EMAIL_FROM: 'Loja <dono@restaurante.co.mz>',
+    });
+    expect(errors).toEqual([]);
+    expect(warnings.some((w: string) => w.includes('SMTP_USER'))).toBe(false);
+  });
+
+  it('RESEND_API_KEY sem EMAIL_FROM é erro — o Resend recusaria todos os envios', () => {
+    const { errors } = validateEnv({ ...validEnv, RESEND_API_KEY: 're_123', EMAIL_FROM: '' });
+    expect(errors.some((e: string) => e.includes('EMAIL_FROM'))).toBe(true);
+  });
 });
 
 describe('parseEnvFile', () => {

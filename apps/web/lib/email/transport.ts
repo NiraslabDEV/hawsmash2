@@ -1,11 +1,15 @@
 import { prepareSystemEmail, logSystemEmail } from "./system-runtime";
 import type { SystemEmailKey } from "./system-catalog";
 import nodemailer, { type Transporter } from "nodemailer";
+import { resendConfigured, sendViaResend } from "./resend";
 import { studioSmtp, sendStudioMail } from "./studio-transport";
 
 /**
- * Envio transacional por SMTP (Hostinger) — ADR 0004. Substitui o Resend: o
- * 1.0 já usa a caixa de email do próprio dono na Hostinger e funciona bem.
+ * Envio transacional. Por ordem:
+ *   1. Resend por HTTPS, se houver `RESEND_API_KEY` (ADR 0009 — o Railway
+ *      bloqueia SMTP fora do plano Pro);
+ *   2. o SMTP da loja configurado no painel (módulo de emails, 1104);
+ *   3. o SMTP do servidor, `SMTP_USER`/`SMTP_PASS` (Hostinger, ADR 0004).
  *
  * Falha de email nunca é fatal (CLAUDE §1) — `sendMail` nunca lança, devolve
  * `{ ok:false, error }` e quem chama decide se isso bloqueia alguma coisa
@@ -16,6 +20,7 @@ let transporter: Transporter | null = null;
 
 export async function isEmailConfigured(): Promise<boolean> {
   return (
+    resendConfigured() ||
     Boolean(process.env.SMTP_USER && process.env.SMTP_PASS) ||
     Boolean(await studioSmtp())
   );
@@ -71,6 +76,22 @@ async function deliver({
   html,
   storeId,
 }: SendMailInput): Promise<SendMailResult> {
+  // Sem EMAIL_FROM sai o endereço nu, sem nome de exibição. O nome que estava
+  // aqui era o de um cliente: outra instalação mandava emails assinados com a
+  // marca errada (CLAUDE.md §18.3). Quem quer nome bonito preenche EMAIL_FROM.
+  const from = process.env.EMAIL_FROM || process.env.SMTP_USER;
+
+  // O Resend só aceita remetentes do domínio verificado lá — EMAIL_FROM.
+  if (resendConfigured()) {
+    if (!from) return { ok: false, error: "email_from_not_configured" };
+    return sendViaResend({
+      from,
+      to: Array.isArray(to) ? to : [to],
+      subject,
+      html,
+    });
+  }
+
   const configured = await studioSmtp(storeId);
   if (configured) {
     const results = await Promise.all(
@@ -83,10 +104,6 @@ async function deliver({
   if (!(process.env.SMTP_USER && process.env.SMTP_PASS))
     return { ok: false, error: "smtp_not_configured" };
 
-  // Sem EMAIL_FROM sai o endereço nu, sem nome de exibição. O nome que estava
-  // aqui era o de um cliente: outra instalação mandava emails assinados com a
-  // marca errada (CLAUDE.md §18.3). Quem quer nome bonito preenche EMAIL_FROM.
-  const from = process.env.EMAIL_FROM || process.env.SMTP_USER;
   try {
     await getTransporter().sendMail({ from, to, subject, html });
     return { ok: true };

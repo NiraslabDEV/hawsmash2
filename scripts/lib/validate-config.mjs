@@ -100,10 +100,17 @@ export function validateEnv(env = {}) {
     }
   }
 
-  if (!env.SMTP_USER || isPlaceholder(env.SMTP_USER) || !env.SMTP_PASS || isPlaceholder(env.SMTP_PASS)) {
+  const hasResend = Boolean(env.RESEND_API_KEY) && !isPlaceholder(env.RESEND_API_KEY);
+  const hasSmtp = Boolean(env.SMTP_USER) && !isPlaceholder(env.SMTP_USER)
+    && Boolean(env.SMTP_PASS) && !isPlaceholder(env.SMTP_PASS);
+  if (!hasResend && !hasSmtp) {
     warnings.push(
-      'SMTP_USER/SMTP_PASS em falta — os emails transacionais (novo pedido / aprovação / recusa) não serão enviados'
+      'Nem RESEND_API_KEY nem SMTP_USER/SMTP_PASS — os emails transacionais (novo pedido / aprovação / recusa) não serão enviados'
     );
+  }
+  // Não `isPlaceholder`: o '<' de "Loja <haw@...>" conta lá como marcador.
+  if (hasResend && !String(env.EMAIL_FROM ?? '').includes('@')) {
+    errors.push('RESEND_API_KEY exige EMAIL_FROM com um remetente do domínio verificado no Resend');
   }
   if (!env.CRON_SECRET || isPlaceholder(env.CRON_SECRET)) {
     warnings.push(
