@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 
-type Filters = { limit?: number; offset?: number; store?: string; status?: string; search?: string };
+type Filters = { limit?: number; offset?: number; store?: string; status?: string; search?: string; day?: string; date_from?: string; date_to?: string };
 const allOrders = Array.from({ length: 125 }, (_, index) => ({
   id: `91000000-0000-4000-8000-${String(index + 1).padStart(12, '0')}`,
   order_number: `TESTE-${String(index + 1).padStart(3, '0')}`,
@@ -11,7 +11,7 @@ const allOrders = Array.from({ length: 125 }, (_, index) => ({
   scheduled_for: null, payment_proof_path: null, items: [],
 }));
 
-async function openPanel(page: Page, delayStoreA = false) {
+async function openPanel(page: Page, delayStoreA = false, dayAware = false) {
   const requests: Filters[] = [];
   await page.addInitScript(() => {
     const user = { id: '90000000-0000-4000-8000-000000000001', aud: 'authenticated', email: 'PLACEHOLDER@example.invalid' };
@@ -31,11 +31,18 @@ async function openPanel(page: Page, delayStoreA = false) {
     else if (pathname.endsWith('/get_orders')) {
       const filters = route.request().postDataJSON().p_filters as Filters;
       requests.push(filters);
-      const matching = allOrders.filter((order) => (!filters.store || order.store_slug === filters.store)
-        && (!filters.status || order.status === filters.status)
+      // Com `dayAware`, a RPC simula a 1110: só os 10 primeiros são do dia em
+      // curso, e as contagens por estado seguem o recorte da lista.
+      const base = allOrders.filter((order, index) => (!filters.store || order.store_slug === filters.store)
+        && (!dayAware || filters.day !== 'current' || index < 10)
         && (!filters.search || order.order_number.includes(filters.search) || order.customer_name.includes(filters.search)));
+      const matching = base.filter((order) => !filters.status || order.status === filters.status);
       if (delayStoreA && filters.store === 'loja-a') await new Promise((resolve) => setTimeout(resolve, 600));
-      body = { orders: matching.slice(filters.offset ?? 0, (filters.offset ?? 0) + (filters.limit ?? 100)), total: matching.length, limit: filters.limit, offset: filters.offset };
+      const statusCounts = base.reduce<Record<string, number>>((acc, order) => ({ ...acc, [order.status]: (acc[order.status] ?? 0) + 1 }), {});
+      body = {
+        orders: matching.slice(filters.offset ?? 0, (filters.offset ?? 0) + (filters.limit ?? 100)), total: matching.length, limit: filters.limit, offset: filters.offset,
+        ...(dayAware ? { status_counts: statusCounts } : {}),
+      };
     }
     await route.fulfill({ json: body, headers: { 'Access-Control-Allow-Origin': 'http://127.0.0.1:3019', 'Access-Control-Allow-Headers': 'Content-Type, Authorization, apikey, X-Client-Info' } }).catch(() => {});
   });
@@ -76,4 +83,33 @@ test('uma resposta atrasada não troca os pedidos da loja seleccionada', async (
   await page.waitForTimeout(800);
   await expect(page.getByRole('cell', { name: /TESTE-111/ })).toBeVisible();
   await expect(page.getByRole('cell', { name: /TESTE-001/ })).toHaveCount(0);
+});
+
+test('abre só com o dia em curso; o histórico e o dia escolhido vão ao servidor', async ({ page }) => {
+  const requests = await openPanel(page, false, true);
+  await expect(page.getByText('Exibindo 1 a 10 de 10 pedidos')).toBeVisible();
+  expect(requests[0]).toMatchObject({ day: 'current', offset: 0 });
+  // As abas contam o dia, não as 125 de sempre do get_order_stats.
+  await expect(page.getByRole('button', { name: /^Pagos\s*5$/ })).toBeVisible();
+  await expect(page.getByRole('button', { name: /^Prontos\s*5$/ })).toBeVisible();
+  await expect(page.getByText('Ao fechar o dia no Caixa, passam para o Histórico.')).toBeVisible();
+  await page.screenshot({ path: 'output/orders/dia-actual.png', fullPage: true });
+
+  await page.getByRole('combobox', { name: 'Período' }).selectOption('history');
+  await expect(page.getByText('Exibindo 1 a 10 de 125 pedidos')).toBeVisible();
+  expect(requests.at(-1)).not.toHaveProperty('day');
+  await expect(page.getByRole('button', { name: /^Prontos\s*62$/ })).toBeVisible();
+
+  await page.getByLabel('Dia do histórico').fill('2026-09-28');
+  await expect.poll(() => requests.at(-1)).toMatchObject({
+    date_from: '2026-09-27T22:00:00.000Z',
+    date_to: '2026-09-28T21:59:59.999Z',
+    offset: 0,
+  });
+  await page.screenshot({ path: 'output/orders/historico-dia.png', fullPage: true });
+
+  await page.getByRole('combobox', { name: 'Período' }).selectOption('current');
+  await expect(page.getByText('Exibindo 1 a 10 de 10 pedidos')).toBeVisible();
+  expect(requests.at(-1)).toMatchObject({ day: 'current' });
+  expect(requests.at(-1)).not.toHaveProperty('date_from');
 });

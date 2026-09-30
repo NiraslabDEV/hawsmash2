@@ -19,7 +19,7 @@ O [`order-machine.ts`](../../packages/core/src/order-machine.ts) é um modelo pu
 
 ## Leitura, paginação e realtime
 
-[`get_orders(p_filters)`](../../supabase/migrations/20260913225235_1045_paginacao_pedidos.sql) serve filtros e paginação. O [painel](../../apps/web/app/(admin)/pedidos/page.tsx) e o [quadro POS](../../apps/web/app/(pos)/pos/orders-board.tsx) lêem a fonte novamente quando chega realtime; o payload do evento não deve montar um pedido incompleto. Há actualização periódica como recuperação quando realtime falha.
+[`get_orders(p_filters)`](../../supabase/migrations/20260930170000_1110_pedidos_do_dia.sql) serve filtros e paginação, e devolve `status_counts` com os mesmos filtros menos o estado (os números das abas). Com `day: 'current'` devolve só o dia em curso: os pedidos depois do último fecho do dia da loja de cada um, ou desde a meia-noite de Maputo para a loja que nunca fechou o dia. O painel abre assim; os dias fechados ficam em **Histórico**, com um dia de calendário opcional (`date_from`/`date_to`). O [painel](../../apps/web/app/(admin)/pedidos/page.tsx) e o [quadro POS](../../apps/web/app/(pos)/pos/orders-board.tsx) lêem a fonte novamente quando chega realtime; o payload do evento não deve montar um pedido incompleto. Há actualização periódica como recuperação quando realtime falha.
 
 Os itens e metadados pertencem ao pedido da loja. O comprovativo vive no bucket privado `payment-proofs`; a visualização do painel usa `createSignedUrl` com validade limitada, não URL pública. Aprovar/recusar envia efeitos auxiliares de email/tracking depois da operação principal. Falhar esses efeitos não deve esconder nem reverter o pedido.
 

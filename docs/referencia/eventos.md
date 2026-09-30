@@ -4,7 +4,7 @@
 
 Retrato estático da **árvore de trabalho**, incluindo ficheiros ainda não commitados. Não comprova aplicação em staging/produção, grants efectivos da instalação ou resultados de testes. Não executa SQL.
 
-103 locais de INSERT reconhecidos: corpos de funções que permanecem na cadeia e escrita directa de runtime em web/bridge. Repetições representam produtores diferentes, não eventos duplicados observados. Não inclui testes, seeds de dados ou corpos substituídos.
+105 locais de INSERT reconhecidos: corpos de funções que permanecem na cadeia e escrita directa de runtime em web/bridge. Repetições representam produtores diferentes, não eventos duplicados observados. Não inclui testes, seeds de dados ou corpos substituídos.
 
 **Dinâmico** conserva a expressão do código; não inventa nomes possíveis. Actor e loja podem ser preenchidos por `private.enforce_event_context`; uma operação de sistema pode não ter actor humano. A tabela regista a forma do INSERT, não prova conformidade completa da auditoria. SQL INSERT com SELECT, wrappers e expressões não reconhecidas permanecem assinalados.
 
@@ -70,6 +70,8 @@ Retrato estático da **árvore de trabalho**, incluindo ficheiros ainda não com
 | `print_job.created` | literal | `private.advance_order_legacy(uuid,text,text)` | [supabase/migrations/20260819231000_f6_stock_consumption.sql:589](../../supabase/migrations/20260819231000_f6_stock_consumption.sql#L589) | trigger/contexto (pode ser sistema); trigger/contexto do pedido/empresa |
 | `print_job.created` | literal | `private.create_order_legacy(jsonb)` | [supabase/migrations/20260625000001_dine_in_person_labels.sql:549](../../supabase/migrations/20260625000001_dine_in_person_labels.sql#L549) | trigger/contexto (pode ser sistema); trigger/contexto do pedido/empresa |
 | `print.change_job_queued` | literal | `public.update_order_details(uuid,jsonb,uuid)` | [supabase/migrations/20260924000000_1072_alterar_morada_e_hora.sql:268](../../supabase/migrations/20260924000000_1072_alterar_morada_e_hora.sql#L268) | coluna explícita; coluna explícita |
+| `print.counter_senha_failed` | literal | `public.create_counter_sale(jsonb)` | [supabase/migrations/20260930190000_1111_senha_no_balcao.sql:132](../../supabase/migrations/20260930190000_1111_senha_no_balcao.sql#L132) | coluna explícita; coluna explícita |
+| `print.counter_senha_queued` | literal | `private.enqueue_counter_senha(uuid)` | [supabase/migrations/20260930190000_1111_senha_no_balcao.sql:94](../../supabase/migrations/20260930190000_1111_senha_no_balcao.sql#L94) | coluna explícita; coluna explícita |
 | `print.enqueue_failed` | literal | `public.advance_order(uuid,text,text)` | [supabase/migrations/20260926180000_1097_estado_e_pagamento_por_perfil.sql:105](../../supabase/migrations/20260926180000_1097_estado_e_pagamento_por_perfil.sql#L105) | coluna explícita; coluna explícita |
 | `print.enqueue_failed` | literal | `public.confirm_payment(text,uuid,text,text,text,integer,jsonb)` | [supabase/migrations/20260926180000_1097_estado_e_pagamento_por_perfil.sql:165](../../supabase/migrations/20260926180000_1097_estado_e_pagamento_por_perfil.sql#L165) | coluna explícita; coluna explícita |
 | `print.local_acknowledged` | literal | `public.sync_counter_sale(jsonb,jsonb)` | [supabase/migrations/20260923190000_1065_sync_offline_reconhece_via_de_controlo.sql:93](../../supabase/migrations/20260923190000_1065_sync_offline_reconhece_via_de_controlo.sql#L93) | coluna explícita; coluna explícita |

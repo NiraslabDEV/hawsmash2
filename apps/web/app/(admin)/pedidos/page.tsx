@@ -7,7 +7,8 @@ import { staffFetch } from '@/lib/admin/staff-fetch';
 import { formatMT, type Cents } from '@delivery/core';
 import { format, parseISO, formatDistanceToNow } from 'date-fns';
 import { pt } from 'date-fns/locale';
-import { initialOrdersView, ORDERS_PAGE_SIZE as PAGE_SIZE, ordersViewReducer, requestOrdersPage, type OrdersViewAction } from '@/lib/orders-pagination';
+import { initialOrdersView, ORDERS_PAGE_SIZE as PAGE_SIZE, ordersViewReducer, requestOrdersPage, type OrdersPeriod, type OrdersViewAction } from '@/lib/orders-pagination';
+import { maputoDate } from '@/lib/admin/analysis-period';
 
 type Order = {
   id: string;
@@ -112,7 +113,7 @@ export default function PedidosPage() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [deviceStatus, setDeviceStatus] = useState<DeviceStatus | null>(null);
   const [view, dispatchView] = useReducer(ordersViewReducer, initialOrdersView);
-  const { search, status: statusFilter, store: storeFilter, page } = view;
+  const { search, status: statusFilter, store: storeFilter, period, date: historyDate, page } = view;
   const [stores, setStores] = useState<Array<{ slug: string; short_name: string }>>([]);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [proofUrls, setProofUrls] = useState<Record<string, string>>({});
@@ -180,6 +181,16 @@ export default function PedidosPage() {
   const orders = ordersQuery.data?.orders ?? [];
   const totalOrders = ordersQuery.data?.total ?? 0;
   const totalPages = Math.max(1, Math.ceil(totalOrders / PAGE_SIZE));
+
+  // As abas contam o mesmo recorte da lista (dia, loja, busca), menos o
+  // estado — mudar de aba não mexe nos números. Guardam-se à parte para não
+  // piscarem enquanto a aba nova carrega.
+  const countsKey = JSON.stringify([search, storeFilter, period, historyDate]);
+  const [listCounts, setListCounts] = useState<{ key: string; counts: Record<string, number> } | null>(null);
+  useEffect(() => {
+    const counts = ordersQuery.data?.statusCounts;
+    if (counts) setListCounts({ key: countsKey, counts });
+  }, [ordersQuery.data, countsKey]);
 
   function changeView(action: OrdersViewAction) {
     dispatchView(action);
@@ -292,13 +303,19 @@ export default function PedidosPage() {
   const printer = deviceStatus?.devices.find((d) => d.kind === 'bridge' || d.kind === 'printer');
   const printerOnline = !!printer?.online;
 
-  // contagem por aba (real, vinda do RPC)
-  const counts = stats?.status_counts ?? {};
+  // contagem por aba (real, vinda do RPC). Sem a 1110 a get_orders não as
+  // devolve: ficam as de sempre do get_order_stats, como antes.
+  const counts = listCounts
+    ? (listCounts.key === countsKey ? listCounts.counts : null)
+    : (stats?.status_counts ?? null);
   const tabCount = (key: string): number | null => {
-    if (!stats) return null;
+    if (!counts) return null;
     if (key === 'all') return Object.values(counts).reduce((a, b) => a + (b || 0), 0);
     return counts[key] ?? 0;
   };
+  const emptyText = period === 'current' && statusFilter === 'all' && !search
+    ? 'Ainda não há pedidos no dia de hoje.'
+    : 'Nenhum pedido encontrado';
 
   // A resposta já é a página. O total vem da mesma consulta no servidor.
   const currentPage = page;
@@ -436,10 +453,19 @@ export default function PedidosPage() {
           <input value={search} onChange={(e) => changeView({ type: 'filter', field: 'search', value: e.target.value })} placeholder="Buscar pedido, cliente, telefone…"
             className="bg-transparent text-sm text-white placeholder-[#8A7A69] focus:outline-none w-full" />
         </div>
-        <div className="flex items-center gap-2 bg-black/20 border border-white/[0.08] rounded-xl px-3 py-2.5 text-sm text-[#C9BCAC]">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><rect x="3" y="4" width="18" height="18" rx="2" /><path d="M16 2v4M8 2v4M3 10h18" /></svg>
-          <span className="capitalize">{format(new Date(), "'Hoje,' dd/MM/yyyy", { locale: pt })}</span>
+        <div className="flex items-center gap-2 bg-black/20 border border-white/[0.08] rounded-xl px-3 text-sm text-[#C9BCAC] focus-within:border-[#F5A623]/40">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" aria-hidden><rect x="3" y="4" width="18" height="18" rx="2" /><path d="M16 2v4M8 2v4M3 10h18" /></svg>
+          <select value={period} onChange={(e) => changeView({ type: 'period', period: e.target.value as OrdersPeriod })} aria-label="Período"
+            className="bg-transparent py-2.5 focus:outline-none cursor-pointer">
+            <option value="current" className="bg-[#231610] text-white">Dia actual</option>
+            <option value="history" className="bg-[#231610] text-white">Histórico</option>
+          </select>
         </div>
+        {period === 'history' && (
+          <input type="date" value={historyDate} max={maputoDate()} aria-label="Dia do histórico"
+            onChange={(e) => changeView({ type: 'filter', field: 'date', value: e.target.value })}
+            className="bg-black/20 border border-white/[0.08] rounded-xl px-3 py-2 text-sm text-[#C9BCAC] [color-scheme:dark] focus:outline-none focus:border-[#F5A623]/40" />
+        )}
         <select value={statusFilter} onChange={(e) => changeView({ type: 'filter', field: 'status', value: e.target.value })} aria-label="Estado dos pedidos"
           className="bg-black/20 border border-white/[0.08] rounded-xl px-3 py-2.5 text-sm text-[#C9BCAC] focus:outline-none focus:border-[#F5A623]/40 cursor-pointer">
           {TABS.map((t) => <option key={t.key} value={t.key} className="bg-[#231610] text-white">{t.key === 'all' ? 'Todos os status' : t.label}</option>)}
@@ -454,6 +480,11 @@ export default function PedidosPage() {
           </select>
         )}
       </div>
+      <p className="-mt-2 text-xs text-[#8A7A69]">
+        {period === 'current'
+          ? 'Pedidos do dia em curso. Ao fechar o dia no Caixa, passam para o Histórico.'
+          : historyDate ? 'Pedidos feitos neste dia.' : 'Todos os pedidos. Escolhe um dia para ver só esse.'}
+      </p>
 
       {/* Abas de status com contagem */}
       <div className="flex gap-1 flex-wrap">
@@ -501,7 +532,7 @@ export default function PedidosPage() {
               {loading ? (
                 <tr><td colSpan={8} className="px-4 py-10 text-center text-[#C9BCAC]">A carregar pedidos…</td></tr>
               ) : pageOrders.length === 0 ? (
-                <tr><td colSpan={8} className="px-4 py-10 text-center text-[#C9BCAC]">Nenhum pedido encontrado</td></tr>
+                <tr><td colSpan={8} className="px-4 py-10 text-center text-[#C9BCAC]">{emptyText}</td></tr>
               ) : (
                 pageOrders.map((order) => {
                   const expanded = expandedId === order.id;
@@ -551,7 +582,7 @@ export default function PedidosPage() {
         {loading ? (
           <div className="text-center text-[#C9BCAC] py-8">A carregar pedidos…</div>
         ) : pageOrders.length === 0 ? (
-          <div className="text-center text-[#C9BCAC] py-8">Nenhum pedido encontrado</div>
+          <div className="text-center text-[#C9BCAC] py-8">{emptyText}</div>
         ) : (
           <>
             {pageOrders.map((order) => (

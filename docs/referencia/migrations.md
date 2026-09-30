@@ -4,7 +4,7 @@
 
 Retrato estático da **árvore de trabalho**, incluindo ficheiros ainda não commitados. Não comprova aplicação em staging/produção, grants efectivos da instalação ou resultados de testes. Não executa SQL.
 
-162 ficheiros; 35 477 linhas. A ordem é o timestamp do nome, não o sufixo de assunto. A 1080 precede intencionalmente 1077–1079. A cadeia canónica está em [supabase/migrations](../../supabase/migrations); os dois SQL de [packages/db/migrations](../../packages/db/migrations) são legado e não entram nesta contagem.
+164 ficheiros; 35 755 linhas. A ordem é o timestamp do nome, não o sufixo de assunto. A 1080 precede intencionalmente 1077–1079. A cadeia canónica está em [supabase/migrations](../../supabase/migrations); os dois SQL de [packages/db/migrations](../../packages/db/migrations) são legado e não entram nesta contagem.
 
 | Ficheiro / assunto | Tabelas em DDL directo | Funções declaradas/alteradas/removidas | Limite |
 | --- | --- | --- | --- |
@@ -170,6 +170,8 @@ Retrato estático da **árvore de trabalho**, incluindo ficheiros ainda não com
 | [supabase/migrations/20260930060000_1107_foto_do_macon_smash.sql:1](../../supabase/migrations/20260930060000_1107_foto_do_macon_smash.sql#L1) | — | — | Leitura estática |
 | [supabase/migrations/20260930140000_1108_reimprimir_fecho_do_turno.sql:1](../../supabase/migrations/20260930140000_1108_reimprimir_fecho_do_turno.sql#L1) | — | `public.reprint_cash_session` | Leitura estática |
 | [supabase/migrations/20260930150000_1109_favicon_da_marca.sql:1](../../supabase/migrations/20260930150000_1109_favicon_da_marca.sql#L1) | — | — | Leitura estática |
+| [supabase/migrations/20260930170000_1110_pedidos_do_dia.sql:1](../../supabase/migrations/20260930170000_1110_pedidos_do_dia.sql#L1) | — | `public.get_orders` | Leitura estática |
+| [supabase/migrations/20260930190000_1111_senha_no_balcao.sql:1](../../supabase/migrations/20260930190000_1111_senha_no_balcao.sql#L1) | — | `private.build_counter_senha`, `private.enqueue_counter_senha`, `public.create_counter_sale` | Leitura estática |
 
 ## SQL dinâmico e limites
 
