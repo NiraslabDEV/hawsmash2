@@ -1058,10 +1058,14 @@
   background: var(--hs-bg-2);
 }
 /* Altura fixa em vez de aspect-ratio: uma lata em ecrã largo enchia meia
-   página e empurrava os botões para fora do campo de visão. */
+   página e empurrava os botões para fora do campo de visão.
+   A faixa da grelha é minmax(0, 1fr) e não `auto`: com `auto` a linha crescia
+   até à altura natural da foto (as latas são verticais) e a imagem saía da
+   caixa, por cima do nome e dos sabores. */
 .hs-upsell-photo {
-  height: 170px;
+  height: 150px;
   display: grid;
+  grid-template: minmax(0, 1fr) / minmax(0, 1fr);
   place-items: center;
   border-radius: 14px;
   background: radial-gradient(120% 100% at 50% 20%, rgba(232, 116, 42, 0.22), transparent 68%);
