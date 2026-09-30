@@ -22,7 +22,7 @@ import {
 export function AnalyticsProvider() {
   const [decided, setDecided] = useState(true); // evita flash até montar
   const [consented, setConsented] = useState(false);
-  // TVs e KDS: sem aviso de cookies e sem etiquetas (ver ./surfaces.ts).
+  // TVs, KDS e POS: sem aviso de cookies e sem etiquetas (ver ./surfaces.ts).
   const permitido = marketingAllowedOn(usePathname());
 
   const { data } = useQuery({

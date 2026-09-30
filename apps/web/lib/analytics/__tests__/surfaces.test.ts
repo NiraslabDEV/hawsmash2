@@ -17,6 +17,13 @@ describe('marketing — onde o aviso de cookies e o rastreio entram', () => {
     expect(marketingAllowedOn('/kds/maputo')).toBe(false);
   });
 
+  it('no POS do balcão, não: o terminal da loja não é um cliente a visitar', () => {
+    expect(marketingAllowedOn('/pos')).toBe(false);
+    expect(marketingAllowedOn('/pos/')).toBe(false);
+    // Só o prefixo exacto: uma página pública que comece por "pos" continua.
+    expect(marketingAllowedOn('/posts')).toBe(true);
+  });
+
   it('sem caminho conhecido, fica como estava', () => {
     expect(marketingAllowedOn(null)).toBe(true);
   });
