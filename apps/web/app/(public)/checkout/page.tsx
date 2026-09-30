@@ -9,9 +9,10 @@
  *   deixou de ser um passo numerado — um campo de código vazio e sempre
  *   visível diz a toda a gente que existe um desconto que ela não tem, e
  *   manda-a para fora do site à procura dele.
- * - **O canal vem primeiro.** É ele que decide se há zona e morada; escolhê-lo
- *   depois de preencher os dados fazia o formulário refluir por baixo do
- *   teclado do telemóvel.
+ * - **Os dados vêm primeiro.** Nome, telefone e email são obrigatórios e
+ *   ficam no topo — decisão do dono. Quem já encomendou deste telemóvel
+ *   encontra-os preenchidos, e a morada da última entrega também
+ *   (`lib/checkout-memory.ts`, só neste browser).
  * - **O total e o botão deixaram de estar só no fim.** Há uma recapitulação no
  *   topo e a barra final diz quanto é que se está a pagar.
  * - **Sem sopa de caixas:** secções separadas por filete, numeradas.
@@ -37,6 +38,15 @@ import { AGENT_CHECKOUT_KEY, consumeAgentCheckout } from '@/lib/agents/webmcp';
 import { parseStoreCookie } from '@/lib/store-context';
 import { clearPendingCheckout, getPendingCheckout, rememberPendingCheckout } from '@/lib/payments/pending-checkout';
 import { clearCheckoutAttempt, getCheckoutAttempt } from '@/lib/payments/checkout-attempt';
+import {
+  forgetCheckout,
+  forgetSavedAddress,
+  isEmail,
+  readSavedAddress,
+  readSavedCustomer,
+  rememberCheckout,
+  type SavedAddress as RememberedAddress,
+} from '@/lib/checkout-memory';
 import {
   FunnelRail,
   FunnelFoot,
@@ -218,6 +228,7 @@ function LoginInline({
           <div className="hf-fld-row">
             <input
               type="tel"
+              autoComplete="tel"
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && ask()}
@@ -268,10 +279,13 @@ export default function CheckoutPage() {
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
   const [customerEmail, setCustomerEmail] = useState('');
-  const [showEmail, setShowEmail]         = useState(false);
   const [fulfillmentType, setFulfillmentType] = useState<'pickup' | 'delivery'>('pickup');
   const [deliveryZoneId, setDeliveryZoneId]   = useState<string>('');
   const [address, setAddress]                 = useState('');
+  // true = a morada veio da última encomenda deste browser; mostra o aviso
+  // com "Entregar noutro sítio" em vez de uma pergunta antes de a ver.
+  const [addressRestored, setAddressRestored] = useState(false);
+  const rememberedAddress = useRef<RememberedAddress | null>(null);
   const [scheduledFor, setScheduledFor]       = useState<string | null>(null);
 
   // O método decide o fluxo: M-Pesa directo pode coexistir com e-Mola online.
@@ -439,10 +453,12 @@ export default function CheckoutPage() {
       storeSlug,
       customerName,
       customerPhone,
-      customerEmail,
+      customerEmail: customerEmail.trim(),
       fulfillmentType,
-      deliveryZoneId: deliveryZoneId || null,
-      address: address || null,
+      // A morada fica no ecrã ao trocar para levantar (voltar à entrega não
+      // obriga a reescrevê-la), mas só segue no pedido se for entrega.
+      deliveryZoneId: fulfillmentType === 'delivery' && deliveryZoneId ? deliveryZoneId : null,
+      address: fulfillmentType === 'delivery' && address ? address : null,
       scheduledFor: scheduledFor || null,
       paymentMethod: method,
       notes: '',
@@ -463,7 +479,11 @@ export default function CheckoutPage() {
 
   function validate(): boolean {
     if (cart.length === 0)            { alert('Carrinho vazio'); return false; }
-    if (!customerName || !customerPhone) { alert('Por favor, preencha nome e telefone'); return false; }
+    if (!customerName.trim() || !customerPhone.trim() || !customerEmail.trim()) {
+      alert('Preenche o nome, o telefone e o email.');
+      return false;
+    }
+    if (!isEmail(customerEmail)) { alert('Confirma o email — parece ter um erro.'); return false; }
     if (fulfillmentType === 'delivery') {
       if (!deliveryZoneId || !address) { alert('Por favor, selecione zona e morada'); return false; }
     }
@@ -499,7 +519,7 @@ export default function CheckoutPage() {
     setAutoSubmitting(true);
     try {
       if (await resumePendingCheckout()) return;
-      rememberAddress();
+      rememberCustomer();
       trackAddPaymentInfo(cartTrackItems(), manualMethod);
       await createOrderMutation.mutateAsync(buildOrderPayload(manualMethod));
     } catch { /* A mutation apresenta o erro ao cliente. */ }
@@ -514,7 +534,7 @@ export default function CheckoutPage() {
     setAutoSubmitting(true);
     try {
       if (await resumePendingCheckout()) return;
-      rememberAddress();
+      rememberCustomer();
       trackAddPaymentInfo(cartTrackItems(), autoMethod);
       const payload = {
         ...buildOrderPayload(autoMethod),
@@ -638,6 +658,21 @@ export default function CheckoutPage() {
       // marca como válido (foi validado na loja); detalhe é revalidado no servidor
       setCouponResult({ valid: true });
     }
+
+    // O que o cliente escreveu da última vez, neste browser.
+    const known = readSavedCustomer(localStorage);
+    if (known) {
+      setCustomerName((n) => n || known.name);
+      setCustomerPhone((p) => p || known.phone);
+      setCustomerEmail((e) => e || known.email);
+    }
+    // Uma selecção assistida traz a sua zona: a morada de memória não se mete.
+    const lastAddress = agentCheckout.current ? null : readSavedAddress(localStorage);
+    if (lastAddress) {
+      rememberedAddress.current = lastAddress;
+      setAddress((a) => a || lastAddress.address);
+      setAddressRestored(true);
+    }
     setCartHydrated(true);
   }, []);
 
@@ -683,15 +718,52 @@ export default function CheckoutPage() {
     } catch { /* Storage recusado pelo browser: preencher o canal normalmente. */ }
   }, [menuData, storeSlug, zones]);
 
-  // Morada nova de quem já tem conta: fica guardada para a próxima. Fire and
-  // forget — a venda nunca espera nem pára por causa disto (§1, regra 1).
-  function rememberAddress() {
-    if (!profile || fulfillmentType !== 'delivery' || addressId || !address.trim()) return;
+  // Zona da morada de memória: só se for desta loja (a de Maputo não serve à
+  // Matola). Vem depois da selecção assistida e nunca pisa uma zona já escolhida.
+  useEffect(() => {
+    const zoneId = rememberedAddress.current?.zoneId;
+    if (!zoneId || addressId || !zones.some((z: any) => z.id === zoneId)) return;
+    setDeliveryZoneId((cur) => cur || zoneId);
+  }, [zones, addressId]);
+
+  // Guarda o que o cliente escreveu para a próxima encomenda: no browser
+  // sempre, e na conta quando o telemóvel já é reconhecido. Fire and forget —
+  // a venda nunca espera nem pára por causa disto (§1, regra 1).
+  function rememberCustomer() {
+    const delivery = fulfillmentType === 'delivery' && address.trim() !== '';
+    rememberCheckout(
+      localStorage,
+      { name: customerName, phone: customerPhone, email: customerEmail },
+      delivery ? { address, zoneId: deliveryZoneId || null } : null,
+    );
+    if (!profile || !delivery || addressId) return;
     saveAddress({
       label: addressLabel || 'Morada',
       address,
       zoneId: deliveryZoneId || null,
     }).catch(() => {});
+  }
+
+  /** Vai entregar noutro sítio: esquece a morada guardada neste browser. */
+  function forgetAddress() {
+    forgetSavedAddress(localStorage);
+    rememberedAddress.current = null;
+    setAddress('');
+    setAddressRestored(false);
+  }
+
+  /** Telemóvel partilhado: sai da conta e esquece os dados deste cliente. */
+  function notMe() {
+    void logout();
+    forgetCheckout(localStorage);
+    rememberedAddress.current = null;
+    setCustomerName('');
+    setCustomerPhone('');
+    setCustomerEmail('');
+    setAddressId('');
+    setAddress('');
+    setDeliveryZoneId('');
+    setAddressRestored(false);
   }
 
   const fmt = (cents: number) => formatMT(cents as Cents);
@@ -907,13 +979,55 @@ export default function CheckoutPage() {
           </button>
         </div>
 
-        {/* ── 01 Como e quando ─────────────────────────────────────────── */}
+        {/* ── 01 Os teus dados ─────────────────────────────────────────── */}
+        {/* Sempre os três campos, já preenchidos para quem voltou — com conta
+            ou só com a memória deste browser. Editáveis: quem encomenda para
+            outra pessoa corrige ali mesmo. */}
         <section className="hf-sec">
-          <SectionHead n={1}>Como e quando</SectionHead>
+          <SectionHead n={1}>Os teus dados</SectionHead>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <label style={{ display: 'block' }}>
+              <span className="hf-lbl">Nome *</span>
+              <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                <span style={{ position: 'absolute', left: 16, color: 'var(--hs-ink-mute)', display: 'flex', pointerEvents: 'none' }}><IcoUser /></span>
+                <input type="text" name="name" required autoComplete="name" value={customerName} onChange={(e) => setCustomerName(e.target.value)} className="hf-fld" style={{ paddingLeft: 46 }} placeholder="O teu nome" />
+              </div>
+            </label>
+            <label style={{ display: 'block' }}>
+              <span className="hf-lbl">Telefone *</span>
+              <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                <span style={{ position: 'absolute', left: 16, color: 'var(--hs-ink-mute)', display: 'flex', pointerEvents: 'none' }}><IcoPhone /></span>
+                <input type="tel" name="tel" required autoComplete="tel" value={customerPhone} onChange={(e) => setCustomerPhone(e.target.value)} className="hf-fld num" style={{ paddingLeft: 46 }} placeholder="+258 XX XXX XXXX" />
+              </div>
+            </label>
+            <label style={{ display: 'block' }}>
+              <span className="hf-lbl">Email *</span>
+              <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                <span style={{ position: 'absolute', left: 16, color: 'var(--hs-ink-mute)', display: 'flex', pointerEvents: 'none' }}><IcoMail /></span>
+                <input type="email" name="email" required autoComplete="email" inputMode="email" value={customerEmail} onChange={(e) => setCustomerEmail(e.target.value)} className="hf-fld" style={{ paddingLeft: 46 }} placeholder="email@exemplo.com" />
+              </div>
+            </label>
+
+            {profile ? (
+              <button type="button" onClick={notMe} style={{ display: 'flex', alignItems: 'center', gap: 11, minHeight: 44, color: 'var(--hs-ink-mute)' }}>
+                <IcoUser />
+                <span style={{ fontSize: 14 }}>Este telemóvel já te conhece.</span>
+                <span className="hf-act">Não sou eu</span>
+              </button>
+            ) : accountReady && (
+              /* Telemóvel novo: entrar em vez de escrever tudo de novo. */
+              <LoginInline requestCode={requestCode} verifyCode={verifyCode} defaultPhone={customerPhone} />
+            )}
+          </div>
+        </section>
+
+        {/* ── 02 Como e quando ─────────────────────────────────────────── */}
+        <section className="hf-sec">
+          <SectionHead n={2}>Como e quando</SectionHead>
           <div className="hf-tiles is-2">
             <Tile
               selected={fulfillmentType === 'pickup'}
-              onClick={() => { setFulfillmentType('pickup'); setDeliveryZoneId(''); setAddress(''); }}
+              onClick={() => setFulfillmentType('pickup')}
               icon={<IcoStore />}
               title="Levantar"
               sub="No balcão"
@@ -949,7 +1063,10 @@ export default function CheckoutPage() {
                     ))}
                     <button
                       type="button"
-                      onClick={() => { setAddressId(''); setAddress(''); setDeliveryZoneId(''); setAddressLabel('Outra'); }}
+                      onClick={() => {
+                        rememberedAddress.current = null;
+                        setAddressId(''); setAddress(''); setDeliveryZoneId(''); setAddressLabel('Outra'); setAddressRestored(false);
+                      }}
                       aria-pressed={addressId === ''}
                       className={`hf-chip${addressId === '' ? ' is-on' : ''}`}
                     >
@@ -981,12 +1098,23 @@ export default function CheckoutPage() {
                 <span className="hf-lbl">Morada *</span>
                 <input
                   type="text"
+                  name="address"
+                  autoComplete="street-address"
                   value={address}
-                  onChange={(e) => setAddress(e.target.value)}
+                  onChange={(e) => { setAddress(e.target.value); setAddressRestored(false); }}
                   className="hf-fld"
                   placeholder="Rua, número, bairro, ponto de referência…"
                 />
               </label>
+              {addressRestored && !addressId && address !== '' && (
+                <p className="hf-note" style={{ alignItems: 'center', marginTop: -6 }}>
+                  <span className="hf-ok" style={{ display: 'flex' }}><IcoCheck size={14} /></span>
+                  <span>Morada da tua última encomenda.</span>
+                  <button type="button" onClick={forgetAddress} className="hf-act" style={{ minHeight: 32 }}>
+                    Outra morada
+                  </button>
+                </p>
+              )}
 
               {profile && !addressId && address.trim() !== '' && (
                 <div>
@@ -1043,63 +1171,6 @@ export default function CheckoutPage() {
               </div>
             )}
           </div>
-        </section>
-
-        {/* ── 02 Quem recebe ───────────────────────────────────────────── */}
-        <section className="hf-sec">
-          <SectionHead n={2}>Quem recebe</SectionHead>
-
-          {profile ? (
-            /* Já nos conhecemos. Nome e telefone ficam à vista em vez de dois
-               campos a pedir para serem reescritos. */
-            <div className="hf-fld" style={{ gap: 14 }}>
-              <span style={{ color: 'var(--hs-gold)', display: 'flex' }}><IcoUser /></span>
-              <span style={{ flex: '1 1 auto', minWidth: 0 }}>
-                {profile.name || 'Cliente'}
-                <small className="num" style={{ display: 'block', fontSize: 11, color: 'var(--hs-ink-mute)', marginTop: 2 }}>
-                  {profile.phone}
-                </small>
-              </span>
-              <button type="button" onClick={logout} className="hf-act">Não sou eu</button>
-            </div>
-          ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-            <label style={{ display: 'block' }}>
-              <span className="hf-lbl">Nome *</span>
-              <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
-                <span style={{ position: 'absolute', left: 16, color: 'var(--hs-ink-mute)', display: 'flex', pointerEvents: 'none' }}><IcoUser /></span>
-                <input type="text" value={customerName} onChange={(e) => setCustomerName(e.target.value)} className="hf-fld" style={{ paddingLeft: 46 }} placeholder="O teu nome" />
-              </div>
-            </label>
-            <label style={{ display: 'block' }}>
-              <span className="hf-lbl">Telefone *</span>
-              <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
-                <span style={{ position: 'absolute', left: 16, color: 'var(--hs-ink-mute)', display: 'flex', pointerEvents: 'none' }}><IcoPhone /></span>
-                <input type="tel" value={customerPhone} onChange={(e) => setCustomerPhone(e.target.value)} className="hf-fld num" style={{ paddingLeft: 46 }} placeholder="+258 XX XXX XXXX" />
-              </div>
-            </label>
-            {showEmail ? (
-              <label style={{ display: 'block' }}>
-                <span className="hf-lbl">Email <span style={{ color: 'var(--hs-ink-faint)' }}>— opcional</span></span>
-                <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
-                  <span style={{ position: 'absolute', left: 16, color: 'var(--hs-ink-mute)', display: 'flex', pointerEvents: 'none' }}><IcoMail /></span>
-                  <input type="email" value={customerEmail} onChange={(e) => setCustomerEmail(e.target.value)} className="hf-fld" style={{ paddingLeft: 46 }} placeholder="email@exemplo.com" />
-                </div>
-              </label>
-            ) : (
-              <button type="button" onClick={() => setShowEmail(true)} style={{ display: 'flex', alignItems: 'center', gap: 11, minHeight: 44, color: 'var(--hs-ink-mute)' }}>
-                <IcoMail />
-                <span style={{ fontSize: 14 }}>Quero o talão por email</span>
-                <span className="hf-act">Juntar</span>
-              </button>
-            )}
-
-            {/* Telemóvel novo: entrar em vez de escrever tudo de novo. */}
-            {accountReady && (
-              <LoginInline requestCode={requestCode} verifyCode={verifyCode} defaultPhone={customerPhone} />
-            )}
-          </div>
-          )}
         </section>
 
         {/* ── 03 Pagamento ─────────────────────────────────────────────── */}

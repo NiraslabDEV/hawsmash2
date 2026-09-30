@@ -19,6 +19,7 @@ async function checkout(page: Page, emolaProvider: 'paysuite' | 'manual' | 'emol
   await page.goto('/checkout');
   await page.getByRole('textbox', { name: 'Nome *', exact: true }).fill('PLACEHOLDER_CLIENTE');
   await page.getByRole('textbox', { name: 'Telefone *', exact: true }).fill('870000000');
+  await page.getByRole('textbox', { name: 'Email *', exact: true }).fill('cliente@example.invalid');
   await page.getByRole('button', { name: 'Pagar agora' }).click();
   return errors;
 }
@@ -148,6 +149,7 @@ test('voltar atrás e mudar para comprovativo não duplica um pagamento incerto'
   await page.goBack();
   await page.getByRole('textbox', { name: 'Nome *', exact: true }).fill('PLACEHOLDER_CLIENTE');
   await page.getByRole('textbox', { name: 'Telefone *', exact: true }).fill('870000000');
+  await page.getByRole('textbox', { name: 'Email *', exact: true }).fill('cliente@example.invalid');
   await page.getByRole('button', { name: 'Comprovativo já paguei' }).click();
   await page.getByRole('button', { name: 'e-Mola Comprovativo' }).click();
   await page.getByRole('button', { name: /^Pagar \d+ MT$/i }).click();
@@ -195,6 +197,7 @@ test('resposta perdida antes do orderId reutiliza a chave após recarregar', asy
   await page.reload();
   await page.getByRole('textbox', { name: 'Nome *', exact: true }).fill('PLACEHOLDER_CLIENTE');
   await page.getByRole('textbox', { name: 'Telefone *', exact: true }).fill('870000000');
+  await page.getByRole('textbox', { name: 'Email *', exact: true }).fill('cliente@example.invalid');
   await page.getByRole('button', { name: 'Pagar agora' }).click();
   await page.getByRole('button', { name: /^e-Mola/ }).click();
   await page.getByRole('button', { name: /^Pagar \d+ MT$/i }).click();

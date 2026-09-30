@@ -76,6 +76,7 @@ async function orderFromStore(page: Page, slug: string, customerName: string) {
   await page.getByRole('button', { name: /Levantar/ }).click();
   await page.getByPlaceholder('O teu nome').fill(customerName);
   await page.getByPlaceholder('+258 XX XXX XXXX').first().fill(`+2588${suffix}01`);
+  await page.getByPlaceholder('email@exemplo.com').fill('cliente@example.invalid');
   await page.getByRole('button', { name: /^Pagar .*MT/ }).click();
   await expect(page.getByText('Total a pagar')).toBeVisible();
 

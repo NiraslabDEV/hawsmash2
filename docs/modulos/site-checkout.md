@@ -12,7 +12,7 @@ O cliente escolhe uma loja, produtos e modo de entrega/levantamento e conclui a 
 | `/l/[slug]` | Montra activa `Storefront`, cardápio e carrinho dessa loja |
 | `/menu` | Atalho por cookie `hs_store` ou loja por omissão; redirige para `/l/[slug]` |
 | `/upsell` | Ofertas antes do pagamento: upgrade de variante e acompanhamentos marcados no catálogo |
-| `/checkout` | Nome/contacto, moradas/conta opcionais, canal/zona/horário e pagamento |
+| `/checkout` | Nome, telefone e email obrigatórios no topo; canal/zona/morada/horário; pagamento |
 | `/payment/return/[orderId]` | Retorno/verificação de pagamento automático |
 | `/order-status/[orderId]` | Acompanhamento, senha, vinculação de conta e avaliação |
 | `/m/[token]` | Cardápio/pedido por QR de mesa; ver [Mesas](mesas.md) |
@@ -38,6 +38,7 @@ O upsell é opcional, usa decisões puras em `lib/upsell.ts` e não deve interro
 
 1. O checkout recupera carrinho/loja, consulta o cardápio e apresenta os dados de entrega ou levantamento.
 2. A pessoa escolhe zona e horário conforme canais e horários devolvidos; conta/moradas guardadas são opcionais. Se o serviço de conta falhar, mantém-se o formulário.
+   Nome, telefone e email são obrigatórios só no browser (decisão do dono, 30/09); `create_order` continua a aceitar pedidos sem email. O que a pessoa escreveu fica em `localStorage` (`dl_customer`, `dl_address`, [`lib/checkout-memory.ts`](../../apps/web/lib/checkout-memory.ts)) e volta preenchido na encomenda seguinte deste browser; a zona só é reposta se for da loja actual. Nunca vem do servidor, portanto não expõe moradas a quem só sabe o telefone (ADR 0003). “Outra morada” esquece a morada guardada; “Não sou eu” esquece tudo e sai da conta. Os campos têm `name`/`autocomplete` (`name`, `tel`, `email`, `street-address`) para o preenchimento automático do browser; o browser só os preenche quando a pessoa escolhe a sugestão.
 3. `validate_referral` pré-valida um código quando usado; a criação volta a validar preço, escolhas, taxa, horário e desconto.
 4. O fluxo manual cria o pedido e apresenta os dados de pagamento da loja. O comprovativo é carregado no bucket privado e ligado ao pedido por `/api/attach-proof`.
 5. O automático envia uma chave de tentativa persistida ao handler de pagamentos. A BD reclama uma única iniciação; resultado pendente/incerto é consultado, não tratado como convite a cobrar de novo.
