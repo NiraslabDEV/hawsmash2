@@ -11,6 +11,7 @@ O dono altera nome, textos, cores, imagens e contactos de marca através de `/ap
 3. O layout raiz injeta variáveis CSS e o `BrandProvider`; componentes cliente usam `useBrand()`.
 4. O layout público gera metadata/OG, tokens da montra e variantes de cor a partir da marca resolvida.
 5. O dono grava por `update_brand`. A mudança não precisa de novo deploy, mas pode estar sujeita à cache de leitura.
+6. As páginas sem dados próprios (login, checkout, POS, painel) são geradas no build; o `revalidate = 60` do layout raiz regenera-as ao ritmo da cache. Sem ele ficavam com a marca do build até ao deploy seguinte (o favicon da 1109 faltou nelas a 30/09).
 
 Só o perfil `owner` tem a aba e permissão de escrita. `manager`, `cashier` e `kitchen` consomem a identidade através das interfaces que usam. Anónimos recebem os campos públicos; não configurações secretas de pagamento ou email.
 

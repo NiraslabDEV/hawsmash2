@@ -13,6 +13,12 @@ const bebasNeue = Bebas_Neue({
   variable: '--font-display',
 });
 
+// Páginas sem dados próprios (login, checkout, POS, painel) são geradas no
+// build e ficavam com a marca desse momento até ao deploy seguinte — sem o
+// favicon, com a cor antiga. Regeneram-se ao ritmo da cache da marca
+// (lib/brand/server.ts). Tem de ser literal: o Next lê-o sem executar.
+export const revalidate = 60;
+
 export async function generateMetadata(): Promise<Metadata> {
   const brand = await getBrand();
   return {

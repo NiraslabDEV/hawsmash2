@@ -13,7 +13,7 @@ import { resolveBrand, type BrandRow, type ResolvedBrand } from './resolve';
  */
 
 /** Quanto tempo o servidor guarda a marca antes de voltar a perguntar. */
-const TTL_MS = 60_000;
+export const TTL_MS = 60_000;
 
 type CacheEntry = { brand: ResolvedBrand; expiresAt: number };
 let cached: CacheEntry | null = null;
