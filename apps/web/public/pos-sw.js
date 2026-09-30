@@ -81,7 +81,7 @@ self.addEventListener('fetch', (event) => {
   const isStatic =
     url.origin === self.location.origin &&
     (url.pathname.startsWith('/_next/static/') ||
-      url.pathname === '/manifest.webmanifest' ||
+      url.pathname === '/pos.webmanifest' ||
       url.pathname.startsWith('/pos-icon-'));
   if (isStatic) event.respondWith(staticAsset(request));
 });

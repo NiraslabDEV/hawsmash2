@@ -9,7 +9,7 @@ import './pos.css';
 export async function generateMetadata(): Promise<Metadata> {
   return {
     title: `POS · ${(await getBrand()).name}`,
-    manifest: '/manifest.webmanifest',
+    manifest: '/pos.webmanifest',
     robots: { index: false, follow: false },
   };
 }

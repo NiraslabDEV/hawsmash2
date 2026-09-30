@@ -1,5 +1,11 @@
 [
   {
+    "file": "docs/AUDITORIA-DOCUMENTACAO.md",
+    "target": "apps/web/app/manifest.ts:7",
+    "kind": "path",
+    "reason": "Retrato da auditoria de 26/09. O manifesto global saiu a 30/09 (o painel instalado abria o POS); os dois manifestos actuais estão em apps/web/lib/pwa/manifests.ts."
+  },
+  {
     "file": "BLOQUEIOS.md",
     "target": "_hawsmash/sections.tsx",
     "kind": "path",

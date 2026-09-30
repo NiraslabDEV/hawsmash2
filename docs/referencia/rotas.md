@@ -48,7 +48,7 @@ Todas são `page.tsx` sob `apps/web/app/(admin)`. As páginas cardapio/mesas/mar
 
 Não há rota cron de página: os cinco crons são endpoints HTTP. Não há rota KDS.
 
-Além destas páginas/APIs, `apps/web/app/manifest.ts:7` serve a rota especial **/manifest.webmanifest**, com scope/start_url do POS. O service worker `apps/web/public/pos-sw.js` é um asset estático.
+Além destas páginas/APIs, há dois manifestos de app instalável, definidos em `apps/web/lib/pwa/manifests.ts`: **/pos.webmanifest** (start_url e scope `/pos`, ligado pelo layout do POS) e **/painel.webmanifest** (start_url `/pedidos`, scope `/`, ligado pelo layout do painel). O site público não liga nenhum. Não pode existir `app/manifest.*`: o Next liga esse ficheiro a todas as páginas, e o painel instalado no telemóvel abria o POS. O service worker `apps/web/public/pos-sw.js` é um asset estático.
 
 ## 3. Todos os 33 endpoints HTTP
 

@@ -116,7 +116,7 @@ export const config = {
   // pagina). Fora: POS, TVs e o resto da API — webhooks e crons nao tem
   // browser do outro lado e nao devem levar Set-Cookie.
   matcher: [
-    '/((?!api|_next/static|_next/image|favicon.ico|pos|tv|kds|manifest.webmanifest|sw.js|.*\\.(?:png|jpg|jpeg|gif|webp|svg|ico|css|js|woff2?)$).*)',
+    '/((?!api|_next/static|_next/image|favicon.ico|pos|tv|kds|sw.js|.*\\.(?:png|jpg|jpeg|gif|webp|svg|ico|css|js|woff2?|webmanifest)$).*)',
     '/api/track',
   ],
 };

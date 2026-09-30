@@ -45,7 +45,7 @@ function Icon({ name }: { name: string }) {
 
 // Perfis, menu e onde cada perfil pode entrar: `lib/admin/nav.ts` (testado).
 
-export default function AdminLayout({ children }: { children: React.ReactNode }) {
+export function AdminShell({ children }: { children: React.ReactNode }) {
   const brand = useBrand();
   const router = useRouter();
   const pathname = usePathname();
