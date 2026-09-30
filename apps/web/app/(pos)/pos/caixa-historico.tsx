@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { formatMT, type Cents } from '@delivery/core';
 import type { CashSold } from '@delivery/receipt';
 import { createClient } from '@/utils/supabase/client';
@@ -19,6 +20,7 @@ import {
   type ShiftRow,
 } from '@/lib/cash/history';
 import { reprintCashDay } from '@/lib/cash/reprint-day';
+import { reprintCashSession } from '@/lib/cash/reprint-session';
 import { PosIcon } from './pos-icons';
 
 /**
@@ -26,7 +28,7 @@ import { PosIcon } from './pos-icons';
  * com a conferência da gaveta, como pagaram e os artigos vendidos — o mesmo
  * que o Caixa do painel mostra (`lib/cash/history`), feito para o dedo.
  *
- * Só se consulta e reimprime o fecho do dia. Com a sessão de quem está no
+ * Só se consulta e reimprime (turno 1108, dia 1100). Com a sessão de quem está no
  * POS: a RLS mostra só esta loja, e a cozinha não chega aqui (CLAUDE §6).
  */
 
@@ -286,6 +288,7 @@ function TurnoItem({ shift, people, open, onToggle }: {
               <ComoPagaram payments={report.payments} />
             </div>
           )}
+          <Reimprimir label="Reimprimir fecho do turno" enviar={(supabase) => reprintCashSession(supabase, shift.id)} />
         </div>
         <div>
           <h4 className="pos-eyebrow mb-2">Artigos vendidos no turno</h4>
@@ -297,20 +300,7 @@ function TurnoItem({ shift, people, open, onToggle }: {
 }
 
 function DiaItem({ day, open, onToggle }: { day: DayCloseRow; open: boolean; onToggle: () => void }) {
-  const [supabase] = useState(() => createClient());
-  const [reprinting, setReprinting] = useState(false);
-  const [notice, setNotice] = useState<{ ok: boolean; text: string } | null>(null);
   const report = day.report;
-
-  async function reprint() {
-    if (reprinting) return;
-    setReprinting(true);
-    const result = await reprintCashDay(supabase, day.id);
-    setReprinting(false);
-    setNotice(result.ok
-      ? { ok: true, text: 'Reimpresso · sai na impressora do balcão, marcado REIMPRESSÃO.' }
-      : { ok: false, text: result.message });
-  }
 
   return (
     <Expansivel
@@ -401,22 +391,7 @@ function DiaItem({ day, open, onToggle }: { day: DayCloseRow; open: boolean; onT
                   ))}
                 </ol>
               </div>
-              <div className="flex flex-col gap-2">
-                <button
-                  type="button"
-                  disabled={reprinting}
-                  onClick={() => void reprint()}
-                  className="pos-btn pos-btn--accent-outline w-full"
-                >
-                  <PosIcon name="printer" size={20} />
-                  {reprinting ? 'A enviar…' : 'Reimprimir fecho do dia'}
-                </button>
-                {notice && (
-                  <p role="status" className={`pos-note ${notice.ok ? 'pos-note--ok' : 'pos-note--danger'} !text-sm`}>
-                    {notice.text}
-                  </p>
-                )}
-              </div>
+              <Reimprimir label="Reimprimir fecho do dia" enviar={(supabase) => reprintCashDay(supabase, day.id)} />
             </div>
             <div>
               <h4 className="pos-eyebrow mb-2">Artigos vendidos no dia</h4>
@@ -426,6 +401,45 @@ function DiaItem({ day, open, onToggle }: { day: DayCloseRow; open: boolean; onT
         </div>
       )}
     </Expansivel>
+  );
+}
+
+/**
+ * Reimprimir um fecho: cada toque leva uma chave nova e sai um talão no
+ * balcão, marcado REIMPRESSÃO. Enquanto envia, o botão não aceita outro toque.
+ */
+export function Reimprimir({ label, enviar, className = '' }: {
+  label: string;
+  enviar: (supabase: SupabaseClient) => Promise<{ ok: true } | { ok: false; message: string }>;
+  className?: string;
+}) {
+  const [supabase] = useState(() => createClient());
+  const [busy, setBusy] = useState(false);
+  const [notice, setNotice] = useState<{ ok: boolean; text: string } | null>(null);
+
+  async function tocar() {
+    if (busy) return;
+    setBusy(true);
+    setNotice(null);
+    const result = await enviar(supabase);
+    setBusy(false);
+    setNotice(result.ok
+      ? { ok: true, text: 'Reimpresso · sai na impressora do balcão, marcado REIMPRESSÃO.' }
+      : { ok: false, text: result.message });
+  }
+
+  return (
+    <div className={`flex flex-col gap-2 ${className}`}>
+      <button type="button" disabled={busy} onClick={() => void tocar()} className="pos-btn pos-btn--accent-outline w-full">
+        <PosIcon name="printer" size={20} />
+        {busy ? 'A enviar…' : label}
+      </button>
+      {notice && (
+        <p role="status" className={`pos-note ${notice.ok ? 'pos-note--ok' : 'pos-note--danger'} !text-sm`}>
+          {notice.text}
+        </p>
+      )}
+    </div>
   );
 }
 

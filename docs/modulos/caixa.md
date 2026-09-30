@@ -18,15 +18,19 @@ O esperado é fundo inicial + vendas recebidas em dinheiro + reforços + troco i
 
 Fontes: [1007 caixa](../../supabase/migrations/20260819220000_1007_cash.sql), [dashboard](../../supabase/migrations/20260819222000_f5_cash_dashboard.sql), [artigos no fecho](../../supabase/migrations/20260926120000_1095_artigos_no_fecho.sql) e [adaptador POS](../../apps/web/lib/pos/caixa.ts).
 
+**Histórico no POS.** A aba Caixa tem três vistas: Agora (o turno aberto), Turnos fechados e Fechos do dia. As duas últimas mostram o que o painel mostra — conferência da gaveta, contado e diferença, como pagaram e artigos vendidos — lido de `cash_sessions` e `cash_day_closes` com a sessão de quem está no POS (a RLS da 1017/1091 deixa o `cashier` ler a sua loja). A leitura é a mesma do painel: [history.ts](../../apps/web/lib/cash/history.ts).
+
+**Reimprimir o turno (1108).** `reprint_cash_session(p_session_id, p_request_id)` volta a pôr o talão de fecho de um turno fechado na impressora do balcão. Botão "Reimprimir fecho do turno" no POS (em cada turno de Turnos fechados e no cartão do turno acabado de fechar) e em Painel → Caixa → Turnos fechados. As regras são as da 1100: owner, manager e cashier da loja, e o service_role; a cozinha não; a mesma chave não gasta mais papel; cada reimpressão fica em `event_log` como `cash.session_close_reprinted`. O papel sai do `report` congelado no fecho — os números não se recalculam. A marca REIMPRESSÃO vai no `shift_label`, que o bridge imprime por baixo de "FECHO DE CAIXA", por isso sai também com o `.exe` que está nas lojas. Num turno de antes da 1095, os artigos são contados pela regra do fecho, no período do turno, sem reescrever o `report`; um `report` sem pagamentos (motor herdado) é recusado com `session_report_unreadable` em vez de imprimir zeros.
+
 ## Fecho do dia
 
 `get_cash_day(p_store)` mostra turno aberto, turnos fechados ainda não agregados e último fecho do dia. `close_cash_day(p_store,p_request_id)` exige não haver turno aberto e pelo menos um turno pendente. Usa o mesmo lock da abertura/fecho de turno, liga os turnos por `cash_sessions.day_close_id` e grava `cash_day_closes`.
 
 O dia soma os relatórios congelados dos turnos; não recalcula as vendas. Cada turno pertence a um único fecho do dia. Repetir a mesma loja e `p_request_id` devolve o mesmo relatório com indicação de duplicado. Uma nova chave não permite incorporar novamente os mesmos turnos. O papel usa `kind=cash_close` com informação `day`, mantendo compatibilidade com o formato anterior do bridge. A listagem de artigos vendidos foi acrescentada pela 1095; fechos históricos sem esse bloco não ganham retrospectivamente dados inventados.
 
-**Reimprimir (1100).** `reprint_cash_day(p_day_close_id, p_request_id)` volta a pôr um fecho do dia na impressora do balcão, marcado REIMPRESSÃO. Botão "Reimprimir" em Painel → Caixa → Fechos do dia e REIMPRIMIR no POS (dia acabado de fechar e "Último fecho do dia"). Pode owner, manager e cashier da loja, e o service_role (suporte); a cozinha não. A mesma chave não gasta mais papel; cada reimpressão fica em `event_log` como `cash.day_close_reprinted`. Num fecho de antes da 1095, o papel leva os artigos vendidos calculados pela regra do fecho do dia — o relatório gravado não muda. O bridge anterior à 1091 imprime-o no formato de turno e ignora a lista.
+**Reimprimir (1100).** `reprint_cash_day(p_day_close_id, p_request_id)` volta a pôr um fecho do dia na impressora do balcão, marcado REIMPRESSÃO. Botão "Reimprimir" em Painel → Caixa → Fechos do dia e no POS (Caixa → Fechos do dia, dia acabado de fechar e "Último fecho do dia"). Pode owner, manager e cashier da loja, e o service_role (suporte); a cozinha não. A mesma chave não gasta mais papel; cada reimpressão fica em `event_log` como `cash.day_close_reprinted`. Num fecho de antes da 1095, o papel leva os artigos vendidos calculados pela regra do fecho do dia — o relatório gravado não muda. O bridge anterior à 1091 imprime-o no formato de turno e ignora a lista.
 
-Fonte: [migration 1091](../../supabase/migrations/20260925100000_1091_fecho_do_dia.sql), [migration 1100](../../supabase/migrations/20260927100000_1100_reimprimir_fecho_do_dia.sql), [day.ts](../../apps/web/lib/cash/day.ts), [reprint-day.ts](../../apps/web/lib/cash/reprint-day.ts) e [day-closes.tsx](../../apps/web/app/(admin)/caixa/day-closes.tsx).
+Fonte: [migration 1091](../../supabase/migrations/20260925100000_1091_fecho_do_dia.sql), [migration 1100](../../supabase/migrations/20260927100000_1100_reimprimir_fecho_do_dia.sql), [day.ts](../../apps/web/lib/cash/day.ts), [reprint-day.ts](../../apps/web/lib/cash/reprint-day.ts) e [history.tsx](../../apps/web/app/(admin)/caixa/history.tsx).
 
 ## Internet, mesas e repetição
 
@@ -41,17 +45,18 @@ A idempotência explícita do fecho do dia e da conta da mesa não deve ser atri
 | Área | Fontes e funções |
 |---|---|
 | Livro | `cash_sessions`, `cash_movements`, `cash_day_closes`, `orders`, `payments`, `table_bills` |
-| POS | [caixa-tab.tsx](../../apps/web/app/(pos)/pos/caixa-tab.tsx) |
+| POS | [caixa-tab.tsx](../../apps/web/app/(pos)/pos/caixa-tab.tsx) e [caixa-historico.tsx](../../apps/web/app/(pos)/pos/caixa-historico.tsx) |
+| Reimpressão | [reprint-session.ts](../../apps/web/lib/cash/reprint-session.ts) (turno, 1108) e [reprint-day.ts](../../apps/web/lib/cash/reprint-day.ts) (dia, 1100) |
 | Painel | [caixa/page.tsx](../../apps/web/app/(admin)/caixa/page.tsx) e listagem de fechos diários |
 | PDF | [`GET /api/cash-sessions/[id]/report`](../../apps/web/app/api/cash-sessions/[id]/report/route.ts); [report.ts](../../apps/web/lib/cash/report.ts) |
 | Email | [`/api/emails/send-cash-close-email`](../../apps/web/app/api/emails/send-cash-close-email/route.ts), [`/api/emails/send-cash-day-email`](../../apps/web/app/api/emails/send-cash-day-email/route.ts) |
 | Papel | `print_jobs` e formatos em [Impressão](impressao.md) |
 
-Eventos centrais: `cash.session_opened`, `cash.session_auto_opened`, `cash.movement_added`, `cash.session_closed`, `cash.day_closed` e falhas auxiliares como `cash.day_close_print_failed`. Os eventos operacionais incluem autor e loja. O dinheiro não pode depender do sucesso SMTP ou da impressora.
+Eventos centrais: `cash.session_opened`, `cash.session_auto_opened`, `cash.movement_added`, `cash.session_closed`, `cash.day_closed`, as reimpressões `cash.session_close_reprinted` e `cash.day_close_reprinted`, e falhas auxiliares como `cash.day_close_print_failed`. Os eventos operacionais incluem autor e loja. O dinheiro não pode depender do sucesso SMTP ou da impressora.
 
 ## Testes e pendências
 
-Testes puros de leitura, entradas e relatório estão em [lib/cash/__tests__](../../apps/web/lib/cash/__tests__) e [POS caixa](../../apps/web/lib/pos/__tests__/caixa.test.ts). As suites de BD são [cash](../../packages/db/tests/cash.test.ts), [cash-v2](../../packages/db/tests/cash-v2.test.ts), [cash-day](../../packages/db/tests/cash-day.test.ts) e [mesas](../../packages/db/tests/mesas.test.ts). Os formatos têm testes de fecho de turno/dia e artigos em `@delivery/receipt`. Não foram executados nesta passagem; `pnpm test` na raiz não substitui o gate de BD.
+Testes puros de leitura, entradas e relatório estão em [lib/cash/__tests__](../../apps/web/lib/cash/__tests__) e [POS caixa](../../apps/web/lib/pos/__tests__/caixa.test.ts). As suites de BD são [cash](../../packages/db/tests/cash.test.ts), [cash-v2](../../packages/db/tests/cash-v2.test.ts), [cash-day](../../packages/db/tests/cash-day.test.ts), [reimprimir o dia](../../packages/db/tests/reimprimir-fecho-do-dia.test.ts), [reimprimir o turno](../../packages/db/tests/reimprimir-fecho-do-turno.test.ts) e [mesas](../../packages/db/tests/mesas.test.ts). Os formatos têm testes de fecho de turno/dia e artigos em `@delivery/receipt`. Não foram executados nesta passagem; `pnpm test` na raiz não substitui o gate de BD.
 
 [ADR 0001](../decisions/0001-multi-unidade.md) rege a unidade; [ADR 0004](../decisions/0004-email-smtp-hostinger.md) rege o envio SMTP. Consultar B-006 para hardware/ensaio de abertura e B-012 para o estado histórico da configuração de email em [BLOQUEIOS](../../BLOQUEIOS.md). A [auditoria](../AUDITORIA-DOCUMENTACAO.md) contém as divergências que não foram corrigidas por esta documentação.
 

@@ -14,6 +14,7 @@ import {
 import { createClient } from '@/utils/supabase/client';
 import { downloadStaffFile } from '@/lib/admin/staff-fetch';
 import { reprintCashDay } from '@/lib/cash/reprint-day';
+import { reprintCashSession } from '@/lib/cash/reprint-session';
 
 import {
   Card,
@@ -165,7 +166,21 @@ function ShiftItem({ shift, people, storeName }: {
   people?: ShiftPeople;
   storeName?: string;
 }) {
+  const supabase = useMemo(() => createClient(), []);
+  const [reprinting, setReprinting] = useState(false);
+  const [notice, setNotice] = useState<{ ok: boolean; text: string } | null>(null);
   const report = shift.report;
+
+  async function reprint() {
+    if (reprinting) return;
+    setReprinting(true);
+    const result = await reprintCashSession(supabase, shift.id);
+    setReprinting(false);
+    setNotice(result.ok
+      ? { ok: true, text: 'Na fila da impressora do balcão da loja, marcado REIMPRESSÃO.' }
+      : { ok: false, text: result.message });
+  }
+
   return (
     <details className="group rounded-xl border border-white/10 bg-black/20 open:border-[#F5A623]/30 open:bg-black/30">
       <summary className="flex cursor-pointer list-none flex-wrap items-center gap-x-4 gap-y-2 p-4">
@@ -221,13 +236,24 @@ function ShiftItem({ shift, people, storeName }: {
               <PaymentSplit payments={report.payments} />
             </div>
           )}
-          <button
-            type="button"
-            onClick={() => { void downloadStaffFile(`/api/cash-sessions/${shift.id}/report`, 'fecho.pdf').catch(() => undefined); }}
-            className="rounded-lg border border-white/10 px-3 py-2 text-xs font-bold text-[#F5A623] hover:bg-white/[0.06]"
-          >
-            Descarregar PDF do turno
-          </button>
+          <div className="flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              onClick={() => { void downloadStaffFile(`/api/cash-sessions/${shift.id}/report`, 'fecho.pdf').catch(() => undefined); }}
+              className="rounded-lg border border-white/10 px-3 py-2 text-xs font-bold text-[#F5A623] hover:bg-white/[0.06]"
+            >
+              Descarregar PDF do turno
+            </button>
+            <button
+              type="button"
+              disabled={reprinting}
+              onClick={() => void reprint()}
+              className="rounded-lg border border-white/10 px-3 py-2 text-xs font-bold text-[#F5A623] hover:bg-white/[0.06] disabled:opacity-50"
+            >
+              {reprinting ? 'A enviar…' : 'Reimprimir fecho do turno'}
+            </button>
+            {notice && <p role="status" className={`text-xs ${notice.ok ? 'text-emerald-300' : 'text-red-300'}`}>{notice.text}</p>}
+          </div>
         </div>
         <div>
           <p className="mb-2 text-xs font-black uppercase tracking-wider text-[#8F8376]">Artigos vendidos no turno</p>

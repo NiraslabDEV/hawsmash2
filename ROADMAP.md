@@ -630,3 +630,23 @@ Pedido do dono: um botão "Reimprimir" nos fechos do dia, no Caixa do painel e n
   de Maputo no contexto, notas da marca guardadas/reabertas. Funil de três etapas
   «Convite para voltar — rascunho IA» revisto e gravado, esperas 0/2880/10080 minutos.
   Sem activar campanha, inscrever contactos ou enviar mensagens. 1190 testes verdes.
+
+## Caixa do POS: histórico e reimprimir o fecho do turno — 2026-09-30
+
+Pedido do dono: no POS, ver os turnos fechados e os fechos do dia como no painel, e um botão para reimprimir
+o fecho de um turno (1108).
+
+- [x] POS → Caixa: vistas Agora · Turnos fechados · Fechos do dia, com conferência da gaveta, como pagaram e
+  artigos vendidos; leitura partilhada com o painel (`lib/cash/history`). Validado a 1366×768 (`843dd12`).
+- [x] `reprint_cash_session(p_session_id, p_request_id)`: as regras da 1100 para o turno — owner/manager/cashier
+  da loja e service_role; cozinha e outra loja recusadas; idempotente por chave; `event_log`
+  `cash.session_close_reprinted`. Marca REIMPRESSÃO no `shift_label`, legível pelo `.exe` que está nas lojas. Turno
+  de antes da 1095 sai com os artigos contados, sem reescrever o `report`; `report` sem pagamentos é recusado.
+- [x] Botão "Reimprimir fecho do turno" em cada turno fechado e no cartão do turno acabado de fechar (POS), e em
+  Painel → Caixa → Turnos fechados.
+- [x] Provado numa BD local (PGlite, sem base remota): 14 cenários vermelhos sem a 1108, 15/15 com ela, reaplicação
+  sem erro. Talão renderizado com a marca (`cash-close-reprint.test.ts`). Gate supabase-js em
+  `packages/db/tests/reimprimir-fecho-do-turno.test.ts` (por correr; recusa fora de localhost).
+- [ ] Aplicar a 1108 no LIVE (`pqjoan…`, ADR 0008) fora do horário da loja. O código foi para o `dev` antes da
+  migration (dry-run a 30/09 às 09:40: só a 1108 pendente); até ela entrar, o botão responde "ainda não está
+  disponível nesta loja" e nada mais muda.

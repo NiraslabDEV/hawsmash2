@@ -4,7 +4,7 @@
 
 Retrato estático da **árvore de trabalho**, incluindo ficheiros ainda não commitados. Não comprova aplicação em staging/produção, grants efectivos da instalação ou resultados de testes. Não executa SQL.
 
-153 ficheiros; 34 287 linhas. A ordem é o timestamp do nome, não o sufixo de assunto. A 1080 precede intencionalmente 1077–1079. A cadeia canónica está em [supabase/migrations](../../supabase/migrations); os dois SQL de [packages/db/migrations](../../packages/db/migrations) são legado e não entram nesta contagem.
+161 ficheiros; 35 457 linhas. A ordem é o timestamp do nome, não o sufixo de assunto. A 1080 precede intencionalmente 1077–1079. A cadeia canónica está em [supabase/migrations](../../supabase/migrations); os dois SQL de [packages/db/migrations](../../packages/db/migrations) são legado e não entram nesta contagem.
 
 | Ficheiro / assunto | Tabelas em DDL directo | Funções declaradas/alteradas/removidas | Limite |
 | --- | --- | --- | --- |
@@ -161,6 +161,14 @@ Retrato estático da **árvore de trabalho**, incluindo ficheiros ainda não com
 | [supabase/migrations/20260926180100_1098_sangria_idempotente.sql:1](../../supabase/migrations/20260926180100_1098_sangria_idempotente.sql#L1) | `public.cash_movements` | `public.add_cash_movement` | Leitura estática |
 | [supabase/migrations/20260926180200_1099_isolamento_de_dados.sql:1](../../supabase/migrations/20260926180200_1099_isolamento_de_dados.sql#L1) | — | `private.can_read_payment_proof` | Leitura estática |
 | [supabase/migrations/20260927100000_1100_reimprimir_fecho_do_dia.sql:1](../../supabase/migrations/20260927100000_1100_reimprimir_fecho_do_dia.sql#L1) | — | `public.reprint_cash_day` | Leitura estática |
+| [supabase/migrations/20260927183932_1101_validar_place_id.sql:1](../../supabase/migrations/20260927183932_1101_validar_place_id.sql#L1) | `public.stores` | `public.set_store_google_place` | Leitura estática |
+| [supabase/migrations/20260927200000_1102_retirar_item_da_mesa.sql:1](../../supabase/migrations/20260927200000_1102_retirar_item_da_mesa.sql#L1) | — | `private.enqueue_table_item_removed`, `private.restore_order_ingredients`, `private.restore_order_stock`, `public.pos_table_overview`, `public.remove_table_item` | Leitura estática |
+| [supabase/migrations/20260927210000_1103_apagar_opcoes_do_cardapio.sql:1](../../supabase/migrations/20260927210000_1103_apagar_opcoes_do_cardapio.sql#L1) | — | — | Leitura estática |
+| [supabase/migrations/20260927214837_1104_modulo_emails.sql:1](../../supabase/migrations/20260927214837_1104_modulo_emails.sql#L1) | `private.email_passwords`, `public.email_contacts`, `public.email_flows`, `public.email_jobs`, `public.email_settings` | `private.email_contact_created`, `private.email_order_event`, `private.email_validate_steps`, `public.email_claim`, `public.email_enrol`, `public.email_finish`, `public.email_save`, `public.email_smtp`, `public.email_unsubscribe` | Contém DO/EXECUTE; ver nota abaixo |
+| [supabase/migrations/20260927231400_1105_emails_do_sistema.sql:1](../../supabase/migrations/20260927231400_1105_emails_do_sistema.sql#L1) | `public.email_campaign_knowledge`, `public.email_delivery_log`, `public.email_system_templates` | `private.email_validate_steps`, `public.email_save_knowledge`, `public.email_save_system` | Contém DO/EXECUTE; ver nota abaixo |
+| [supabase/migrations/20260929220000_1106_variante_no_nome_do_talao.sql:1](../../supabase/migrations/20260929220000_1106_variante_no_nome_do_talao.sql#L1) | — | — | Contém DO/EXECUTE; ver nota abaixo |
+| [supabase/migrations/20260930060000_1107_foto_do_macon_smash.sql:1](../../supabase/migrations/20260930060000_1107_foto_do_macon_smash.sql#L1) | — | — | Leitura estática |
+| [supabase/migrations/20260930140000_1108_reimprimir_fecho_do_turno.sql:1](../../supabase/migrations/20260930140000_1108_reimprimir_fecho_do_turno.sql#L1) | — | `public.reprint_cash_session` | Leitura estática |
 
 ## SQL dinâmico e limites
 
@@ -175,5 +183,8 @@ As listas fixas de policies da 1004 são expandidas pelo gerador; a remoção de
 | [supabase/migrations/20260923230000_1070_cardapio_em_tempo_real.sql:14](../../supabase/migrations/20260923230000_1070_cardapio_em_tempo_real.sql#L14) | DDL dinâmico/condicional: só listas fixas de policies da 1004 são expandidas; restantes efeitos exigem revisão. |
 | [supabase/migrations/20260924015000_1080_mesmo_produto_em_varias_linhas.sql:40](../../supabase/migrations/20260924015000_1080_mesmo_produto_em_varias_linhas.sql#L40) | Altera corpo de função por pg_get_functiondef/replace; não executado pelo catálogo. |
 | [supabase/migrations/20260924015000_1080_mesmo_produto_em_varias_linhas.sql:81](../../supabase/migrations/20260924015000_1080_mesmo_produto_em_varias_linhas.sql#L81) | Altera corpo de função por pg_get_functiondef/replace; não executado pelo catálogo. |
+| [supabase/migrations/20260927214837_1104_modulo_emails.sql:67](../../supabase/migrations/20260927214837_1104_modulo_emails.sql#L67) | DDL dinâmico/condicional: só listas fixas de policies da 1004 são expandidas; restantes efeitos exigem revisão. |
+| [supabase/migrations/20260927231400_1105_emails_do_sistema.sql:27](../../supabase/migrations/20260927231400_1105_emails_do_sistema.sql#L27) | DDL dinâmico/condicional: só listas fixas de policies da 1004 são expandidas; restantes efeitos exigem revisão. |
+| [supabase/migrations/20260929220000_1106_variante_no_nome_do_talao.sql:20](../../supabase/migrations/20260929220000_1106_variante_no_nome_do_talao.sql#L20) | Altera corpo de função por pg_get_functiondef/replace; não executado pelo catálogo. |
 
 [RPCs](rpcs.md) · [Tabelas/RLS](tabelas-rls.md) · [Eventos](eventos.md)

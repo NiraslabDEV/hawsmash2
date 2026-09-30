@@ -6,6 +6,7 @@ import { createClient } from '@/utils/supabase/client';
 import { staffFetch } from '@/lib/admin/staff-fetch';
 import { addCashMovement, movementRequestKeeper } from '@/lib/cash/movement';
 import { reprintCashDay } from '@/lib/cash/reprint-day';
+import { reprintCashSession } from '@/lib/cash/reprint-session';
 import {
   CASH_MOVEMENT_HINTS,
   CASH_MOVEMENT_LABELS,
@@ -28,7 +29,7 @@ import {
   type CashDayReport,
 } from '@/lib/cash/day';
 import { fetchTableOverview } from '@/lib/pos/tables';
-import { CaixaHistorico } from './caixa-historico';
+import { CaixaHistorico, Reimprimir } from './caixa-historico';
 import { PosIcon } from './pos-icons';
 import { TouchKeyboard } from './touch-keyboard';
 
@@ -774,6 +775,11 @@ export function CaixaTab({
             <p className="mt-2 text-sm text-ink">
               A pessoa seguinte abre o turno dela à esquerda. No fim de tudo, faz-se o fecho do dia.
             </p>
+            <Reimprimir
+              label="Reimprimir fecho do turno"
+              enviar={(client) => reprintCashSession(client, lastClose.session_id)}
+              className="mt-3"
+            />
             {!troca && (
               <button
                 type="button"
@@ -781,7 +787,7 @@ export function CaixaTab({
                   setAbrirTurno(lastClose.session_id);
                   setVista('turnos');
                 }}
-                className="pos-btn pos-btn--quiet mt-3 !min-h-12 w-full"
+                className="pos-btn pos-btn--quiet mt-2 !min-h-12 w-full"
               >
                 <PosIcon name="clock" size={18} />
                 Ver a gaveta e os artigos vendidos
