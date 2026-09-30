@@ -239,7 +239,64 @@ describe("talão da casa · venda de balcão", () => {
       ["counter", "controlo"],
       ["kitchen", "cliente"],
     ]);
-    expect(await papel(vendaId, "receipt")).toEqual([]);
+    // O único `receipt` é a senha pequena (1111) — o talão curto não volta.
+    const recibos = await papel(vendaId, "receipt");
+    expect(recibos.map((r) => r.payload.template)).toEqual(["senha"]);
+  });
+
+  it("a senha pequena sai ao balcão, depois das vias, com o número e sem 'Balcão' como nome", async () => {
+    const { data: fila } = await admin
+      .from("print_jobs")
+      .select("kind,station,reprint_seq,payload,created_at")
+      .eq("order_id", vendaId)
+      .in("kind", ["order", "receipt"])
+      .order("created_at");
+    const ordem = (fila ?? []).map((j) => (j.kind === "receipt" ? "senha" : j.payload.via));
+    expect(ordem.at(-1)).toBe("senha");
+
+    const { data: pedido } = await admin
+      .from("orders")
+      .select("daily_number,order_number")
+      .eq("id", vendaId)
+      .single();
+    const [senha] = await papel(vendaId, "receipt");
+    expect(senha).toMatchObject({
+      station: "counter",
+      reprint_seq: 0,
+      payload: {
+        template: "senha",
+        store_short_name: "Matola",
+        daily_number: pedido!.daily_number,
+        order_number: pedido!.order_number,
+        table_number: null,
+        customer_name: "",
+      },
+    });
+  });
+
+  it("repetir a mesma venda não põe uma segunda senha na fila", async () => {
+    const clientSaleId = crypto.randomUUID();
+    const venda = {
+      p_payload: {
+        clientSaleId,
+        deviceId,
+        customerName: "Ana",
+        items: [{ menuItemId: itemId, qty: 1 }],
+        payments: [{ method: "cash", amountCents: precoItem }],
+        cashReceivedCents: precoItem,
+      },
+    };
+    const primeira = await caixa.rpc("create_counter_sale", venda);
+    const repetida = await caixa.rpc("create_counter_sale", venda);
+    expect(primeira.error).toBeNull();
+    expect(repetida.error).toBeNull();
+    const id = primeira.data.order_id as string;
+    criadosPedidos.push(id);
+    expect(repetida.data.order_id).toBe(id);
+
+    const recibos = await papel(id, "receipt");
+    expect(recibos).toHaveLength(1);
+    expect(recibos[0].payload).toMatchObject({ template: "senha", customer_name: "Ana" });
   });
 
   it("o talão do balcão leva o pagamento, o recebido e o troco, e não inventa cliente", async () => {
@@ -266,7 +323,8 @@ describe("talão da casa · venda de balcão", () => {
     });
     expect(error).toBeNull();
 
-    const [segunda] = await papel(vendaId, "receipt");
+    // A seq 0 do `receipt` é a senha pequena (1111); a reimpressão vem depois.
+    const segunda = (await papel(vendaId, "receipt")).find((j) => j.reprint_seq > 0);
     expect(segunda).toMatchObject({
       station: "counter",
       payload: { formato: "talao_completo", via: "reimpressao" },

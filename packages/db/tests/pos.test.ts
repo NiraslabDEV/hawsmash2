@@ -912,13 +912,16 @@ describe("F3 — talões da venda", () => {
 
     expect(error).toBeNull();
     // Um só papel para tudo (1064): dois talões completos — VIA DE CONTROLO ao
-    // balcão, VIA DO CLIENTE na cozinha — e nenhum talão curto. O retry não
-    // duplica nada.
-    expect(jobs).toHaveLength(2);
-    expect(jobs?.every((job) => job.kind === "order")).toBe(true);
+    // balcão, VIA DO CLIENTE na cozinha — e nenhum talão curto; mais a senha
+    // pequena ao balcão (1111). O retry não duplica nada.
+    expect(jobs).toHaveLength(3);
+    const vias = jobs?.filter((job) => job.kind === "order") ?? [];
+    expect(vias).toHaveLength(2);
+    expect(jobs?.filter((job) => job.kind === "receipt").map((job) => job.payload.template))
+      .toEqual(["senha"]);
 
-    const controlo = jobs?.find((job) => job.reprint_seq === 0);
-    const cliente = jobs?.find((job) => job.reprint_seq === 1);
+    const controlo = vias.find((job) => job.reprint_seq === 0);
+    const cliente = vias.find((job) => job.reprint_seq === 1);
     const talao = {
       template: "kitchen",
       formato: "talao_completo",

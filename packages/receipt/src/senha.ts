@@ -1,7 +1,9 @@
 /**
- * A senha pequena (1083): o papel que o cliente da mesa leva — só o número que
- * se chama e que aparece na TV, a mesa e o nome. Nada de artigos nem preços:
- * isso vai na comanda.
+ * A senha pequena (1083): o papel que o cliente leva — só o número que se
+ * chama e que aparece na TV, a mesa (se for de mesa) e o nome. Nada de artigos
+ * nem preços: isso vai na comanda. Sai nos pedidos de mesa (1092) e nas vendas
+ * do balcão (1111), com o logo da marca por cima quando o layout da loja o tem
+ * ligado — o mesmo interruptor do talão completo.
  *
  * O payload traz também os campos do formato herdado (`customer_name`,
  * `table_number`, `items: []`…). Um bridge de antes deste formato não o
@@ -9,11 +11,13 @@
  * artigos. Sai maior do que devia, mas sai, e diz o que interessa.
  */
 
+import { FACTORY_PRINT_LAYOUT, type PrintLayout } from './layout';
 import {
   ALIGN_CENTER,
   ALIGN_LEFT,
   BOLD_OFF,
   BOLD_ON,
+  BRAND,
   CUT,
   FEED_BEFORE_CUT,
   INIT,
@@ -32,13 +36,14 @@ export interface SenhaSlipPayload {
   template: 'senha';
   store_short_name: string;
   daily_number: number;
+  /** Só nos pedidos de mesa; no balcão vem `null`. */
   table_number: number | null;
-  /** "Mesa 5 · João" — o nome do cliente, quando o caixa o escreveu. */
+  /** "Mesa 5 · João" na mesa, "João" no balcão, ou vazio sem nome escrito. */
   customer_name: string;
   order_number: string;
   created_at: string;
   // Formato herdado, para um bridge antigo imprimir o essencial.
-  fulfillment_type: 'dine_in';
+  fulfillment_type: 'dine_in' | 'counter';
   items: [];
   payment_method: 'no_payment';
   total_cents: number;
@@ -54,8 +59,12 @@ function nomeDoCliente(customerName: string): string | null {
   return nome || null;
 }
 
-export function buildSenhaSlip(payload: SenhaSlipPayload): Op[] {
+export function buildSenhaSlip(
+  payload: SenhaSlipPayload,
+  layout: PrintLayout = FACTORY_PRINT_LAYOUT,
+): Op[] {
   const ops: Op[] = [INIT, ALIGN_CENTER];
+  if (layout.show.logo) ops.push(BRAND);
   ops.push(BOLD_ON, line(payload.store_short_name.toUpperCase()), BOLD_OFF);
   ops.push(line(rule('-')));
   ops.push(line('SENHA'));

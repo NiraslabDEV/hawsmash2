@@ -642,7 +642,7 @@ function buildTestReceipt(payload: TestPrintPayload): Op[] {
 
 /** Qualquer payload conhecido; o que não se reconhece sai no formato herdado. */
 export function buildReceipt(payload: PrintPayload, layout: PrintLayout = FACTORY_PRINT_LAYOUT): Op[] {
-  if (isSenhaSlip(payload)) return buildSenhaSlip(payload);
+  if (isSenhaSlip(payload)) return buildSenhaSlip(payload, layout);
   if (isKitchenTicket(payload)) return buildKitchenTicket(payload, layout);
   if (isCustomerReceipt(payload)) return buildCustomerReceipt(payload);
   if (isCashClosePayload(payload)) return buildCashCloseReceipt(payload);
