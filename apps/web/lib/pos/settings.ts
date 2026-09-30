@@ -79,6 +79,14 @@ export type PosSettings = {
     /** Toca quando chega um pedido online. */
     newOrderChime: boolean;
   };
+  session: {
+    /**
+     * Minutos sem toques até o POS voltar aos cartões e pedir o PIN.
+     * 0 = nunca: fica aberto o turno inteiro e só bloqueia no botão Bloquear
+     * ou na troca de turno.
+     */
+    lockAfterMinutes: number;
+  };
   /**
    * Como sai o talão (modelo por via e blocos). Quem o aplica é o print-bridge
    * do mini-PC, que o lê desta mesma linha; o contrato é `@delivery/receipt`.
@@ -124,7 +132,11 @@ export const POS_LIMITS = {
   quickNotes: 24,
   confirmationMin: 1,
   confirmationMax: 15,
+  lockMaxMinutes: 240,
 } as const;
+
+/** As escolhas do painel para o bloqueio sem uso, em minutos (0 = nunca). */
+export const POS_LOCK_OPTIONS: readonly number[] = [0, 5, 15, 30, 60];
 
 export const FACTORY_POS_SETTINGS: PosSettings = {
   payments: {
@@ -188,6 +200,13 @@ export const FACTORY_POS_SETTINGS: PosSettings = {
   },
   alerts: {
     newOrderChime: true,
+  },
+  // Nunca, de fábrica (pedido da loja, 30 Set): o bloqueio aos 5 minutos
+  // obrigava a caixa a pôr o PIN várias vezes por turno. Quem se afasta toca
+  // em Bloquear; a troca de turno bloqueia sozinha. Cada loja pode voltar a
+  // ligá-lo nas Definições do POS.
+  session: {
+    lockAfterMinutes: 0,
   },
   printing: FACTORY_PRINT_LAYOUT,
 };
@@ -301,9 +320,11 @@ export function resolvePosSettings(raw: unknown): PosSettings {
   const cart = obj(r.cart) ?? {};
   const sale = obj(r.sale) ?? {};
   const alerts = obj(r.alerts) ?? {};
+  const session = obj(r.session) ?? {};
 
   const fulfillment = cart.defaultFulfillment;
   const segundos = Number(sale.confirmationSeconds);
+  const minutosBloqueio = typeof session.lockAfterMinutes === 'number' ? session.lockAfterMinutes : Number.NaN;
 
   return {
     payments: {
@@ -335,6 +356,12 @@ export function resolvePosSettings(raw: unknown): PosSettings {
     },
     alerts: {
       newOrderChime: bool(alerts.newOrderChime, f.alerts.newOrderChime),
+    },
+    session: {
+      lockAfterMinutes:
+        Number.isFinite(minutosBloqueio) && minutosBloqueio >= 0
+          ? Math.min(POS_LIMITS.lockMaxMinutes, Math.round(minutosBloqueio))
+          : f.session.lockAfterMinutes,
     },
     printing: resolvePrintLayout(r.printing),
   };

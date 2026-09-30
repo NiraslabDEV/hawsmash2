@@ -6,7 +6,7 @@ O POS é a PWA touch de `/pos`, vinculada a uma loja e operada com a sessão ind
 
 `cashier`, `manager` e `owner` operam o balcão dentro do acesso à loja. O dono tem acesso global; o terminal continua vinculado à sua unidade. `kitchen` não recebe permissões financeiras por conseguir ver um cartão na entrada. A autorização efectiva está nas RPCs, não nos botões.
 
-O vínculo usa `bind_pos_device`. A entrada corrente apresenta `pos_login_cards` e envia cartão/PIN a [`POST /api/pos/login`](../../apps/web/app/api/pos/login/route.ts). O servidor verifica `pos_login_with_pin` e cria uma sessão Supabase da pessoa. Email/palavra-passe continuam a servir o vínculo e a configuração inicial do PIN. `set_own_pos_pin`, `pos_pin_status`, `lock_pos_device` e `unlock_pos_device` completam esse ciclo. O PIN tem 4–6 dígitos; falhas repetidas activam espera crescente. O bloqueio por inactividade usa cinco minutos em [session.ts](../../apps/web/lib/pos/session.ts).
+O vínculo usa `bind_pos_device`. A entrada corrente apresenta `pos_login_cards` e envia cartão/PIN a [`POST /api/pos/login`](../../apps/web/app/api/pos/login/route.ts). O servidor verifica `pos_login_with_pin` e cria uma sessão Supabase da pessoa. Email/palavra-passe continuam a servir o vínculo e a configuração inicial do PIN. `set_own_pos_pin`, `pos_pin_status`, `lock_pos_device` e `unlock_pos_device` completam esse ciclo. O PIN tem 4–6 dígitos; falhas repetidas activam espera crescente. O bloqueio por inactividade é uma definição da loja (Definições → POS → "Bloquear o POS sem uso", `session.lockAfterMinutes`): de fábrica **nunca** desde 30/09 — a pessoa entra uma vez e fica o turno inteiro; o POS volta aos cartões no botão Bloquear ou na troca de turno. A loja pode escolher 5, 15, 30 ou 60 minutos ([session.ts](../../apps/web/lib/pos/session.ts)). Com alguém no POS, o ecrã fica ligado (Screen Wake Lock, [use-screen-wake-lock.ts](../../apps/web/app/(pos)/pos/use-screen-wake-lock.ts)); nos cartões, o Windows volta a decidir.
 
 Detalhes de acesso, criação e revogação estão em [Equipa](equipa.md). Uma primeira entrada ou troca de utilizador não deve ser descrita como autenticação offline: a rota de login depende de Supabase Auth.
 
@@ -34,6 +34,7 @@ Fontes: [pos-shell.tsx](../../apps/web/app/(pos)/pos/pos-shell.tsx), [offline-st
 | `quickNotes` | Atalhos de artigo e pedido somam-se; um segundo toque retira o atalho. |
 | `cart` | Canal inicial e pedido de nome/telefone no balcão. Canal indisponível ou offline cai em balcão. |
 | `sale` | Confirmação de 1–15 segundos, por omissão 3; dinheiro exige OK. |
+| `session` | `lockAfterMinutes`: minutos sem toques até voltar aos cartões e pedir o PIN; 0 = nunca (fábrica), tecto 240. Valor estragado ou negativo cai em nunca, não num bloqueio instantâneo. Lojas que gravaram antes do campo ficam com o de fábrica. |
 | `alerts` | Som do pedido novo. Desligar o som conserva o aviso visual. |
 | `printing` | Modelos por via e interruptores do talão completo. O número de vias fica separado, em `stores.kitchen_ticket_copies`. Ver [Impressão](impressao.md). |
 

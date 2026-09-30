@@ -62,6 +62,18 @@ describe('definições do POS — leitura tolerante', () => {
     expect(resolvePosSettings({ sale: { confirmationSeconds: 999 } }).sale.confirmationSeconds).toBe(15);
   });
 
+  it('bloqueio sem uso: de fábrica nunca, e a loja escolhe', () => {
+    expect(FACTORY_POS_SETTINGS.session.lockAfterMinutes).toBe(0);
+    // Uma loja que gravou as definições antes deste campo fica com o de fábrica.
+    expect(resolvePosSettings({ quickNotes: ['SEM SAL'] }).session.lockAfterMinutes).toBe(0);
+    expect(resolvePosSettings({ session: { lockAfterMinutes: 15 } }).session.lockAfterMinutes).toBe(15);
+    expect(resolvePosSettings({ session: { lockAfterMinutes: 9999 } }).session.lockAfterMinutes).toBe(240);
+    // Estragado ou negativo cai no de fábrica — nunca num bloqueio instantâneo.
+    expect(resolvePosSettings({ session: { lockAfterMinutes: 'cinco' } }).session.lockAfterMinutes).toBe(0);
+    expect(resolvePosSettings({ session: { lockAfterMinutes: -3 } }).session.lockAfterMinutes).toBe(0);
+    expect(resolvePosSettings({ session: { lockAfterMinutes: null } }).session.lockAfterMinutes).toBe(0);
+  });
+
   it('lê os passos do upsell e desliga só o que se pediu', () => {
     const s = resolvePosSettings({
       upsell: { enabled: true, steps: { dessert: { enabled: false, title: 'Doce?', scripts: ['Um doce?'] } } },

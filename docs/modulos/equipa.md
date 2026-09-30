@@ -28,7 +28,7 @@ O [script de criação de equipa](../../scripts/criar-equipa.mjs) é uma ferrame
 
 ## Vínculo, PIN e sessão
 
-O terminal é vinculado por `bind_pos_device`. O primeiro PIN pode ser configurado com `set_own_pos_pin`; `pos_pin_status` informa o estado. `lock_pos_device` e `unlock_pos_device` controlam o bloqueio; o POS usa também a regra local de inactividade.
+O terminal é vinculado por `bind_pos_device`. O primeiro PIN pode ser configurado com `set_own_pos_pin`; `pos_pin_status` informa o estado. `lock_pos_device` e `unlock_pos_device` controlam o bloqueio: botão Bloquear, troca de turno e, se a loja o ligar nas Definições do POS, inactividade (de fábrica desligada desde 30/09 — ver [POS](pos.md)).
 
 `pos_login_cards(p_device_id)` é uma RPC pública limitada a um terminal activo. Devolve nomes, perfil, presença de PIN e estado de bloqueio, não email, telefone ou hash. A escolha do cartão ainda não autentica ninguém.
 

@@ -19,6 +19,7 @@ import {
   FACTORY_POS_SETTINGS,
   POS_FULFILLMENT_NAMES,
   POS_LIMITS,
+  POS_LOCK_OPTIONS,
   POS_PAYMENT_METHOD_NAMES,
   POS_UPSELL_STEP_NAMES,
   resolvePosSettings,
@@ -55,6 +56,12 @@ const INPUT =
   'mt-1 w-full rounded-xl border border-white/10 bg-[#0f0e0c] px-4 py-3 text-sm text-white placeholder:text-[#6f6a62]';
 const LABEL = 'block text-xs font-bold uppercase tracking-wide text-[#8b8378]';
 const CARD = 'rounded-2xl border border-white/[0.08] p-5';
+
+function lockOptionLabel(minutos: number): string {
+  if (minutos === 0) return 'Nunca — fica aberto o turno inteiro';
+  if (minutos % 60 === 0) return minutos === 60 ? 'Ao fim de 1 hora sem uso' : `Ao fim de ${minutos / 60} horas sem uso`;
+  return `Ao fim de ${minutos} minutos sem uso`;
+}
 
 function Toggle({
   checked,
@@ -618,6 +625,31 @@ export default function DefinicoesPosPage() {
                 />
                 <span className="mt-1 block font-normal normal-case tracking-normal">
                   Só em vendas sem dinheiro. Com dinheiro, o ecrã mostra o troco e fica até o caixa tocar em OK.
+                </span>
+              </label>
+              <label className={LABEL}>
+                Bloquear o POS sem uso
+                <select
+                  value={draft.session.lockAfterMinutes}
+                  onChange={(event) =>
+                    patch((current) => ({
+                      ...current,
+                      session: { lockAfterMinutes: Number(event.target.value) },
+                    }))
+                  }
+                  className={INPUT}
+                >
+                  {[...new Set([...POS_LOCK_OPTIONS, draft.session.lockAfterMinutes])]
+                    .sort((a, b) => a - b)
+                    .map((minutos) => (
+                      <option key={minutos} value={minutos}>
+                        {lockOptionLabel(minutos)}
+                      </option>
+                    ))}
+                </select>
+                <span className="mt-1 block font-normal normal-case tracking-normal">
+                  Com &quot;Nunca&quot;, quem entra fica o turno inteiro sem voltar a pôr o PIN; o POS só volta aos
+                  cartões no botão Bloquear ou na troca de turno. Quem se afasta do balcão toca em Bloquear.
                 </span>
               </label>
             </div>

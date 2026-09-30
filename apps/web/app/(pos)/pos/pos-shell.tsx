@@ -33,7 +33,7 @@ import { syncOfflineSales } from '@/lib/pos/offline-sync';
 import { connectionStatus } from '@/lib/pos/connection-status';
 import { trackUpsell } from '@/lib/analytics/track';
 import { buildPosUpsellFunnel, type PosUpsellStep } from '@/lib/pos/pos-upsell';
-import { isPosPin, POS_IDLE_TIMEOUT_MS } from '@/lib/pos/session';
+import { isPosPin, posIdleTimeoutMs } from '@/lib/pos/session';
 import { OrdersBoard } from './orders-board';
 import { SenhasTab } from './senhas-tab';
 import { MesasTab } from './mesas-tab';
@@ -41,6 +41,7 @@ import { CaixaTab } from './caixa-tab';
 import { PosIcon, type PosIconName } from './pos-icons';
 import { AvailabilityPanel } from './availability-panel';
 import { useNewOrderAlert } from './use-new-order-alert';
+import { useScreenWakeLock } from './use-screen-wake-lock';
 import { prepararSom, tocarAlarme } from '@/lib/pos/chime';
 import {
   CURRENT_BUILD,
@@ -737,13 +738,17 @@ export function PosShell() {
     setLocked(true);
   }, [context, locked, supabase]);
 
+  // Bloqueio sem uso: o tempo é da loja (Definições do POS); de fábrica nunca
+  // — a caixa entra uma vez e fica o turno inteiro. Bloquear e a troca de
+  // turno continuam a bloquear.
+  const idleTimeoutMs = posIdleTimeoutMs(posSettings.session.lockAfterMinutes);
   useEffect(() => {
-    if (!context || locked || !pinConfigured) return;
+    if (!context || locked || !pinConfigured || idleTimeoutMs === null) return;
 
-    let timer = window.setTimeout(() => void lockDevice(), POS_IDLE_TIMEOUT_MS);
+    let timer = window.setTimeout(() => void lockDevice(), idleTimeoutMs);
     const registerActivity = () => {
       window.clearTimeout(timer);
-      timer = window.setTimeout(() => void lockDevice(), POS_IDLE_TIMEOUT_MS);
+      timer = window.setTimeout(() => void lockDevice(), idleTimeoutMs);
     };
     const events: Array<keyof WindowEventMap> = ['pointerdown', 'keydown', 'touchstart'];
     events.forEach((event) => window.addEventListener(event, registerActivity, { passive: true }));
@@ -752,7 +757,11 @@ export function PosShell() {
       window.clearTimeout(timer);
       events.forEach((event) => window.removeEventListener(event, registerActivity));
     };
-  }, [context, lockDevice, locked, pinConfigured]);
+  }, [context, idleTimeoutMs, lockDevice, locked, pinConfigured]);
+
+  // Com alguém no POS, o ecrã não apaga nem o PC adormece. Nos cartões,
+  // o Windows volta a decidir.
+  useScreenWakeLock(Boolean(context) && !(pinConfigured && locked));
 
   async function bindDevice() {
     if (!selectedStoreId || deviceLabel.trim().length < 3 || bridgeToken.trim().length < 32) return;
