@@ -28,6 +28,7 @@ import {
   type CashDayReport,
 } from '@/lib/cash/day';
 import { fetchTableOverview } from '@/lib/pos/tables';
+import { CaixaHistorico } from './caixa-historico';
 import { PosIcon } from './pos-icons';
 import { TouchKeyboard } from './touch-keyboard';
 
@@ -37,6 +38,8 @@ const POLL_MS = 30_000;
 const KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', 'C', '0', '⌫'];
 
 type Acao = 'movimento' | 'fecho';
+/** O turno de agora, ou o que já fechou (o mesmo que o Caixa do painel mostra). */
+type Vista = 'agora' | 'turnos' | 'dias';
 type Feedback = { tone: 'ok' | 'danger'; text: string };
 
 /**
@@ -120,6 +123,11 @@ export function CaixaTab({
 }) {
   const [supabase] = useState(() => createClient());
   const movementKey = useRef(movementRequestKeeper());
+  const [vistaEscolhida, setVista] = useState<Vista>('agora');
+  // A troca de turno faz-se no turno de agora: quem sai não fica no histórico.
+  const vista: Vista = troca ? 'agora' : vistaEscolhida;
+  /** O turno que acabou de fechar, para o histórico o mostrar já aberto. */
+  const [abrirTurno, setAbrirTurno] = useState<string | null>(null);
   const [store, setStore] = useState<CashStore | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -367,7 +375,7 @@ export function CaixaTab({
   // Num PC com teclado, os algarismos e o Enter também servem. O fecho do dia
   // fica de fora: um Enter perdido não fecha o dia.
   useEffect(() => {
-    if (!keyboardActive || reasonKeyboard || modo === null || modo === 'dia') return;
+    if (!keyboardActive || reasonKeyboard || vista !== 'agora' || modo === null || modo === 'dia') return;
     function onKey(event: KeyboardEvent) {
       const alvo = event.target as HTMLElement | null;
       if (alvo && (alvo.tagName === 'INPUT' || alvo.tagName === 'TEXTAREA' || alvo.isContentEditable)) return;
@@ -380,7 +388,7 @@ export function CaixaTab({
     }
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [keyboardActive, modo, press, reasonKeyboard, submit]);
+  }, [keyboardActive, modo, press, reasonKeyboard, submit, vista]);
 
   const keypad = (
     <div className="grid grid-cols-3 gap-2">
@@ -418,16 +426,53 @@ export function CaixaTab({
     </button>
   );
 
+  const cabecalho = (
+    <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="min-w-0">
+        <h2 className="text-xl font-bold">Caixa · {storeName}</h2>
+        <p className="text-sm text-ink-mute">
+          {session ? `${session.shift_label} · aberto às ${hora(session.opened_at)}` : 'Sem turno aberto'}
+        </p>
+      </div>
+      {!troca && (
+        <div role="group" aria-label="Ver no caixa" className="pos-seg w-full whitespace-nowrap sm:w-[34rem]">
+          <button type="button" aria-pressed={vista === 'agora'} onClick={() => setVista('agora')}>
+            <PosIcon name="cash" size={18} />
+            Agora
+          </button>
+          <button
+            type="button"
+            aria-pressed={vista === 'turnos'}
+            onClick={() => {
+              setAbrirTurno(null);
+              setVista('turnos');
+            }}
+          >
+            <PosIcon name="clock" size={18} />
+            Turnos fechados
+          </button>
+          <button type="button" aria-pressed={vista === 'dias'} onClick={() => setVista('dias')}>
+            <PosIcon name="lock" size={18} />
+            Fechos do dia
+          </button>
+        </div>
+      )}
+    </div>
+  );
+
+  if (vista !== 'agora') {
+    return (
+      <div className="mx-auto flex w-full max-w-6xl flex-col gap-4">
+        {cabecalho}
+        <CaixaHistorico storeId={storeId} online={online} vista={vista} abrirId={abrirTurno} />
+      </div>
+    );
+  }
+
   return (
     <div className="mx-auto grid w-full max-w-5xl gap-3 lg:grid-cols-[minmax(0,22rem)_minmax(0,1fr)]">
+      <div className="lg:col-span-2">{cabecalho}</div>
       <div className="flex flex-col gap-3">
-        <div>
-          <h2 className="text-xl font-bold">Caixa · {storeName}</h2>
-          <p className="text-sm text-ink-mute">
-            {session ? `${session.shift_label} · aberto às ${hora(session.opened_at)}` : 'Sem turno aberto'}
-          </p>
-        </div>
-
         {troca && (
           <div role="status" className="pos-note pos-note--warn flex items-center justify-between gap-3 !text-base">
             <span>
@@ -729,6 +774,19 @@ export function CaixaTab({
             <p className="mt-2 text-sm text-ink">
               A pessoa seguinte abre o turno dela à esquerda. No fim de tudo, faz-se o fecho do dia.
             </p>
+            {!troca && (
+              <button
+                type="button"
+                onClick={() => {
+                  setAbrirTurno(lastClose.session_id);
+                  setVista('turnos');
+                }}
+                className="pos-btn pos-btn--quiet mt-3 !min-h-12 w-full"
+              >
+                <PosIcon name="clock" size={18} />
+                Ver a gaveta e os artigos vendidos
+              </button>
+            )}
           </section>
         )}
 

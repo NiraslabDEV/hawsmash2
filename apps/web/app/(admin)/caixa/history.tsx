@@ -1,14 +1,16 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { parseCashSold, type CashSold } from '@delivery/receipt';
 
+import { businessDateLabel, dayShiftsLabel } from '@/lib/cash/day';
 import {
-  businessDateLabel,
-  dayShiftsLabel,
-  parseCashDayReport,
-  type CashDayReport,
-} from '@/lib/cash/day';
+  fetchCashHistory,
+  groupByDay,
+  type CashHistory as History,
+  type DayCloseRow,
+  type ShiftPeople,
+  type ShiftRow,
+} from '@/lib/cash/history';
 import { createClient } from '@/utils/supabase/client';
 import { downloadStaffFile } from '@/lib/admin/staff-fetch';
 import { reprintCashDay } from '@/lib/cash/reprint-day';
@@ -26,7 +28,6 @@ import {
   maputoDay,
   mt,
   time,
-  type Payments,
 } from './ui';
 
 /**
@@ -34,73 +35,10 @@ import {
  * (1091), cada um aberto com o dinheiro, a conferência da gaveta e os artigos
  * vendidos que o fecho congelou (1095). Só se consulta, descarrega e
  * reimprime — abrir, movimentar e fechar é no cartão do turno actual.
+ * A leitura é a mesma do POS (`lib/cash/history`).
  */
 
 const PAGE = 30;
-
-type ShiftReport = {
-  total_pedidos: number | null;
-  total_faturado_cents: number | null;
-  payments: Payments | null;
-  cash_sales_cents: number;
-  sangria_cents: number;
-  reforco_cents: number;
-  despesa_cents: number;
-  troco_inicial_cents: number;
-  sold: CashSold | null;
-};
-
-type ShiftRow = {
-  id: string;
-  store_id: string;
-  shift_label: string;
-  opened_at: string;
-  closed_at: string;
-  opening_float_cents: number;
-  expected_cash_cents: number;
-  counted_cash_cents: number;
-  difference_cents: number;
-  difference_reason: string | null;
-  day_close_id: string | null;
-  report: ShiftReport;
-};
-
-type DayCloseRow = {
-  id: string;
-  store_id: string;
-  business_date: string;
-  closed_at: string;
-  report: CashDayReport | null;
-  backfill: boolean;
-};
-
-const isCents = (value: unknown): value is number => typeof value === 'number' && Number.isSafeInteger(value);
-const cents = (value: unknown) => (isCents(value) ? value : 0);
-
-/** O `report` de um turno, lido com desconfiança: o que faltar fica a zero ou vazio. */
-function parseShiftReport(raw: unknown): ShiftReport {
-  const record = raw && typeof raw === 'object' && !Array.isArray(raw) ? (raw as Record<string, unknown>) : {};
-  const payments = record.payments as Record<string, unknown> | undefined;
-  const hasPayments = !!payments && ['cash', 'mpesa', 'emola', 'credit_card'].every((key) => isCents(payments[key]));
-  return {
-    total_pedidos: isCents(record.total_pedidos) ? record.total_pedidos : null,
-    total_faturado_cents: isCents(record.total_faturado_cents) ? record.total_faturado_cents : null,
-    payments: hasPayments
-      ? {
-          cash: payments.cash as number,
-          mpesa: payments.mpesa as number,
-          emola: payments.emola as number,
-          credit_card: payments.credit_card as number,
-        }
-      : null,
-    cash_sales_cents: cents(record.cash_sales_cents),
-    sangria_cents: cents(record.sangria_cents),
-    reforco_cents: cents(record.reforco_cents),
-    despesa_cents: cents(record.despesa_cents),
-    troco_inicial_cents: cents(record.troco_inicial_cents),
-    sold: parseCashSold(record.sold),
-  };
-}
 
 export function CashHistory({
   storeId,
@@ -115,56 +53,18 @@ export function CashHistory({
 }) {
   const supabase = useMemo(() => createClient(), []);
   const [tab, setTab] = useState<'shifts' | 'days'>('shifts');
-  const [shifts, setShifts] = useState<ShiftRow[] | null>(null);
-  const [days, setDays] = useState<DayCloseRow[] | null>(null);
+  const [history, setHistory] = useState<History | null>(null);
   const [limit, setLimit] = useState(PAGE);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    let shiftQuery = supabase
-      .from('cash_sessions')
-      .select('id,store_id,shift_label,opened_at,closed_at,opening_float_cents,expected_cash_cents,counted_cash_cents,difference_cents,difference_reason,day_close_id,report')
-      .not('closed_at', 'is', null)
-      .order('closed_at', { ascending: false })
-      .limit(limit);
-    let dayQuery = supabase
-      .from('cash_day_closes')
-      .select('id,store_id,business_date,closed_at,report')
-      .order('closed_at', { ascending: false })
-      .limit(limit);
-    if (storeId) {
-      shiftQuery = shiftQuery.eq('store_id', storeId);
-      dayQuery = dayQuery.eq('store_id', storeId);
-    }
-    const [shiftResult, dayResult] = await Promise.all([shiftQuery, dayQuery]);
-    if (shiftResult.error) {
-      setError(`Não foi possível carregar os turnos: ${shiftResult.error.message}`);
+    const result = await fetchCashHistory(supabase, { storeId, limit });
+    if (!result.ok) {
+      setError(`Não foi possível carregar os turnos: ${result.message}`);
       return;
     }
     setError(null);
-    setShifts((shiftResult.data ?? []).map((row) => ({
-      id: row.id as string,
-      store_id: row.store_id as string,
-      shift_label: row.shift_label as string,
-      opened_at: row.opened_at as string,
-      closed_at: row.closed_at as string,
-      opening_float_cents: cents(row.opening_float_cents),
-      expected_cash_cents: cents(row.expected_cash_cents),
-      counted_cash_cents: cents(row.counted_cash_cents),
-      difference_cents: cents(row.difference_cents),
-      difference_reason: (row.difference_reason as string | null) ?? null,
-      day_close_id: (row.day_close_id as string | null) ?? null,
-      report: parseShiftReport(row.report),
-    })));
-    // Sem a 1091 aplicada, não há fechos do dia — os turnos aparecem na mesma.
-    setDays(dayResult.error ? [] : (dayResult.data ?? []).map((row) => ({
-      id: row.id as string,
-      store_id: row.store_id as string,
-      business_date: row.business_date as string,
-      closed_at: row.closed_at as string,
-      report: parseCashDayReport(row.report),
-      backfill: (row.report as { backfill?: unknown } | null)?.backfill === true,
-    })));
+    setHistory(result.history);
   }, [limit, storeId, supabase]);
 
   useEffect(() => {
@@ -173,16 +73,9 @@ export function CashHistory({
     return () => window.clearInterval(timer);
   }, [load, refreshKey]);
 
-  // Quem abriu e fechou cada turno só vem no relatório do fecho do dia.
-  const people = useMemo(() => {
-    const map = new Map<string, { opened: string | null; closed: string | null }>();
-    for (const day of days ?? []) {
-      for (const shift of day.report?.shifts ?? []) {
-        if (shift.session_id) map.set(shift.session_id, { opened: shift.opened_by_name, closed: shift.closed_by_name });
-      }
-    }
-    return map;
-  }, [days]);
+  const shifts = history?.shifts ?? null;
+  const days = history?.days ?? null;
+  const people = history?.people;
 
   const pendingShifts = (shifts ?? []).filter((shift) => !shift.day_close_id).length;
   const showStore = !storeId;
@@ -205,7 +98,7 @@ export function CashHistory({
       <div className="mt-5">
         {error ? (
           <EmptyState>{error}</EmptyState>
-        ) : shifts === null || days === null ? (
+        ) : !shifts || !days ? (
           <EmptyState>A carregar…</EmptyState>
         ) : tab === 'shifts' ? (
           shifts.length === 0 ? <EmptyState>Ainda não há turnos fechados.</EmptyState> : (
@@ -214,7 +107,7 @@ export function CashHistory({
                 <ShiftItem
                   key={shift.id}
                   shift={shift}
-                  people={people.get(shift.id)}
+                  people={people?.get(shift.id)}
                   storeName={showStore ? storeNames[shift.store_id] : undefined}
                 />
               )}
@@ -255,16 +148,9 @@ function TabButton({ active, onClick, children }: { active: boolean; onClick: ()
 }
 
 function GroupedByDay<T>({ items, dayOf, children }: { items: T[]; dayOf: (item: T) => string; children: (item: T) => React.ReactNode }) {
-  const groups: Array<{ day: string; items: T[] }> = [];
-  for (const item of items) {
-    const day = dayOf(item);
-    const last = groups[groups.length - 1];
-    if (last && last.day === day) last.items.push(item);
-    else groups.push({ day, items: [item] });
-  }
   return (
     <div className="space-y-5">
-      {groups.map((group) => (
+      {groupByDay(items, dayOf).map((group) => (
         <div key={group.day}>
           <p className="mb-2 text-xs font-black uppercase tracking-wider text-[#8F8376]">{dayHeading(group.day)}</p>
           <div className="space-y-2">{group.items.map(children)}</div>
@@ -276,7 +162,7 @@ function GroupedByDay<T>({ items, dayOf, children }: { items: T[]; dayOf: (item:
 
 function ShiftItem({ shift, people, storeName }: {
   shift: ShiftRow;
-  people?: { opened: string | null; closed: string | null };
+  people?: ShiftPeople;
   storeName?: string;
 }) {
   const report = shift.report;

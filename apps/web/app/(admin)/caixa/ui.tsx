@@ -3,6 +3,7 @@
 import { useState, type ReactNode } from 'react';
 import { formatMT, type Cents } from '@delivery/core';
 import type { CashSold } from '@delivery/receipt';
+import type { CashPayments } from '@/lib/cash/history';
 
 /** Peças visuais partilhadas pela aba Caixa: turno actual, turnos e fechos do dia. */
 
@@ -29,30 +30,8 @@ export const dateTime = (iso: string) =>
     hour12: false,
   }).format(new Date(iso));
 
-/** O dia de Maputo de um instante, `YYYY-MM-DD`. */
-export const maputoDay = (iso: string) =>
-  new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Maputo', year: 'numeric', month: '2-digit', day: '2-digit' })
-    .format(new Date(iso));
-
-/** `2026-09-27` → "Hoje", "Ontem" ou "sáb., 25/09". */
-export function dayHeading(day: string): string {
-  const today = maputoDay(new Date().toISOString());
-  const yesterday = maputoDay(new Date(Date.now() - 86_400_000).toISOString());
-  if (day === today) return 'Hoje';
-  if (day === yesterday) return 'Ontem';
-  const [year, month, date] = day.split('-').map(Number);
-  if (!year || !month || !date) return day;
-  return new Intl.DateTimeFormat('pt-PT', { timeZone: 'UTC', weekday: 'short', day: '2-digit', month: '2-digit' })
-    .format(new Date(Date.UTC(year, month - 1, date)));
-}
-
-export function duration(fromIso: string, toIso: string): string {
-  const minutes = Math.max(0, Math.round((new Date(toIso).getTime() - new Date(fromIso).getTime()) / 60_000));
-  const hours = Math.floor(minutes / 60);
-  return hours > 0 ? `${hours}h${String(minutes % 60).padStart(2, '0')}` : `${minutes} min`;
-}
-
-export type Payments = { cash: number; mpesa: number; emola: number; credit_card: number };
+export { dayHeading, duration, maputoDay } from '@/lib/cash/history';
+export type Payments = CashPayments;
 
 const PAYMENT_METHODS: Array<{ key: keyof Payments; label: string; color: string }> = [
   { key: 'cash', label: 'Dinheiro', color: '#F5A623' },

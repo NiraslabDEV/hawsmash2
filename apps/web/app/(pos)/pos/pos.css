@@ -536,6 +536,28 @@
 }
 @keyframes pos-draw { to { stroke-dashoffset: 0; } }
 
+/* Cartão que abre no toque (histórico do caixa): o aberto ganha o
+   contorno do acento, e o que aparece desce um pouco ao entrar. */
+.pos-fold[data-open='true'] {
+  box-shadow: inset 0 0 0 1px var(--pos-accent-line), var(--pos-highlight);
+}
+.pos-reveal { animation: pos-reveal 200ms var(--pos-ease-out) both; }
+@keyframes pos-reveal {
+  from { opacity: 0; transform: translateY(-6px); }
+}
+
+/* Grelhas pela largura que o conteúdo tem, não pela do ecrã: a 1366×768
+   o carrinho e as categorias deixam ~800 px ao meio (hardware.md §1.1). */
+.pos-cq { container-type: inline-size; }
+.pos-split { display: grid; gap: 1.25rem; }
+.pos-quad { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.5rem; }
+@container (min-width: 42rem) {
+  .pos-split { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@container (min-width: 32rem) {
+  .pos-quad { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+
 /* Barra de progresso do funil de oferta. */
 .pos-steps { display: flex; gap: 6px; }
 .pos-steps > span {
@@ -581,7 +603,8 @@
 
 @media (prefers-reduced-motion: reduce) {
   .pos-sheet,
-  .pos-pop { animation: pos-fade 160ms ease both; }
+  .pos-pop,
+  .pos-reveal { animation: pos-fade 160ms ease both; }
   .pos-mark path { animation: none; stroke-dashoffset: 0; }
   .pos-alarm::after { animation: pos-blink 1.2s ease-in-out infinite; }
   .pos-press:active:not(:disabled),
