@@ -47,5 +47,8 @@ Decisão do Gabriel a 29/09, ao fazer o cutover:
    30/09; certificados emitidos e domínios verificados.
 2. Transferir o `hawsmash2-staging` para a org Pro.
 3. Terminais da loja em `hawsmash.com/pos` (vincular de novo); depois, crons e novo staging.
-4. Importar pedidos e clientes do 1.0 (`scripts/import-hawsmash-1.ts --sem-cardapio`) depois da troca
-   de DNS, com dry-run primeiro.
+4. ~~Importar pedidos e clientes do 1.0 (`scripts/import-hawsmash-1.ts --sem-cardapio`) depois da troca
+   de DNS, com dry-run primeiro.~~ Feito a 30/09: 1024 pedidos e 511 clientes, reconciliado ao
+   cêntimo com o 1.0 (B-010).
+5. Os 73 pedidos de ensaio de 19/08 a 02/09 (`MPT-`/`MTL-`, 51.739 MT, 20 na Matola) contam nos
+   relatórios. Confirmados como ensaio pelo dono; retirar só com dry-run e cópia antes.

@@ -145,6 +145,34 @@ async function main(): Promise<void> {
   log(`  linhas de item:  ${report.order_items}`);
   log(`  clientes únicos: ${report.customers}`);
   log(`  facturado (pagos e entregues): ${(report.revenue_cents / 100).toFixed(2)} MT`);
+  const dates = orders.map((order) => order.created_at).sort();
+  if (dates.length > 0) log(`  de ${dates[0]} a ${dates[dates.length - 1]}`);
+  const orderIds = new Set(orders.map((order) => order.id));
+  const orphanItems = items.filter((item) => !orderIds.has(item.order_id)).length;
+  if (orphanItems > 0) log(`  itens sem pedido (ficam de fora): ${orphanItems}`);
+
+  // Validar tudo antes de escrever: um erro de dados a meio deixava a
+  // importação feita só até esse pedido.
+  const problems: string[] = [];
+  for (const order of orders) {
+    try {
+      mapOrder(order, 'validacao');
+    } catch (error) {
+      problems.push(error instanceof Error ? error.message : String(error));
+    }
+  }
+  for (const item of items) {
+    try {
+      mapOrderItem(item, 'validacao', 'validacao');
+    } catch (error) {
+      problems.push(error instanceof Error ? error.message : String(error));
+    }
+  }
+  if (problems.length > 0) {
+    for (const problem of problems.slice(0, 20)) log(`  x ${problem}`);
+    throw new Error(`${problems.length} registo(s) do 1.0 não passam na validação; nada foi escrito.`);
+  }
+  log('  validação: todos os pedidos e itens passam');
 
   if (!apply) {
     log('dry-run terminado — nada foi escrito. Repetir com --apply depois de conferir.');

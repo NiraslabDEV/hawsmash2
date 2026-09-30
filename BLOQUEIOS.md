@@ -255,10 +255,17 @@ preparada (`--sem-cardapio`, pendentes como cancelados, trava de emails) e por c
 TXT; MX, SPF, DMARC e DKIM intactos). Certificados Let's Encrypt emitidos para `hawsmash.com` e `www`
 (válidos até 29/12/2026); os dois domínios aparecem verificados no Railway. Confirmado às 07:05:
 `hawsmash.com` serve o 2.0 com a base da loja (bundle com `pqjoan…`, 26 itens em Maputo, Matola 404).
-O 1.0 não tinha service worker — nenhum browser fica preso numa cópia antiga. Falta: importar o 1.0
-e passar os terminais para `hawsmash.com/pos`.
+O 1.0 não tinha service worker — nenhum browser fica preso numa cópia antiga.
 
-- Estado: aberto — domínio no 2.0; importação do 1.0 e terminais pendentes
+**Importação do 1.0 feita a 30/09, 07:44–07:57** (`--apply --i-know-this-is-live --sem-cardapio`, para
+Maputo, depois de dry-run com validação de todos os registos). Reconciliação exacta com o 1.0: 1024
+pedidos (955 entregues = 950 entregues + 5 pagos; 69 cancelados = 67 + 2 pendentes), 2128 linhas de
+itens, 1.277.820,00 MT faturados, 04/06 a 29/09 17:07. 511 clientes, 30 fundidos com os que já
+existiam (561 no total). Nenhum email em fila, nenhum pedido do 1.0 activo na fila do POS, cardápio
+intacto. Repetir a importação é seguro (o número do pedido é único) se o 1.0 ainda receber algum.
+Falta: passar os terminais para `hawsmash.com/pos`.
+
+- Estado: aberto — domínio no 2.0 e 1.0 importado; terminais pendentes
 - Desbloqueia: cliente + Gabriel
 - Pergunta exacta: em que dia exacto o `hawsmash.com` passa a apontar para o 2.0?
 - Como avancei: o 1.0 continua intocado; o 2.0 vive em staging até haver data.
