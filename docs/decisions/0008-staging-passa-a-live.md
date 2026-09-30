@@ -43,7 +43,8 @@ Decisão do Gabriel a 29/09, ao fazer o cutover:
 
 ## Pendentes
 
-1. DNS na Hostinger para os alvos novos do Railway, com os dois TXT `_railway-verify`.
+1. ~~DNS na Hostinger para os alvos novos do Railway, com os dois TXT `_railway-verify`.~~ Feito a
+   30/09; certificados emitidos e domínios verificados.
 2. Transferir o `hawsmash2-staging` para a org Pro.
 3. Terminais da loja em `hawsmash.com/pos` (vincular de novo); depois, crons e novo staging.
 4. Importar pedidos e clientes do 1.0 (`scripts/import-hawsmash-1.ts --sem-cardapio`) depois da troca

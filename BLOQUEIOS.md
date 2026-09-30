@@ -248,11 +248,17 @@ As 16 violações da spec permanecem no relatório, separadas dos IDs histórico
 `hawsmash.com` e `www` saíram do projecto Railway do 1.0 e foram para o `hawsmash2 / production`,
 que já serve a base da loja (`pqjoan…`). Alvos novos: `@` → `lhe2xb8u.up.railway.app`,
 `www` → `nf5vpac8.up.railway.app`, mais os TXT `_railway-verify` e `_railway-verify.www` com os
-valores novos. **Falta mudar o DNS na Hostinger** (MX e SPF não se tocam): até lá o domínio responde
-sem certificado. O 1.0 continua no endereço Railway dele. Importação de pedidos e clientes do 1.0
+valores novos. O 1.0 continua no endereço Railway dele. Importação de pedidos e clientes do 1.0
 preparada (`--sem-cardapio`, pendentes como cancelados, trava de emails) e por correr.
 
-- Estado: aberto — domínio movido, DNS pendente
+**30/09/2026:** DNS mudado na Hostinger pelo Gabriel (raiz como ALIAS → `lhe2xb8u…`, `www`, os dois
+TXT; MX, SPF, DMARC e DKIM intactos). Certificados Let's Encrypt emitidos para `hawsmash.com` e `www`
+(válidos até 29/12/2026); os dois domínios aparecem verificados no Railway. Confirmado às 07:05:
+`hawsmash.com` serve o 2.0 com a base da loja (bundle com `pqjoan…`, 26 itens em Maputo, Matola 404).
+O 1.0 não tinha service worker — nenhum browser fica preso numa cópia antiga. Falta: importar o 1.0
+e passar os terminais para `hawsmash.com/pos`.
+
+- Estado: aberto — domínio no 2.0; importação do 1.0 e terminais pendentes
 - Desbloqueia: cliente + Gabriel
 - Pergunta exacta: em que dia exacto o `hawsmash.com` passa a apontar para o 2.0?
 - Como avancei: o 1.0 continua intocado; o 2.0 vive em staging até haver data.
