@@ -11,6 +11,8 @@ playwright-report/
 .env.*
 **/.env
 **/.env.*
+# `nome.env` também é segredo (ex.: a password da BD de um protótipo).
+*.env
 !.env.example
 !**/.env.example
 
@@ -24,6 +26,9 @@ README-add.md
 
 # Credenciais de acesso (passwords em texto simples) — nunca vai para o git.
 CREDENCIAIS*
+
+# Material comercial (faturas, propostas, guia de marca, protótipos) — não é código do produto.
+comercial/
 
 # Artefactos de teste (screenshots, resultados do Playwright)
 output/
