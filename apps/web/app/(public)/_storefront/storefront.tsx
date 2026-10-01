@@ -255,6 +255,7 @@ export function Storefront({
 
       <MenuBanners
         categories={categories}
+        promotions={data?.promotions ?? null}
         acceptingOrders={acceptingOrders}
         qtyFor={qtyFor}
         onAdd={handleAdd}

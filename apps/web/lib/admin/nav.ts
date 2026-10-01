@@ -40,6 +40,8 @@ export const ADMIN_NAV: AdminNavItem[] = [
   { href: '/feedback', label: 'Avaliações', icon: 'feedback', roles: ['owner', 'manager'] },
   { href: '/lista-espera', label: 'Clientes', icon: 'clientes', roles: ['owner', 'manager'] },
   { href: '/marketing', label: 'Marketing', icon: 'marketing', roles: ['owner', 'manager'] },
+  // Promoção mexe no preço: só o dono (§6). A RLS de promotions/referral_codes diz o mesmo.
+  { href: '/promocoes', label: 'Promoções', icon: 'promocoes', roles: ['owner'] },
   { href: '/emails', label: 'Emails', icon: 'emails', roles: ['owner'] },
   { href: '/lojas', label: 'Lojas', icon: 'lojas', roles: ['owner', 'manager'] },
   { href: '/definicoes-pos', label: 'POS', icon: 'pos', roles: ['owner', 'manager'] },

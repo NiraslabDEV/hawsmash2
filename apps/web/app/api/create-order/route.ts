@@ -70,6 +70,7 @@ function translateError(msg: string): string {
   if (msg === 'referral_auto_redemption')     return 'Não podes usar o teu próprio código de referral.';
   if (msg === 'referral_already_redeemed')    return 'Já usaste este código de referral.';
   if (msg === 'referral_max_redemptions')     return 'Este código de referral já atingiu o limite de utilizações.';
+  if (msg === 'referral_wrong_store')         return 'Este código não vale nesta loja. Remove-o ou escolhe a loja certa.';
   if (msg === 'gift_item_not_authorized')     return 'Item de brinde não autorizado. Aplica um código válido primeiro.';
   if (msg === 'gift_item_max_one')            return 'Só é permitida 1 unidade do item de brinde.';
   if (msg === 'table_required')               return 'Mesa em falta. Lê o QR code novamente.';

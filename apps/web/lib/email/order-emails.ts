@@ -49,6 +49,29 @@ export interface OrderEmailData {
   paymentMethod: string | null;
   storeName?: string | null;
   storePhone?: string | null;
+  /** De onde veio o desconto (1113). Ausente = pedido sem promoção ou BD antiga. */
+  promo?: {
+    bogoDiscountCents: number;
+    bogoFreeItem: string | null;
+    couponCode: string | null;
+    couponDiscountCents: number;
+    manualDiscountCents: number;
+    deliveryDiscountCents: number;
+  } | null;
+}
+
+function promoLines(p: OrderEmailData['promo']): string {
+  if (!p) return '';
+  const out: string[] = [];
+  if (p.bogoDiscountCents > 0) {
+    out.push(`<p><strong>2x1:</strong> ${escapeHtml(p.bogoFreeItem ?? 'produto')} grátis (−${money(p.bogoDiscountCents)})</p>`);
+  }
+  if (p.couponDiscountCents > 0) {
+    out.push(`<p><strong>Desconto ${escapeHtml(p.couponCode ?? '')}:</strong> −${money(p.couponDiscountCents)}</p>`);
+  }
+  if (p.manualDiscountCents > 0) out.push(`<p><strong>Desconto:</strong> −${money(p.manualDiscountCents)}</p>`);
+  if (p.deliveryDiscountCents > 0) out.push('<p><strong>Entrega grátis</strong></p>');
+  return out.join('');
 }
 
 export function approvalEmail(o: OrderEmailData): {
@@ -66,6 +89,7 @@ export function approvalEmail(o: OrderEmailData): {
         <div style="background: #1a1614; color: #e5e5e5; padding: 20px; border-radius: 8px; margin: 20px 0;">
           <p><strong>Número do Pedido:</strong> ${escapeHtml(o.orderNumber)}</p>
           ${store}
+          ${promoLines(o.promo)}
           <p><strong>Total Pago:</strong> ${money(o.totalCents)}</p>
           <p><strong>Método de Pagamento:</strong> ${escapeHtml(String(o.paymentMethod ?? "").toUpperCase())}</p>
         </div>
@@ -156,6 +180,33 @@ async function loadOrder(
   }
 }
 
+/**
+ * De onde veio o desconto (1113). Leitura à parte e best-effort: numa BD sem a
+ * 1113 as colunas não existem, e isso nunca pode impedir o email de sair.
+ */
+async function loadPromo(svc: SupabaseClient, orderId: string): Promise<OrderEmailData["promo"]> {
+  try {
+    const { data, error } = await svc
+      .from("orders")
+      .select("discount_cents,bogo_discount_cents,bogo_free_item,manual_discount_cents,delivery_discount_cents,referral_code")
+      .eq("id", orderId)
+      .maybeSingle();
+    if (error || !data) return null;
+    const d = data as Record<string, number | string | null>;
+    const n = (k: string) => Number(d[k] ?? 0);
+    return {
+      bogoDiscountCents: n("bogo_discount_cents"),
+      bogoFreeItem: (d.bogo_free_item as string | null) ?? null,
+      couponCode: (d.referral_code as string | null) ?? null,
+      couponDiscountCents: n("discount_cents") - n("bogo_discount_cents") - n("manual_discount_cents"),
+      manualDiscountCents: n("manual_discount_cents"),
+      deliveryDiscountCents: n("delivery_discount_cents"),
+    };
+  } catch {
+    return null;
+  }
+}
+
 function emailData(order: OrderRow): OrderEmailData {
   return {
     customerName: order.customer_name,
@@ -206,7 +257,7 @@ export async function sendApprovalEmailForOrder(
   if (!(PAID_STATES as readonly string[]).includes(order.status))
     return { ok: false, error: "invalid_state" };
   if (await hasSequence(svc, order, orderId, "paid")) return { ok: true };
-  const { subject, html } = approvalEmail(emailData(order));
+  const { subject, html } = approvalEmail({ ...emailData(order), promo: await loadPromo(svc, orderId) });
   return sendMail({
     to: order.customer_email,
     subject,

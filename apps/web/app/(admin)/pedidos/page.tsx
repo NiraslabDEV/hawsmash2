@@ -10,6 +10,7 @@ import { pt } from 'date-fns/locale';
 import { initialOrdersView, ORDERS_PAGE_SIZE as PAGE_SIZE, ordersViewReducer, requestOrdersPage, type OrdersPeriod, type OrdersViewAction } from '@/lib/orders-pagination';
 import { maputoDate } from '@/lib/admin/analysis-period';
 import { AnularEntregue } from './anular-entregue';
+import { OrderPromoLines } from './promo-lines';
 
 type Order = {
   id: string;
@@ -746,6 +747,7 @@ function OrderDetail({ order, proofUrl, actions }: { order: Order; proofUrl: str
         <div className="text-sm space-y-1">
           <div className="flex justify-between text-[#C9BCAC]"><span>Subtotal</span><span>{money(order.subtotal_cents)}</span></div>
           {order.delivery_fee_cents > 0 && <div className="flex justify-between text-[#C9BCAC]"><span>Taxa de entrega</span><span>{money(order.delivery_fee_cents)}</span></div>}
+          <OrderPromoLines orderId={order.id} />
           <div className="flex justify-between text-white font-bold text-lg pt-1 border-t border-white/[0.06]"><span>Total</span><span>{money(order.total_cents)}</span></div>
         </div>
 

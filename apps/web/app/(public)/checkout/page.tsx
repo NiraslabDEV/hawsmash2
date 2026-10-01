@@ -25,7 +25,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
-import { formatMT, getPaymentMode, type Cents } from '@delivery/core';
+import { applyPromotions, formatMT, getPaymentMode, type Cents } from '@delivery/core';
 
 import '../_storefront/landing.css';
 import '../_storefront/funnel.css';
@@ -83,6 +83,11 @@ type MenuModGroup = {
 };
 type MenuItemLite = { id: string; name: string; price_cents: number; variants?: MenuVariant[]; addons?: MenuAddon[]; modifier_groups?: MenuModGroup[] };
 type CartModifier = { groupId: string; optionIds: string[] };
+/** O que `get_store_promotions` (1113) devolve e a /api/menu junta ao cardápio. */
+type StorePromotions = {
+  bogo: { live: boolean; label: string; same_item_only: boolean; item_ids: string[] } | null;
+  free_delivery: { live: boolean; label: string; min_subtotal_cents: number } | null;
+};
 
 // preço unitário = (variante ou base) + Σ adicionais. PREVIEW; servidor é a verdade.
 function lineUnitPrice(
@@ -299,7 +304,7 @@ export default function CheckoutPage() {
   type CouponResult = {
     valid: boolean;
     reason?: string;
-    reward_type?: 'discount_cents' | 'discount_pct' | 'free_item';
+    reward_type?: 'discount_cents' | 'discount_pct' | 'free_item' | 'bogo';
     reward_value?: number;
     gift_item_id?: string;
     gift_item_name?: string;
@@ -311,15 +316,23 @@ export default function CheckoutPage() {
   // fica a saber que existe um desconto que lhe falta.
   const [showCoupon, setShowCoupon]     = useState(false);
 
-  async function applyCoupon() {
-    const code = couponInput.trim().toUpperCase();
+  // `override` só quando o código vem guardado do browser; os botões passam o
+  // evento, que não é texto — nesse caso vale o que está escrito no campo.
+  async function applyCoupon(override?: unknown) {
+    const code = (typeof override === 'string' ? override : couponInput).trim().toUpperCase();
     if (!code) return;
     setCouponLoading(true);
     setCouponResult(null);
-    const { data, error } = await supabase.rpc('validate_referral', {
+    // Com a loja (1113): um cupão só de Matola é recusado aqui, não no fim.
+    // Sem a 1113 aplicada, cai para a validação antiga — o servidor recusa na mesma.
+    let { data, error } = await supabase.rpc('validate_referral', {
       p_code:  code,
       p_phone: customerPhone || '',
+      p_store_slug: storeSlug,
     });
+    if (error) {
+      ({ data, error } = await supabase.rpc('validate_referral', { p_code: code, p_phone: customerPhone || '' }));
+    }
     setCouponLoading(false);
     if (error || !data) { setCouponResult({ valid: false, reason: 'invalid_or_expired' }); return; }
     const res = data as CouponResult;
@@ -337,12 +350,10 @@ export default function CheckoutPage() {
     localStorage.removeItem('referral_code');
   }
 
-  // desconto estimado (cosmético — o servidor é a verdade)
+  // Desconto estimado (cupão + 2x1) — cosmético, o servidor é a verdade. É a
+  // mesma conta do create_order (packages/core/src/promotions.ts).
   function discountPreview(): number {
-    if (!couponResult?.valid) return 0;
-    if (couponResult.reward_type === 'discount_cents') return couponResult.reward_value ?? 0;
-    if (couponResult.reward_type === 'discount_pct')   return Math.round(subtotal * (couponResult.reward_value ?? 0) / 100);
-    return 0;
+    return promo.discountCents;
   }
 
   const [showPaymentScreen, setShowPaymentScreen] = useState(false);
@@ -402,10 +413,38 @@ export default function CheckoutPage() {
     return sum + lineUnitPrice(menuItem, item.variantId, item.addonIds, item.modifiers) * item.qty;
   }, 0);
 
-  const deliveryFee = fulfillmentType === 'delivery'
+  const zoneFee = fulfillmentType === 'delivery'
     ? (zones?.find((z: any) => z.id === deliveryZoneId)?.fee_cents || 0)
     : 0;
 
+  // Promoções da loja (1113): 2x1, entrega grátis e o cupão aplicado.
+  const promotions: StorePromotions | null = menuData?.promotions ?? null;
+  const promo = useMemo(() => {
+    const allItems = menuData?.categories?.flatMap((c: any) => c.items) ?? [];
+    const eligible = new Set<string>(promotions?.bogo?.item_ids ?? []);
+    const coupon = couponResult?.valid && couponResult.reward_type
+      ? { type: couponResult.reward_type, value: couponResult.reward_value ?? 0 }
+      : null;
+    return applyPromotions({
+      lines: cart.map((line: any) => {
+        const it = allItems.find((i: any) => i.id === line.menuItemId);
+        return {
+          itemId: line.menuItemId,
+          name: it?.name ?? '',
+          unitPriceCents: lineUnitPrice(it, line.variantId, line.addonIds, line.modifiers),
+          qty: line.qty,
+          bogoEligible: eligible.has(line.menuItemId),
+        };
+      }),
+      fulfillment: fulfillmentType,
+      deliveryFeeCents: zoneFee,
+      coupon,
+      bogo: promotions?.bogo ? { live: promotions.bogo.live, sameItemOnly: promotions.bogo.same_item_only } : null,
+      freeDeliveryMinCents: promotions?.free_delivery?.live ? promotions.free_delivery.min_subtotal_cents : null,
+    });
+  }, [cart, menuData, promotions, couponResult, fulfillmentType, zoneFee]);
+
+  const deliveryFee = promo.deliveryFeeCents;
   const total = subtotal + deliveryFee;
 
   // Itens do carrinho com detalhe (para os eventos do funil)
@@ -652,11 +691,12 @@ export default function CheckoutPage() {
     if (saved) setCart(JSON.parse(saved));
     const savedCode = localStorage.getItem('referral_code');
     if (savedCode) {
-      setReferralCode(savedCode);
       setCouponInput(savedCode);
       setShowCoupon(true);
-      // marca como válido (foi validado na loja); detalhe é revalidado no servidor
-      setCouponResult({ valid: true });
+      // Revalida com a loja (1113): a pré-visualização precisa do tipo e do
+      // valor, e um código entretanto esgotado ou de outra loja diz-se já aqui,
+      // não no fim da compra.
+      void applyCoupon(savedCode);
     }
 
     // O que o cliente escreveu da última vez, neste browser.
@@ -973,7 +1013,7 @@ export default function CheckoutPage() {
             {cart.length} {cart.length === 1 ? 'artigo' : 'artigos'}
           </span>
           <span style={{ width: 3, height: 3, borderRadius: '50%', background: 'var(--hs-ink-faint)' }} />
-          <span className="hf-recap-total num">{fmt(total)}</span>
+          <span className="hf-recap-total num">{fmt(dueCents)}</span>
           <button type="button" onClick={() => router.push(`/l/${storeSlug}`)} className="hf-act">
             Editar
           </button>
@@ -1308,8 +1348,24 @@ export default function CheckoutPage() {
             {deliveryFee > 0 && (
               <dl className="hf-sum"><dt>Entrega</dt><dd className="num">+ {fmt(deliveryFee)}</dd></dl>
             )}
-            {discountPreview() > 0 && (
-              <dl className="hf-sum is-off"><dt>Desconto ({referralCode})</dt><dd className="num">− {fmt(discountPreview())}</dd></dl>
+            {promo.deliveryDiscountCents > 0 && (
+              <dl className="hf-sum is-off"><dt>Entrega</dt><dd>Grátis</dd></dl>
+            )}
+            {promo.bogoDiscountCents > 0 && (
+              <dl className="hf-sum is-off"><dt>2x1 — {promo.bogoFreeItem} grátis</dt><dd className="num">− {fmt(promo.bogoDiscountCents)}</dd></dl>
+            )}
+            {promo.couponDiscountCents > 0 && (
+              <dl className="hf-sum is-off"><dt>Desconto ({referralCode})</dt><dd className="num">− {fmt(promo.couponDiscountCents)}</dd></dl>
+            )}
+            {promo.bogoOneAway && (
+              <p style={{ margin: 0, fontSize: 13, color: 'var(--hs-gold, #e5a93c)' }}>
+                {promotions?.bogo?.label || '2x1'}: junta mais {promotions?.bogo?.same_item_only === false ? 'um produto da promo' : 'um igual'} e o segundo sai grátis.
+              </p>
+            )}
+            {promo.missingForFreeDeliveryCents > 0 && (
+              <p style={{ margin: 0, fontSize: 13, color: 'var(--hs-ink-dim)' }}>
+                Faltam <strong className="num">{fmt(promo.missingForFreeDeliveryCents)}</strong> para a entrega ficar grátis.
+              </p>
             )}
             {couponResult?.valid && couponResult.reward_type === 'free_item' && (
               <dl className="hf-sum is-off"><dt>{couponResult.gift_item_name ?? 'Item grátis'}</dt><dd>Grátis</dd></dl>
@@ -1352,6 +1408,7 @@ export default function CheckoutPage() {
                     {couponResult.reason === 'auto_redemption'          ? 'Não podes usar o teu próprio código.' :
                      couponResult.reason === 'already_redeemed'        ? 'Já usaste este código antes.' :
                      couponResult.reason === 'max_redemptions_reached' ? 'Este código atingiu o limite de utilizações.' :
+                     couponResult.reason === 'wrong_store'             ? 'Este código não vale nesta loja.' :
                      'Código inválido ou expirado.'}
                   </p>
                 )}
@@ -1374,7 +1431,7 @@ export default function CheckoutPage() {
         {/* ── Barra de acção ───────────────────────────────────────────── */}
         <div className="hf-bar">
           <dl className="hf-bar-total">
-            <dt>{referralCode ? 'Total estimado' : 'Total'}</dt>
+            <dt>{referralCode || promo.discountCents > 0 ? 'Total estimado' : 'Total'}</dt>
             <dd className="num">{fmt(dueCents)}</dd>
           </dl>
           <button

@@ -362,7 +362,27 @@ export function buildFullTicket(payload: KitchenTicketPayload, layout: PrintLayo
     if (payload.fulfillment_type === 'delivery' && (payload.delivery_fee_cents ?? 0) > 0) {
       ops.push(line(twoColumns('Taxa de entrega:', mt(payload.delivery_fee_cents ?? 0))));
     }
-    if ((payload.discount_cents ?? 0) > 0) {
+    if (payload.fulfillment_type === 'delivery' && (payload.delivery_discount_cents ?? 0) > 0) {
+      ops.push(line(twoColumns('Entrega:', 'GRÁTIS')));
+    }
+    // 1113: uma linha por origem. Sem os campos (pedido antigo), a linha única.
+    const bogo = payload.bogo_discount_cents ?? 0;
+    const cupao = payload.coupon_discount_cents ?? 0;
+    const manual = payload.manual_discount_cents ?? 0;
+    if (bogo + cupao + manual > 0) {
+      if (bogo > 0) {
+        ops.push(line('** PROMO 2x1 **'));
+        if (payload.bogo_free_item) ops.push(line(`${payload.bogo_free_item} GRÁTIS`));
+        ops.push(line(twoColumns('Promo 2x1:', signedMT(-bogo))));
+      }
+      if (cupao > 0) {
+        ops.push(line(twoColumns(`Cupão ${payload.coupon_code ?? ''}:`.replace(' :', ':'), signedMT(-cupao))));
+      }
+      if (manual > 0) {
+        ops.push(line(twoColumns('Desconto gerente:', signedMT(-manual))));
+        if (payload.discount_reason) for (const l of wrap(`(${payload.discount_reason})`)) ops.push(line(l));
+      }
+    } else if ((payload.discount_cents ?? 0) > 0) {
       ops.push(line(twoColumns('Desconto:', signedMT(-(payload.discount_cents ?? 0)))));
     }
     if (payload.total_cents != null) {

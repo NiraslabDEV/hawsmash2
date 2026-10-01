@@ -312,6 +312,42 @@ export default function OrderStatusPage({ params }: { params: { orderId: string 
                 <span className="hf-line-p num">{formatMT((oi.unit_price_cents * oi.qty) as Cents)}</span>
               </div>
             ))}
+            {/* 1113: de onde veio o desconto. Sem a migration, `promo` não vem e nada aparece. */}
+            {orderStatus.promo?.bogo_discount_cents > 0 && (
+              <div className="hf-line">
+                <span className="hf-line-q num" />
+                <span className="hf-line-n" style={{ color: 'var(--hs-ok)' }}>2x1 — {orderStatus.promo.bogo_free_item} grátis</span>
+                <span className="hf-line-p num" style={{ color: 'var(--hs-ok)' }}>− {formatMT(orderStatus.promo.bogo_discount_cents as Cents)}</span>
+              </div>
+            )}
+            {orderStatus.promo?.coupon_discount_cents > 0 && (
+              <div className="hf-line">
+                <span className="hf-line-q num" />
+                <span className="hf-line-n" style={{ color: 'var(--hs-ok)' }}>Desconto {orderStatus.promo.coupon_code ?? ''}</span>
+                <span className="hf-line-p num" style={{ color: 'var(--hs-ok)' }}>− {formatMT(orderStatus.promo.coupon_discount_cents as Cents)}</span>
+              </div>
+            )}
+            {orderStatus.promo?.manual_discount_cents > 0 && (
+              <div className="hf-line">
+                <span className="hf-line-q num" />
+                <span className="hf-line-n" style={{ color: 'var(--hs-ok)' }}>Desconto</span>
+                <span className="hf-line-p num" style={{ color: 'var(--hs-ok)' }}>− {formatMT(orderStatus.promo.manual_discount_cents as Cents)}</span>
+              </div>
+            )}
+            {orderStatus.delivery_fee_cents > 0 && (
+              <div className="hf-line">
+                <span className="hf-line-q num" />
+                <span className="hf-line-n">Entrega</span>
+                <span className="hf-line-p num">{formatMT(orderStatus.delivery_fee_cents as Cents)}</span>
+              </div>
+            )}
+            {orderStatus.promo?.delivery_discount_cents > 0 && (
+              <div className="hf-line">
+                <span className="hf-line-q num" />
+                <span className="hf-line-n" style={{ color: 'var(--hs-ok)' }}>Entrega</span>
+                <span className="hf-line-p" style={{ color: 'var(--hs-ok)' }}>Grátis</span>
+              </div>
+            )}
           </div>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 16, paddingTop: 14, borderTop: '1px solid var(--hs-line)' }}>
             <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '.22em', textTransform: 'uppercase', color: 'var(--hs-ink-mute)' }}>

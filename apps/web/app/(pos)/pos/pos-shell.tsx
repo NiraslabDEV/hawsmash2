@@ -19,6 +19,7 @@ import {
   updateOfflineSale,
   posItemAvailability,
   type OfflineSale,
+  type OfflineSaleDraft,
   type PosMenuCategory as Category,
   type PosMenuItem as MenuItem,
 } from '@/lib/pos/offline-store';
@@ -34,6 +35,19 @@ import { connectionStatus } from '@/lib/pos/connection-status';
 import { trackUpsell } from '@/lib/analytics/track';
 import { buildPosUpsellFunnel, type PosUpsellStep } from '@/lib/pos/pos-upsell';
 import { isPosPin, posIdleTimeoutMs } from '@/lib/pos/session';
+import {
+  checkManualDiscount,
+  couponErrorText,
+  discountPayload,
+  posPromotionPreview,
+  readCachedPromotions,
+  writeCachedPromotions,
+  type PosCoupon,
+  type PosManualDiscount,
+  type PosPromotions,
+} from '@/lib/pos/promotions';
+import { parseMTInput } from '@/lib/cash/input';
+import { DiscountPanel } from './discount-panel';
 import { OrdersBoard } from './orders-board';
 import { SenhasTab } from './senhas-tab';
 import { MesasTab } from './mesas-tab';
@@ -80,7 +94,6 @@ import {
   addonsOf,
   cartCount,
   cartLines,
-  cartTotalCents,
   changeQty as applyQty,
   defaultVariant,
   needsVariantChoice,
@@ -213,6 +226,16 @@ function errorMessage(message?: string): string {
   if (message.includes('void_access_denied')) {
     return 'A anulação exige um gerente ou o dono.';
   }
+  if (message.includes('discount_requires_manager')) {
+    return 'O desconto manual exige um gerente ou o dono.';
+  }
+  if (message.includes('invalid_manual_discount')) {
+    return 'Desconto inválido: confirma o valor e escreve o motivo.';
+  }
+  if (message.includes('referral_') || message.includes('coupon_requires_phone')) {
+    const code = message.match(/referral_[a-z_]+|coupon_requires_phone/)?.[0];
+    return `Cupão: ${couponErrorText(code)}`;
+  }
   return message;
 }
 
@@ -221,6 +244,9 @@ const KEYBOARD_LABELS = {
   phone: 'Telefone',
   address: 'Morada da entrega',
   orderNote: 'Nota do pedido',
+  coupon: 'Código do cupão',
+  discountValue: 'Valor do desconto',
+  discountReason: 'Motivo do desconto',
 } as const;
 
 /**
@@ -289,6 +315,10 @@ export function PosShell() {
   /** Terminal já vinculado mas sem sessão: é o ecrã dos cartões da equipa. */
   const [cardLoginDeviceId, setCardLoginDeviceId] = useState<string | null>(null);
   const [sessionUserId, setSessionUserId] = useState<string | null>(null);
+  /** Perfil de quem está a operar — o desconto manual só aparece a gerente/dono. */
+  const [operatorRole, setOperatorRole] = useState<string | null>(null);
+  /** Promoções da loja (1113); a última lista conhecida serve sem rede. */
+  const [promotions, setPromotions] = useState<PosPromotions | null>(null);
   const [pin, setPin] = useState('');
   const [pinConfirmation, setPinConfirmation] = useState('');
   const [pinError, setPinError] = useState<string | null>(null);
@@ -581,6 +611,18 @@ export function PosShell() {
     } catch {
       // A última cache válida continua visível; a venda não pára por uma atualização falhada.
     }
+    // Promoções: best-effort, ao mesmo ritmo do cardápio. Sem rede (ou antes
+    // da 1113 estar aplicada) fica a última lista conhecida.
+    try {
+      const { data, error: promoError } = await supabase.rpc('get_store_promotions', {
+        p_store_slug: context.storeSlug,
+      });
+      if (promoError) throw promoError;
+      setPromotions(data as PosPromotions);
+      writeCachedPromotions(window.localStorage, context.storeSlug, data as PosPromotions);
+    } catch {
+      setPromotions((current) => current ?? readCachedPromotions(window.localStorage, context.storeSlug));
+    }
     // O que o dono muda na aba POS chega ao balcão no mesmo ritmo do cardápio,
     // sem reiniciar o terminal. Falhar aqui mantém o que já estava.
     const lidas = await fetchPosSettings(supabase, context.storeId);
@@ -692,6 +734,10 @@ export function PosShell() {
               })),
               payments: sale.payments,
               offlineTotalCents: sale.totalCents,
+              // 1113: o desconto da venda e a hora a que foi feita (para o 2x1
+              // do dia contar mesmo que sincronize no dia seguinte).
+              ...(sale.discount ?? {}),
+              promoAt: sale.createdAt,
               ...(sale.cashReceivedCents == null
                 ? {}
                 : { cashReceivedCents: sale.cashReceivedCents }),
@@ -887,7 +933,6 @@ export function PosShell() {
   );
 
   const lines = useMemo(() => cartLines(cart), [cart]);
-  const subtotalCents = useMemo(() => cartTotalCents(cart), [cart]);
   const count = useMemo(() => cartCount(cart), [cart]);
 
   // Aquece o cache das fotos do cardápio INTEIRO, não só o da categoria aberta.
@@ -1035,9 +1080,7 @@ export function PosShell() {
   const [customerAddress, setCustomerAddress] = useState('');
   const [zoneId, setZoneId] = useState('');
   /** Campo de texto aberto no teclado do ecrã. Null = teclado fechado. */
-  const [keyboardField, setKeyboardField] = useState<
-    'name' | 'phone' | 'address' | 'orderNote' | null
-  >(null);
+  const [keyboardField, setKeyboardField] = useState<keyof typeof KEYBOARD_LABELS | null>(null);
   /** Confirmação de "desvincular este PC", no ecrã bloqueado. */
   const [unbindConfirm, setUnbindConfirm] = useState(false);
   /** Linha do carrinho a receber nota ("sem jalapeño"). */
@@ -1067,7 +1110,89 @@ export function PosShell() {
     if (fulfillment !== 'delivery' || !zoneId) return 0;
     return channels.zones.find((zone) => zone.id === zoneId)?.fee_cents ?? 0;
   }, [channels.zones, fulfillment, zoneId]);
-  const totalCents = subtotalCents + deliveryFeeCents;
+  // ── Descontos (1113): cupão, promoções "também no balcão", manual ─────────
+  const [coupon, setCoupon] = useState<PosCoupon | null>(null);
+  const [couponCode, setCouponCode] = useState('');
+  const [couponError, setCouponError] = useState<string | null>(null);
+  const [couponBusy, setCouponBusy] = useState(false);
+  const [manualType, setManualType] = useState<'pct' | 'cents'>('pct');
+  const [manualValue, setManualValue] = useState('');
+  const [manualReason, setManualReason] = useState('');
+  const canManual = operatorRole === 'owner' || operatorRole === 'manager';
+
+  useEffect(() => {
+    if (!sessionUserId) { setOperatorRole(null); return; }
+    let alive = true;
+    void supabase.from('staff_profiles').select('role').eq('user_id', sessionUserId).maybeSingle()
+      .then(({ data }) => { if (alive) setOperatorRole((data?.role as string | undefined) ?? null); });
+    return () => { alive = false; };
+  }, [sessionUserId, supabase]);
+
+  /** O desconto manual escrito, já em número — null enquanto incompleto ou inválido. */
+  const manual = useMemo<PosManualDiscount | null>(() => {
+    if (!canManual || !manualValue.trim()) return null;
+    const value = manualType === 'pct' ? Number(manualValue.trim()) : parseMTInput(manualValue);
+    if (value === null || !Number.isFinite(value)) return null;
+    const draft = { type: manualType, value, reason: manualReason };
+    return checkManualDiscount(draft) ? null : draft;
+  }, [canManual, manualType, manualValue, manualReason]);
+  const manualError = useMemo(() => {
+    if (!canManual || !manualValue.trim()) return null;
+    const value = manualType === 'pct' ? Number(manualValue.trim()) : parseMTInput(manualValue);
+    return checkManualDiscount({ type: manualType, value: value ?? 0, reason: manualReason });
+  }, [canManual, manualType, manualValue, manualReason]);
+
+  const promo = useMemo(
+    () => posPromotionPreview({
+      lines,
+      fulfillment,
+      zoneFeeCents: deliveryFeeCents,
+      promotions,
+      coupon,
+      manual,
+    }),
+    [lines, fulfillment, deliveryFeeCents, promotions, coupon, manual],
+  );
+
+  async function applyCoupon() {
+    const code = couponCode.trim().toUpperCase();
+    if (!code || !context) return;
+    if (!customerPhone.trim()) {
+      setCouponError(couponErrorText('coupon_requires_phone'));
+      return;
+    }
+    setCouponBusy(true);
+    setCouponError(null);
+    const { data, error: validateError } = await supabase.rpc('validate_referral', {
+      p_code: code,
+      p_phone: customerPhone.trim(),
+      p_store_slug: context.storeSlug,
+    });
+    setCouponBusy(false);
+    const res = data as { valid?: boolean; reason?: string; reward_type?: PosCoupon['type']; reward_value?: number; gift_item_id?: string | null; gift_item_name?: string | null } | null;
+    if (validateError || !res?.valid || !res.reward_type) {
+      setCouponError(couponErrorText(res?.reason));
+      return;
+    }
+    setCoupon({
+      code,
+      type: res.reward_type,
+      value: res.reward_value ?? 0,
+      giftItemId: res.gift_item_id ?? null,
+      giftName: res.gift_item_name ?? null,
+    });
+  }
+
+  function resetDiscounts() {
+    setCoupon(null);
+    setCouponCode('');
+    setCouponError(null);
+    setManualValue('');
+    setManualReason('');
+  }
+
+  const discountFields = discountPayload({ coupon, customerPhone, manual });
+  const totalCents = promo.totalCents;
   /** O que o ecrã de pagamento cobra: a conta da mesa, ou o carrinho. */
   const cobrarCents = contaMesa ? contaMesa.totalCents : totalCents;
   const [orderNote, setOrderNote] = useState('');
@@ -1473,6 +1598,7 @@ export function PosShell() {
     });
     setCart({});
     setSaleId(crypto.randomUUID());
+    resetDiscounts();
     setMesaAlvo(null);
     setMesasRefresh((n) => n + 1);
   }
@@ -1589,6 +1715,10 @@ export function PosShell() {
         payments: paymentPlan.payments,
         ...(cashPaymentCents > 0 ? { cashReceivedCents: receivedCents } : {}),
         totalCents,
+        // Sem isto, a venda com desconto sincronizava sem ele e ficava presa.
+        ...(Object.keys(discountFields).length > 0
+          ? { discount: discountFields as OfflineSaleDraft['discount'] }
+          : {}),
       });
     } catch {
       setSubmitting(false);
@@ -1607,6 +1737,7 @@ export function PosShell() {
       });
       setCart({});
       setSaleId(crypto.randomUUID());
+      resetDiscounts();
       setAllocations({});
       setCashReceivedCents(0);
       setPendingSales((current) => current + 1);
@@ -1642,6 +1773,8 @@ export function PosShell() {
           : {}),
         ...(orderNote.trim() ? { notes: orderNote.trim() } : {}),
         ...(scheduledFor ? { scheduledFor } : {}),
+        // Cupão e desconto manual (1113): o servidor valida e recalcula.
+        ...discountFields,
       },
     });
     setSubmitting(false);
@@ -1671,6 +1804,7 @@ export function PosShell() {
     setLastSale(completed);
     setCart({});
     setSaleId(crypto.randomUUID());
+    resetDiscounts();
     setAllocations({});
     setCashReceivedCents(0);
   }
@@ -2994,11 +3128,42 @@ export function PosShell() {
                       <span className="pos-num">{mt(deliveryFeeCents)}</span>
                     </p>
                   )}
+                  {promo.discountCents + promo.deliveryDiscountCents > 0 && (
+                    <p className="mt-2 flex items-baseline justify-between gap-3 text-[0.9375rem] font-semibold text-emerald-300">
+                      <span>Descontos</span>
+                      <span className="pos-num">− {mt(promo.discountCents + promo.deliveryDiscountCents)}</span>
+                    </p>
+                  )}
                   <p className="mt-3 flex items-baseline justify-between border-t border-white/[0.07] pt-3 text-lg font-bold">
                     <span>TOTAL</span>
                     <span className="pos-num text-gold">{mt(totalCents)}</span>
                   </p>
                 </div>
+                )}
+
+                {!contaMesa && (
+                  <DiscountPanel
+                    promo={promo}
+                    coupon={coupon}
+                    couponCode={couponCode}
+                    couponError={couponError}
+                    couponBusy={couponBusy}
+                    online={online}
+                    hasPhone={customerPhone.trim().length > 0}
+                    canManual={canManual}
+                    manualType={manualType}
+                    manualValue={manualValue}
+                    manualReason={manualReason}
+                    manualError={manualError}
+                    onEditCoupon={() => setKeyboardField('coupon')}
+                    onApplyCoupon={() => void applyCoupon()}
+                    onRemoveCoupon={() => { setCoupon(null); setCouponCode(''); setCouponError(null); }}
+                    onEditPhone={() => setKeyboardField('phone')}
+                    onManualType={(type) => { setManualType(type); setManualValue(''); }}
+                    onEditManualValue={() => setKeyboardField('discountValue')}
+                    onEditManualReason={() => setKeyboardField('discountReason')}
+                    onClearManual={() => { setManualValue(''); setManualReason(''); }}
+                  />
                 )}
 
                 {/* Misto só faz sentido com dois meios ligados e com a loja a
@@ -3236,7 +3401,7 @@ export function PosShell() {
       {keyboardField && (
         <TouchKeyboard
           label={KEYBOARD_LABELS[keyboardField]}
-          mode={keyboardField === 'phone' ? 'tel' : 'text'}
+          mode={keyboardField === 'phone' || keyboardField === 'discountValue' ? 'tel' : 'text'}
           value={
             keyboardField === 'name'
               ? customerName
@@ -3244,7 +3409,13 @@ export function PosShell() {
                 ? customerPhone
                 : keyboardField === 'address'
                   ? customerAddress
-                  : orderNote
+                  : keyboardField === 'coupon'
+                    ? couponCode
+                    : keyboardField === 'discountValue'
+                      ? manualValue
+                      : keyboardField === 'discountReason'
+                        ? manualReason
+                        : orderNote
           }
           suggestions={keyboardField === 'orderNote' ? quickNotes : []}
           onCancel={() => setKeyboardField(null)}
@@ -3252,6 +3423,9 @@ export function PosShell() {
             if (keyboardField === 'name') setCustomerName(valor);
             else if (keyboardField === 'phone') setCustomerPhone(valor);
             else if (keyboardField === 'address') setCustomerAddress(valor);
+            else if (keyboardField === 'coupon') { setCouponCode(valor.toUpperCase()); setCouponError(null); }
+            else if (keyboardField === 'discountValue') setManualValue(valor.replace(/[^\d.,]/g, ''));
+            else if (keyboardField === 'discountReason') setManualReason(valor);
             else setOrderNote(valor);
             setKeyboardField(null);
           }}

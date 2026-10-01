@@ -101,6 +101,18 @@ export interface KitchenTicketPayload {
   subtotal_cents?: number | null;
   delivery_fee_cents?: number | null;
   discount_cents?: number | null;
+  /**
+   * De onde veio o desconto (1113, via trigger em print_jobs). Opcionais: sem
+   * eles o talão mostra só "Desconto:" com o total, como antes.
+   */
+  bogo_discount_cents?: number | null;
+  bogo_free_item?: string | null;
+  coupon_code?: string | null;
+  coupon_discount_cents?: number | null;
+  manual_discount_cents?: number | null;
+  discount_reason?: string | null;
+  /** Taxa de entrega perdoada pela promo: sai "Entrega: GRÁTIS". */
+  delivery_discount_cents?: number | null;
   total_cents?: number | null;
   payment_method?: string | null;
   /** Link de avaliação no Google — é o QR do rodapé quando existe. */
