@@ -103,10 +103,14 @@ export function validateEnv(env = {}) {
   const hasResend = Boolean(env.RESEND_API_KEY) && !isPlaceholder(env.RESEND_API_KEY);
   const hasSmtp = Boolean(env.SMTP_USER) && !isPlaceholder(env.SMTP_USER)
     && Boolean(env.SMTP_PASS) && !isPlaceholder(env.SMTP_PASS);
-  if (!hasResend && !hasSmtp) {
+  const hasRelay = Boolean(env.EMAIL_RELAY_SECRET) && !isPlaceholder(env.EMAIL_RELAY_SECRET);
+  if (!hasRelay && !hasResend && !hasSmtp) {
     warnings.push(
-      'Nem RESEND_API_KEY nem SMTP_USER/SMTP_PASS — os emails transacionais (novo pedido / aprovação / recusa) não serão enviados'
+      'Nem EMAIL_RELAY_SECRET, nem RESEND_API_KEY, nem SMTP_USER/SMTP_PASS — os emails transacionais (novo pedido / aprovação / recusa) não serão enviados'
     );
+  }
+  if (hasRelay && String(env.EMAIL_RELAY_SECRET).length < 32) {
+    errors.push('EMAIL_RELAY_SECRET tem de ter pelo menos 32 caracteres — a função email-relay recusa segredos curtos');
   }
   // Não `isPlaceholder`: o '<' de "Loja <haw@...>" conta lá como marcador.
   if (hasResend && !String(env.EMAIL_FROM ?? '').includes('@')) {

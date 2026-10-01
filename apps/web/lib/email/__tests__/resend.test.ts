@@ -33,11 +33,13 @@ vi.mock('nodemailer', () => ({
 import { sendViaResend } from '../resend';
 import { sendMail } from '../transport';
 
-const ENV = ['RESEND_API_KEY', 'EMAIL_FROM', 'SMTP_USER', 'SMTP_PASS'] as const;
+const ENV = ['RESEND_API_KEY', 'EMAIL_FROM', 'SMTP_USER', 'SMTP_PASS', 'EMAIL_RELAY_SECRET'] as const;
 const saved: Record<string, string | undefined> = {};
 
 beforeEach(() => {
   for (const key of ENV) saved[key] = process.env[key];
+  // Estes testes são do Resend sozinho; o relé tem os seus (relay.test.ts).
+  delete process.env.EMAIL_RELAY_SECRET;
   state.smtpSends = [];
   state.studioSends = [];
   state.logged = [];

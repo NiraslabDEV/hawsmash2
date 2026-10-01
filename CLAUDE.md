@@ -82,7 +82,7 @@ NUNCA editar main directamente. NUNCA correr SQL à mão em produção — só m
 | Backend | Supabase (Postgres + RLS + Realtime + Auth + Storage) |
 | Validação | Zod em toda a boundary |
 | Pagamentos | **Paysuite** (M-Pesa/e-Mola automático, validado em produção) · **M-Pesa directo** da Vodacom, sem gateway pelo meio · **manual por comprovativo** (fallback) · **balcão** (dinheiro/cartão/móvel). Escolhe-se por loja em `stores.payment_provider` |
-| Email | SMTP Hostinger (`nodemailer`, route handlers) — a caixa do próprio dono, herdado do 1.0 (ADR 0004). Com `RESEND_API_KEY`, sai por HTTPS no Resend: o Railway bloqueia SMTP fora do plano Pro (ADR 0009) |
+| Email | SMTP Hostinger (`nodemailer`, route handlers) — a caixa do próprio dono, herdado do 1.0 (ADR 0004). O Railway bloqueia SMTP fora do Pro: com `EMAIL_RELAY_SECRET` sai pela função `email-relay` do Supabase (ADR 0010), com o Resend de reserva (ADR 0009) |
 | Impressão | `services/print-bridge` (Node, ESC/POS TCP 9100) — um por loja, 24/7, com **HTTP local na LAN** |
 | Monorepo | pnpm workspaces + Turborepo |
 | Testes | Vitest (domínio/RLS) + Playwright (e2e do POS e do checkout) |

@@ -1,15 +1,18 @@
 import { prepareSystemEmail, logSystemEmail } from "./system-runtime";
 import type { SystemEmailKey } from "./system-catalog";
 import nodemailer, { type Transporter } from "nodemailer";
+import { relayConfigured, sendViaRelay } from "./relay";
 import { resendConfigured, sendViaResend } from "./resend";
 import { studioSmtp, sendStudioMail } from "./studio-transport";
 
 /**
  * Envio transacional. Por ordem:
- *   1. Resend por HTTPS, se houver `RESEND_API_KEY` (ADR 0009 — o Railway
- *      bloqueia SMTP fora do plano Pro);
- *   2. o SMTP da loja configurado no painel (módulo de emails, 1104);
- *   3. o SMTP do servidor, `SMTP_USER`/`SMTP_PASS` (Hostinger, ADR 0004).
+ *   1. o relé no Supabase, se houver `EMAIL_RELAY_SECRET` — a caixa Hostinger
+ *      do dono, sem limite diário de terceiros (ADR 0010);
+ *   2. Resend por HTTPS, se houver `RESEND_API_KEY` — também a reserva quando
+ *      o relé falha (ADR 0009 — o Railway bloqueia SMTP fora do plano Pro);
+ *   3. o SMTP da loja configurado no painel (módulo de emails, 1104);
+ *   4. o SMTP do servidor, `SMTP_USER`/`SMTP_PASS` (Hostinger, ADR 0004).
  *
  * Falha de email nunca é fatal (CLAUDE §1) — `sendMail` nunca lança, devolve
  * `{ ok:false, error }` e quem chama decide se isso bloqueia alguma coisa
@@ -20,6 +23,7 @@ let transporter: Transporter | null = null;
 
 export async function isEmailConfigured(): Promise<boolean> {
   return (
+    relayConfigured() ||
     resendConfigured() ||
     Boolean(process.env.SMTP_USER && process.env.SMTP_PASS) ||
     Boolean(await studioSmtp())
@@ -80,17 +84,26 @@ async function deliver({
   // aqui era o de um cliente: outra instalação mandava emails assinados com a
   // marca errada (CLAUDE.md §18.3). Quem quer nome bonito preenche EMAIL_FROM.
   const from = process.env.EMAIL_FROM || process.env.SMTP_USER;
+  const recipients = Array.isArray(to) ? to : [to];
+
+  // O remetente do relé é o da função (EMAIL_FROM lá), não o daqui.
+  let relayError: string | null = null;
+  if (relayConfigured()) {
+    const viaRelay = await sendViaRelay({ to: recipients, subject, html });
+    if (viaRelay.ok) return viaRelay;
+    relayError = viaRelay.error;
+    console.error("[email] relé falhou, a tentar a reserva:", relayError);
+  }
 
   // O Resend só aceita remetentes do domínio verificado lá — EMAIL_FROM.
   if (resendConfigured()) {
     if (!from) return { ok: false, error: "email_from_not_configured" };
-    return sendViaResend({
-      from,
-      to: Array.isArray(to) ? to : [to],
-      subject,
-      html,
-    });
+    const viaResend = await sendViaResend({ from, to: recipients, subject, html });
+    if (viaResend.ok || !relayError) return viaResend;
+    return { ok: false, error: `${relayError}; ${viaResend.error}` };
   }
+  // Com relé configurado, o SMTP daqui está bloqueado: não vale a pena esperar.
+  if (relayError) return { ok: false, error: relayError };
 
   const configured = await studioSmtp(storeId);
   if (configured) {
