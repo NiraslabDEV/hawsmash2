@@ -9,6 +9,7 @@ import { format, parseISO, formatDistanceToNow } from 'date-fns';
 import { pt } from 'date-fns/locale';
 import { initialOrdersView, ORDERS_PAGE_SIZE as PAGE_SIZE, ordersViewReducer, requestOrdersPage, type OrdersPeriod, type OrdersViewAction } from '@/lib/orders-pagination';
 import { maputoDate } from '@/lib/admin/analysis-period';
+import { AnularEntregue } from './anular-entregue';
 
 type Order = {
   id: string;
@@ -359,6 +360,7 @@ export default function PedidosPage() {
             </button>
           </>
         )}
+        <AnularEntregue order={order} onDone={(result) => { setMessage(result); void refreshData(); }} />
       </div>
     );
   };
