@@ -650,3 +650,127 @@ o fecho de um turno (1108).
 - [ ] Aplicar a 1108 no LIVE (`pqjoan…`, ADR 0008) fora do horário da loja. O código foi para o `dev` antes da
   migration (dry-run a 30/09 às 09:40: só a 1108 pendente); até ela entrar, o botão responde "ainda não está
   disponível nesta loja" e nada mais muda.
+
+## Pedidos do dia, senha do balcão, favicon e o POS sem bloqueio — 2026-09-30
+
+Quatro pedidos do dono e da caixa de Maputo, no mesmo dia, mais a correcção do manifesto que o primeiro deles
+deixou pendurada.
+
+- [x] **Pedidos do dia (1110).** `get_orders` aceita `day: 'current'`: pedidos **depois do último fecho do dia**
+  da loja (1091), nunca desde a meia-noite UTC (CLAUDE §9); loja que nunca fechou conta desde a meia-noite de
+  Maputo. Devolve `status_counts` com os mesmos filtros menos o estado, para as abas contarem o recorte da lista.
+  O painel abre em "Dia actual"; "Histórico" mostra tudo ou um dia de calendário.
+- [x] **Senha pequena no balcão (1111).** Cada venda do POS sai com as vias da loja e mais um papel pequeno com
+  o logo e a senha. Põe a senha da 1092 na fila do balcão **depois** das vias (`clock_timestamp()`), best-effort
+  e idempotente; offline, a sincronização trata-a como o recibo já impresso. Leva o logo quando o talão completo
+  da loja o tem ligado — uma bridge anterior à 1111 imprime-a sem logo.
+- [x] **Favicon da marca (1109).** `brand_settings.favicon_path` estava vazio e o separador do browser mostrava o
+  ícone genérico. Um `favicon.ico` com sete tamanhos, redesenhado a 16/24/32 px. A migration grava o caminho
+  **só quando o favicon está vazio**: um favicon posto pela Aparência não é tocado.
+- [x] **O POS fica aberto o turno inteiro.** O bloqueio aos 5 minutos sem toques passou a definição da loja
+  (`store_pos_settings.config → session.lockAfterMinutes`), de fábrica **nunca**, com Painel → POS a oferecer
+  Nunca/5/15/30/60. Bloquear à mão e a troca de turno continuam a bloquear. Valor estragado cai em nunca, não
+  num bloqueio instantâneo. Sem migration: o `config` é jsonb. Com alguém no POS o ecrã não apaga (Screen Wake
+  Lock). Divergência face ao ADR 0006 registada em **B-118**.
+- [x] **O painel no ecrã inicial abre o painel.** O único manifesto era o do POS, declarado na raiz da app, e o
+  Next liga esse ficheiro a **todas** as páginas: quem punha `/pedidos` no telemóvel recebia a app do POS, deitada.
+  Cada app passa a ter o seu (`lib/pwa/manifests.ts`): `/pos.webmanifest` e `/painel.webmanifest`; o site público
+  não liga nenhum. Corrige também o `df22e9b`, que tirou esse manifesto e renomeou o layout do painel sem o
+  novo — em produção o painel ficou sem menu e sem verificação de sessão.
+- [x] **A marca deixa de congelar no build.** Login, checkout, POS, upsell e painel são estáticos (cache de um
+  ano) e ficavam com a marca do momento do build: o favicon da 1109 apareceu nas páginas dinâmicas e faltou
+  nestas. O layout raiz passa a `revalidate = 60`, o mesmo ritmo da cache da marca, com teste de regressão.
+- [ ] Aplicar 1109, 1110 e 1111 no LIVE fora do horário da loja. Sem a 1110 a página comporta-se como antes (o
+  servidor ignora o filtro e as abas voltam às contagens do `get_order_stats`).
+
+## Checkout: dados no topo e morada lembrada — 2026-09-30
+
+- [x] "Os teus dados" passa a secção **01** e o email deixa de ser opcional, validado na forma (decisão do dono,
+  30/09). **O servidor continua a aceitar pedidos sem email** — a obrigatoriedade é do browser.
+- [x] Nome, telefone, email e a última morada ficam no `localStorage` do próprio cliente
+  ([`lib/checkout-memory.ts`](apps/web/lib/checkout-memory.ts)) e voltam preenchidos na encomenda seguinte **deste
+  browser**; a zona só é reposta se for da loja actual. Nunca vêm do servidor (ADR 0003), portanto não expõem
+  moradas a quem só sabe o telefone.
+- [x] "Outra morada" esquece a morada guardada; "Não sou eu" sai da conta e esquece tudo. Levantar e voltar à
+  entrega já não apaga a morada; só segue no pedido quando é entrega.
+- [x] Campos com `name`/`autocomplete` para o preenchimento automático do browser.
+
+## Email a sair outra vez: Resend e depois o relé no Supabase — 2026-09-30/10-01
+
+A 28/09 e a 30/09, do contentor de produção no Railway, 465/587/2525 da Hostinger deram `ETIMEDOUT` e
+`email_delivery_log` só tinha `failed`: o dono não recebia alertas, fechos nem comprovativos. O Railway corta SMTP
+fora do plano Pro.
+
+- [x] **[ADR 0009](docs/decisions/0009-email-por-https-resend.md) — Resend por HTTPS** quando há
+  `RESEND_API_KEY`, com o SMTP a passar a reserva. Campanhas e sequências ficam de fora, para não gastarem a
+  quota dos emails dos pedidos. `validate-config` aceita Resend **ou** SMTP.
+- [x] **[ADR 0010](docs/decisions/0010-email-pela-hostinger-via-supabase.md) — relé `email-relay` no Supabase**,
+  que entrega pela caixa Hostinger do dono como o 1.0 fazia, sem o limite de 100/dia do plano grátis do Resend.
+  Autentica por `x-relay-secret` (≥ 32 caracteres, comparação em tempo constante), `verify_jwt = false`, remetente
+  sempre o `EMAIL_FROM` **da função**, até 50 destinatários. Ordem final: relé → Resend → SMTP da loja → SMTP do
+  servidor ([emails](docs/modulos/emails.md)).
+- [x] Nunca lança (CLAUDE §1): falha de email devolve `{ ok:false, error }` e não bloqueia nada.
+- [ ] `supabase functions deploy email-relay` e os segredos da função no LIVE; confirmar recepção real (**B-114**).
+- [~] B-114: um timeout do relé depois de a Hostinger aceitar pode duplicar esse email, porque o Resend tenta a
+  seguir. Aceitável em avisos; não toca em dinheiro nem em papel.
+
+## Importação do 1.0 feita — 2026-09-30
+
+- [x] **`--sem-cardapio`**: importa só pedidos e clientes. Sem a flag o script apaga e recria os produtos, o que
+  numa base a facturar significaria perder fotos, preços por loja e ligações de estoque.
+- [x] **O dry-run valida todos os registos antes de escrever** — mapeia todos os pedidos e itens, mostra o
+  intervalo de datas e os itens sem pedido, e pára antes de escrever se algum falhar. Antes, um erro de dados
+  aparecia a meio da escrita e deixava a importação feita até esse pedido.
+- [x] Importado para Maputo e reconciliado com o 1.0: **1024 pedidos, 2128 linhas, 1.277.820,00 MT, 511
+  clientes** (B-010). Detalhe em [migração](docs/operacao/migracao.md).
+- [ ] Os 73 pedidos de ensaio de 19/08 a 02/09 (51.739 MT) continuam a contar nos relatórios. Retirá-los exige
+  dry-run e cópia antes.
+
+## Anular um pedido já entregue — 2026-09-30 (1112)
+
+Pedido do Gabriel, a partir de um pedido de teste (MPT-1423) que entrou na loja a sério e ficou Entregue.
+"Entregue" é estado final: o `advance_order` recusa cancelar e o `void_sale` é só de vendas de balcão por
+entregar. Apagar é proibido (CLAUDE §17) — e um DELETE deixava o stock gasto sem volta e os pagamentos fora do
+livro.
+
+- [x] `void_delivered_order(p_order_id, p_reason)`: **só o dono**; motivo de 3–500 caracteres; repõe stock e
+  ingredientes (`restore_order_stock`, idempotente); estado → `cancelled` com o histórico; pagamentos
+  `confirmed` → `refunded`, saindo do turno aberto, do fecho do dia e dos relatórios; retira da fila o email
+  "cancelado" ao cliente; grava `order.voided` com autor, motivo e valores. Repetir não faz nada (`duplicate`).
+- [x] Um turno **já fechado** com o pedido fica como fechou; a resposta diz `shift_closed` e o painel avisa.
+- [x] Botão **Anular** nos pedidos entregues, só para o dono
+  ([`anular-entregue.tsx`](<apps/web/app/(admin)/pedidos/anular-entregue.tsx>)), com testes em
+  [`lib/admin/__tests__/void-delivered-order.test.ts`](apps/web/lib/admin/__tests__/void-delivered-order.test.ts).
+- [ ] Aplicar a 1112 no LIVE. Sem ela, o botão responde que a operação ainda não está disponível nesta loja.
+
+## Descontos e promoções — 2026-09-30 (1113)
+
+Porta para o 2.0 o mecanismo que outra instância do motor já tem a facturar, adaptado a várias lojas (CLAUDE §5)
+e alargado ao balcão. Contrato completo em [promoções](docs/modulos/promocoes.md).
+
+- [x] **Promo 2x1** por loja, produtos elegíveis marcados um a um (`menu_items.bogo_eligible`): uma unidade
+  grátis por pedido, paga-se a mais cara e sai grátis a segunda mais cara. Dias da semana contados pelo **dia do
+  turno** (02:00 de sábado ainda é sexta, se a sexta virar a noite) e janela de datas opcional.
+- [x] **Entrega grátis** por loja a partir de um mínimo, contado **depois** dos descontos — senão as promoções
+  acumulavam.
+- [x] **Cupões** (`referral_codes`, herdados do motor) passam a poder valer só numa loja e ganham o tipo `bogo`.
+  A % calcula-se depois do 2x1: não se dá desconto sobre o que já é grátis.
+- [x] **Balcão:** cupões (pedem telefone), 2x1/entrega grátis marcados "também no balcão" e **desconto manual**
+  só de gerente/dono, com motivo. Tudo recalculado pelo `create_counter_sale` **antes de conferir o pagamento**.
+- [x] **Uma só conta para os dois canais:** `private.compute_promotions`, espelhada em
+  [`applyPromotions`](packages/core/src/promotions.ts). Ordem: 2x1 → cupão → manual → entrega. Mudar uma regra
+  obriga a mudar os dois lados e os testes.
+- [x] **Dinheiro na mesma forma:** `discount_cents` continua a ser todo o abatimento e
+  `total = subtotal − desconto + entrega`. As colunas novas (`bogo_*`, `manual_*`, `delivery_discount_cents`,
+  `discount_reason`) só dizem **de onde** veio cada parte: relatórios, caixa e fecho não mudam.
+- [x] **Venda offline com desconto nunca é recusada** na sincronização: já foi cobrada. Fica `needs_review` e
+  grava `promotion.needs_review`.
+- [x] Não acumula com campanha de preço (1060). Conta da mesa (`close_table_bill`) fica de fora.
+- [x] Painel → **Promoções**, só do dono: regras, cupões, elegibilidade 2x1, resumo de 30 dias e utilizações.
+- [x] Testes: 37 casos na conta do core, 9 no POS, 17 no painel, 4 no talão, 6 na anulação de entregue (1112) e
+  o [ensaio SQL](supabase/tests/promotions.sql) em `ROLLBACK` (blocos 1–15 do site, 16 do balcão). Suite
+  completa a 02/10: **1330 testes em 144 ficheiros, todos verdes**. O ensaio SQL não corre no `pnpm test`.
+- [ ] Aplicar a 1113 no LIVE fora do horário da loja. A migration injecta duas chamadas no
+  `create_counter_sale_unlocked` por substituição verificada: **pára se a âncora não existir**.
+- [~] **B-119**: o `.exe` das lojas é anterior às linhas novas do talão; até ser trocado sai a linha única
+  "Desconto:" com o total certo.

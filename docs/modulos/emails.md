@@ -1,6 +1,6 @@
 # Emails no painel
 
-`/emails`, só para o dono, com selector de loja. Migrations **1104 e 1105**.
+`/emails`, só para o dono, com selector de loja. Migrations **1104 e 1105**. O **transporte** — por onde o email sai de facto — está em §Transporte, e mudou duas vezes depois desta entrega ([ADR 0009](../decisions/0009-email-por-https-resend.md) e [ADR 0010](../decisions/0010-email-pela-hostinger-via-supabase.md)).
 
 ## Utilização
 
@@ -27,6 +27,31 @@
 5. **Histórico:** fila, envio em curso, aceite pelo SMTP, falha, cancelado ou incerto.
    Páginas de 50, horários de Maputo. Aceite pelo SMTP não prova entrega/leitura.
    Inclui os novos envios dos nove emissores antigos; não guarda HTML ou códigos.
+
+## Transporte: os quatro caminhos, por ordem
+
+`apps/web/lib/email/transport.ts` escolhe sozinho. **Primeiro que estiver configurado ganha**; o seguinte serve de reserva:
+
+| # | Caminho | Liga-se com | Fonte |
+|---:|---|---|---|
+| 1 | **Relé no Supabase** — a caixa Hostinger do dono, enviada de dentro do Supabase | `EMAIL_RELAY_SECRET` no site, e os mesmos segredos nos da função | [ADR 0010](../decisions/0010-email-pela-hostinger-via-supabase.md), [relay.ts](../../apps/web/lib/email/relay.ts), [função](../../supabase/functions/email-relay/index.ts) |
+| 2 | **Resend por HTTPS** — também a reserva quando o relé falha | `RESEND_API_KEY`; `EMAIL_FROM` de domínio verificado lá | [ADR 0009](../decisions/0009-email-por-https-resend.md), [resend.ts](../../apps/web/lib/email/resend.ts) |
+| 3 | **SMTP da loja**, gravado nesta aba | Configuração do painel (1104), palavra-passe no Vault | [studio-transport.ts](../../apps/web/lib/email/studio-transport.ts) |
+| 4 | **SMTP do servidor** | `SMTP_USER`/`SMTP_PASS` | [ADR 0004](../decisions/0004-email-smtp-hostinger.md) |
+
+**Porque é que isto existe:** o Railway corta a saída SMTP fora do plano Pro. A 28/09 e a 30/09, do contentor de produção, as portas 465/587/2525 da Hostinger deram `ETIMEDOUT` e `email_delivery_log` só tinha `failed` — o dono não recebia alertas, fechos nem comprovativos. O Supabase deixa sair SMTP; por isso o relé.
+
+Consequências que mudam a leitura do resto deste módulo:
+
+- **Com relé ou Resend activos, a configuração SMTP desta aba deixa de ser o caminho dos emails operacionais.** Continua a valer para as campanhas (ver abaixo) e continua a ser o que o painel grava e testa.
+- Com relé configurado, o SMTP local nem é tentado: estaria bloqueado de qualquer forma.
+- **O teste de ligação do painel continua a falhar no Railway** até ao plano Pro. É esperado e não diz nada sobre o relé nem sobre o Resend.
+- O remetente do relé é o `EMAIL_FROM` **da função**, nunca o do pedido: não serve para enviar em nome de outro. A função autentica por `x-relay-secret` comparado em tempo constante, com `verify_jwt = false`, e valida até 50 destinatários.
+- Um timeout do relé depois de a Hostinger ter aceitado a mensagem pode **duplicar** esse email, porque o Resend tenta a seguir. Aceitável em avisos; não toca em dinheiro nem em papel.
+- **As campanhas e sequências ficam fora** do relé e do Resend (`sendStudioMail`, `/api/cron/emails`): continuam no SMTP configurado aqui. Uma campanha não gasta a quota de terceiros que os emails dos pedidos precisam.
+- Publicar o relé é um passo à parte do deploy do site: `supabase functions deploy email-relay`. Os erros de entrega ficam nos logs da função; o resultado continua em `email_delivery_log`.
+
+O email de **pagamento confirmado** mostra as linhas de desconto do pedido quando existem — 2x1, cupão, desconto manual e entrega grátis ([promoções](promocoes.md)). A leitura é à parte e best-effort: numa base sem a 1113 as colunas não existem e o email sai como antes.
 
 ## Biblioteca e IA gratuita
 
@@ -78,15 +103,19 @@ retries automáticos: falha fica visível e envio interrompido passa a incerto a
 10 minutos. Confirmar no fornecedor antes de criar nova campanha. A etapa seguinte
 só é agendada depois de a anterior ficar aceite e persistida.
 
-Configuração do painel tem prioridade sobre envs SMTP para a loja. Emails gerais e
-relatórios usam a primeira configuração activa na ordem das lojas. As envs SMTP
-antigas continuam como alternativa dos emails operacionais. Desligar no painel
-suspende sempre a fila dos novos funis.
+Entre os **dois SMTP**, a configuração do painel tem prioridade sobre as envs do
+servidor para a loja. Emails gerais e relatórios usam a primeira configuração activa
+na ordem das lojas. Desligar no painel suspende sempre a fila dos novos funis.
+Relé e Resend, quando configurados, entram **antes** destes dois nos emails
+operacionais — ver §Transporte; as campanhas continuam a sair por aqui.
 
 ## Instalação e ensaios
 
 - Aplicar 1104 e 1105 primeiro em staging; publicar o código.
 - `APP_BASE_URL`: origem HTTPS do ambiente, para os links de cancelamento.
+- Transporte: `EMAIL_RELAY_SECRET` (e `supabase functions deploy email-relay` com os segredos
+  da função) ou `RESEND_API_KEY`. Ver [ambiente](../referencia/ambiente.md) — a lista completa
+  e o que fica no Supabase em vez do Railway.
 - Vault: `app_cron_base_url` e `app_cron_secret`, iguais aos do ambiente.
 - `scripts/sql/install-email-cron.sql`: `app-emails`, de minuto a minuto,
   `/api/cron/emails`, Bearer `CRON_SECRET`. HTTP síncrono no scheduler, nunca na venda.
@@ -99,7 +128,7 @@ suspende sempre a fila dos novos funis.
 - Unitários: HTML, URLs, intervalos, duplicação de transaccionais, autenticação,
   cancelamento depois de claim e persistência após SMTP.
 
-Sem credenciais SMTP a edição funciona e o envio fica pendente (B-114). Não há
+Sem nenhum dos quatro caminhos a edição funciona e o envio fica pendente (B-114). Não há
 tracking de aberturas/cliques, importação CSV, editor de HTML livre ou reactivação
 automática de contactos cancelados nesta entrega.
 

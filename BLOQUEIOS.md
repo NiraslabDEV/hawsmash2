@@ -44,6 +44,8 @@
 
 As [violações de código identificadas na auditoria](docs/AUDITORIA-DOCUMENTACAO.md#5-código-que-viola-a-spec) foram corrigidas no mesmo dia no branch `fix/violacoes-spec`, salvo V-03, V-10 e V-11 (decisões B-116–B-118); o estado item a item está na §5.1 da auditoria. **As migrations 1097–1099 não estão aplicadas em nenhuma base** — B-115.
 
+**Acrescentado depois desta revisão:** B-119 (02/10, trabalho da 1113). A contagem acima é a de 26/09 e não se reescreve; as migrations pendentes de aplicação no LIVE — 1108 a 1113 — estão nos itens `[ ]` do [ROADMAP](ROADMAP.md), não como bloqueios, porque dependem só de uma janela fora do horário da loja.
+
 ## ABERTOS
 
 ### PACOTE FINAL — revisão documental de 26/09/2026
@@ -910,6 +912,27 @@ validadas. Os requisitos GBP abaixo continuam fora da parcela Places instalada.
 - Contexto: os 15 s são deliberados (`apps/web/lib/pos/offline-store.ts`): a 2 min, um produto marcado como esgotado
   continuava à venda no balcão até ao ciclo seguinte. O custo é uma leitura leve a cada 15 s por terminal.
 - Se a resposta for "2 min": uma constante e um teste — minutos.
+
+---
+
+### B-119 · [Bridge] O `.exe` das lojas é anterior às linhas de desconto no talão (1113)
+
+- Estado: **aberto**. Categoria: **hardware/instalação**. Desbloqueia: Gabriel, na loja.
+- O problema: a 1113 põe a origem de cada desconto no payload de `print_jobs` e o
+  [talão](packages/receipt/src/tickets.ts) imprime uma linha por origem — 2x1 com o produto grátis, cupão com o
+  código, desconto manual com o motivo, entrega grátis. O `.exe` instalado em Maputo é do `d530fe2` e não conhece
+  essas instruções.
+- Como avancei: o talão antigo continua **certo**. O payload traz o `discount_cents` de sempre, por isso a bridge
+  instalada imprime a linha única "Desconto:" com o valor total correcto — menos detalhada, não errada. Nada
+  bloqueia a venda (CLAUDE §1).
+- Onde está: [`packages/receipt/src/tickets.ts`](packages/receipt/src/tickets.ts),
+  [`promo-lines.test.ts`](packages/receipt/src/__tests__/promo-lines.test.ts) e o trigger
+  `private.print_job_promotions` da 1113.
+- Para fechar: gerar o `.exe` de um commit com a 1113, trocá-lo nas duas lojas **mantendo o mesmo nome de ficheiro
+  e a mesma tarefa** (ver **B-117**, que tem de ser resolvido na mesma visita para não ficarem duas bridges), e
+  conferir num talão real com um 2x1 e um desconto manual.
+- Se não for trocado: o dono não vê no papel de onde veio o desconto. O painel e o email mostram-no de qualquer
+  forma; o motivo do desconto manual fica só nesses dois sítios.
 
 ---
 

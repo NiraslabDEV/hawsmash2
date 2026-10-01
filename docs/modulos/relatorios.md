@@ -17,8 +17,10 @@ O dono vê consolidado e lojas; o gerente consulta as suas lojas. Caixa e cozinh
 | `export_sales_for_accounting` | Linhas de pagamentos para exportar sob o perfil/loja do utilizador |
 | `get_daily_digest` | Vendas/caixa/incidentes por loja no resumo diário |
 | `get_monthly_digest` | Mês por loja comparado com o anterior, artigos e contexto Google |
+| `get_promotions_summary` na aba Promoções | 30 dias de 2x1, cupões, entrega grátis e desconto manual, com receita dos pedidos com promoção; ver [promoções](promocoes.md) |
+| `get_coupon_usage` na aba Promoções | Utilizações de cada cupão, só para o dono |
 
-As principais tabelas são `orders`, `order_items`, `payments`, `cash_sessions`, `cash_day_closes`, `analytics_events`, `order_attribution`, `order_upsells` e `google_profile_snapshots`. Catálogo e lojas dão nomes/contexto; os custos congelados pertencem às linhas vendidas. `get_dashboard_metrics` mantém um contrato consolidado herdado; a interface actual de vendas usa `get_sales_metrics`.
+As principais tabelas são `orders`, `order_items`, `payments`, `cash_sessions`, `cash_day_closes`, `analytics_events`, `order_attribution`, `order_upsells`, `promotions` e `google_profile_snapshots`. Catálogo e lojas dão nomes/contexto; os custos congelados pertencem às linhas vendidas. `get_dashboard_metrics` mantém um contrato consolidado herdado; a interface actual de vendas usa `get_sales_metrics`.
 
 Períodos e apresentação usam Africa/Maputo. Todos/Online/POS é origem comercial, não meio de pagamento: entrega POS continua POS; online recebido em dinheiro e QR público continuam online. A exportação contabilística é independente desse filtro. As definições e limites de aquisição/margem estão em [marketing](marketing.md), incluindo o facto de margem estimada não ser lucro líquido.
 

@@ -2,7 +2,7 @@
 
 As TVs mostram informação pública da loja: senhas, vídeos/imagens e cardápio. O painel configura cada ecrã físico. O **KDS de cozinha continua planeado** em G2 do [ROADMAP](../../ROADMAP.md); não existe uma página KDS implementada. O quadro de pedidos do POS não deve ser apresentado como essa entrega.
 
-**Estado:** código observado na árvore de 26/09/2026, sem consulta às boxes ou a produção. A migration 1090 implementa as TVs configuráveis; equipamento, som, cache e limite efectivo de upload exigem validação da instalação.
+**Estado:** código observado na árvore de 2/10/2026, sem consulta às boxes ou a produção. A migration 1090 implementa as TVs configuráveis; equipamento, som, cache e limite efectivo de upload exigem validação da instalação. As correcções de 27/09 (um clique para pôr media numa TV, pré-visualização ao vivo, ecrãs sem marketing) são de interface e de leitura: não alteram o contrato da 1090.
 
 ## Utilizadores, dados e endereços
 
@@ -20,12 +20,14 @@ A configuração inicial prevê duas TVs por loja: a primeira com senhas e víde
 
 | Modo | Resultado |
 |---|---|
-| Senhas + vídeos | Ciclo de media e coluna das senhas prontas, com destaque temporário da nova senha; sem media, mostra senhas |
+| Senhas + vídeos | Ciclo de media e coluna das senhas prontas, com destaque temporário da nova senha. **Sempre dividido**: sem nenhum ficheiro, o lado da media mostra a marca, em vez de as senhas ocuparem o ecrã todo |
 | Só senhas | Prontas em grande e pedidos em preparo abaixo |
 | Só vídeos | Media em ecrã inteiro; sem playlist, logótipo |
 | Cardápio | Produtos, preços e disponibilidade da loja |
 
-As senhas prontas vêm dos pedidos em `ready`, após chamada na aba Senhas do POS ou avanço do pedido. **As vistas de senhas** não mostram nomes, telefones nem valores. O modo Cardápio mostra preços dos produtos.
+As senhas prontas vêm dos pedidos em `ready`, após chamada na aba Senhas do POS ou avanço do pedido. **As vistas de senhas** não mostram nomes, telefones nem valores. O modo Cardápio mostra preços dos produtos. A lista de pedidos em preparo tem tecto — 20 no ecrã inteiro, 10 na coluna — e remata com «+N»: um pedido esquecido em preparo não enche a TV.
+
+**Nas TVs e no KDS não há marketing.** `/tv` e `/kds` (e também `/pos`) não pedem a configuração de consentimento, não mostram o aviso de cookies e não iniciam nenhuma etiqueta: o aviso ficava por cima das senhas sem ninguém para o fechar, e cada volta da TV contava como uma visita da loja online nos pixels. A regra está num sítio só, [`lib/analytics/surfaces.ts`](../../apps/web/lib/analytics/surfaces.ts), com teste; o `AnalyticsProvider` continua montado em todas as páginas.
 
 A TV relê a configuração a cada 30 s e conserva uma cópia local. O polling da fila de senhas é de 5 s; o cardápio refresca a cada 60 s. Uma falha mantém o último conteúdo disponível; não transforma a TV numa fonte de estado de pedido. Os vídeos já guardados podem continuar sem internet, mas as senhas deixam de ter actualizações novas.
 
@@ -39,9 +41,13 @@ A TV relê a configuração a cada 30 s e conserva uma cópia local. O polling d
 
 A pré-visualização usa a página real com `?preview=1`, incluindo a rotação. Essa consulta não actualiza o heartbeat. A leitura normal actualiza `last_seen_at`, limitada na BD a aproximadamente 25 s; o painel considera o ecrã online dentro da janela definida no contrato de TV.
 
+**A miniatura mostra o rascunho, não o gravado.** O painel envia o que está a ser editado ao iframe por `postMessage` — mesma origem, só com `?preview=1` — e a TV desenha-o na hora. **A TV da loja só muda ao Guardar**, e o texto por baixo da miniatura di-lo quando há alterações por guardar. O contrato do rascunho está em [`lib/tv/preview.ts`](../../apps/web/lib/tv/preview.ts), com testes: mensagens de outra origem são ignoradas e um rascunho estragado cai em valores seguros. O resultado de Guardar, e os erros, aparecem também na barra de guardar — não só no topo da página, que com a página a descer não se via.
+
 ## Biblioteca e cache
 
 O bucket público `tv-media` guarda media promocional, não dados de clientes. Upload aceita MP4/WebM, JPEG/PNG/WebP; `.mov` e `.avi` são recusados. O limite declarado é 200 MB por ficheiro, mas o projecto Supabase pode impor um limite global menor (**B-113**). O guião original recomenda 1080p, duração de 20–60 s e menos de 50 MB; a compatibilidade do codec continua a depender da box.
+
+**Pôr um ficheiro numa TV é um clique.** Na biblioteca, cada ficheiro tem um botão por TV da loja (`+ TV 1` / `✓ TV 1`): um clique põe-no ou tira-o dessa TV e **grava logo**, avisando se a TV está num modo que não passa media. No editor da TV, «Carregar vídeo ou imagem para esta TV» carrega, junta à lista e grava. O cartão de cada TV diz «N vídeos/imagens a passar», ou avisa que não tem nenhum. Antes, carregar punha o ficheiro só na biblioteca e juntá-lo à TV era um segundo passo escondido — a TV ficava vazia depois de três gravações. Guardar, `+ TV` e carregar passam todos pelo mesmo caminho de gravação, e a lista é limpa contra a biblioteca mais recente. Uma imagem sozinha fica no ecrã, em vez de piscar a cada 10 s.
 
 O dono pode apagar media; o gerente só pode apagar o que carregou. Ao retirar um ficheiro, as TVs que o referenciam deixam de o apresentar. O upload e o registo em BD são operações distintas, com tentativa de limpeza do objecto quando o registo falha.
 

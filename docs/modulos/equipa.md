@@ -8,8 +8,18 @@ O módulo atribui uma identidade a cada operador, um perfil e as lojas em que po
 |---|---|
 | `owner` | Todas as lojas; configura marca, loja, equipa, pagamentos, custos e acessos |
 | `manager` | Operação das lojas atribuídas: pedidos, anulação, caixa, contagem/estoque e definições do POS |
-| `cashier` | Venda, pagamento presencial, caixa, aprovação de comprovativo pelo POS e disponibilidade dos produtos; sem acesso geral a custos/configuração da empresa |
+| `cashier` | Venda, pagamento presencial, caixa, aprovação de comprovativo pelo POS e disponibilidade dos produtos; sem acesso geral a custos/configuração da empresa. **Aplica cupões no balcão, não desconto manual** |
 | `kitchen` | Pedidos e preparação; sem operações financeiras |
+
+Três operações que mexem no preço ou desfazem dinheiro têm perfil próprio na BD, não no ecrã:
+
+| Operação | Perfil exigido | Onde |
+|---|---|---|
+| **Desconto manual** no balcão, com motivo | `manager` ou `owner` (`discount_requires_manager`) | [POS](pos.md), 1113 |
+| **Regras de promoção e cupões** (`/promocoes`, `promotions`, `referral_codes`) | só `owner`, pela RLS e pelo menu | [promoções](promocoes.md), 1113 |
+| **Anular um pedido já entregue** (`void_delivered_order`) | só `owner`, com motivo de 3–500 caracteres | [pedidos](pedidos.md), 1112 |
+
+A anulação de venda de balcão por entregar continua em `void_sale` (manager/owner). Nenhuma destas apaga registos: a venda anulada fica, com motivo e autor em `event_log`.
 
 As permissões finais são as verificações SQL/RLS de cada operação. Esconder uma aba não é controlo de acesso. Perfis herdados `bar`/`waiter` que ainda aparecem no modelo puro `packages/core/src/order-machine.ts` não são novos perfis operacionais desta instalação.
 

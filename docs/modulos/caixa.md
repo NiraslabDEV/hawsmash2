@@ -38,6 +38,8 @@ As operações de caixa exigem servidor; vendas de balcão podem continuar na fi
 
 Mesas ainda por pagar não são dinheiro em caixa. O POS mostra mesas abertas e o total pendente; liquidá-las chama `close_table_bill`, não `close_cash_session`. Ver [Mesas](mesas.md). Fechar o turno não liquida implicitamente contas de mesa.
 
+**Descontos e anulações que vêm de fora do caixa.** Os descontos (2x1, cupão, manual, entrega grátis — 1113) não mudam nada aqui: `orders.discount_cents` continua a ser todo o abatimento aos produtos e `total = subtotal − desconto + entrega`, que é o valor que o turno e o fecho do dia já contavam. As colunas novas só dizem de onde veio cada parte. Já a anulação de um pedido **entregue** (`void_delivered_order`, 1112) passa os pagamentos `confirmed` a `refunded`: saem do turno aberto, do fecho do dia e dos relatórios, porque o fecho conta só `confirmed` de pedidos não cancelados. **Um turno que já fechou com esse pedido fica como fechou** — o relatório é congelado e não se reescreve; a resposta da RPC diz `shift_closed` para o painel avisar quem anulou.
+
 A idempotência explícita do fecho do dia e da conta da mesa não deve ser atribuída a todas as RPCs. `add_cash_movement` não recebe uma chave de pedido; repetir deliberadamente a chamada pode criar outro movimento. Numa resposta incerta, conferir o livro antes de lançar novamente. Esta descrição regista o contrato existente sem alterar as regras do produto.
 
 ## Dados, rotas e auditoria

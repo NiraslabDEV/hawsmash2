@@ -29,6 +29,8 @@ Anular/cancelar repõe segundo os consumos registados. As rotinas verificam movi
 
 Fontes: [1008 produto final](../../supabase/migrations/20260819230000_1008_stock.sql), [1024 ingredientes](../../supabase/migrations/20260827100000_1024_ingredientes_e_ficha_tecnica.sql), [1025 consumo na venda](../../supabase/migrations/20260827110000_1025_ficha_tecnica_na_venda.sql) e [1081 mesas](../../supabase/migrations/20260924060000_1081_mesas_no_balcao.sql).
 
+A anulação de um pedido **entregue** (`void_delivered_order`, 1112) repõe stock e ingredientes por `private.restore_order_stock`, a mesma função idempotente da retirada de item da mesa (1102): nunca repõe duas vezes, mesmo que se repita a chamada. Ver [pedidos](pedidos.md).
+
 ## Operação e RPCs
 
 | Acção | RPCs |
