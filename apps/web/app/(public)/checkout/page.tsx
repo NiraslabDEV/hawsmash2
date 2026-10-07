@@ -38,6 +38,7 @@ import { AGENT_CHECKOUT_KEY, consumeAgentCheckout } from '@/lib/agents/webmcp';
 import { parseStoreCookie } from '@/lib/store-context';
 import { clearPendingCheckout, getPendingCheckout, rememberPendingCheckout } from '@/lib/payments/pending-checkout';
 import { clearCheckoutAttempt, getCheckoutAttempt } from '@/lib/payments/checkout-attempt';
+import { clearPendingProof, readPendingProof, rememberPendingProof } from '@/lib/payments/pending-proof';
 import {
   forgetCheckout,
   forgetSavedAddress,
@@ -359,6 +360,15 @@ export default function CheckoutPage() {
   const [showPaymentScreen, setShowPaymentScreen] = useState(false);
   const [paymentProof, setPaymentProof]           = useState<File | null>(null);
   const [uploading, setUploading]                 = useState(false);
+  // O pedido manual já criado. Vive em `localStorage` enquanto espera
+  // comprovativo: quem sai para a aplicação do M-Pesa volta a este mesmo
+  // pedido em vez de encomendar outra vez (ver `lib/payments/pending-proof`).
+  const [manualOrderId, setManualOrderId]         = useState<string | null>(null);
+  // Num pedido recuperado, o valor e o número vêm do servidor, não do
+  // carrinho: é esse o montante que a loja reconhece na conta dela.
+  const [resumed, setResumed]                     = useState<{ totalCents: number; orderNumber: string | null } | null>(null);
+  // Enquanto não se sabe se há pedido por pagar, não se mostra o formulário.
+  const [checkingPending, setCheckingPending]     = useState(true);
   const [autoSubmitting, setAutoSubmitting]       = useState(false);
   const submissionInProgress = useRef(false);
   // Número onde o pedido de PIN vai cair. Começa igual ao do pedido, mas
@@ -551,6 +561,64 @@ export default function CheckoutPage() {
     return true;
   }
 
+  // Voltar da aplicação do M-Pesa não recomeça o pedido. O ecrã de pagamento
+  // só vive em memória: um telemóvel que despeja a página devolvia a pessoa ao
+  // formulário, onde ela encomendava outra vez — duas encomendas iguais no
+  // painel, uma sem comprovativo. Se ficou um pedido desta loja à espera do
+  // comprovativo, é a ele que ela volta, com o mesmo `orderId` (regra 4).
+  const pendingChecked = useRef(false);
+  useEffect(() => {
+    // Sem bandeira de cancelamento: o StrictMode desmonta e remonta o efeito, e
+    // um cleanup que abortasse esta consulta deixava o ecrã a carregar para
+    // sempre. A guarda é o `ref` — a consulta acontece uma vez.
+    if (pendingChecked.current) return;
+    pendingChecked.current = true;
+    const pending = readPendingProof(localStorage, storeSlug);
+    if (!pending) { setCheckingPending(false); return; }
+    // Rede fraca não deixa ninguém num ecrã a carregar: ao fim de oito
+    // segundos vale a nota do browser e a pessoa anexa o comprovativo.
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => controller.abort(), 8_000);
+    void (async () => {
+      try {
+        const res = await fetch(`/api/order-status/${pending.orderId}`, { signal: controller.signal });
+        if (!res.ok) { clearPendingProof(localStorage, pending.orderId); return; }
+        const order = await res.json();
+        // Aprovado, cancelado ou já pago por outra via: a loja está a tratar
+        // dele e não há comprovativo a enviar. O formulário abre limpo.
+        if (order?.status !== 'awaiting_approval') { clearPendingProof(localStorage, pending.orderId); return; }
+        setManualOrderId(pending.orderId);
+        setManualMethod(order.payment_method === 'emola' ? 'emola' : 'mpesa');
+        setResumed({
+          // O valor é o do pedido, não o do carrinho de agora: é por ele que a
+          // loja reconhece o pagamento na conta dela.
+          totalCents: Number.isSafeInteger(order.total_cents) ? order.total_cents : pending.totalCents,
+          orderNumber: typeof order.order_number === 'string' ? order.order_number : pending.orderNumber,
+        });
+        setShowPaymentScreen(true);
+      } catch {
+        // Sem resposta não se apaga nada: na dúvida volta-se ao mesmo pedido,
+        // que é o que não deixa encomendar duas vezes.
+        setManualOrderId(pending.orderId);
+        setManualMethod(pending.method);
+        setResumed({ totalCents: pending.totalCents, orderNumber: pending.orderNumber });
+        setShowPaymentScreen(true);
+      } finally {
+        window.clearTimeout(timer);
+        setCheckingPending(false);
+      }
+    })();
+  }, [storeSlug]);
+
+  /** Desiste do pedido por pagar e volta ao formulário para fazer outro. */
+  function startOverFromPending() {
+    clearPendingProof(localStorage, manualOrderId ?? undefined);
+    setManualOrderId(null);
+    setResumed(null);
+    setPaymentProof(null);
+    setShowPaymentScreen(false);
+  }
+
   // Voltar no navegador não deve duplicar um pagamento ainda por resolver.
   const handleCreateManualOrder = async () => {
     if (submissionInProgress.current || !validate()) return;
@@ -560,7 +628,16 @@ export default function CheckoutPage() {
       if (await resumePendingCheckout()) return;
       rememberCustomer();
       trackAddPaymentInfo(cartTrackItems(), manualMethod);
-      await createOrderMutation.mutateAsync(buildOrderPayload(manualMethod));
+      const created = await createOrderMutation.mutateAsync(buildOrderPayload(manualMethod));
+      // A partir daqui o pedido existe. Guardar a referência antes de a pessoa
+      // sair para o M-Pesa é o que a traz de volta a ESTE pedido.
+      if (typeof created?.orderId === 'string') {
+        setManualOrderId(created.orderId);
+        rememberPendingProof(localStorage, {
+          orderId: created.orderId, storeSlug, method: manualMethod,
+          totalCents: dueCents, orderNumber: null,
+        });
+      }
     } catch { /* A mutation apresenta o erro ao cliente. */ }
     finally { submissionInProgress.current = false; setAutoSubmitting(false); }
   };
@@ -650,7 +727,7 @@ export default function CheckoutPage() {
 
   const handleUploadProof = async () => {
     if (!paymentProof) { alert('Por favor, selecione o comprovativo'); return; }
-    const orderId = createOrderMutation.data?.orderId;
+    const orderId = manualOrderId ?? createOrderMutation.data?.orderId;
     if (!orderId) { alert('Pedido não encontrado. Tente novamente.'); return; }
 
     setUploading(true);
@@ -674,6 +751,8 @@ export default function CheckoutPage() {
         throw new Error(body.error || 'Falha ao anexar comprovativo');
       }
 
+      // Comprovativo entregue: o pedido deixa de estar à espera desta pessoa.
+      clearPendingProof(localStorage, orderId);
       localStorage.removeItem('cart');
       router.push(`/order-status/${orderId}`);
     } catch (error) {
@@ -812,7 +891,9 @@ export default function CheckoutPage() {
 
   // ─── Loading ───────────────────────────────────────────────────────────────
 
-  if (isLoadingMenu) {
+  // Também espera pela verificação do pedido por pagar: sem isso o formulário
+  // pisca antes de o ecrã do comprovativo voltar.
+  if (isLoadingMenu || checkingPending) {
     return (
       <div className="hs hf" style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', padding: 16 }}>
         <div style={{ textAlign: 'center' }}>
@@ -829,11 +910,31 @@ export default function CheckoutPage() {
     const isMpesa = manualMethod === 'mpesa';
     const number  = isMpesa ? menuData?.mpesa_number : menuData?.emola_number;
     const holder  = isMpesa ? menuData?.mpesa_name   : menuData?.emola_name;
+    // Num pedido recuperado manda o total do servidor: o carrinho pode já ter
+    // sido mexido, o pedido não.
+    const payableCents = resumed ? resumed.totalCents : dueCents;
 
     return (
       <div className="hs hf" style={{ minHeight: '100vh' }}>
         <div className="hf-page">
           <FunnelRail step={2} storeName={storeName} />
+
+          {/* Quem volta do M-Pesa precisa de saber, antes de tudo, que não tem
+              de encomendar outra vez. */}
+          {resumed && (
+            <section className="hf-sec">
+              <div className="hf-panel is-ok" style={{ padding: 16 }}>
+                <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '.24em', textTransform: 'uppercase', color: 'var(--hs-ink-mute)' }}>
+                  O teu pedido está guardado
+                </div>
+                <p style={{ margin: '10px 0 0', fontSize: 14, lineHeight: 1.45, color: 'var(--hs-ink-dim)' }}>
+                  {resumed.orderNumber
+                    ? <>O pedido <strong className="num" style={{ color: 'var(--hs-ink)' }}>{resumed.orderNumber}</strong> está à espera do comprovativo. Não encomendes outra vez — anexa aqui em baixo.</>
+                    : <>O teu pedido está à espera do comprovativo. Não encomendes outra vez — anexa aqui em baixo.</>}
+                </p>
+              </div>
+            </section>
+          )}
 
           {/* O valor é a capa: é por ele que a loja reconhece o pagamento. */}
           <section className="hf-hero hf-hero-glow-c" style={{ textAlign: 'center' }}>
@@ -844,11 +945,11 @@ export default function CheckoutPage() {
               className="num"
               style={{ fontFamily: 'var(--font-display)', fontSize: 68, lineHeight: .94, letterSpacing: '-.01em', color: 'var(--hs-gold)', marginTop: 12 }}
             >
-              {fmt(dueCents)}
+              {fmt(payableCents)}
             </div>
             <button
               type="button"
-              onClick={() => navigator.clipboard?.writeText(String(dueCents / 100))}
+              onClick={() => navigator.clipboard?.writeText(String(payableCents / 100))}
               className="hf-btn hf-btn-ghost hf-btn-sm"
               style={{ margin: '14px auto 0' }}
             >
@@ -912,7 +1013,7 @@ export default function CheckoutPage() {
             <SectionHead>Três passos</SectionHead>
             <ol style={{ margin: 0, padding: 0, listStyle: 'none' }}>
               {[
-                <>Envia <strong className="num" style={{ color: 'var(--hs-ink)' }}>{fmt(dueCents)}</strong> para o número acima.</>,
+                <>Envia <strong className="num" style={{ color: 'var(--hs-ink)' }}>{fmt(payableCents)}</strong> para o número acima.</>,
                 <>Guarda o SMS de confirmação ou tira print.</>,
                 <>Anexa aqui em baixo. Confirmamos em poucos minutos e a chapa arranca.</>,
               ].map((text, i) => (
@@ -980,6 +1081,12 @@ export default function CheckoutPage() {
             <p className="hf-note" style={{ justifyContent: 'center', marginTop: 14, color: 'var(--hs-ink-faint)' }}>
               O teu comprovativo só é visto pela equipa da loja.
             </p>
+            {/* Quem já desistiu deste não fica preso ao ecrã de pagamento. */}
+            {resumed && (
+              <button type="button" onClick={startOverFromPending} className="hf-act" style={{ margin: '10px auto 0', display: 'block' }}>
+                Já não vou pagar este — fazer outro pedido
+              </button>
+            )}
           </div>
           <FunnelFoot />
         </div>

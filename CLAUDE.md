@@ -191,6 +191,8 @@ pagamentos a `refunded`, turno já fechado fica como fechou — 1112). Apagar co
 ## 13. SITE PÚBLICO (o canal que já factura)
 
 Loja explícita no cardápio/checkout; preço e disponibilidade vêm do servidor.
+Quem sai do site para pagar no M-Pesa volta ao **mesmo** pedido, à espera do comprovativo — nunca ao formulário
+vazio: o ecrã de pagamento é recuperável por uma nota em `localStorage` (regra 4).
 [Site e checkout](docs/modulos/site-checkout.md) · [conta do cliente](docs/modulos/conta-cliente.md).
 [Agentes](docs/modulos/agentes.md) preparam revisão; a pessoa conclui o checkout.
 [Marketing](docs/modulos/marketing.md) · [promoções](docs/modulos/promocoes.md) · [relatórios](docs/modulos/relatorios.md).

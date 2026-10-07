@@ -281,3 +281,69 @@ test('e-Mola directo real por integrar cai no comprovativo mantendo e-Mola', asy
   expect(manualOrders).toBe(0);
   expect(await page.evaluate(() => localStorage.getItem('pending_order_id'))).toBeNull();
 });
+
+// ── Voltar do M-Pesa sem encomendar outra vez ────────────────────────────────
+// Quem paga por comprovativo sai do site para o *150# ou para a aplicação. O
+// telemóvel despeja a página; sem a nota em `localStorage` a pessoa voltava ao
+// formulário e fazia o pedido de novo — duas encomendas no painel, uma delas
+// sem comprovativo nenhum.
+
+const pendingOrderId = '10000000-0000-4000-8000-000000000020';
+
+/** O pedido tal como o servidor o devolve enquanto espera o comprovativo. */
+function pendingOrder(status: string) {
+  return { status, payment_method: 'mpesa', total_cents: 77_700, order_number: 'PLACEHOLDER_ENC' };
+}
+
+/** Cria o pedido por comprovativo e devolve quantas vezes foi criado. */
+async function manualOrder(page: Page): Promise<() => number> {
+  let created = 0;
+  await page.route('**/api/create-order', (route) => {
+    created++;
+    return route.fulfill({ json: { orderId: pendingOrderId } });
+  });
+  await checkout(page, 'manual');
+  await page.getByRole('button', { name: 'Comprovativo já paguei' }).click();
+  await page.getByRole('button', { name: /^Pagar \d+ MT$/i }).click();
+  await expect(page.getByText('Total a pagar')).toBeVisible();
+  return () => created;
+}
+
+test('regressar ao checkout devolve o mesmo pedido à espera do comprovativo', async ({ page }) => {
+  const created = await manualOrder(page);
+  await page.route(`**/api/order-status/${pendingOrderId}`, (route) => route.fulfill({ json: pendingOrder('awaiting_approval') }));
+
+  await page.reload();
+
+  await expect(page.getByText('O teu pedido está guardado')).toBeVisible();
+  await expect(page.getByText('PLACEHOLDER_ENC')).toBeVisible();
+  // O valor é o do pedido no servidor, não o que o carrinho recalcularia —
+  // na capa e no passo 01, os dois sítios onde a pessoa o lê.
+  await expect(page.getByText('777 MT', { exact: true })).toHaveCount(2);
+  await expect(page.getByRole('textbox', { name: 'Nome *', exact: true })).toHaveCount(0);
+  expect(created()).toBe(1);
+});
+
+test('um pedido já aprovado liberta o checkout para encomendar outra vez', async ({ page }) => {
+  await manualOrder(page);
+  await page.route(`**/api/order-status/${pendingOrderId}`, (route) => route.fulfill({ json: pendingOrder('approved') }));
+
+  await page.reload();
+
+  await expect(page.getByRole('textbox', { name: 'Nome *', exact: true })).toBeVisible();
+  await expect(page.getByText('O teu pedido está guardado')).toHaveCount(0);
+  // A nota saiu do browser: o próximo regresso não ressuscita o pedido velho.
+  expect(await page.evaluate(() => localStorage.getItem('pending_proof'))).toBeNull();
+});
+
+test('desistir do pedido por pagar volta ao formulário', async ({ page }) => {
+  await manualOrder(page);
+  await page.route(`**/api/order-status/${pendingOrderId}`, (route) => route.fulfill({ json: pendingOrder('awaiting_approval') }));
+  await page.reload();
+  await expect(page.getByText('O teu pedido está guardado')).toBeVisible();
+
+  await page.getByRole('button', { name: /fazer outro pedido/i }).click();
+
+  await expect(page.getByRole('textbox', { name: 'Nome *', exact: true })).toBeVisible();
+  expect(await page.evaluate(() => localStorage.getItem('pending_proof'))).toBeNull();
+});
