@@ -60,7 +60,9 @@ em [Equipa](../modulos/equipa.md) e na [auditoria](../AUDITORIA-DOCUMENTACAO.md)
 
 Com agendador, SMTP e destinatários configurados, o sistema pode enviar alertas quando:
 
-- um POS ou a impressão de uma loja fica **sem sinal mais de 5 minutos**;
+- a **impressão** de uma loja fica **sem sinal mais de 5 minutos** (é um serviço que está sempre ligado);
+- um **POS** fica **sem sinal mais de 15 minutos** com a loja a funcionar — dentro do horário ou com turno
+  aberto. À noite, com o terminal desligado, não avisa: isso é normal, não é avaria;
 - há **trabalhos de impressão falhados**;
 - um pedido pago fica **mais de 2 minutos sem comanda**;
 - um produto **esgota** ou passa abaixo do mínimo;
@@ -69,6 +71,12 @@ Com agendador, SMTP e destinatários configurados, o sistema pode enviar alertas
 O email pode trazer um botão para **abrir o WhatsApp da loja**, se o contacto estiver configurado.
 Não é envio automático de mensagem pelo WhatsApp. A aba **Sistema** actualiza o estado a cada 30 segundos.
 Combina com o suporte um teste de entrega; existir um alerta no registo não prova que o email chegou.
+
+**Um dispositivo que já não existe.** Quando se limpa a cache de um POS ou se reinstala o programa, o
+sistema passa a ver um terminal novo — e o antigo fica na lista a avisar para sempre. Na aba **Sistema**,
+ao lado de um dispositivo desligado, há **retirar**: deixa de aparecer e de avisar. O histórico de vendas
+feitas nesse terminal não se perde, e só o dono ou o gerente o podem fazer. Se tiver dúvida se o terminal
+ainda existe, não retire — pergunte ao suporte.
 
 **Fechar uma loja temporariamente** (falta de luz, obras): aba **Lojas** → escolher a loja → escrever o
 motivo → *Fechar loja agora*. O site deixa de aceitar encomendas **dessa loja** e a outra continua a vender.

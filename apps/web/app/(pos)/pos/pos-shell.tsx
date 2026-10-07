@@ -32,6 +32,7 @@ import {
 } from '@/lib/pos/offline-sales';
 import { syncOfflineSales } from '@/lib/pos/offline-sync';
 import { connectionStatus } from '@/lib/pos/connection-status';
+import { HEARTBEAT_MS, sendPosHeartbeat } from '@/lib/pos/heartbeat';
 import { trackUpsell } from '@/lib/analytics/track';
 import { buildPosUpsellFunnel, type PosUpsellStep } from '@/lib/pos/pos-upsell';
 import { isPosPin, posIdleTimeoutMs } from '@/lib/pos/session';
@@ -637,6 +638,30 @@ export function PosShell() {
     const timer = window.setInterval(() => void refreshMenu(), MENU_REFRESH_MS);
     return () => window.clearInterval(timer);
   }, [context, refreshMenu]);
+
+  // Sinal de vida (1114). O POS tem de dizer que está ligado mesmo sem vender:
+  // antes disto, "calado há 5 minutos" queria dizer "sem venda há 5 minutos", e
+  // o painel acendia um crítico em cada hora morta com o balcão a trabalhar.
+  // Best-effort: falhar não estraga nada e não se diz nada ao operador — quem
+  // precisa de saber é o painel.
+  useEffect(() => {
+    if (!context) return;
+    const bater = () => void sendPosHeartbeat(supabase, context.deviceId);
+    bater();
+    const timer = window.setInterval(bater, HEARTBEAT_MS);
+    // Um quiosque fica dias aberto e o browser estrangula os timers da aba em
+    // segundo plano: ao voltar ao ecrã, bate já em vez de esperar o intervalo.
+    const aoVoltar = () => {
+      if (document.visibilityState === 'visible') bater();
+    };
+    document.addEventListener('visibilitychange', aoVoltar);
+    window.addEventListener('online', bater);
+    return () => {
+      window.clearInterval(timer);
+      document.removeEventListener('visibilitychange', aoVoltar);
+      window.removeEventListener('online', bater);
+    };
+  }, [context, supabase]);
 
   // Um "esgotado" marcado no painel ou noutro terminal chega ao balcão em
   // segundos: o POS é um quiosque e ninguém o recarrega à mão. O realtime só

@@ -10,6 +10,12 @@ O vínculo usa `bind_pos_device`. A entrada corrente apresenta `pos_login_cards`
 
 Detalhes de acesso, criação e revogação estão em [Equipa](equipa.md). Uma primeira entrada ou troca de utilizador não deve ser descrita como autenticação offline: a rota de login depende de Supabase Auth.
 
+### Sinal de vida e dispositivos retirados (1114)
+
+O POS bate `pos_heartbeat` **de 60 em 60 segundos** ([heartbeat.ts](../../apps/web/lib/pos/heartbeat.ts)), e também ao voltar ao primeiro plano e ao recuperar rede — um quiosque fica dias aberto e o browser estrangula os timers da aba em segundo plano. É best-effort: sem rede não tenta, falhar não diz nada ao operador e nunca toca no caminho da venda. Antes disto, `devices.last_seen_at` do POS só mexia ao vender, e o alerta `device_silent` significava na prática "sem venda há 5 minutos" — em Maputo, a 07/10, havia um crítico vermelho com o terminal a cobrar. Limiares e porta do horário estão no [runbook](../operacao/runbook.md).
+
+Cada `bind_pos_device` insere uma **linha nova** em `devices`: o mesmo PC que perde o `localStorage` (cache limpa, PWA reinstalada, browser novo) aparece como terminal novo e deixa a linha antiga a alertar. Desde a 1114 o próprio `bind_pos_device` desactiva os POS da mesma loja calados há mais de 48 h — um segundo terminal a sério bate de minuto a minuto e nunca cai nessa rede. O que escapar retira-se à mão no painel Sistema com `retire_device` (manager/owner, com registo em `event_log`). **Não se apaga**: a linha é o histórico de quem vendeu em que terminal (§17).
+
 ## Venda e degradação
 
 1. O terminal lê `get_menu` da sua loja, categorias, variantes, adicionais e disponibilidade. A cache é actualizada à entrada e a cada 15 segundos; o ADR 0006 fixa dois minutos, divergência V11 da auditoria.

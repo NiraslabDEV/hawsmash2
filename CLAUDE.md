@@ -141,6 +141,10 @@ Servidor fixa preços e estado; impressão/rede degradam sem perder a venda.
 - Sangria/reforço/despesa levam `p_request_id` (1098). Nunca um `confirm()` do browser em fluxo de venda.
 - Descontos no balcão (1113): o POS pré-visualiza, o servidor recalcula **antes** de conferir o pagamento.
   Manual só manager/owner, com motivo. Venda offline com desconto nunca é recusada — fica `needs_review`.
+- O POS bate `pos_heartbeat` a cada 60 s (1114) — "ligado" não pode depender de ter vendido. Limiar de
+  silêncio por tipo (bridge 5 min, POS 15 min) e o POS só é vigiado com a loja a operar; loja inactiva
+  não alerta. Cada `bind_pos_device` cria linha nova em `devices`: o fantasma retira-se com `retire_device`,
+  nunca se apaga.
 [Fluxos, definições e contrato offline (§7.5 original)](docs/modulos/pos.md) · [promoções](docs/modulos/promocoes.md).
 
 ---

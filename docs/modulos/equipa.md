@@ -18,6 +18,8 @@ Três operações que mexem no preço ou desfazem dinheiro têm perfil próprio 
 | **Desconto manual** no balcão, com motivo | `manager` ou `owner` (`discount_requires_manager`) | [POS](pos.md), 1113 |
 | **Regras de promoção e cupões** (`/promocoes`, `promotions`, `referral_codes`) | só `owner`, pela RLS e pelo menu | [promoções](promocoes.md), 1113 |
 | **Anular um pedido já entregue** (`void_delivered_order`) | só `owner`, com motivo de 3–500 caracteres | [pedidos](pedidos.md), 1112 |
+| **Retirar um dispositivo** (`retire_device`) | `manager` ou `owner` (`retire_device_access_denied`), só da sua loja | [POS](pos.md), 1114 |
+| **Sinal de vida do POS** (`pos_heartbeat`) | qualquer perfil da loja, incluindo `cashier` — é `security definer` porque a RLS da `devices` só deixa escrever manager/owner | [POS](pos.md), 1114 |
 
 A anulação de venda de balcão por entregar continua em `void_sale` (manager/owner). Nenhuma destas apaga registos: a venda anulada fica, com motivo e autor em `event_log`.
 
