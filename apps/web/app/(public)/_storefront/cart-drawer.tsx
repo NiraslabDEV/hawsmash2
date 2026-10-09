@@ -61,10 +61,13 @@ export function CartDrawer({
         <div className="hs-drawer-body">
           {lines.length === 0 && <p className="hs-drawer-empty">O carrinho está vazio.</p>}
 
-          {lines.map((line) => (
+          {lines.map((line) => {
+            // A Coca Zero mostra a lata dela, não a da Coca.
+            const photo = line.variant?.photo_url ?? line.item.photo_url;
+            return (
             <div key={`${line.item.id}-${line.variant?.id ?? 'base'}-${line.index}`} className="hs-drawer-line">
-              {line.item.photo_url ? (
-                <Image src={line.item.photo_url} alt="" width={56} height={56} />
+              {photo ? (
+                <Image src={photo} alt="" width={56} height={56} />
               ) : (
                 <span />
               )}
@@ -91,7 +94,8 @@ export function CartDrawer({
                 </button>
               </span>
             </div>
-          ))}
+            );
+          })}
         </div>
 
         <footer className="hs-drawer-foot">
