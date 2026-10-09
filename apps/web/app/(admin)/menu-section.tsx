@@ -71,6 +71,8 @@ interface Variant {
   sort: number;
   is_default: boolean;
   active: boolean;
+  /** Foto própria da variante (Coca Zero ≠ Coca). Null = usa a do produto. */
+  photo_url: string | null;
 }
 
 interface Addon {
@@ -725,6 +727,16 @@ function ItemModal({
     item ? centsToDecimalString(item.price_cents) : ''
   );
   const [photoFile, setPhotoFile] = useState<File | null>(null);
+  const photoInputRef = useRef<HTMLInputElement>(null);
+  // A foto escolhida aparece logo, antes de guardar; sem escolha, a que já lá está.
+  const [filePreview, setFilePreview] = useState<string | null>(null);
+  useEffect(() => {
+    if (!photoFile) { setFilePreview(null); return; }
+    const url = URL.createObjectURL(photoFile);
+    setFilePreview(url);
+    return () => URL.revokeObjectURL(url);
+  }, [photoFile]);
+  const photoPreview = filePreview ?? item?.photo_url ?? null;
   const [trackStock, setTrackStock] = useState(item?.track_stock ?? false);
   const [stockQty, setStockQty] = useState(item?.stock_qty ?? 0);
   const [availableDelivery, setAvailableDelivery] = useState(item?.available_delivery ?? true);
@@ -795,165 +807,251 @@ function ItemModal({
   }
 
   return (
-    <div className="fixed inset-0 bg-black/70 backdrop-blur-[4px] z-50 flex items-center justify-center p-4">
+    <div
+      className="fixed inset-0 z-50 flex items-end justify-center bg-black/75 backdrop-blur-sm sm:items-center sm:p-4"
+    >
       <form
         onSubmit={handleSave}
-        className="border border-white/[0.08] bg-white/[0.04] backdrop-blur-[12px] shadow-[0_4px_24px_rgba(0,0,0,0.4)] rounded-2xl w-full max-w-md p-5 space-y-4 max-h-[90vh] overflow-y-auto"
+        className="flex max-h-[94vh] w-full max-w-lg flex-col overflow-hidden rounded-t-3xl border border-white/[0.08] bg-[#14110F] shadow-[0_24px_80px_rgba(0,0,0,0.6)] sm:rounded-3xl"
       >
-        <h2 className="font-bold text-lg text-[#F5A623]">
-          {item ? 'Editar item' : 'Novo item'}
-        </h2>
-
-        <div>
-          <label className="block text-xs font-semibold text-[#C9BCAC] mb-1">Nome</label>
-          <input
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            required
-            className="w-full bg-black/20 border border-white/[0.08] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-[#F5A623]"
-            placeholder="ex: Frango grelhado"
-          />
-        </div>
-
-        <div>
-          <label className="block text-xs font-semibold text-[#C9BCAC] mb-1">Descrição</label>
-          <textarea
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            rows={2}
-            className="w-full bg-black/20 border border-white/[0.08] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-[#F5A623]"
-            placeholder="ex: Com batata frita e salada"
-          />
-        </div>
-
-        <div>
-          <label className="block text-xs font-semibold text-[#C9BCAC] mb-1">Preço (MT)</label>
-          <input
-            value={priceMT}
-            onChange={(e) => setPriceMT(e.target.value)}
-            required
-            inputMode="decimal"
-            className="w-full bg-black/20 border border-white/[0.08] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-[#F5A623]"
-            placeholder="ex: 250.00"
-          />
-        </div>
-
-        <div>
-          <label className="block text-xs font-semibold text-[#C9BCAC] mb-1">Foto</label>
-          <input
-            type="file"
-            accept="image/*"
-            onChange={(e) => setPhotoFile(e.target.files?.[0] ?? null)}
-            className="w-full text-sm text-[#C9BCAC]"
-          />
-          {item?.photo_url && !photoFile && (
-            <p className="text-xs text-[#C9BCAC] mt-1">Já tem foto. Escolhe outra para substituir.</p>
-          )}
-        </div>
-
-        <div>
-          <label className="block text-xs font-semibold text-[#C9BCAC] mb-1">Canal</label>
-          <div className="flex gap-4">
-            <label className="flex items-center gap-2 text-xs font-semibold text-[#C9BCAC]">
-              <input
-                type="checkbox"
-                checked={availableDelivery}
-                onChange={(e) => setAvailableDelivery(e.target.checked)}
-                className="rounded bg-black/20 border-white/[0.08] text-[#F5A623] focus:ring-[#F5A623]"
-              />
-              Delivery
-            </label>
-            <label className="flex items-center gap-2 text-xs font-semibold text-[#C9BCAC]">
-              <input
-                type="checkbox"
-                checked={availableDineIn}
-                onChange={(e) => setAvailableDineIn(e.target.checked)}
-                className="rounded bg-black/20 border-white/[0.08] text-[#F5A623] focus:ring-[#F5A623]"
-              />
-              QR Mesa
-            </label>
+        {/* Cabeçalho fixo */}
+        <header className="flex items-center justify-between border-b border-white/[0.06] px-5 py-4">
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#8b8378]">
+              {item ? 'Editar produto' : 'Novo produto'}
+            </p>
+            <h2 className="mt-0.5 truncate text-lg font-bold text-white">{name.trim() || 'Sem nome'}</h2>
           </div>
-          <p className="text-[11px] text-[#C9BCAC]/70 mt-1">
-            Escolhe onde este prato aparece — só no delivery, só na mesa, ou em ambos.
-          </p>
-        </div>
-
-        <div>
-          <label className="flex items-center gap-2 text-xs font-semibold text-[#C9BCAC]">
-            <input
-              type="checkbox"
-              checked={isUpsell}
-              onChange={(e) => setIsUpsell(e.target.checked)}
-              className="rounded bg-black/20 border-white/[0.08] text-[#F5A623] focus:ring-[#F5A623]"
-            />
-            Oferecer no fim do pedido
-          </label>
-          <p className="text-[11px] text-[#C9BCAC]/70 mt-1">
-            Aparece no ecrã que surge entre o carrinho e o pagamento (bebidas, batatas,
-            sobremesas). Quem já leva um destes não volta a ser incomodado.
-          </p>
-        </div>
-
-        <div className="space-y-2">
-          <div className="flex items-center gap-2">
-            <input
-              type="checkbox"
-              id="trackStock"
-              checked={trackStock}
-              onChange={(e) => setTrackStock(e.target.checked)}
-              className="rounded bg-black/20 border-white/[0.08] text-[#F5A623] focus:ring-[#F5A623]"
-            />
-            <label htmlFor="trackStock" className="text-xs font-semibold text-[#C9BCAC]">
-              Controlar estoque
-            </label>
-          </div>
-          
-          {trackStock && (
-            <div>
-              <label className="block text-xs font-semibold text-[#C9BCAC] mb-1">Quantidade em estoque</label>
-              <input
-                type="number"
-                min="0"
-                value={stockQty}
-                onChange={(e) => setStockQty(parseInt(e.target.value) || 0)}
-                className="w-full bg-black/20 border border-white/[0.08] rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-[#F5A623]"
-              />
-            </div>
-          )}
-        </div>
-
-        {/* Tamanhos + Adicionais (opcional). Só para item já guardado, pois
-            referenciam menu_item_id. Sem nenhum → item fica "simples". */}
-        {item ? (
-          <OptionsEditor itemId={item.id} />
-        ) : (
-          <p className="text-xs text-[#C9BCAC] border-t border-white/[0.08] pt-3">
-            Guarda o item primeiro para adicionar <strong>Tamanhos</strong> e <strong>Adicionais</strong> (opcional).
-          </p>
-        )}
-
-        {error && (
-          <p className="text-sm text-red-400 bg-red-900/20 border border-red-800 rounded-lg px-3 py-2">{error}</p>
-        )}
-
-        <div className="flex gap-2 pt-1">
           <button
             type="button"
             onClick={onClose}
-            className="flex-1 border border-white/[0.08] text-[#C9BCAC] font-semibold py-3 rounded-xl text-sm hover:bg-white/[0.08] transition-colors"
+            aria-label="Fechar"
+            className="flex h-9 w-9 items-center justify-center rounded-full bg-white/[0.06] text-[#C9BCAC] transition-colors hover:bg-white/[0.12] hover:text-white"
+          >
+            ✕
+          </button>
+        </header>
+
+        <div className="flex-1 space-y-5 overflow-y-auto px-5 py-5">
+          {/* Foto + nome + preço */}
+          <div className="flex gap-4">
+            <button
+              type="button"
+              onClick={() => photoInputRef.current?.click()}
+              className="group relative h-28 w-28 shrink-0 overflow-hidden rounded-2xl border border-dashed border-white/[0.14] bg-white/[0.03] transition-colors hover:border-[#F5A623]"
+              aria-label={photoPreview ? 'Trocar foto' : 'Adicionar foto'}
+            >
+              {photoPreview ? (
+                <>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={photoPreview} alt="" className="h-full w-full object-contain p-1.5" />
+                  <span className="absolute inset-x-0 bottom-0 bg-black/70 py-1 text-[10px] font-semibold text-white opacity-0 transition-opacity group-hover:opacity-100">
+                    Trocar foto
+                  </span>
+                </>
+              ) : (
+                <span className="flex h-full flex-col items-center justify-center gap-1 text-[#8b8378]">
+                  <span className="text-2xl leading-none">＋</span>
+                  <span className="text-[11px] font-semibold">Foto</span>
+                </span>
+              )}
+            </button>
+            <input
+              ref={photoInputRef}
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              className="hidden"
+              onChange={(e) => { setPhotoFile(e.target.files?.[0] ?? null); e.target.value = ''; }}
+            />
+
+            <div className="min-w-0 flex-1 space-y-3">
+              <Field label="Nome">
+                <input
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  required
+                  className={INPUT}
+                  placeholder="ex: Frango grelhado"
+                />
+              </Field>
+              <Field label="Preço">
+                <div className="relative">
+                  <input
+                    value={priceMT}
+                    onChange={(e) => setPriceMT(e.target.value)}
+                    required
+                    inputMode="decimal"
+                    className={`${INPUT} pr-12 font-semibold text-[#F5A623]`}
+                    placeholder="250.00"
+                  />
+                  <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-[#8b8378]">MT</span>
+                </div>
+              </Field>
+            </div>
+          </div>
+
+          <Field label="Descrição">
+            <textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              rows={2}
+              className={`${INPUT} resize-none`}
+              placeholder="ex: Com batata frita e salada"
+            />
+          </Field>
+
+          {/* Onde aparece */}
+          <Section title="Onde aparece">
+            <div className="grid grid-cols-2 gap-2">
+              <ChannelChip label="Delivery" hint="Site e levantamento" on={availableDelivery} onToggle={() => setAvailableDelivery((v) => !v)} />
+              <ChannelChip label="QR Mesa" hint="Pedido na mesa" on={availableDineIn} onToggle={() => setAvailableDineIn((v) => !v)} />
+            </div>
+          </Section>
+
+          {/* Opções */}
+          <Section title="Opções">
+            <div className="divide-y divide-white/[0.06] overflow-hidden rounded-2xl border border-white/[0.06] bg-white/[0.02]">
+              <SwitchRow
+                label="Oferecer no fim do pedido"
+                hint="Aparece entre o carrinho e o pagamento (bebidas, batatas, sobremesas)."
+                on={isUpsell}
+                onToggle={() => setIsUpsell((v) => !v)}
+              />
+              <SwitchRow
+                label="Controlar estoque"
+                hint="Esgota sozinho quando chega a zero."
+                on={trackStock}
+                onToggle={() => setTrackStock((v) => !v)}
+              >
+                {trackStock && (
+                  <div className="mt-3 flex items-center gap-3">
+                    <span className="text-xs text-[#C9BCAC]">Quantidade</span>
+                    <input
+                      type="number"
+                      min="0"
+                      value={stockQty}
+                      onChange={(e) => setStockQty(parseInt(e.target.value) || 0)}
+                      className={`${INPUT} w-28`}
+                    />
+                  </div>
+                )}
+              </SwitchRow>
+            </div>
+          </Section>
+
+          {/* Variantes + Adicionais (opcional). Só para item já guardado, pois
+              referenciam menu_item_id. Sem nenhum → item fica "simples". */}
+          {item ? (
+            <OptionsEditor itemId={item.id} />
+          ) : (
+            <p className="rounded-2xl border border-dashed border-white/[0.1] px-4 py-3 text-xs text-[#C9BCAC]">
+              Guarda o produto primeiro para adicionar <strong className="text-white">variantes</strong> e{' '}
+              <strong className="text-white">adicionais</strong>.
+            </p>
+          )}
+
+          {error && (
+            <p className="rounded-xl border border-red-800/70 bg-red-900/20 px-3 py-2 text-sm text-red-300">{error}</p>
+          )}
+        </div>
+
+        {/* Rodapé fixo */}
+        <footer className="flex gap-2 border-t border-white/[0.06] bg-[#14110F] px-5 py-4">
+          <button
+            type="button"
+            onClick={onClose}
+            className="flex-1 rounded-xl border border-white/[0.08] py-3 text-sm font-semibold text-[#C9BCAC] transition-colors hover:bg-white/[0.06]"
           >
             Cancelar
           </button>
           <button
             type="submit"
             disabled={saving}
-            className="flex-1 bg-[#F5A623] text-[#2A1710] font-bold py-3 rounded-xl text-sm disabled:opacity-60 hover:bg-[#D6860F] transition-colors"
+            className="flex-[2] rounded-xl bg-[#F5A623] py-3 text-sm font-bold text-[#2A1710] shadow-[0_8px_24px_rgba(245,166,35,0.25)] transition-colors hover:bg-[#D6860F] disabled:opacity-60"
           >
             {saving ? 'A guardar…' : 'Guardar'}
           </button>
-        </div>
+        </footer>
       </form>
     </div>
+  );
+}
+
+const INPUT =
+  'w-full rounded-xl border border-white/[0.08] bg-white/[0.04] px-3 py-2.5 text-sm text-white placeholder-[#6f675d] transition-colors focus:border-[#F5A623] focus:bg-white/[0.06] focus:outline-none';
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <label className="block">
+      <span className="mb-1.5 block text-xs font-semibold text-[#C9BCAC]">{label}</span>
+      {children}
+    </label>
+  );
+}
+
+function Section({ title, hint, children }: { title: string; hint?: string; children: React.ReactNode }) {
+  return (
+    <section>
+      <div className="mb-2 flex items-baseline justify-between gap-2">
+        <h3 className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#8b8378]">{title}</h3>
+        {hint && <span className="text-[11px] text-[#6f675d]">{hint}</span>}
+      </div>
+      {children}
+    </section>
+  );
+}
+
+function Switch({ on }: { on: boolean }) {
+  return (
+    <span
+      aria-hidden
+      className={`relative inline-flex h-6 w-11 shrink-0 rounded-full transition-colors ${on ? 'bg-[#F5A623]' : 'bg-white/[0.12]'}`}
+    >
+      <span className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform ${on ? 'translate-x-[22px]' : 'translate-x-0.5'}`} />
+    </span>
+  );
+}
+
+function SwitchRow({
+  label, hint, on, onToggle, children,
+}: { label: string; hint: string; on: boolean; onToggle: () => void; children?: React.ReactNode }) {
+  return (
+    <div className="px-4 py-3">
+      <button type="button" role="switch" aria-checked={on} onClick={onToggle} className="flex w-full items-center gap-3 text-left">
+        <span className="min-w-0 flex-1">
+          <span className="block text-sm font-semibold text-white">{label}</span>
+          <span className="mt-0.5 block text-xs text-[#8b8378]">{hint}</span>
+        </span>
+        <Switch on={on} />
+      </button>
+      {children}
+    </div>
+  );
+}
+
+function ChannelChip({ label, hint, on, onToggle }: { label: string; hint: string; on: boolean; onToggle: () => void }) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={on}
+      onClick={onToggle}
+      className={`flex items-center gap-3 rounded-2xl border px-3 py-3 text-left transition-colors ${
+        on ? 'border-[#F5A623]/60 bg-[#F5A623]/10' : 'border-white/[0.08] bg-white/[0.02] hover:bg-white/[0.05]'
+      }`}
+    >
+      <span
+        className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md text-[11px] font-bold ${
+          on ? 'bg-[#F5A623] text-[#2A1710]' : 'border border-white/[0.2] text-transparent'
+        }`}
+      >
+        ✓
+      </span>
+      <span className="min-w-0">
+        <span className={`block text-sm font-semibold ${on ? 'text-white' : 'text-[#C9BCAC]'}`}>{label}</span>
+        <span className="block text-[11px] text-[#8b8378]">{hint}</span>
+      </span>
+    </button>
   );
 }
 
@@ -968,7 +1066,7 @@ function OptionsEditor({ itemId }: { itemId: string }) {
   const refetch = useCallback(async () => {
     const [{ data: vs }, { data: as }] = await Promise.all([
       supabase.from('menu_item_variants')
-        .select('id, menu_item_id, name, price_cents, sort, is_default, active')
+        .select('id, menu_item_id, name, price_cents, sort, is_default, active, photo_url')
         .eq('menu_item_id', itemId).order('sort'),
       supabase.from('menu_addons')
         .select('id, menu_item_id, name, price_cents, sort, active, photo_url')
@@ -995,6 +1093,29 @@ function OptionsEditor({ itemId }: { itemId: string }) {
   async function setVariantPrice(id: string, priceCents: number) {
     setErr('');
     const { error } = await supabase.from('menu_item_variants').update({ price_cents: priceCents }).eq('id', id);
+    if (error) { setErr(`Erro: ${error.message}`); return; }
+    refetch();
+  }
+
+  /**
+   * A foto da variante vai para o mesmo bucket das do produto. É ela que o
+   * site, o upsell e o POS mostram quando a variante está escolhida; sem foto,
+   * fica a do produto.
+   */
+  async function uploadVariantPhoto(id: string, file: File) {
+    setErr('');
+    const ext = file.name.split('.').pop()?.toLowerCase() ?? 'jpg';
+    const path = `${crypto.randomUUID()}.${ext}`;
+    const { error: upErr } = await supabase.storage
+      .from('menu-photos')
+      .upload(path, file, { cacheControl: '3600', upsert: false });
+    if (upErr) { setErr(`Erro no upload da foto: ${upErr.message}`); return; }
+    await setVariantPhoto(id, supabase.storage.from('menu-photos').getPublicUrl(path).data.publicUrl);
+  }
+
+  async function setVariantPhoto(id: string, photoUrl: string | null) {
+    setErr('');
+    const { error } = await supabase.from('menu_item_variants').update({ photo_url: photoUrl }).eq('id', id);
     if (error) { setErr(`Erro: ${error.message}`); return; }
     refetch();
   }
@@ -1084,74 +1205,102 @@ function OptionsEditor({ itemId }: { itemId: string }) {
   }
 
   return (
-    <div className="border-t border-white/[0.08] pt-4 space-y-4">
-      {err && <p className="text-sm text-red-400">{err}</p>}
+    <div className="space-y-5">
+      {err && <p className="rounded-xl border border-red-800/70 bg-red-900/20 px-3 py-2 text-sm text-red-300">{err}</p>}
 
-      {/* Tamanhos */}
-      <div>
-        <p className="text-xs font-semibold text-[#C9BCAC] mb-2">
-          Tamanhos <span className="font-normal">(escolha única — substitui o preço base)</span>
-        </p>
-        <ul className="space-y-1.5 mb-2">
+      {/* Variantes (tamanhos, sabores…) */}
+      <Section title="Variantes" hint="escolha única · substitui o preço">
+        <ul className="space-y-2">
           {variants.map((v) => (
-            <li key={v.id} className="flex items-center gap-2 text-sm">
-              <button
-                type="button"
-                onClick={() => setDefaultVariant(v.id)}
-                title={v.is_default ? 'Padrão' : 'Tornar padrão'}
-                className={`text-xs px-1.5 py-0.5 rounded ${v.is_default ? 'bg-[#F5A623] text-[#2A1710]' : 'bg-white/[0.08] text-[#C9BCAC]'}`}
-              >
-                {v.is_default ? '★ Padrão' : 'Tornar padrão'}
-              </button>
-              <span className="flex-1 text-white">{v.name}</span>
+            <li
+              key={v.id}
+              className={`flex items-center gap-3 rounded-2xl border p-2.5 pr-3 transition-colors ${
+                v.is_default ? 'border-[#F5A623]/50 bg-[#F5A623]/[0.06]' : 'border-white/[0.06] bg-white/[0.02]'
+              }`}
+            >
+              <VariantPhoto
+                name={v.name}
+                photoUrl={v.photo_url}
+                onUpload={(file) => uploadVariantPhoto(v.id, file)}
+                onRemove={() => setVariantPhoto(v.id, null)}
+              />
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-semibold text-white">{v.name}</p>
+                <button
+                  type="button"
+                  onClick={() => setDefaultVariant(v.id)}
+                  disabled={v.is_default}
+                  className={`mt-0.5 text-[11px] font-semibold ${
+                    v.is_default ? 'text-[#F5A623]' : 'text-[#8b8378] hover:text-[#C9BCAC]'
+                  }`}
+                >
+                  {v.is_default ? '★ Padrão' : 'Tornar padrão'}
+                </button>
+              </div>
               <PriceEdit cents={v.price_cents} label={`Preço de ${v.name}`} onSave={(c) => setVariantPrice(v.id, c)} />
-              <button type="button" onClick={() => deleteVariant(v.id)} className="text-red-400 px-1">✕</button>
+              <RemoveButton label={`Apagar ${v.name}`} onClick={() => deleteVariant(v.id)} />
             </li>
           ))}
-          {variants.length === 0 && <li className="text-xs text-[#C9BCAC]">Sem tamanhos — item de preço único.</li>}
+          {variants.length === 0 && (
+            <li className="rounded-2xl border border-dashed border-white/[0.08] px-4 py-3 text-xs text-[#8b8378]">
+              Sem variantes — produto de preço único.
+            </li>
+          )}
         </ul>
-        <OptionAddRow placeholder="ex: Médio" onAdd={addVariant} />
-      </div>
+        <div className="mt-2">
+          <OptionAddRow placeholder="Nova variante (ex: Zero, Médio)" onAdd={addVariant} />
+        </div>
+        {variants.length > 0 && (
+          <p className="mt-2 text-[11px] text-[#6f675d]">
+            Toca na miniatura para dar foto própria à variante. Sem foto, usa a do produto.
+          </p>
+        )}
+      </Section>
 
       {/* Adicionais */}
-      <div>
-        <p className="text-xs font-semibold text-[#C9BCAC] mb-2">
-          Adicionais <span className="font-normal">(multi — somam ao preço)</span>
-        </p>
-        <ul className="space-y-1.5 mb-2">
+      <Section title="Adicionais" hint="vários · somam ao preço">
+        <ul className="space-y-2">
           {addons.map((a) => (
-            <li key={a.id} className="flex items-center gap-2 text-sm">
+            <li key={a.id} className="flex items-center gap-3 rounded-2xl border border-white/[0.06] bg-white/[0.02] p-2.5 pr-3">
               {/* A foto do botão no POS (1078). */}
-              {a.photo_url ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={a.photo_url} alt="" className="h-8 w-8 shrink-0 object-contain" />
-              ) : (
-                <span className="h-8 w-8 shrink-0 rounded bg-white/[0.06]" />
-              )}
-              <select
-                value={a.photo_url ?? ''}
-                onChange={(e) => setAddonPhoto(a.id, e.target.value || null)}
-                aria-label={`Foto de ${a.name}`}
-                className="rounded bg-white/[0.06] px-1 py-0.5 text-xs text-[#C9BCAC]"
-              >
-                <option value="">Sem foto</option>
-                {EXTRA_PHOTOS.map((foto) => (
-                  <option key={foto.url} value={foto.url}>{foto.label}</option>
-                ))}
-                {a.photo_url && !EXTRA_PHOTOS.some((foto) => foto.url === a.photo_url) && (
-                  <option value={a.photo_url}>Outra</option>
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-white/[0.05]">
+                {a.photo_url && (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={a.photo_url} alt="" className="h-full w-full object-contain p-1" />
                 )}
-              </select>
-              <span className="flex-1 text-white">{a.name}</span>
-              <span className="text-[#F5A623] font-semibold">+{formatMT(a.price_cents)}</span>
-              <button type="button" onClick={() => deleteAddon(a.id)} className="text-red-400 px-1">✕</button>
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-semibold text-white">{a.name}</p>
+                <select
+                  value={a.photo_url ?? ''}
+                  onChange={(e) => setAddonPhoto(a.id, e.target.value || null)}
+                  aria-label={`Foto de ${a.name}`}
+                  className="mt-0.5 max-w-full rounded-md bg-transparent text-[11px] font-semibold text-[#8b8378] hover:text-[#C9BCAC] focus:outline-none"
+                >
+                  <option value="">Sem foto</option>
+                  {EXTRA_PHOTOS.map((foto) => (
+                    <option key={foto.url} value={foto.url}>{foto.label}</option>
+                  ))}
+                  {a.photo_url && !EXTRA_PHOTOS.some((foto) => foto.url === a.photo_url) && (
+                    <option value={a.photo_url}>Outra</option>
+                  )}
+                </select>
+              </div>
+              <span className="text-sm font-semibold text-[#F5A623]">+{formatMT(a.price_cents)}</span>
+              <RemoveButton label={`Apagar ${a.name}`} onClick={() => deleteAddon(a.id)} />
             </li>
           ))}
-          {addons.length === 0 && <li className="text-xs text-[#C9BCAC]">Sem adicionais.</li>}
+          {addons.length === 0 && (
+            <li className="rounded-2xl border border-dashed border-white/[0.08] px-4 py-3 text-xs text-[#8b8378]">
+              Sem adicionais.
+            </li>
+          )}
         </ul>
-        <OptionAddRow placeholder="ex: Queijo extra" onAdd={addAddon} />
-        <p className="mt-2 text-xs text-[#8b8378]">
-          No balcão, são estes os EXTRAS que o POS oferece para este produto — e saem grandes na comanda.
+        <div className="mt-2">
+          <OptionAddRow placeholder="Novo adicional (ex: Queijo extra)" onAdd={addAddon} />
+        </div>
+        <p className="mt-2 text-[11px] text-[#6f675d]">
+          No balcão, são estes os extras que o POS oferece para este produto — e saem grandes na comanda.
         </p>
         {addons.length > 0 && (
           <button
@@ -1163,7 +1312,79 @@ function OptionsEditor({ itemId }: { itemId: string }) {
           </button>
         )}
         {copyInfo && <p className="mt-1 text-xs text-emerald-400">{copyInfo}</p>}
-      </div>
+      </Section>
+    </div>
+  );
+}
+
+function RemoveButton({ label, onClick }: { label: string; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={label}
+      aria-label={label}
+      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm text-[#8b8378] transition-colors hover:bg-red-500/10 hover:text-red-400"
+    >
+      ✕
+    </button>
+  );
+}
+
+/** Miniatura da variante: toca para escolher ou trocar a foto; ✕ tira-a. */
+function VariantPhoto({
+  name, photoUrl, onUpload, onRemove,
+}: {
+  name: string;
+  photoUrl: string | null;
+  onUpload: (file: File) => Promise<void>;
+  onRemove: () => void;
+}) {
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [uploading, setUploading] = useState(false);
+
+  async function pick(file: File) {
+    setUploading(true);
+    try { await onUpload(file); } finally { setUploading(false); }
+  }
+
+  return (
+    <div className="relative shrink-0">
+      <button
+        type="button"
+        onClick={() => fileRef.current?.click()}
+        disabled={uploading}
+        title={photoUrl ? `Trocar foto de ${name}` : `Adicionar foto a ${name}`}
+        aria-label={photoUrl ? `Trocar foto de ${name}` : `Adicionar foto a ${name}`}
+        className={`flex h-12 w-12 items-center justify-center overflow-hidden rounded-xl text-[10px] font-semibold text-[#8b8378] transition-colors hover:ring-1 hover:ring-[#F5A623] disabled:opacity-60 ${
+          photoUrl ? 'bg-white/[0.05]' : 'border border-dashed border-white/[0.16] bg-transparent'
+        }`}
+      >
+        {uploading ? '…' : photoUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={photoUrl} alt="" className="h-full w-full object-contain p-1" />
+        ) : (
+          <span className="flex flex-col items-center leading-tight"><span className="text-base">＋</span>foto</span>
+        )}
+      </button>
+      {photoUrl && !uploading && (
+        <button
+          type="button"
+          onClick={onRemove}
+          title={`Tirar foto de ${name}`}
+          aria-label={`Tirar foto de ${name}`}
+          className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-[#2A1710] text-[9px] text-red-400 ring-1 ring-white/[0.15] hover:bg-red-500 hover:text-white"
+        >
+          ✕
+        </button>
+      )}
+      <input
+        ref={fileRef}
+        type="file"
+        accept="image/jpeg,image/png,image/webp"
+        className="hidden"
+        onChange={(e) => { const f = e.target.files?.[0]; if (f) pick(f); e.target.value = ''; }}
+      />
     </div>
   );
 }
@@ -1192,7 +1413,7 @@ function PriceEdit({ cents, label, onSave }: { cents: number; label: string; onS
   if (!editing) {
     return (
       <button type="button" onClick={start} title="Editar preço" aria-label={label}
-        className="text-[#F5A623] font-semibold hover:underline">
+        className="rounded-lg px-2 py-1 text-sm font-semibold text-[#F5A623] transition-colors hover:bg-[#F5A623]/10">
         {formatMT(cents)}
       </button>
     );
@@ -1209,7 +1430,7 @@ function PriceEdit({ cents, label, onSave }: { cents: number; label: string; onS
       }}
       inputMode="decimal"
       aria-label={label}
-      className="w-20 bg-black/20 border border-[#F5A623] rounded-lg px-2 py-1 text-sm text-white focus:outline-none"
+      className="w-20 rounded-lg border border-[#F5A623] bg-white/[0.04] px-2 py-1 text-sm text-white focus:outline-none"
     />
   );
 }
@@ -1230,25 +1451,37 @@ function OptionAddRow({ placeholder, onAdd }: { placeholder: string; onAdd: (nam
     setName(''); setPriceMT('');
   }
 
+  // Enter acrescenta a linha em vez de submeter o formulário do produto inteiro.
+  function onEnter(e: React.KeyboardEvent) {
+    if (e.key === 'Enter') { e.preventDefault(); submit(); }
+  }
+
   return (
     <div className="flex gap-2">
       <input
         value={name}
         onChange={(e) => setName(e.target.value)}
+        onKeyDown={onEnter}
         placeholder={placeholder}
-        className="flex-1 bg-black/20 border border-white/[0.08] rounded-lg px-3 py-1.5 text-sm text-white placeholder-[#C9BCAC] focus:outline-none focus:border-[#F5A623]"
+        className={`${INPUT} flex-1`}
       />
-      <input
-        value={priceMT}
-        onChange={(e) => setPriceMT(e.target.value)}
-        inputMode="decimal"
-        placeholder="MT"
-        className="w-20 bg-black/20 border border-white/[0.08] rounded-lg px-3 py-1.5 text-sm text-white placeholder-[#C9BCAC] focus:outline-none focus:border-[#F5A623]"
-      />
+      <div className="relative w-24">
+        <input
+          value={priceMT}
+          onChange={(e) => setPriceMT(e.target.value)}
+          onKeyDown={onEnter}
+          inputMode="decimal"
+          placeholder="0"
+          className={`${INPUT} pr-9`}
+        />
+        <span className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-[11px] font-semibold text-[#6f675d]">MT</span>
+      </div>
       <button
         type="button"
         onClick={submit}
-        className="bg-white/[0.08] text-white text-sm font-semibold px-3 py-1.5 rounded-lg hover:bg-white/[0.14] transition-colors"
+        disabled={!name.trim()}
+        aria-label="Acrescentar"
+        className="flex w-11 shrink-0 items-center justify-center rounded-xl bg-[#F5A623] text-lg font-bold text-[#2A1710] transition-colors hover:bg-[#D6860F] disabled:bg-white/[0.08] disabled:text-[#6f675d]"
       >
         +
       </button>
