@@ -178,6 +178,10 @@ export default function OrderStatusPage({ params }: { params: { orderId: string 
   // Senha do dia (1032). Pedidos antigos não a têm — aí o nº do pedido serve.
   const senha: string | null =
     orderStatus.daily_number != null ? String(orderStatus.daily_number).padStart(3, '0') : null;
+  // Loja sem telefone gravado cai no contacto da marca: sem número aqui, o
+  // cliente usa o único WhatsApp que vê no ecrã — e esse é o de quem fez o sistema.
+  const contactPhone: string = store.phone || brand.storefront.contact.phone || '';
+  const contactDigits = contactPhone.replace(/\D/g, '');
 
   return (
     <div className="hs hf" style={{ minHeight: '100vh' }}>
@@ -266,22 +270,30 @@ export default function OrderStatusPage({ params }: { params: { orderId: string 
         )}
 
         {/* ── Contacto da loja: ANTES de qualquer bloco comercial ──────── */}
-        {(store.phone || store.address) && (
+        {(contactDigits || store.address) && (
           <section className="hf-sec">
             <SectionHead>Precisas de nós?</SectionHead>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 11 }}>
-              {store.phone && (
-                <a
-                  className="hf-fld"
-                  href={`https://wa.me/${String(store.phone).replace(/\D/g, '')}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  style={{ textDecoration: 'none' }}
-                >
-                  <span className="hf-ok" style={{ display: 'flex' }}><IcoWhats size={18} /></span>
-                  <span style={{ fontSize: 14 }}>WhatsApp da loja</span>
-                  <span className="num" style={{ marginLeft: 'auto', fontSize: 14, color: 'var(--hs-ink-dim)' }}>{store.phone}</span>
-                </a>
+              {contactDigits && (
+                <>
+                  <p style={{ margin: 0, fontSize: 14, lineHeight: 1.5, color: 'var(--hs-ink-soft)' }}>
+                    Dúvidas sobre o pedido, a entrega ou o pagamento? Fala directamente com a equipa da loja.
+                  </p>
+                  <a
+                    className="hf-btn hf-btn-gold"
+                    href={`https://wa.me/${contactDigits}${
+                      orderStatus.order_number ? `?text=${encodeURIComponent(`Olá! Sobre o pedido ${orderStatus.order_number}`)}` : ''
+                    }`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    <IcoWhats size={18} />
+                    Falar com {brand.storefront.logoText}
+                  </a>
+                  <p className="num" style={{ margin: 0, textAlign: 'center', fontSize: 13, color: 'var(--hs-ink-dim)' }}>
+                    WhatsApp · {contactPhone}
+                  </p>
+                </>
               )}
               {store.address && (
                 <a
