@@ -369,10 +369,12 @@ textarea.hf-fld { min-height: 84px; align-items: flex-start; line-height: 1.5; r
   border-bottom: 1px solid rgba(255, 255, 255, 0.07);
   font-size: 11px; line-height: 1.7; letter-spacing: 0.02em; color: var(--pb-ink);
 }
+.hf-sup-note { margin: 16px 0 0; font-size: 12px; line-height: 1.5; color: var(--pb-ink-dim); }
+/* Contorno, não cheio: o botão cheio da página é o da loja. */
 .hf-sup-cta {
-  display: inline-flex; align-items: center; gap: 9px; min-height: 52px; padding: 0 20px;
-  background: var(--pb-accent); color: var(--pb-bg-2); border-radius: 6px;
-  font-size: 14px; font-weight: 700; letter-spacing: 0.04em;
+  display: inline-flex; align-items: center; gap: 9px; min-height: 44px; padding: 0 16px;
+  border: 1px solid var(--pb-accent); color: var(--pb-accent); border-radius: 6px;
+  font-size: 13px; font-weight: 600; letter-spacing: 0.04em;
 }
 .hf-sup-mail { font-size: 12px; color: var(--pb-ink-mute); }
 

@@ -225,7 +225,8 @@ export function FunnelFoot({ rights = false }: { rights?: boolean }) {
 /* ── Assinatura de quem fez o sistema (espaço E) ─────────────────────── */
 
 export function PoweredBy() {
-  const pb = useBrand().storefront.poweredBy;
+  const brand = useBrand();
+  const pb = brand.storefront.poweredBy;
   if (!pb?.enabled) return null;
 
   const vars = {
@@ -250,7 +251,13 @@ export function PoweredBy() {
       <h2 className="hf-sup-title">{pb.title}</h2>
       <p className="hf-sup-body">{pb.body}</p>
       <p className="hf-sup-proof">{pb.proof.join('  ·  ')}</p>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginTop: 20, flexWrap: 'wrap' }}>
+      {/* Clientes do restaurante tomavam este contacto pelo da loja e iam parar
+          a quem fez o sistema. O pedido trata-se com a loja, no bloco lá em cima. */}
+      <p className="hf-sup-note">
+        Este contacto é para quem quer um sistema destes. Sobre o teu pedido, fala com{' '}
+        {brand.storefront.logoText} no botão «Falar com {brand.storefront.logoText}» acima.
+      </p>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginTop: 16, flexWrap: 'wrap' }}>
         {pb.whatsapp && (
           <a className="hf-sup-cta" href={pb.whatsapp} target="_blank" rel="noopener noreferrer">
             <IcoWhats />
