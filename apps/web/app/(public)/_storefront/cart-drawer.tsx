@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import Image from 'next/image';
 import { formatMT, type Cents } from '@delivery/core';
 
@@ -20,6 +21,7 @@ export function CartDrawer({
   onClose,
   onDec,
   onInc,
+  onNotes,
   onCheckout,
   canCheckout,
 }: {
@@ -29,6 +31,7 @@ export function CartDrawer({
   onClose: () => void;
   onDec: (line: CartView) => void;
   onInc: (line: CartView) => void;
+  onNotes: (line: CartView, notes: string) => void;
   onCheckout: () => void;
   canCheckout: boolean;
 }) {
@@ -93,6 +96,7 @@ export function CartDrawer({
                   +
                 </button>
               </span>
+              <LineNote line={line} onNotes={onNotes} />
             </div>
             );
           })}
@@ -119,6 +123,35 @@ export function CartDrawer({
         </footer>
       </aside>
     </>
+  );
+}
+
+/* Observação para a cozinha, por lanche. Fechada por defeito para não pesar
+   no carrinho; abre sozinha quando a linha já traz uma nota. */
+function LineNote({ line, onNotes }: { line: CartView; onNotes: (line: CartView, notes: string) => void }) {
+  const [open, setOpen] = useState(line.notes !== '');
+
+  if (!open) {
+    return (
+      <button type="button" className="hs-drawer-note-add" onClick={() => setOpen(true)}>
+        + Observação
+      </button>
+    );
+  }
+
+  return (
+    <label className="hs-drawer-note">
+      <span className="hs-drawer-note-l">Observação para a cozinha</span>
+      <input
+        type="text"
+        value={line.notes}
+        maxLength={200}
+        autoFocus={line.notes === ''}
+        placeholder="Ex.: sem cebola, molho à parte"
+        aria-label={`Observação para ${line.item.name}`}
+        onChange={(e) => onNotes(line, e.target.value)}
+      />
+    </label>
   );
 }
 

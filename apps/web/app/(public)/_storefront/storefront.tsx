@@ -37,7 +37,7 @@ export function Storefront({
   const brand = useBrand();
   const L = brand.storefront.landing;
   const router = useRouter();
-  const { cart, hydrated, add, setQtyByIndex, clear, count } = useCart();
+  const { cart, hydrated, add, setQtyByIndex, setNotesByIndex, clear, count } = useCart();
 
   const [scrolled, setScrolled] = useState(false);
   const [cartOpen, setCartOpen] = useState(false);
@@ -166,6 +166,7 @@ export function Storefront({
           variant,
           qty: line.qty,
           unitCents: variant?.price_cents ?? item.price_cents,
+          notes: line.notes ?? '',
         },
       ];
     });
@@ -292,6 +293,7 @@ export function Storefront({
         onCheckout={goToCheckout}
         onInc={(line) => setQtyByIndex(line.index, line.qty + 1)}
         onDec={(line) => setQtyByIndex(line.index, line.qty - 1)}
+        onNotes={(line, notes) => setNotesByIndex(line.index, notes)}
       />
 
       {switchOpen && (

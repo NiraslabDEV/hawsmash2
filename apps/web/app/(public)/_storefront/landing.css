@@ -765,6 +765,17 @@
 .hs-drawer-line .nm { font-family: var(--font-condensed); font-size: 18px; letter-spacing: 0.06em; text-transform: uppercase; line-height: 1.1; }
 .hs-drawer-line .vr { font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase; color: var(--hs-gold); }
 .hs-drawer-line .pr { font-size: 13px; color: var(--hs-ink-dim); }
+.hs-drawer-note-add {
+  grid-column: 1 / -1; justify-self: start; min-height: 40px; padding: 0 2px;
+  font-size: 13px; font-weight: 600; color: var(--hs-gold);
+}
+.hs-drawer-note { grid-column: 1 / -1; display: grid; gap: 6px; }
+.hs-drawer-note-l { font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--hs-ink-mute); }
+.hs-drawer-note input {
+  width: 100%; min-height: 44px; padding: 0 12px; border-radius: 10px;
+  border: 1px solid var(--hs-line); background: var(--hs-bg-1); color: var(--hs-ink); font-size: 16px;
+}
+.hs-drawer-note input:focus-visible { outline: 2px solid var(--hs-gold); outline-offset: 1px; }
 .hs-drawer-foot { padding: 20px; border-top: 1px solid var(--hs-line); display: grid; gap: 14px; }
 .hs-drawer-total { display: flex; align-items: baseline; justify-content: space-between; }
 .hs-drawer-total .l { font-size: 11px; letter-spacing: 0.24em; text-transform: uppercase; color: var(--hs-ink-mute); }

@@ -83,4 +83,5 @@ export interface CartView {
   variant: MenuVariant | null;
   qty: number;
   unitCents: number;
+  notes: string;
 }
