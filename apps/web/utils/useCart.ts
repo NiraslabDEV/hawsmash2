@@ -111,6 +111,20 @@ export function useCart() {
     );
   }, []);
 
+  // Observação do cliente para a cozinha ("sem cebola"). Fica na linha e
+  // segue em `order_items.notes`; vazio apaga. O limite é o do schema (200).
+  const setNotesByIndex = useCallback((index: number, notes: string) => {
+    setCart((prev) =>
+      prev.map((l, i) => {
+        if (i !== index) return l;
+        const text = notes.slice(0, 200);
+        if (text) return { ...l, notes: text };
+        const { notes: _drop, ...rest } = l;
+        return rest;
+      })
+    );
+  }, []);
+
   const removeByIndex = useCallback(
     (index: number) => setCart((prev) => prev.filter((_, i) => i !== index)),
     []
@@ -168,6 +182,7 @@ export function useCart() {
     setQty,
     setQtyByIndex,
     setLineVariantByIndex,
+    setNotesByIndex,
     removeByIndex,
     remove,
     clear,
