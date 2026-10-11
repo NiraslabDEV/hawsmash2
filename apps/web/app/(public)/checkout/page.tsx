@@ -1268,7 +1268,7 @@ export default function CheckoutPage() {
 
           <p className="hf-note" style={{ marginTop: 14 }}>
             <span className="hf-ok" style={{ display: 'flex' }}><IcoShield /></span>
-            O valor é fechado por nós. Ninguém to muda a meio do caminho.
+            Pagamento seguro.
           </p>
         </section>
 
