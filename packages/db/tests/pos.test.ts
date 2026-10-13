@@ -1357,8 +1357,10 @@ describe("1077 — extras no balcão", () => {
     expect(jobs?.length).toBeGreaterThan(0);
     for (const job of jobs ?? []) {
       expect(job.payload.items).toEqual([
+        // Desde a 1106 a variante vai no nome E no campo: a bridge antiga só
+        // lê o nome; a nova vê que já lá está e não a repete.
         expect.objectContaining({
-          name: "Classic Smash",
+          name: "Classic Smash WAGYU",
           variant: "WAGYU",
           extras: ["Bacon teste 1077"],
           notes: "Sem cebola",

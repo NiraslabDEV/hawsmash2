@@ -62,8 +62,14 @@ function vender(items: Linha[], amountCents: number, clientSaleId = crypto.rando
 }
 
 /** O que a cozinha lê: o nome, e a variante quando vem num campo à parte (1077). */
+/** Como a bridge escreve o artigo (`itemName` em packages/receipt): a variante só se o nome não a trouxer (1106). */
 function noPapel(artigo: ArtigoDoPapel): string {
-  return `${artigo.quantity}x ${[artigo.name, artigo.variant].filter(Boolean).join(" ")}`;
+  const variante = artigo.variant?.trim();
+  const nome =
+    !variante || artigo.name.toLowerCase().includes(variante.toLowerCase())
+      ? artigo.name
+      : `${artigo.name} ${variante}`;
+  return `${artigo.quantity}x ${nome}`;
 }
 
 async function stockDoClassic(): Promise<number> {
