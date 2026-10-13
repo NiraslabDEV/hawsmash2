@@ -11,17 +11,22 @@ export async function GET(request: Request) {
     const channel = searchParams.get('channel'); // 'delivery' | 'dine_in' | null (tudo)
     const storeSlug = resolveStoreSlug(searchParams.get('store'));
 
-    const { data, error } = await supabase.rpc('get_menu', {
-      p_store_slug: storeSlug,
-      p_channel: channel,
-    });
-    
+    const [{ data, error }, promos] = await Promise.all([
+      supabase.rpc('get_menu', {
+        p_store_slug: storeSlug,
+        p_channel: channel,
+      }),
+      // Best-effort: sem promoções (ou antes da 1113 estar aplicada) o
+      // cardápio abre na mesma. O desconto real é sempre do create_order.
+      supabase.rpc('get_store_promotions', { p_store_slug: storeSlug }),
+    ]);
+
     if (error) {
       console.error('Error fetching menu:', error);
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
-    
-    return NextResponse.json(data);
+
+    return NextResponse.json({ ...data, promotions: promos.error ? null : promos.data });
   } catch (error) {
     if (error instanceof InvalidStoreSlugError) {
       return NextResponse.json({ error: 'Loja inválida.' }, { status: 400 });

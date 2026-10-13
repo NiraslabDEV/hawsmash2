@@ -125,6 +125,16 @@ export type OfflineSaleDraft = {
   payments: Array<{ method: z.infer<typeof paymentMethodSchema>; amountCents: number }>;
   cashReceivedCents?: number;
   totalCents: number;
+  /**
+   * Cupão e desconto manual (1113). Sem isto uma venda com desconto que caísse
+   * na fila sincronizava sem ele — o pagamento deixava de bater com o total e
+   * a venda ficava presa.
+   */
+  discount?: {
+    referralCode?: string;
+    customerPhone?: string;
+    manualDiscount?: { type: 'pct' | 'cents'; value: number; reason: string };
+  };
 };
 
 export type OfflineSale = OfflineSaleDraft & {
@@ -161,6 +171,15 @@ const offlineSaleDraftSchema: z.ZodType<OfflineSaleDraft> = z.object({
   })).min(1),
   cashReceivedCents: z.number().int().nonnegative().optional(),
   totalCents: z.number().int().positive(),
+  discount: z.object({
+    referralCode: z.string().min(2).max(40).optional(),
+    customerPhone: z.string().min(1).max(40).optional(),
+    manualDiscount: z.object({
+      type: z.enum(['pct', 'cents']),
+      value: z.number().int().positive(),
+      reason: z.string().min(3).max(200),
+    }).optional(),
+  }).optional(),
 });
 
 export type CachedMenu = {

@@ -1,16 +1,19 @@
 # Pacotes, scripts, testes e CI
 
+Contagens da árvore local de **2 de Outubro de 2026**. As contagens de 26/09 ficam no corpo quando descrevem um limite que se mantém; não se apresenta número de ficheiros como prova de execução.
+
 ## 1. Responsabilidade e API
 
 | Área | API/responsabilidade observada | Testes existentes |
 |---|---|---|
-| packages/core | Dinheiro (Cents/cents/conversões/formatMT/orderTotal), transition e tipos, schemas, importação/árvore de menu, getPaymentMode; entrada src/index.ts | 6 ficheiros __tests__; máquina/schemas herdados não equivalem às RPCs activas |
+| packages/core | Dinheiro (Cents/cents/conversões/formatMT/orderTotal), transition e tipos, schemas, importação/árvore de menu, getPaymentMode, `applyPromotions` (1113) | 7 ficheiros __tests__; máquina/schemas herdados não equivalem às RPCs activas. `promotions.test.ts` é o espelho da conta SQL, não uma prova de que as duas concordam na BD |
 | packages/payments | PaymentProvider Redirect/Direct, Paysuite/Mock/Mpesa/MpesaSimulator/EmolaSimulator, assinatura/parsing/consulta, normalização MSISDN/códigos, conferência de extractos | 9 ficheiros; não provam API real Movitel ou conta do fornecedor |
-| packages/receipt | PrintPayload/Op/layout, builders de vias/cozinha/cliente/turno/dia/senha, buildPrintDocument, encodeEscPos, renderPreview, sampleTicket | 4 ficheiros; diferenças locais preexistentes nos modelos/extras |
-| packages/db | Tipos de BD, 2 migrations herdadas, gate de integração Supabase; fonte SQL canónica fica em supabase | 36 ficheiros tests; 353 declarações it/test por extracção, não total runtime |
+| packages/receipt | PrintPayload/Op/layout, builders de vias/cozinha/cliente/turno/dia/senha, buildPrintDocument, encodeEscPos, renderPreview, sampleTicket; linhas de desconto por origem (1113) | 6 ficheiros; diferenças locais preexistentes nos modelos/extras. `promo-lines.test.ts` cobre o papel novo; o `.exe` instalado nas lojas é anterior (B-119) |
+| packages/db | Tipos de BD, 2 migrations herdadas, gate de integração Supabase; fonte SQL canónica fica em supabase | 39 ficheiros tests; as 353 declarações it/test contadas a 26/09 são extracção, não total runtime |
 | services/print-bridge | Config por loja, poll/claim, retries, TCP/Windows/série, servidor HTTP local/ledger, gaveta/visor, heartbeat/watchdog, layout/disco, SEA Windows | 18 ficheiros + 2 snapshots; simulação não valida hardware |
-| apps/web/lib | Admin/analytics/attribution/agents/brand/cash/payments/POS/TV/auth/account/email/Google/monthly | 74 ficheiros de testes nas libs; não executados aqui |
+| apps/web/lib | Admin/analytics/attribution/agents/brand/cash/payments/POS/TV/auth/account/email/Google/monthly, promoções do painel e do POS, anulação de entregue, superfícies sem marketing | 94 ficheiros de testes nas libs; não executados aqui |
 | scripts | Setup, importação, backups/guard, reconciliação normalizada e pacote de agentes | 6 ficheiros de testes |
+| supabase/tests | 7 ensaios SQL manuais, cada um numa transacção com `ROLLBACK`: idempotência do checkout, routing e-Mola (dois), pedidos do dia, paginação, campanha por loja e promoções | Não correm no `pnpm test` (o vitest exclui `**/tests/**`); são colados numa base de ensaio à mão. Um ensaio aprovado numa base local não prova a instalação |
 
 As 353 declarações de testes DB incluem **42 suspensas** por B-101 em cash.test.ts, payments.test.ts, referral.test.ts, stock.test.ts e tracking.test.ts. Existem suites cash-v2/stock-v2 activas; isso não prova substituição integral. Os testes de conta existentes cobrem token/hash com fixtures, não a cadeia de enumeração descrita em V-01.
 

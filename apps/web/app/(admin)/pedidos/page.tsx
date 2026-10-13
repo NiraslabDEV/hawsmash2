@@ -9,6 +9,9 @@ import { format, parseISO, formatDistanceToNow } from 'date-fns';
 import { pt } from 'date-fns/locale';
 import { initialOrdersView, ORDERS_PAGE_SIZE as PAGE_SIZE, ordersViewReducer, requestOrdersPage, type OrdersPeriod, type OrdersViewAction } from '@/lib/orders-pagination';
 import { maputoDate } from '@/lib/admin/analysis-period';
+import { AnularEntregue } from './anular-entregue';
+import { AtribuirEstafeta } from './atribuir-estafeta';
+import { OrderPromoLines } from './promo-lines';
 
 type Order = {
   id: string;
@@ -333,6 +336,7 @@ export default function PedidosPage() {
             <button onClick={() => { setSelectedOrder(order); setShowDenyModal(true); }} className="px-3 py-1.5 text-xs font-semibold bg-white/[0.06] text-red-400 rounded-xl hover:bg-red-900/20 transition-all">Negar</button>
           </>
         )}
+        <AtribuirEstafeta order={order} onDone={(result) => { setMessage(result); void refreshData(); }} />
         {action && (
           <button onClick={() => advance(order, action.event)} className={`px-3 py-1.5 text-xs font-semibold text-white rounded-xl transition-all ${action.color}`}>{action.label}</button>
         )}
@@ -359,6 +363,7 @@ export default function PedidosPage() {
             </button>
           </>
         )}
+        <AnularEntregue order={order} onDone={(result) => { setMessage(result); void refreshData(); }} />
       </div>
     );
   };
@@ -744,6 +749,7 @@ function OrderDetail({ order, proofUrl, actions }: { order: Order; proofUrl: str
         <div className="text-sm space-y-1">
           <div className="flex justify-between text-[#C9BCAC]"><span>Subtotal</span><span>{money(order.subtotal_cents)}</span></div>
           {order.delivery_fee_cents > 0 && <div className="flex justify-between text-[#C9BCAC]"><span>Taxa de entrega</span><span>{money(order.delivery_fee_cents)}</span></div>}
+          <OrderPromoLines orderId={order.id} />
           <div className="flex justify-between text-white font-bold text-lg pt-1 border-t border-white/[0.06]"><span>Total</span><span>{money(order.total_cents)}</span></div>
         </div>
 

@@ -67,6 +67,13 @@ export interface MenuPayload {
   upsell_enabled?: boolean;
   upsell_title?: string;
   upsell_subtitle?: string;
+  /** Promoções da loja (1113), juntas pela /api/menu. null = sem promoções ou BD antiga. */
+  promotions?: StorefrontPromotions | null;
+}
+
+export interface StorefrontPromotions {
+  bogo: { live: boolean; label: string; same_item_only: boolean; item_ids: string[] } | null;
+  free_delivery: { live: boolean; label: string; min_subtotal_cents: number } | null;
 }
 
 /** Linha do carrinho já cruzada com o cardápio (para o drawer mostrar nome e preço). */

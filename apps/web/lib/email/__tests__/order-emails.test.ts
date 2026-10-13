@@ -47,6 +47,23 @@ describe('conteúdo dos emails de pedido', () => {
     expect(html).toContain('&lt;script&gt;');
   });
 
+  it('pagamento confirmado diz de onde veio o desconto (1113)', () => {
+    const { html } = approvalEmail({
+      customerName: 'X', orderNumber: 'MPT-1', totalCents: 47700, paymentMethod: 'mpesa',
+      promo: {
+        bogoDiscountCents: 45000, bogoFreeItem: 'Classic <b>',
+        couponCode: 'AMIGO10', couponDiscountCents: 5300,
+        manualDiscountCents: 0, deliveryDiscountCents: 10000,
+      },
+    });
+    expect(html).toContain('2x1');
+    expect(html).toContain('Classic &lt;b&gt;');
+    expect(html).toContain('AMIGO10');
+    expect(html).toContain('Entrega grátis');
+    const semPromo = approvalEmail({ customerName: 'X', orderNumber: 'MPT-1', totalCents: 45000, paymentMethod: 'mpesa' });
+    expect(semPromo.html).not.toContain('2x1');
+  });
+
   it('valor em MT pelo formatMT, nunca "MTn" do Intl', () => {
     const { html } = approvalEmail({ customerName: 'X', orderNumber: 'MPT-1', totalCents: 45000, paymentMethod: 'mpesa' });
     expect(html).toContain('450 MT');

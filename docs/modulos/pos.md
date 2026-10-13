@@ -10,6 +10,12 @@ O vínculo usa `bind_pos_device`. A entrada corrente apresenta `pos_login_cards`
 
 Detalhes de acesso, criação e revogação estão em [Equipa](equipa.md). Uma primeira entrada ou troca de utilizador não deve ser descrita como autenticação offline: a rota de login depende de Supabase Auth.
 
+### Sinal de vida e dispositivos retirados (1114)
+
+O POS bate `pos_heartbeat` **de 60 em 60 segundos** ([heartbeat.ts](../../apps/web/lib/pos/heartbeat.ts)), e também ao voltar ao primeiro plano e ao recuperar rede — um quiosque fica dias aberto e o browser estrangula os timers da aba em segundo plano. É best-effort: sem rede não tenta, falhar não diz nada ao operador e nunca toca no caminho da venda. Antes disto, `devices.last_seen_at` do POS só mexia ao vender, e o alerta `device_silent` significava na prática "sem venda há 5 minutos" — em Maputo, a 07/10, havia um crítico vermelho com o terminal a cobrar. Limiares e porta do horário estão no [runbook](../operacao/runbook.md).
+
+Cada `bind_pos_device` insere uma **linha nova** em `devices`: o mesmo PC que perde o `localStorage` (cache limpa, PWA reinstalada, browser novo) aparece como terminal novo e deixa a linha antiga a alertar. Desde a 1114 o próprio `bind_pos_device` desactiva os POS da mesma loja calados há mais de 48 h — um segundo terminal a sério bate de minuto a minuto e nunca cai nessa rede. O que escapar retira-se à mão no painel Sistema com `retire_device` (manager/owner, com registo em `event_log`). **Não se apaga**: a linha é o histórico de quem vendeu em que terminal (§17).
+
 ## Venda e degradação
 
 1. O terminal lê `get_menu` da sua loja, categorias, variantes, adicionais e disponibilidade. A cache é actualizada à entrada e a cada 15 segundos; o ADR 0006 fixa dois minutos, divergência V11 da auditoria.
@@ -21,6 +27,20 @@ Detalhes de acesso, criação e revogação estão em [Equipa](equipa.md). Uma p
 7. A reconexão chama **`sync_counter_sale`**, não apenas `create_counter_sale`. A RPC compara a venda offline com o preço actual, assinala divergências para revisão e reconhece as vias já impressas. A fila remove a entrada apenas após sucesso; as falhas conservam a entrada e repetem com espera crescente até 60 segundos.
 
 Fontes: [pos-shell.tsx](../../apps/web/app/(pos)/pos/pos-shell.tsx), [offline-store.ts](../../apps/web/lib/pos/offline-store.ts), [offline-sales.ts](../../apps/web/lib/pos/offline-sales.ts), [offline-sync.ts](../../apps/web/lib/pos/offline-sync.ts) e [migration 1065](../../supabase/migrations/20260923190000_1065_sync_offline_reconhece_via_de_controlo.sql). Offline usa preços e disponibilidade em cache, não conhece o stock actual e depende de os dados locais do navegador permanecerem disponíveis.
+
+### Descontos no balcão (1113)
+
+No ecrã de pagamento há um **painel de descontos** ([discount-panel.tsx](<../../apps/web/app/(pos)/pos/discount-panel.tsx>), regras em [lib/pos/promotions.ts](../../apps/web/lib/pos/promotions.ts)). Três coisas distintas, com permissões distintas:
+
+| No painel | Quem | Regra |
+|---|---|---|
+| **Cupão** | qualquer operador | Pede o **telefone** (`coupon_requires_phone`, P0027). Só se aplica **com rede**: quem valida é o servidor |
+| **Desconto manual** % ou MT | só **gerente/dono** (`discount_requires_manager`) | Motivo obrigatório, 3–200 caracteres; fica no talão e no painel, não no ecrã do cliente |
+| **2x1 / entrega grátis da loja** | automático | Só se a promoção estiver marcada «também no balcão» (`include_counter`) |
+
+O POS **pré-visualiza**; o total, o troco e o plano de pagamento definitivos saem do `create_counter_sale`, que recalcula tudo **antes de conferir o pagamento** — o dinheiro recebido tem de bater com o total já descontado. Esconder ou mostrar o painel não é autorização: um caixa que force a chamada é recusado pela BD.
+
+**Offline:** a fila guarda o cupão, o desconto e a hora da venda (`OfflineSale.discount`, `promoAt`). Na sincronização a venda **já foi cobrada**, por isso nunca é recusada por promoção: aplica-se na mesma, a venda fica `needs_review` e grava `promotion.needs_review` com o motivo — o problema do cupão, ou `manual_discount_unverified` se o desconto manual não veio de um gerente. A promoção é contada à **hora da venda**, não à da sincronização: um 2x1 de sexta não desaparece por a rede só voltar no sábado. É o mesmo princípio do preço divergente — a venda não se desfaz, confere-se depois. Contrato completo em [promoções](promocoes.md).
 
 ## Definições da loja
 
@@ -39,6 +59,8 @@ Fontes: [pos-shell.tsx](../../apps/web/app/(pos)/pos/pos-shell.tsx), [offline-st
 | `printing` | Modelos por via e interruptores do talão completo. O número de vias fica separado, em `stores.kitchen_ticket_copies`. Ver [Impressão](impressao.md). |
 
 [settings.ts](../../apps/web/lib/pos/settings.ts) contém tipos, `FACTORY_POS_SETTINGS`, `POS_LIMITS`, `resolvePosSettings`, leitura e cache. O resolver aplica fábrica campo a campo; lixo num campo não apaga os restantes. `fetchPosSettings` mantém cache/fábrica quando falha. A última configuração é guardada em `localStorage` por loja. O painel grava o objecto resolvido inteiro e o POS relê-o com o menu.
+
+No POS **não há marketing**: o terminal não pede a configuração de consentimento, não mostra o aviso de cookies e não carrega etiquetas — o aviso tapava o caixa e um «Aceitar» carregava os pixels no terminal da loja. A lista de superfícies está em [`lib/analytics/surfaces.ts`](../../apps/web/lib/analytics/surfaces.ts), partilhada com as TVs e o KDS; ver [Marketing](marketing.md).
 
 Estas escolhas são apresentação. Esconder um pagamento não pode impedir a sincronização de uma venda anterior. Preços, taxas, permissões e estado financeiro continuam a ser regras do servidor. `event_log` regista `store.pos_settings_changed`, autor, loja e secções alteradas.
 

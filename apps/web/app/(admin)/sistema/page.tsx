@@ -12,6 +12,8 @@ type Device = {
   label: string;
   app_version: string | null;
   last_seen_at: string | null;
+  /** Quanto silêncio conta como avaria neste tipo (1114): bridge 5 min, POS 15. */
+  silent_after_seconds?: number;
   online: boolean;
 };
 
@@ -91,6 +93,7 @@ export default function SistemaPage() {
   const [conversions, setConversions] = useState<ConversionHealth | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [retiring, setRetiring] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     const [statusResult, alertsResult, conversionsResult] = await Promise.all([
@@ -117,6 +120,38 @@ export default function SistemaPage() {
     const timer = window.setInterval(() => void refresh(), REFRESH_MS);
     return () => window.clearInterval(timer);
   }, [refresh]);
+
+  // Retirar um terminal que já não existe (1114). Cada vez que um POS perde o
+  // `localStorage` — cache limpa, PWA reinstalada — nasce uma linha nova em
+  // `devices` e a antiga fica a alertar para sempre. Em Maputo havia uma de
+  // 30/09 a dar crítico com o terminal a vender ao lado. A linha não se apaga,
+  // é histórico de quem vendeu onde: desactiva-se, com motivo e registo.
+  const retireDevice = useCallback(
+    async (device: Device, storeName: string) => {
+      const label = `${KIND_LABELS[device.kind]} · ${device.label}`;
+      if (
+        !confirm(
+          `Retirar "${label}" de ${storeName}?\n\n` +
+            'Deixa de aparecer no painel e de gerar alertas. O histórico de vendas ' +
+            'feitas neste terminal não se perde. Só o faz se este dispositivo já não existir.',
+        )
+      ) {
+        return;
+      }
+      setRetiring(device.id);
+      const { error: retireError } = await supabase.rpc('retire_device', {
+        p_device_id: device.id,
+        p_reason: 'retirado no painel Sistema',
+      });
+      setRetiring(null);
+      if (retireError) {
+        setError(`Não foi possível retirar o dispositivo: ${retireError.message}`);
+        return;
+      }
+      await refresh();
+    },
+    [refresh, supabase],
+  );
 
   const critical = alerts.filter((alert) => alert.severity === 'critical');
 
@@ -183,9 +218,22 @@ export default function SistemaPage() {
                       <span className="font-bold text-white">{KIND_LABELS[device.kind]}</span>
                       <span className="text-[#8b8378]">{device.label}</span>
                     </span>
-                    <span className="text-xs text-[#8b8378]">
-                      {device.online ? 'ligado' : `visto ${dateTime(device.last_seen_at)}`}
-                      {device.app_version ? ` · v${device.app_version}` : ''}
+                    <span className="flex items-center gap-2 text-xs text-[#8b8378]">
+                      <span>
+                        {device.online ? 'ligado' : `visto ${dateTime(device.last_seen_at)}`}
+                        {device.app_version ? ` · v${device.app_version}` : ''}
+                      </span>
+                      {!device.online && (
+                        <button
+                          type="button"
+                          onClick={() => void retireDevice(device, store.store_name)}
+                          disabled={retiring === device.id}
+                          className="rounded-lg border border-white/[0.12] px-2 py-1 font-bold text-[#8b8378] transition hover:border-[#7a2b2b] hover:text-[#ffb0b0] disabled:opacity-50"
+                          title="Este dispositivo já não existe? Retira-o para parar os alertas."
+                        >
+                          {retiring === device.id ? 'a retirar…' : 'retirar'}
+                        </button>
+                      )}
                     </span>
                   </li>
                 ))}

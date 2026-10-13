@@ -124,7 +124,8 @@ Catálogo partilhado; preços efectivos, disponibilidade, numeração e operaç�
 | `kitchen` | a sua loja | ver pedidos e avançar preparo (em preparo → pronto). **Não vê dinheiro** — ainda não imposto na BD, B-116 |
 
 Imposto na BD, não no ecrã: `advance_order` por perfil e `confirm_payment` só do servidor (1097), `void_sale` só
-manager/owner, comprovativos só da loja e sem cozinha (1099). Acções sensíveis gravam `event_log` com actor e loja.
+manager/owner, comprovativos só da loja e sem cozinha (1099), **desconto manual** só manager/owner e **regras de
+promoção, cupões e anular entregue** só owner (1112, 1113). Acções sensíveis gravam `event_log` com actor e loja.
 O POS abre a sessão Supabase **de cada operador** por cartão + PIN — nunca uma sessão do terminal.
 [Equipa, permissões exigidas e efectivas](docs/modulos/equipa.md).
 
@@ -138,7 +139,13 @@ Servidor fixa preços e estado; impressão/rede degradam sem perder a venda.
 - `create_counter_sale` é transaccional e idempotente por `client_sale_id`; recalcula preço e troco, baixa stock.
 - Anular é `void_sale` (manager/owner, motivo, repõe stock); a venda anulada nunca desaparece. Reimprimir loga.
 - Sangria/reforço/despesa levam `p_request_id` (1098). Nunca um `confirm()` do browser em fluxo de venda.
-[Fluxos, definições e contrato offline (§7.5 original)](docs/modulos/pos.md).
+- Descontos no balcão (1113): o POS pré-visualiza, o servidor recalcula **antes** de conferir o pagamento.
+  Manual só manager/owner, com motivo. Venda offline com desconto nunca é recusada — fica `needs_review`.
+- O POS bate `pos_heartbeat` a cada 60 s (1114) — "ligado" não pode depender de ter vendido. Limiar de
+  silêncio por tipo (bridge 5 min, POS 15 min) e o POS só é vigiado com a loja a operar; loja inactiva
+  não alerta. Cada `bind_pos_device` cria linha nova em `devices`: o fantasma retira-se com `retire_device`,
+  nunca se apaga.
+[Fluxos, definições e contrato offline (§7.5 original)](docs/modulos/pos.md) · [promoções](docs/modulos/promocoes.md).
 
 ---
 
@@ -179,16 +186,24 @@ Realtime só dispara `refetch`; testes e migrations em staging precedem produç�
 Delivery, levantamento, balcão e mesas; transições só por `advance_order`, nunca por update directo.
 Papel na aprovação/confirmação é best-effort: falha vira `print.enqueue_failed`, não reverte o pedido (1097).
 A máquina pura herdada não é a autoridade de todos os estados actuais.
-[Pedidos](docs/modulos/pedidos.md) · [mesas](docs/modulos/mesas.md).
+"Entregue" é final: desfazer um pedido entregue é `void_delivered_order` (só owner, motivo, repõe stock,
+pagamentos a `refunded`, turno já fechado fica como fechou — 1112). Apagar continua proibido (§17).
+Estafeta (1115): `deliveries` com estado próprio ao lado do pedido; "Levantei" = o antigo "Enviar". Entra por
+telefone + PIN com token opaco — **não** é conta Supabase nem perfil, para a RLS da loja não lhe abrir nada.
+Taxa creditada uma vez por entrega; pagar em dinheiro é despesa do turno.
+[Pedidos](docs/modulos/pedidos.md) · [mesas](docs/modulos/mesas.md) · [estafetas](docs/modulos/estafetas.md).
 
 ---
 
 ## 13. SITE PÚBLICO (o canal que já factura)
 
 Loja explícita no cardápio/checkout; preço e disponibilidade vêm do servidor.
+Quem sai do site para pagar no M-Pesa volta ao **mesmo** pedido, à espera do comprovativo — nunca ao formulário
+vazio: o ecrã de pagamento é recuperável por uma nota em `localStorage` (regra 4).
 [Site e checkout](docs/modulos/site-checkout.md) · [conta do cliente](docs/modulos/conta-cliente.md).
 [Agentes](docs/modulos/agentes.md) preparam revisão; a pessoa conclui o checkout.
-[Marketing](docs/modulos/marketing.md) · [relatórios](docs/modulos/relatorios.md).
+[Marketing](docs/modulos/marketing.md) · [promoções](docs/modulos/promocoes.md) · [relatórios](docs/modulos/relatorios.md).
+2x1, entrega grátis e cupões por loja: a conta é do servidor nos dois canais e **não acumula** com campanha (1113).
 
 ---
 

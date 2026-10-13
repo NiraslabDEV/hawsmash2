@@ -14,6 +14,12 @@
       "reason": "O ADR rejeita explicitamente uma tabela de templates; a referência documenta a alternativa recusada, não uma tabela entregue."
     },
     {
+      "file": "docs/referencia/migrations.md",
+      "token": "private.get_order_status",
+      "kind": "function",
+      "reason": "Nome intermedio gerado pelo proprio catalogo: a 1113 move o get_order_status anterior para private e renomeia-o logo a seguir para get_order_status_before_promotions, que e o nome que fica. O indice de migrations registra o ALTER; o catalogo de funcoes registra o nome final. Linha gerada por schema-catalog.mjs, nao editavel a mao."
+    },
+    {
       "file": "docs/modulos/equipa.md",
       "token": "auth.users",
       "kind": "table",

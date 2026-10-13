@@ -283,13 +283,17 @@ describe("F8 — painel Sistema", () => {
   });
 
   it("levanta alerta de bridge calado e de impressão falhada, com a loja certa", async () => {
+    // Bridge, não POS: desde a 1114 o POS calado só alerta com a loja a operar
+    // (horário ou turno aberto), e um teste que dependesse da hora do relógio
+    // passava de manhã e falhava à noite. A bridge é 24/7 e é sempre vigiada —
+    // que é exactamente o que o nome deste teste sempre disse.
     const { data: silent } = await admin
       .from("devices")
       .insert({
         store_id: maputoStoreId,
-        kind: "pos",
-        label: "POS calado F8",
-        device_key_hash: `f8-pos-${suffix}`,
+        kind: "bridge",
+        label: "Bridge calado F8",
+        device_key_hash: `f8-bridge-calado-${suffix}`,
         last_seen_at: new Date(Date.now() - 30 * 60_000).toISOString(),
       })
       .select("id")

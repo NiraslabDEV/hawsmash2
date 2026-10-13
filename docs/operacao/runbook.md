@@ -12,12 +12,31 @@
 
 Painel **Sistema** (`/sistema`), um bloco por loja, actualizado a cada 30 segundos.
 Lê `get_system_status`, `list_system_alerts` e saúde das conversões; um heartbeat é sinal do processo,
-não prova de papel na impressora nem de toda a operação financeira. Fontes: [página Sistema](../../apps/web/app/(admin)/sistema/page.tsx)
-e [alertas do cron](../../supabase/migrations/20260922193000_1050_alertas_do_cron.sql).
+não prova de papel na impressora nem de toda a operação financeira. Fontes: [página Sistema](../../apps/web/app/(admin)/sistema/page.tsx),
+[alertas do cron](../../supabase/migrations/20260922193000_1050_alertas_do_cron.sql) e
+[sinal de vida do POS](../../supabase/migrations/20261007140000_1114_sinal_de_vida_do_pos.sql).
+
+**Dispositivo calado com o terminal ligado.** Antes da 1114 o POS só escrevia `last_seen_at` ao vender:
+"calado há 5 minutos" queria dizer "sem venda há 5 minutos", e o painel punha um crítico em cada hora morta.
+Hoje o POS bate o sinal de vida de minuto a minuto. Se voltar a aparecer um POS calado com o terminal a
+trabalhar, confirmar por esta ordem: (1) o terminal tem o build com `pos_heartbeat` — a coluna `app_version`
+do dispositivo no painel di-lo; (2) o `device_id` que o browser tem no `localStorage`
+(`hs_pos_device_id`) é o mesmo que está a alertar — se não for, nasceu uma linha nova e a antiga é um
+fantasma, que se **retira** no painel Sistema; (3) a sessão do operador não expirou, porque o sinal de vida
+vai com a sessão dele.
+
+**Resíduo conhecido (1114).** No ecrã de cartões — terminal ligado, ninguém dentro — não há sessão, e
+`pos_heartbeat` exige `auth.uid()`: o POS deixa de bater. Com a loja aberta e ninguém a entrar durante mais
+de 15 minutos, aparece um `device_silent` que é verdade ("ninguém no POS") mas que se lê como avaria. A
+janela é estreita, porque o bloqueio por inactividade está de fábrica em **nunca** desde 30/09 e a pessoa
+fica o turno inteiro dentro: na prática é a abertura e a troca de turno. Não se resolveu com um RPC aberto ao
+`anon` de propósito — um caminho que deixa manter um terminal "vivo" só com o `device_id` enfraquece
+exactamente o alarme que esta migration foi corrigir. Se der ruído a sério, o caminho é ligar o sinal de vida
+à sessão do terminal, não abrir a porta.
 
 | Sinal implementado | O que conferir |
 |---|---|
-| Dispositivos | Último heartbeat e alerta `device_silent`, com limiar de cinco minutos no SQL |
+| Dispositivos | Último heartbeat e alerta `device_silent`. Limiar por tipo desde a 1114: **bridge 5 min** (bate a cada 30 s, é 24/7) e **POS 15 min** (bate a cada 60 s, vende offline por desenho). O POS só é vigiado com a loja **a operar** — dentro do horário ou com turno aberto; a bridge é vigiada sempre. Loja com `stores.active = false` não gera alerta nenhum |
 | Impressão | Fila pendente/falhada e alerta `print_failed`; não garante saída física |
 | Pedido sem papel | `order_not_printed` para pedidos elegíveis há mais de dois minutos, conforme filtros SQL |
 | Estoque | Alertas de stock da loja |

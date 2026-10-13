@@ -6,7 +6,7 @@ import { formatMT, type Cents } from '@delivery/core';
 import { useBrand } from '@/lib/brand/context';
 
 import { CartIcon } from './icons';
-import type { MenuCategory, MenuItem, MenuVariant } from './types';
+import type { MenuCategory, MenuItem, MenuVariant, StorefrontPromotions } from './types';
 
 /** "400 MT" → ["400", "MT"], para o preço grande com a unidade pequena ao lado. */
 function splitMT(cents: number): [string, string] {
@@ -112,6 +112,7 @@ function PriceChip({
 function Banner({
   item,
   index,
+  bogo,
   acceptingOrders,
   qtyFor,
   onAdd,
@@ -120,6 +121,8 @@ function Banner({
 }: {
   item: MenuItem;
   index: number;
+  /** Entra no 2x1 que está a correr agora. */
+  bogo: boolean;
   acceptingOrders: boolean;
   qtyFor: (item: MenuItem, variant: MenuVariant | null) => number;
   onAdd: (item: MenuItem, variant: MenuVariant | null) => void;
@@ -151,6 +154,13 @@ function Banner({
       </div>
 
       <div className="hs-bn-info">
+        {bogo && (
+          <span
+            style={{ display: 'inline-block', marginBottom: 6, padding: '3px 10px', borderRadius: 999, background: 'var(--hs-bg-0)', color: 'var(--hs-gold)', fontWeight: 800, fontSize: 12, letterSpacing: '.08em' }}
+          >
+            2x1 HOJE
+          </span>
+        )}
         <h3 className="hs-bn-name">{item.name}</h3>
         {item.description && <p className="hs-bn-ing">{item.description}</p>}
         <PriceChip
@@ -173,6 +183,7 @@ function Banner({
 
 export function MenuBanners({
   categories,
+  promotions = null,
   acceptingOrders,
   qtyFor,
   onAdd,
@@ -180,6 +191,7 @@ export function MenuBanners({
   onInc,
 }: {
   categories: MenuCategory[];
+  promotions?: StorefrontPromotions | null;
   acceptingOrders: boolean;
   qtyFor: (item: MenuItem, variant: MenuVariant | null) => number;
   onAdd: (item: MenuItem, variant: MenuVariant | null) => void;
@@ -189,6 +201,14 @@ export function MenuBanners({
   const L = useBrand().storefront.landing;
   const [tab, setTab] = useState<string | null>(null);
   const active = categories.find((c) => c.id === tab) ?? categories[0];
+  // Só o que está a correr AGORA (o servidor diz `live`); o preço final é do checkout.
+  const bogoItems = promotions?.bogo?.live ? new Set(promotions.bogo.item_ids) : null;
+  const avisos: string[] = [];
+  if (promotions?.bogo?.live) avisos.push(promotions.bogo.label || 'Compre 1 e leve o 2.º grátis');
+  if (promotions?.free_delivery?.live) {
+    const minimo = formatMT(promotions.free_delivery.min_subtotal_cents as Cents);
+    avisos.push(`${promotions.free_delivery.label || 'Entrega grátis'} a partir de ${minimo}`);
+  }
 
   return (
     <section className="hs-section" id="cardapio">
@@ -230,12 +250,22 @@ export function MenuBanners({
           </div>
         )}
 
+        {avisos.length > 0 && (
+          <div
+            role="note"
+            style={{ margin: '0 0 18px', padding: '12px 16px', borderRadius: 14, background: 'var(--hs-gold)', color: 'var(--hs-bg-0)', fontWeight: 800, textAlign: 'center' }}
+          >
+            {avisos.join(' · ')}
+          </div>
+        )}
+
         <div className="hs-banners">
           {(active?.items ?? []).map((item, index) => (
             <Banner
               key={item.id}
               item={item}
               index={index}
+              bogo={Boolean(bogoItems?.has(item.id))}
               acceptingOrders={acceptingOrders}
               qtyFor={qtyFor}
               onAdd={onAdd}

@@ -57,6 +57,24 @@ export function painelManifest(brand: ResolvedBrand): MetadataRoute.Manifest {
   };
 }
 
+/** O telemóvel do estafeta (1115): de pé, sem barra do browser, só /estafeta. */
+export function estafetaManifest(brand: ResolvedBrand): MetadataRoute.Manifest {
+  return {
+    id: '/estafeta',
+    name: `${brand.name} Estafeta`,
+    short_name: 'Estafeta',
+    description: `Entregas ${brand.name}`,
+    start_url: '/estafeta',
+    scope: '/estafeta',
+    display: 'standalone',
+    orientation: 'portrait',
+    background_color: brand.theme.bg0,
+    theme_color: brand.theme.bg0,
+    lang: 'pt-PT',
+    icons: ICONS,
+  };
+}
+
 export function manifestResponse(manifest: MetadataRoute.Manifest): Response {
   return new Response(JSON.stringify(manifest), {
     headers: { 'Content-Type': 'application/manifest+json; charset=utf-8' },

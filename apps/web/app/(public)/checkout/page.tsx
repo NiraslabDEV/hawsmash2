@@ -25,7 +25,7 @@
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
-import { formatMT, getPaymentMode, type Cents } from '@delivery/core';
+import { applyPromotions, formatMT, getPaymentMode, type Cents } from '@delivery/core';
 
 import '../_storefront/landing.css';
 import '../_storefront/funnel.css';
@@ -38,6 +38,7 @@ import { AGENT_CHECKOUT_KEY, consumeAgentCheckout } from '@/lib/agents/webmcp';
 import { parseStoreCookie } from '@/lib/store-context';
 import { clearPendingCheckout, getPendingCheckout, rememberPendingCheckout } from '@/lib/payments/pending-checkout';
 import { clearCheckoutAttempt, getCheckoutAttempt } from '@/lib/payments/checkout-attempt';
+import { clearPendingProof, readPendingProof, rememberPendingProof } from '@/lib/payments/pending-proof';
 import {
   forgetCheckout,
   forgetSavedAddress,
@@ -83,6 +84,11 @@ type MenuModGroup = {
 };
 type MenuItemLite = { id: string; name: string; price_cents: number; variants?: MenuVariant[]; addons?: MenuAddon[]; modifier_groups?: MenuModGroup[] };
 type CartModifier = { groupId: string; optionIds: string[] };
+/** O que `get_store_promotions` (1113) devolve e a /api/menu junta ao cardápio. */
+type StorePromotions = {
+  bogo: { live: boolean; label: string; same_item_only: boolean; item_ids: string[] } | null;
+  free_delivery: { live: boolean; label: string; min_subtotal_cents: number } | null;
+};
 
 // preço unitário = (variante ou base) + Σ adicionais. PREVIEW; servidor é a verdade.
 function lineUnitPrice(
@@ -299,7 +305,7 @@ export default function CheckoutPage() {
   type CouponResult = {
     valid: boolean;
     reason?: string;
-    reward_type?: 'discount_cents' | 'discount_pct' | 'free_item';
+    reward_type?: 'discount_cents' | 'discount_pct' | 'free_item' | 'bogo';
     reward_value?: number;
     gift_item_id?: string;
     gift_item_name?: string;
@@ -311,15 +317,23 @@ export default function CheckoutPage() {
   // fica a saber que existe um desconto que lhe falta.
   const [showCoupon, setShowCoupon]     = useState(false);
 
-  async function applyCoupon() {
-    const code = couponInput.trim().toUpperCase();
+  // `override` só quando o código vem guardado do browser; os botões passam o
+  // evento, que não é texto — nesse caso vale o que está escrito no campo.
+  async function applyCoupon(override?: unknown) {
+    const code = (typeof override === 'string' ? override : couponInput).trim().toUpperCase();
     if (!code) return;
     setCouponLoading(true);
     setCouponResult(null);
-    const { data, error } = await supabase.rpc('validate_referral', {
+    // Com a loja (1113): um cupão só de Matola é recusado aqui, não no fim.
+    // Sem a 1113 aplicada, cai para a validação antiga — o servidor recusa na mesma.
+    let { data, error } = await supabase.rpc('validate_referral', {
       p_code:  code,
       p_phone: customerPhone || '',
+      p_store_slug: storeSlug,
     });
+    if (error) {
+      ({ data, error } = await supabase.rpc('validate_referral', { p_code: code, p_phone: customerPhone || '' }));
+    }
     setCouponLoading(false);
     if (error || !data) { setCouponResult({ valid: false, reason: 'invalid_or_expired' }); return; }
     const res = data as CouponResult;
@@ -337,17 +351,24 @@ export default function CheckoutPage() {
     localStorage.removeItem('referral_code');
   }
 
-  // desconto estimado (cosmético — o servidor é a verdade)
+  // Desconto estimado (cupão + 2x1) — cosmético, o servidor é a verdade. É a
+  // mesma conta do create_order (packages/core/src/promotions.ts).
   function discountPreview(): number {
-    if (!couponResult?.valid) return 0;
-    if (couponResult.reward_type === 'discount_cents') return couponResult.reward_value ?? 0;
-    if (couponResult.reward_type === 'discount_pct')   return Math.round(subtotal * (couponResult.reward_value ?? 0) / 100);
-    return 0;
+    return promo.discountCents;
   }
 
   const [showPaymentScreen, setShowPaymentScreen] = useState(false);
   const [paymentProof, setPaymentProof]           = useState<File | null>(null);
   const [uploading, setUploading]                 = useState(false);
+  // O pedido manual já criado. Vive em `localStorage` enquanto espera
+  // comprovativo: quem sai para a aplicação do M-Pesa volta a este mesmo
+  // pedido em vez de encomendar outra vez (ver `lib/payments/pending-proof`).
+  const [manualOrderId, setManualOrderId]         = useState<string | null>(null);
+  // Num pedido recuperado, o valor e o número vêm do servidor, não do
+  // carrinho: é esse o montante que a loja reconhece na conta dela.
+  const [resumed, setResumed]                     = useState<{ totalCents: number; orderNumber: string | null } | null>(null);
+  // Enquanto não se sabe se há pedido por pagar, não se mostra o formulário.
+  const [checkingPending, setCheckingPending]     = useState(true);
   const [autoSubmitting, setAutoSubmitting]       = useState(false);
   const submissionInProgress = useRef(false);
   // Número onde o pedido de PIN vai cair. Começa igual ao do pedido, mas
@@ -402,10 +423,38 @@ export default function CheckoutPage() {
     return sum + lineUnitPrice(menuItem, item.variantId, item.addonIds, item.modifiers) * item.qty;
   }, 0);
 
-  const deliveryFee = fulfillmentType === 'delivery'
+  const zoneFee = fulfillmentType === 'delivery'
     ? (zones?.find((z: any) => z.id === deliveryZoneId)?.fee_cents || 0)
     : 0;
 
+  // Promoções da loja (1113): 2x1, entrega grátis e o cupão aplicado.
+  const promotions: StorePromotions | null = menuData?.promotions ?? null;
+  const promo = useMemo(() => {
+    const allItems = menuData?.categories?.flatMap((c: any) => c.items) ?? [];
+    const eligible = new Set<string>(promotions?.bogo?.item_ids ?? []);
+    const coupon = couponResult?.valid && couponResult.reward_type
+      ? { type: couponResult.reward_type, value: couponResult.reward_value ?? 0 }
+      : null;
+    return applyPromotions({
+      lines: cart.map((line: any) => {
+        const it = allItems.find((i: any) => i.id === line.menuItemId);
+        return {
+          itemId: line.menuItemId,
+          name: it?.name ?? '',
+          unitPriceCents: lineUnitPrice(it, line.variantId, line.addonIds, line.modifiers),
+          qty: line.qty,
+          bogoEligible: eligible.has(line.menuItemId),
+        };
+      }),
+      fulfillment: fulfillmentType,
+      deliveryFeeCents: zoneFee,
+      coupon,
+      bogo: promotions?.bogo ? { live: promotions.bogo.live, sameItemOnly: promotions.bogo.same_item_only } : null,
+      freeDeliveryMinCents: promotions?.free_delivery?.live ? promotions.free_delivery.min_subtotal_cents : null,
+    });
+  }, [cart, menuData, promotions, couponResult, fulfillmentType, zoneFee]);
+
+  const deliveryFee = promo.deliveryFeeCents;
   const total = subtotal + deliveryFee;
 
   // Itens do carrinho com detalhe (para os eventos do funil)
@@ -512,6 +561,64 @@ export default function CheckoutPage() {
     return true;
   }
 
+  // Voltar da aplicação do M-Pesa não recomeça o pedido. O ecrã de pagamento
+  // só vive em memória: um telemóvel que despeja a página devolvia a pessoa ao
+  // formulário, onde ela encomendava outra vez — duas encomendas iguais no
+  // painel, uma sem comprovativo. Se ficou um pedido desta loja à espera do
+  // comprovativo, é a ele que ela volta, com o mesmo `orderId` (regra 4).
+  const pendingChecked = useRef(false);
+  useEffect(() => {
+    // Sem bandeira de cancelamento: o StrictMode desmonta e remonta o efeito, e
+    // um cleanup que abortasse esta consulta deixava o ecrã a carregar para
+    // sempre. A guarda é o `ref` — a consulta acontece uma vez.
+    if (pendingChecked.current) return;
+    pendingChecked.current = true;
+    const pending = readPendingProof(localStorage, storeSlug);
+    if (!pending) { setCheckingPending(false); return; }
+    // Rede fraca não deixa ninguém num ecrã a carregar: ao fim de oito
+    // segundos vale a nota do browser e a pessoa anexa o comprovativo.
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => controller.abort(), 8_000);
+    void (async () => {
+      try {
+        const res = await fetch(`/api/order-status/${pending.orderId}`, { signal: controller.signal });
+        if (!res.ok) { clearPendingProof(localStorage, pending.orderId); return; }
+        const order = await res.json();
+        // Aprovado, cancelado ou já pago por outra via: a loja está a tratar
+        // dele e não há comprovativo a enviar. O formulário abre limpo.
+        if (order?.status !== 'awaiting_approval') { clearPendingProof(localStorage, pending.orderId); return; }
+        setManualOrderId(pending.orderId);
+        setManualMethod(order.payment_method === 'emola' ? 'emola' : 'mpesa');
+        setResumed({
+          // O valor é o do pedido, não o do carrinho de agora: é por ele que a
+          // loja reconhece o pagamento na conta dela.
+          totalCents: Number.isSafeInteger(order.total_cents) ? order.total_cents : pending.totalCents,
+          orderNumber: typeof order.order_number === 'string' ? order.order_number : pending.orderNumber,
+        });
+        setShowPaymentScreen(true);
+      } catch {
+        // Sem resposta não se apaga nada: na dúvida volta-se ao mesmo pedido,
+        // que é o que não deixa encomendar duas vezes.
+        setManualOrderId(pending.orderId);
+        setManualMethod(pending.method);
+        setResumed({ totalCents: pending.totalCents, orderNumber: pending.orderNumber });
+        setShowPaymentScreen(true);
+      } finally {
+        window.clearTimeout(timer);
+        setCheckingPending(false);
+      }
+    })();
+  }, [storeSlug]);
+
+  /** Desiste do pedido por pagar e volta ao formulário para fazer outro. */
+  function startOverFromPending() {
+    clearPendingProof(localStorage, manualOrderId ?? undefined);
+    setManualOrderId(null);
+    setResumed(null);
+    setPaymentProof(null);
+    setShowPaymentScreen(false);
+  }
+
   // Voltar no navegador não deve duplicar um pagamento ainda por resolver.
   const handleCreateManualOrder = async () => {
     if (submissionInProgress.current || !validate()) return;
@@ -521,7 +628,16 @@ export default function CheckoutPage() {
       if (await resumePendingCheckout()) return;
       rememberCustomer();
       trackAddPaymentInfo(cartTrackItems(), manualMethod);
-      await createOrderMutation.mutateAsync(buildOrderPayload(manualMethod));
+      const created = await createOrderMutation.mutateAsync(buildOrderPayload(manualMethod));
+      // A partir daqui o pedido existe. Guardar a referência antes de a pessoa
+      // sair para o M-Pesa é o que a traz de volta a ESTE pedido.
+      if (typeof created?.orderId === 'string') {
+        setManualOrderId(created.orderId);
+        rememberPendingProof(localStorage, {
+          orderId: created.orderId, storeSlug, method: manualMethod,
+          totalCents: dueCents, orderNumber: null,
+        });
+      }
     } catch { /* A mutation apresenta o erro ao cliente. */ }
     finally { submissionInProgress.current = false; setAutoSubmitting(false); }
   };
@@ -611,7 +727,7 @@ export default function CheckoutPage() {
 
   const handleUploadProof = async () => {
     if (!paymentProof) { alert('Por favor, selecione o comprovativo'); return; }
-    const orderId = createOrderMutation.data?.orderId;
+    const orderId = manualOrderId ?? createOrderMutation.data?.orderId;
     if (!orderId) { alert('Pedido não encontrado. Tente novamente.'); return; }
 
     setUploading(true);
@@ -635,6 +751,8 @@ export default function CheckoutPage() {
         throw new Error(body.error || 'Falha ao anexar comprovativo');
       }
 
+      // Comprovativo entregue: o pedido deixa de estar à espera desta pessoa.
+      clearPendingProof(localStorage, orderId);
       localStorage.removeItem('cart');
       router.push(`/order-status/${orderId}`);
     } catch (error) {
@@ -652,11 +770,12 @@ export default function CheckoutPage() {
     if (saved) setCart(JSON.parse(saved));
     const savedCode = localStorage.getItem('referral_code');
     if (savedCode) {
-      setReferralCode(savedCode);
       setCouponInput(savedCode);
       setShowCoupon(true);
-      // marca como válido (foi validado na loja); detalhe é revalidado no servidor
-      setCouponResult({ valid: true });
+      // Revalida com a loja (1113): a pré-visualização precisa do tipo e do
+      // valor, e um código entretanto esgotado ou de outra loja diz-se já aqui,
+      // não no fim da compra.
+      void applyCoupon(savedCode);
     }
 
     // O que o cliente escreveu da última vez, neste browser.
@@ -772,7 +891,9 @@ export default function CheckoutPage() {
 
   // ─── Loading ───────────────────────────────────────────────────────────────
 
-  if (isLoadingMenu) {
+  // Também espera pela verificação do pedido por pagar: sem isso o formulário
+  // pisca antes de o ecrã do comprovativo voltar.
+  if (isLoadingMenu || checkingPending) {
     return (
       <div className="hs hf" style={{ minHeight: '100vh', display: 'grid', placeItems: 'center', padding: 16 }}>
         <div style={{ textAlign: 'center' }}>
@@ -789,11 +910,31 @@ export default function CheckoutPage() {
     const isMpesa = manualMethod === 'mpesa';
     const number  = isMpesa ? menuData?.mpesa_number : menuData?.emola_number;
     const holder  = isMpesa ? menuData?.mpesa_name   : menuData?.emola_name;
+    // Num pedido recuperado manda o total do servidor: o carrinho pode já ter
+    // sido mexido, o pedido não.
+    const payableCents = resumed ? resumed.totalCents : dueCents;
 
     return (
       <div className="hs hf" style={{ minHeight: '100vh' }}>
         <div className="hf-page">
           <FunnelRail step={2} storeName={storeName} />
+
+          {/* Quem volta do M-Pesa precisa de saber, antes de tudo, que não tem
+              de encomendar outra vez. */}
+          {resumed && (
+            <section className="hf-sec">
+              <div className="hf-panel is-ok" style={{ padding: 16 }}>
+                <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: '.24em', textTransform: 'uppercase', color: 'var(--hs-ink-mute)' }}>
+                  O teu pedido está guardado
+                </div>
+                <p style={{ margin: '10px 0 0', fontSize: 14, lineHeight: 1.45, color: 'var(--hs-ink-dim)' }}>
+                  {resumed.orderNumber
+                    ? <>O pedido <strong className="num" style={{ color: 'var(--hs-ink)' }}>{resumed.orderNumber}</strong> está à espera do comprovativo. Não encomendes outra vez — anexa aqui em baixo.</>
+                    : <>O teu pedido está à espera do comprovativo. Não encomendes outra vez — anexa aqui em baixo.</>}
+                </p>
+              </div>
+            </section>
+          )}
 
           {/* O valor é a capa: é por ele que a loja reconhece o pagamento. */}
           <section className="hf-hero hf-hero-glow-c" style={{ textAlign: 'center' }}>
@@ -804,11 +945,11 @@ export default function CheckoutPage() {
               className="num"
               style={{ fontFamily: 'var(--font-display)', fontSize: 68, lineHeight: .94, letterSpacing: '-.01em', color: 'var(--hs-gold)', marginTop: 12 }}
             >
-              {fmt(dueCents)}
+              {fmt(payableCents)}
             </div>
             <button
               type="button"
-              onClick={() => navigator.clipboard?.writeText(String(dueCents / 100))}
+              onClick={() => navigator.clipboard?.writeText(String(payableCents / 100))}
               className="hf-btn hf-btn-ghost hf-btn-sm"
               style={{ margin: '14px auto 0' }}
             >
@@ -872,7 +1013,7 @@ export default function CheckoutPage() {
             <SectionHead>Três passos</SectionHead>
             <ol style={{ margin: 0, padding: 0, listStyle: 'none' }}>
               {[
-                <>Envia <strong className="num" style={{ color: 'var(--hs-ink)' }}>{fmt(dueCents)}</strong> para o número acima.</>,
+                <>Envia <strong className="num" style={{ color: 'var(--hs-ink)' }}>{fmt(payableCents)}</strong> para o número acima.</>,
                 <>Guarda o SMS de confirmação ou tira print.</>,
                 <>Anexa aqui em baixo. Confirmamos em poucos minutos e a chapa arranca.</>,
               ].map((text, i) => (
@@ -940,6 +1081,12 @@ export default function CheckoutPage() {
             <p className="hf-note" style={{ justifyContent: 'center', marginTop: 14, color: 'var(--hs-ink-faint)' }}>
               O teu comprovativo só é visto pela equipa da loja.
             </p>
+            {/* Quem já desistiu deste não fica preso ao ecrã de pagamento. */}
+            {resumed && (
+              <button type="button" onClick={startOverFromPending} className="hf-act" style={{ margin: '10px auto 0', display: 'block' }}>
+                Já não vou pagar este — fazer outro pedido
+              </button>
+            )}
           </div>
           <FunnelFoot />
         </div>
@@ -973,7 +1120,7 @@ export default function CheckoutPage() {
             {cart.length} {cart.length === 1 ? 'artigo' : 'artigos'}
           </span>
           <span style={{ width: 3, height: 3, borderRadius: '50%', background: 'var(--hs-ink-faint)' }} />
-          <span className="hf-recap-total num">{fmt(total)}</span>
+          <span className="hf-recap-total num">{fmt(dueCents)}</span>
           <button type="button" onClick={() => router.push(`/l/${storeSlug}`)} className="hf-act">
             Editar
           </button>
@@ -1308,8 +1455,24 @@ export default function CheckoutPage() {
             {deliveryFee > 0 && (
               <dl className="hf-sum"><dt>Entrega</dt><dd className="num">+ {fmt(deliveryFee)}</dd></dl>
             )}
-            {discountPreview() > 0 && (
-              <dl className="hf-sum is-off"><dt>Desconto ({referralCode})</dt><dd className="num">− {fmt(discountPreview())}</dd></dl>
+            {promo.deliveryDiscountCents > 0 && (
+              <dl className="hf-sum is-off"><dt>Entrega</dt><dd>Grátis</dd></dl>
+            )}
+            {promo.bogoDiscountCents > 0 && (
+              <dl className="hf-sum is-off"><dt>2x1 — {promo.bogoFreeItem} grátis</dt><dd className="num">− {fmt(promo.bogoDiscountCents)}</dd></dl>
+            )}
+            {promo.couponDiscountCents > 0 && (
+              <dl className="hf-sum is-off"><dt>Desconto ({referralCode})</dt><dd className="num">− {fmt(promo.couponDiscountCents)}</dd></dl>
+            )}
+            {promo.bogoOneAway && (
+              <p style={{ margin: 0, fontSize: 13, color: 'var(--hs-gold, #e5a93c)' }}>
+                {promotions?.bogo?.label || '2x1'}: junta mais {promotions?.bogo?.same_item_only === false ? 'um produto da promo' : 'um igual'} e o segundo sai grátis.
+              </p>
+            )}
+            {promo.missingForFreeDeliveryCents > 0 && (
+              <p style={{ margin: 0, fontSize: 13, color: 'var(--hs-ink-dim)' }}>
+                Faltam <strong className="num">{fmt(promo.missingForFreeDeliveryCents)}</strong> para a entrega ficar grátis.
+              </p>
             )}
             {couponResult?.valid && couponResult.reward_type === 'free_item' && (
               <dl className="hf-sum is-off"><dt>{couponResult.gift_item_name ?? 'Item grátis'}</dt><dd>Grátis</dd></dl>
@@ -1352,6 +1515,7 @@ export default function CheckoutPage() {
                     {couponResult.reason === 'auto_redemption'          ? 'Não podes usar o teu próprio código.' :
                      couponResult.reason === 'already_redeemed'        ? 'Já usaste este código antes.' :
                      couponResult.reason === 'max_redemptions_reached' ? 'Este código atingiu o limite de utilizações.' :
+                     couponResult.reason === 'wrong_store'             ? 'Este código não vale nesta loja.' :
                      'Código inválido ou expirado.'}
                   </p>
                 )}
@@ -1374,7 +1538,7 @@ export default function CheckoutPage() {
         {/* ── Barra de acção ───────────────────────────────────────────── */}
         <div className="hf-bar">
           <dl className="hf-bar-total">
-            <dt>{referralCode ? 'Total estimado' : 'Total'}</dt>
+            <dt>{referralCode || promo.discountCents > 0 ? 'Total estimado' : 'Total'}</dt>
             <dd className="num">{fmt(dueCents)}</dd>
           </dl>
           <button

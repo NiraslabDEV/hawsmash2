@@ -7,6 +7,7 @@
 | alerts | Recusa ausência de CRON_SECRET (503) | Cooldown 30 min; list_system_alerts_all; SMTP/WhatsApp deep link |
 | conversions | Recusa ausência de CRON_SECRET (503) | Claim/processamento da outbox; credenciais de cada rede |
 | digest | Recusa ausência de CRON_SECRET (503) | get_daily_digest, resumo diário/email |
+| emails | Recusa ausência de CRON_SECRET (503) | `email_claim` (FOR UPDATE SKIP LOCKED, até cinco por chamada), cinco ligações em paralelo; fila do módulo de [emails](../modulos/emails.md), 1104. A etapa seguinte só é agendada depois de a anterior ficar aceite e persistida |
 | monthly | Recusa ausência de CRON_SECRET (503) | get_monthly_digest, fotografia Google, deduplicação/force; B-114 |
 | reconcile | Recusa ausência de CRON_SECRET (503) | Até 300 pedidos por passagem, páginas de 50, 3 consultas em paralelo, orçamento 50 s/consulta 20 s; nextCursor até completed; B-106 |
 
@@ -25,6 +26,15 @@ O Supabase de staging tinha dois jobs activos, instalados por
 |---|---|---|---|
 | app-digest | `0 6 * * *` | Todos os dias às 08h | Dia anterior completo, passado em `?day=` |
 | app-monthly | `0 6 1 * *` | Dia 1 às 08h | Último mês fechado |
+
+A 28/09, com o módulo de emails, [`install-email-cron.sql`](../../scripts/sql/install-email-cron.sql) instalou dois jobs à parte destes, e **execução natural foi observada com sucesso em staging**:
+
+| Job | Expressão | Ritmo | Handler |
+|---|---|---|---|
+| app-emails | `* * * * *` | De minuto a minuto | `/api/cron/emails` — a fila dos funis tem de correr ao minuto para uma espera de cinco minutos valer cinco minutos |
+| app-alerts | `*/5 * * * *` | Cada cinco minutos | `/api/cron/alerts`, o emissor que já existia |
+
+O HTTP é síncrono dentro do scheduler, **nunca dentro de uma venda**. Os dois lêem o mesmo `app_cron_base_url`/`app_cron_secret` do Vault que os anteriores — e esse `app_cron_base_url` ainda aponta para o endereço de staging, que serve a base do LIVE ([ADR 0008](../decisions/0008-staging-passa-a-live.md)): muda-se **antes** de repontar o staging para uma base nova.
 
 Os jobs lêem `app_cron_base_url` e `app_cron_secret` no Vault. O segredo coincide
 com `CRON_SECRET` no Railway; não aparece no SQL versionado nem no comando do job.

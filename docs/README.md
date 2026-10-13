@@ -6,7 +6,7 @@ O [CLAUDE](../CLAUDE.md) conserva decisões e invariantes. Os módulos descrevem
 
 - [Manual do dono](operacao/manual-dono.md), [runbook](operacao/runbook.md), [hardware](operacao/hardware.md).
 - [Lojas](modulos/lojas.md), [equipa/PIN](modulos/equipa.md), [caixa](modulos/caixa.md), [relatórios/exportação](modulos/relatorios.md).
-- [Aparência](modulos/aparencia.md), [marketing](operacao/marketing.md), [TVs/KDS](modulos/tvs-kds.md).
+- [Aparência](modulos/aparencia.md), [marketing](operacao/marketing.md), [promoções](modulos/promocoes.md), [TVs/KDS](modulos/tvs-kds.md). Promoções e cupões são do dono.
 - [Instalação](operacao/instalacao.md), [plano LIVE](planos/live.md), [volume](planos/volume.md). Metas não são ensaios concluídos.
 
 ## Equipa da loja
@@ -36,6 +36,7 @@ O [README raiz](../README.md) explica arranque. Complementos: [formato de cardá
 | [Conta do cliente](modulos/conta-cliente.md) | Dispositivo, moradas e recuperação |
 | [Aparência](modulos/aparencia.md) | Marca como dado e fábrica |
 | [Marketing](modulos/marketing.md) | Atribuição, consentimento, campanhas e upsells |
+| [Promoções](modulos/promocoes.md) | 2x1, entrega grátis e cupões por loja |
 | [Emails](modulos/emails.md) | Editor por blocos, transaccionais, funis, SMTP e fila |
 | [Relatórios](modulos/relatorios.md) | Vendas, CSV, digest e Google |
 | [Agentes](modulos/agentes.md) | MCP/WebMCP e revisão humana |

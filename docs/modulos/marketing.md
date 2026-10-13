@@ -89,9 +89,13 @@ O catálogo admitido exclui POS, brindes, adicionais e modificadores. Variantes 
 
 **Limite observado:** [CampaignBanner/CampaignPrice](../../apps/web/components/storefront/campaign.tsx) existem, mas não têm importador na montra activa. O checkout actual mantém o campo de cupão e não o condiciona à campanha. O requisito de banner, actualização na expiração e ocultação de cupão não deve ser anunciado como UI entregue. A activação de campanha exige primeiro fechar/ensaiar essa integração; a documentação não modifica o código.
 
+**Campanha de preço ≠ promoção (1113).** São dois mecanismos distintos e **não acumulam**: a campanha reescreve a tabela de preços da loja (`store_items.price_cents_override`) e o wrapper retira o `referralCode`; as [promoções](promocoes.md) (2x1, entrega grátis, cupões, desconto manual) deixam o preço em paz e abatem no total do pedido. A camada da 1113 fica **por cima** da 1060 na cadeia do `create_order`, pela mesma ordem: `create_order_store_legacy` (1113) → `create_order_store_before_promotions` (1060) → `create_order_store_before_campaign` (1013). Com campanha a correr, não há cupão nem 2x1 no pedido. A montra e o checkout das promoções têm UI entregue — o que não é verdade da campanha.
+
 ## Eventos, privacidade e verificação
 
 `campaign.started` grava autor/loja e preços antes/depois. O processamento de conversões pode gravar `conversion.enqueue_error`; os estados detalhados ficam na fila. Eventos de funil pertencem a `analytics_events`, não são todos eventos de auditoria. A aba Marketing faz escrita directa em `settings`; não se promete um evento auditado para cada alteração desse formulário.
+
+**Ecrãs sem marketing.** `/tv`, `/kds` e `/pos` não pedem a configuração de consentimento, não mostram o aviso de cookies e não iniciam etiqueta nenhuma — são páginas sem ninguém a navegar à frente, e o aviso tapava as senhas e o ecrã do caixa. Lista única em [`lib/analytics/surfaces.ts`](../../apps/web/lib/analytics/surfaces.ts), com teste; o `AnalyticsProvider` continua montado em todas as páginas e é ele que decide. Ver [TVs](tvs-kds.md) e [POS](pos.md).
 
 Scripts publicitários respeitam `dl_consent`; medição first-party existe sem esse consentimento no comportamento actual. Esta descrição não é uma conclusão jurídica. Não se deve afirmar que toda a superfície pública é isenta de PII: a cadeia de conta por UUID e as policies de comprovativos têm achados abertos na [auditoria, secção 5](../AUDITORIA-DOCUMENTACAO.md#5-código-que-viola-a-spec).
 

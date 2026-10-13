@@ -4,7 +4,7 @@
 
 Retrato estático da **árvore de trabalho**, incluindo ficheiros ainda não commitados. Não comprova aplicação em staging/produção, grants efectivos da instalação ou resultados de testes. Não executa SQL.
 
-164 ficheiros; 35 755 linhas. A ordem é o timestamp do nome, não o sufixo de assunto. A 1080 precede intencionalmente 1077–1079. A cadeia canónica está em [supabase/migrations](../../supabase/migrations); os dois SQL de [packages/db/migrations](../../packages/db/migrations) são legado e não entram nesta contagem.
+166 ficheiros; 36 899 linhas. A ordem é o timestamp do nome, não o sufixo de assunto. A 1080 precede intencionalmente 1077–1079. A cadeia canónica está em [supabase/migrations](../../supabase/migrations); os dois SQL de [packages/db/migrations](../../packages/db/migrations) são legado e não entram nesta contagem.
 
 | Ficheiro / assunto | Tabelas em DDL directo | Funções declaradas/alteradas/removidas | Limite |
 | --- | --- | --- | --- |
@@ -172,6 +172,8 @@ Retrato estático da **árvore de trabalho**, incluindo ficheiros ainda não com
 | [supabase/migrations/20260930150000_1109_favicon_da_marca.sql:1](../../supabase/migrations/20260930150000_1109_favicon_da_marca.sql#L1) | — | — | Leitura estática |
 | [supabase/migrations/20260930170000_1110_pedidos_do_dia.sql:1](../../supabase/migrations/20260930170000_1110_pedidos_do_dia.sql#L1) | — | `public.get_orders` | Leitura estática |
 | [supabase/migrations/20260930190000_1111_senha_no_balcao.sql:1](../../supabase/migrations/20260930190000_1111_senha_no_balcao.sql#L1) | — | `private.build_counter_senha`, `private.enqueue_counter_senha`, `public.create_counter_sale` | Leitura estática |
+| [supabase/migrations/20260930200000_1112_anular_pedido_entregue.sql:1](../../supabase/migrations/20260930200000_1112_anular_pedido_entregue.sql#L1) | — | `public.void_delivered_order` | Leitura estática |
+| [supabase/migrations/20260930210000_1113_descontos_e_promocoes.sql:1](../../supabase/migrations/20260930210000_1113_descontos_e_promocoes.sql#L1) | `public.menu_items`, `public.orders`, `public.promotions`, `public.referral_codes` | `private.apply_order_promotions`, `private.audit_bogo_eligible`, `private.audit_promotion`, `private.audit_referral_code`, `private.compute_promotions`, `private.counter_sale_promotions`, `private.create_order_store_legacy`, `private.get_order_status`, `private.print_job_promotions`, `private.promotion_is_live`, `private.record_counter_promotions`, `private.store_business_dow`, `private.store_promotions_at`, `private.touch_promotion`, `public.get_coupon_usage`, `public.get_order_status`, `public.get_promotions_summary`, `public.get_store_promotions`, `public.validate_referral` | Contém DO/EXECUTE; ver nota abaixo |
 
 ## SQL dinâmico e limites
 
@@ -189,5 +191,7 @@ As listas fixas de policies da 1004 são expandidas pelo gerador; a remoção de
 | [supabase/migrations/20260927214837_1104_modulo_emails.sql:67](../../supabase/migrations/20260927214837_1104_modulo_emails.sql#L67) | DDL dinâmico/condicional: só listas fixas de policies da 1004 são expandidas; restantes efeitos exigem revisão. |
 | [supabase/migrations/20260927231400_1105_emails_do_sistema.sql:27](../../supabase/migrations/20260927231400_1105_emails_do_sistema.sql#L27) | DDL dinâmico/condicional: só listas fixas de policies da 1004 são expandidas; restantes efeitos exigem revisão. |
 | [supabase/migrations/20260929220000_1106_variante_no_nome_do_talao.sql:20](../../supabase/migrations/20260929220000_1106_variante_no_nome_do_talao.sql#L20) | Altera corpo de função por pg_get_functiondef/replace; não executado pelo catálogo. |
+| [supabase/migrations/20260930210000_1113_descontos_e_promocoes.sql:805](../../supabase/migrations/20260930210000_1113_descontos_e_promocoes.sql#L805) | Altera corpo de função por pg_get_functiondef/replace; não executado pelo catálogo. |
+| [supabase/migrations/20260930210000_1113_descontos_e_promocoes.sql:838](../../supabase/migrations/20260930210000_1113_descontos_e_promocoes.sql#L838) | Altera corpo de função por pg_get_functiondef/replace; não executado pelo catálogo. |
 
 [RPCs](rpcs.md) · [Tabelas/RLS](tabelas-rls.md) · [Eventos](eventos.md)
