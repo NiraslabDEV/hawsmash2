@@ -10,6 +10,7 @@ import { pt } from 'date-fns/locale';
 import { initialOrdersView, ORDERS_PAGE_SIZE as PAGE_SIZE, ordersViewReducer, requestOrdersPage, type OrdersPeriod, type OrdersViewAction } from '@/lib/orders-pagination';
 import { maputoDate } from '@/lib/admin/analysis-period';
 import { AnularEntregue } from './anular-entregue';
+import { AtribuirEstafeta } from './atribuir-estafeta';
 import { OrderPromoLines } from './promo-lines';
 
 type Order = {
@@ -335,6 +336,7 @@ export default function PedidosPage() {
             <button onClick={() => { setSelectedOrder(order); setShowDenyModal(true); }} className="px-3 py-1.5 text-xs font-semibold bg-white/[0.06] text-red-400 rounded-xl hover:bg-red-900/20 transition-all">Negar</button>
           </>
         )}
+        <AtribuirEstafeta order={order} onDone={(result) => { setMessage(result); void refreshData(); }} />
         {action && (
           <button onClick={() => advance(order, action.event)} className={`px-3 py-1.5 text-xs font-semibold text-white rounded-xl transition-all ${action.color}`}>{action.label}</button>
         )}

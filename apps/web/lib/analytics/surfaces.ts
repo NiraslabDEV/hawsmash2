@@ -1,5 +1,6 @@
 /**
- * Ecrãs onde não há marketing: as TVs, o KDS e o POS do balcão.
+ * Ecrãs onde não há marketing: as TVs, o KDS, o POS do balcão e o telemóvel do
+ * estafeta (1115), que é uma ferramenta de trabalho, não uma visita à loja.
  *
  * São páginas sem ninguém à frente a navegar: o aviso de cookies ficava por
  * cima das senhas e dos vídeos sem ninguém para o fechar, e cada volta da TV
@@ -7,7 +8,7 @@
  * caixa e um "Aceitar" carregava os pixels no terminal da loja. Nestes
  * caminhos não se mostra o aviso nem se carrega nenhuma etiqueta.
  */
-const SEM_MARKETING = ['/tv', '/kds', '/pos'];
+const SEM_MARKETING = ['/tv', '/kds', '/pos', '/estafeta'];
 
 export function marketingAllowedOn(pathname: string | null): boolean {
   if (!pathname) return true;

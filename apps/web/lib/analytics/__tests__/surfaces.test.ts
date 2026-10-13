@@ -24,6 +24,10 @@ describe('marketing — onde o aviso de cookies e o rastreio entram', () => {
     expect(marketingAllowedOn('/posts')).toBe(true);
   });
 
+  it('no telemóvel do estafeta, não: é trabalho, e o ecrã tem a morada do cliente', () => {
+    expect(marketingAllowedOn('/estafeta')).toBe(false);
+  });
+
   it('sem caminho conhecido, fica como estava', () => {
     expect(marketingAllowedOn(null)).toBe(true);
   });

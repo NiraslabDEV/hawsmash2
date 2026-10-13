@@ -94,11 +94,15 @@ export default function OrderStatusPage({ params }: { params: { orderId: string 
     refetchInterval: polling ? 5000 : false, // Poll every 5 seconds
   });
 
+  // Com estafeta (1115), "delivered" no pedido quer dizer "saiu da loja": o
+  // acompanhamento só pára quando ele marca a entrega como feita.
+  const entregaStatus: string | undefined = orderStatus?.delivery?.status;
   useEffect(() => {
-    if (orderStatus?.status === 'delivered' || orderStatus?.status === 'cancelled') {
+    const aCaminho = entregaStatus === 'picked_up' || entregaStatus === 'assigned';
+    if ((orderStatus?.status === 'delivered' && !aCaminho) || orderStatus?.status === 'cancelled') {
       setPolling(false);
     }
-  }, [orderStatus?.status]);
+  }, [orderStatus?.status, entregaStatus]);
 
   // purchase — REGRA CRÍTICA (16.1): só em paid/approved, com guard duplo
   // (useRef in-memory + localStorage) para nunca re-disparar em reload/polling.
@@ -168,12 +172,19 @@ export default function OrderStatusPage({ params }: { params: { orderId: string 
     );
   }
 
-  const status: string = orderStatus.status;
   const fulfillment: string = orderStatus.fulfillment_type;
+  // O estafeta levantou e ainda não entregou: para o cliente é "A caminho",
+  // embora o pedido já esteja `delivered` (= saiu da loja) desde o "Enviar".
+  const entrega = orderStatus.delivery as { status: string; courier_first_name: string | null } | undefined;
+  const aCaminho = fulfillment === 'delivery' && entrega?.status === 'picked_up';
+  const status: string = aCaminho ? 'ready' : orderStatus.status;
+  const estadoTexto = aCaminho ? 'A caminho' : LABEL[status] ?? status;
   const isTerminal = ['delivered', 'cancelled'].includes(status);
   const isCancelled = status === 'cancelled';
   const isPaid = ['paid', 'approved', 'in_preparation', 'ready', 'delivered'].includes(status);
-  const hero = heroCopy(status, fulfillment);
+  const hero = aCaminho && entrega?.courier_first_name
+    ? { kicker: `A caminho com ${entrega.courier_first_name}`, lead: 'Já vai', tail: 'a caminho.' }
+    : heroCopy(status, fulfillment);
   const store = orderStatus.store ?? {};
   // Senha do dia (1032). Pedidos antigos não a têm — aí o nº do pedido serve.
   const senha: string | null =
@@ -228,7 +239,7 @@ export default function OrderStatusPage({ params }: { params: { orderId: string 
               <dd className="hf-meta-v num" style={{ margin: 0 }}>
                 {orderStatus.scheduled_for
                   ? new Date(orderStatus.scheduled_for).toLocaleTimeString('pt-MZ', { hour: '2-digit', minute: '2-digit' })
-                  : LABEL[status] ?? status}
+                  : estadoTexto}
               </dd>
             </div>
           </dl>
@@ -258,7 +269,7 @@ export default function OrderStatusPage({ params }: { params: { orderId: string 
                 <span style={{ marginLeft: 'auto', display: 'inline-flex', alignItems: 'center', gap: 7 }}>
                   {!isTerminal && <span className="hf-pulse" />}
                   <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: '.18em', textTransform: 'uppercase', color: 'var(--hs-gold)' }}>
-                    {LABEL[status] ?? status}
+                    {estadoTexto}
                   </span>
                 </span>
               }

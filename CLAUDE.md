@@ -188,7 +188,10 @@ Papel na aprovação/confirmação é best-effort: falha vira `print.enqueue_fai
 A máquina pura herdada não é a autoridade de todos os estados actuais.
 "Entregue" é final: desfazer um pedido entregue é `void_delivered_order` (só owner, motivo, repõe stock,
 pagamentos a `refunded`, turno já fechado fica como fechou — 1112). Apagar continua proibido (§17).
-[Pedidos](docs/modulos/pedidos.md) · [mesas](docs/modulos/mesas.md).
+Estafeta (1115): `deliveries` com estado próprio ao lado do pedido; "Levantei" = o antigo "Enviar". Entra por
+telefone + PIN com token opaco — **não** é conta Supabase nem perfil, para a RLS da loja não lhe abrir nada.
+Taxa creditada uma vez por entrega; pagar em dinheiro é despesa do turno.
+[Pedidos](docs/modulos/pedidos.md) · [mesas](docs/modulos/mesas.md) · [estafetas](docs/modulos/estafetas.md).
 
 ---
 

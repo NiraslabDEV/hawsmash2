@@ -934,6 +934,20 @@ validadas. Os requisitos GBP abaixo continuam fora da parcela Places instalada.
 - Se não for trocado: o dono não vê no papel de onde veio o desconto. O painel e o email mostram-no de qualquer
   forma; o motivo do desconto manual fica só nesses dois sítios.
 
+### B-120 · [Estafetas] Quanto se paga ao estafeta, e como (1115)
+
+- Estado: **aberto**. Categoria: **cliente**. Desbloqueia: Ridwan.
+- Pergunta exacta: os estafetas são da casa ou freelancers, e recebem um valor fixo por entrega, a taxa de entrega
+  que o cliente paga, ou outra coisa (por zona, ao dia)?
+- Como avancei: regra por loja em `stores.courier_fee_fixed_cents` / `courier_fee_pct`; de fábrica **100% da taxa
+  de entrega** (150 MT em Maputo). O dono muda-a em `/estafetas` sem deploy. A taxa congela na entrega quando é
+  entregue — mudar a regra não reescreve entregas antigas.
+- Onde está: [`1115_estafetas.sql`](supabase/migrations/20261013120000_1115_estafetas.sql)
+  (`private.courier_fee_for`) e [`/estafetas`](apps/web/app/(admin)/estafetas/page.tsx).
+- Se a resposta for outra: fixo ou percentagem são só dados (minutos). "Por zona" ou "ao dia" pede uma coluna
+  nova em `delivery_zones` ou um acerto diário — uma migration pequena. Se os estafetas cobrarem à porta, falta o
+  "dinheiro a devolver" na conta-corrente (hoje os pedidos saem pagos).
+
 ---
 
 ## ARQUIVO — resolvidos

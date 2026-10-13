@@ -39,6 +39,12 @@ describe('painel — onde cada perfil pode entrar', () => {
     expect(canAccessAdminPath('cashier', '/pagina-nova')).toBe(false);
   });
 
+  it('os estafetas: o Balcão atribui e vê o mapa; a cozinha não', () => {
+    expect(canAccessAdminPath('cashier', '/estafetas')).toBe(true);
+    expect(canAccessAdminPath('manager', '/estafetas')).toBe(true);
+    expect(canAccessAdminPath('kitchen', '/estafetas')).toBe(false);
+  });
+
   it('a cozinha não entra no painel', () => {
     expect(canAccessAdminPath('kitchen', '/pedidos')).toBe(false);
   });

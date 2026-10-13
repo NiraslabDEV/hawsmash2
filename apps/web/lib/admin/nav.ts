@@ -32,6 +32,8 @@ export type AdminNavItem = {
 
 export const ADMIN_NAV: AdminNavItem[] = [
   { href: '/pedidos', label: 'Pedidos', icon: 'pedidos', badge: true, roles: ['owner', 'manager', 'cashier'] },
+  // O balcão atribui o estafeta e vê o mapa; pagar-lhe é do gerente e do dono (1115).
+  { href: '/estafetas', label: 'Estafetas', icon: 'estafetas', roles: ['owner', 'manager', 'cashier'] },
   { href: '/cardapio', label: 'Cardápio', icon: 'cardapio', roles: ['owner', 'manager'] },
   { href: '/mesas', label: 'Mesas', icon: 'mesas', roles: ['owner', 'manager'] },
   { href: '/caixa', label: 'Caixa', icon: 'caixa', roles: ['owner', 'manager', 'cashier'] },
