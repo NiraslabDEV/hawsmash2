@@ -46,8 +46,28 @@ function buildVersion() {
   }
 }
 
+/**
+ * Headers de segurança em todas as respostas (auditoria REA, 13/10/2026: o
+ * hawsmash.com não enviava nenhum). Sem CSP de scripts por agora — GTM, Pixel,
+ * Typekit e Paysuite precisam de uma lista própria testada em staging; aqui só
+ * `frame-ancestors`, que não toca em nada do que a página carrega.
+ * HSTS sem includeSubDomains: não sabemos se todos os subdomínios têm HTTPS.
+ */
+const SECURITY_HEADERS = [
+  { key: 'Strict-Transport-Security', value: 'max-age=31536000' },
+  { key: 'X-Frame-Options', value: 'SAMEORIGIN' },
+  { key: 'Content-Security-Policy', value: "frame-ancestors 'self'" },
+  { key: 'X-Content-Type-Options', value: 'nosniff' },
+  { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+  { key: 'Permissions-Policy', value: 'camera=(self), microphone=(), geolocation=(self)' },
+];
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  poweredByHeader: false,
+  async headers() {
+    return [{ source: '/:path*', headers: SECURITY_HEADERS }];
+  },
   // O POS compara esta versão com a de `/api/version` e recarrega-se quando há
   // deploy novo (lib/pos/app-update.ts).
   env: {

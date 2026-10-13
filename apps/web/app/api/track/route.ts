@@ -10,59 +10,39 @@ import {
 } from '@/lib/attribution';
 import { isBotUserAgent } from '@/lib/analytics/bots';
 import { SESSION_COOKIE, SESSION_MAX_AGE, resolveSessionId } from '@/lib/analytics/session';
-import { parseStoreCookie, resolveStoreSlug } from '@/lib/store-context';
+import {
+  MAX_BODY_BYTES,
+  createRateLimiter,
+  rateLimitKey,
+  validateTrackBody,
+} from '@/lib/analytics/track-guard';
+import { parseStoreCookie } from '@/lib/store-context';
 
-interface TrackBody {
-  type: string;
-  value_cents?: number;
-  utm?: Record<string, string>;
-  payload?: Record<string, unknown>;
-  store?: string | null;
-}
-
-function validate(body: unknown): { ok: true; data: TrackBody } | { ok: false; error: string } {
-  if (!body || typeof body !== 'object' || Array.isArray(body)) {
-    return { ok: false, error: 'body must be an object' };
-  }
-  const b = body as Record<string, unknown>;
-  if (typeof b.type !== 'string' || b.type.length === 0 || b.type.length > 100) {
-    return { ok: false, error: 'type must be a non-empty string (max 100)' };
-  }
-  if (b.value_cents !== undefined) {
-    if (typeof b.value_cents !== 'number' || !Number.isInteger(b.value_cents) || b.value_cents < 0) {
-      return { ok: false, error: 'value_cents must be a non-negative integer' };
-    }
-  }
-  let store: string | null = null;
-  if (b.store !== undefined && b.store !== null && b.store !== '') {
-    try {
-      store = resolveStoreSlug(b.store);
-    } catch {
-      return { ok: false, error: 'store must be a valid slug' };
-    }
-  }
-
-  return {
-    ok: true,
-    data: {
-      type: b.type,
-      value_cents: b.value_cents as number | undefined,
-      utm: (b.utm && typeof b.utm === 'object' ? b.utm : {}) as Record<string, string>,
-      payload: (b.payload && typeof b.payload === 'object' ? b.payload : {}) as Record<string, unknown>,
-      store,
-    },
-  };
-}
+const limiter = createRateLimiter();
 
 export async function POST(req: NextRequest) {
+  const key = rateLimitKey(req.headers.get('x-forwarded-for'), req.headers.get('x-real-ip'));
+  if (!limiter.allow(key)) {
+    return NextResponse.json({ error: 'too many requests' }, { status: 429 });
+  }
+
+  const declared = Number(req.headers.get('content-length') ?? 0);
+  if (declared > MAX_BODY_BYTES) {
+    return NextResponse.json({ error: 'body too large' }, { status: 413 });
+  }
+  const text = await req.text();
+  if (new TextEncoder().encode(text).length > MAX_BODY_BYTES) {
+    return NextResponse.json({ error: 'body too large' }, { status: 413 });
+  }
+
   let body: unknown;
   try {
-    body = await req.json();
+    body = JSON.parse(text);
   } catch {
     return NextResponse.json({ error: 'invalid json' }, { status: 400 });
   }
 
-  const result = validate(body);
+  const result = validateTrackBody(body);
   if (!result.ok) {
     return NextResponse.json({ error: result.error }, { status: 400 });
   }
