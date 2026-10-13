@@ -30,6 +30,8 @@ import {
 import { buildPickupSlots, formatSlot } from '@/lib/pos/schedule';
 import { TouchKeyboard } from './touch-keyboard';
 import { OrderDecision } from './order-decision';
+import { canAssignCourier } from '@/lib/estafeta/board';
+import { EscolherEstafeta, EstafetaChip } from './estafetas-tab';
 
 type DecisionError = { texto: string; mudouDeEstado: boolean };
 
@@ -305,6 +307,9 @@ export function OrdersBoard({
                         {order.payment_proof_path ? '📎 VER COMPROVATIVO' : 'SEM COMPROVATIVO'} · {paymentLabel(order)}
                       </p>
                     )}
+                    {order.fulfillment_type === 'delivery' && (
+                      <EstafetaChip storeId={storeId} orderId={order.id} />
+                    )}
                     {order.status === 'awaiting_payment' && (
                       <p className="mt-2 rounded-lg bg-black/30 px-2 py-1 text-center text-xs font-bold tracking-[0.15em] text-sky-200">
                         À ESPERA DO PAGAMENTO · {paymentLabel(order)}
@@ -349,6 +354,7 @@ export function OrdersBoard({
       {abertoAtual && (
         <DetalhePedido
           order={abertoAtual}
+          storeId={storeId}
           zones={zones}
           closesAt={closesAt}
           onAlterado={() => void load()}
@@ -377,6 +383,7 @@ export function OrdersBoard({
  */
 export function DetalhePedido({
   order,
+  storeId,
   zones,
   closesAt,
   onAlterado,
@@ -388,6 +395,8 @@ export function DetalhePedido({
   onErroDecisao,
 }: {
   order: BoardOrder;
+  /** Com loja, o detalhe de uma entrega deixa escolher o estafeta (1115). */
+  storeId?: string;
   zones: DeliveryZoneOption[];
   closesAt: string | null;
   /** Depois de uma alteração: recarregar o quadro, que traz a linha nova. */
@@ -572,6 +581,13 @@ export function DetalhePedido({
               </p>
             )}
           </div>
+
+          {storeId && canAssignCourier(order) && (
+            <div className="pos-card !p-4">
+              <p className="pos-eyebrow mb-2">ESTAFETA</p>
+              <EscolherEstafeta storeId={storeId} orderId={order.id} />
+            </div>
+          )}
 
           <div className="pos-card !p-4">
             <p className="pos-eyebrow">PAGAMENTO</p>

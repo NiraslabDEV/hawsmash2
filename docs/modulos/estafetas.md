@@ -26,6 +26,17 @@ O estafeta **não tem conta Supabase** nem perfil em `staff_profiles`. Toda a RL
 
 Depois de entregue, o nome, o telefone e a morada do cliente deixam de aparecer no telemóvel. O cliente, no acompanhamento, vê "A caminho com <primeiro nome>" enquanto a entrega está `picked_up`. Esse dado vem do `get_order_status` (embrulhado na 1115).
 
+## No POS
+
+O balcão faz tudo isto sem sair do POS ([`estafetas-tab.tsx`](../../apps/web/app/(pos)/pos/estafetas-tab.tsx)):
+
+- **Separador Estafetas**, no menu lateral. Mostra as entregas à espera de estafeta: tocar no pedido abre um botão por estafeta, com os de serviço e livres primeiro. Mostra também cada estafeta, com o que leva e quantas entregas fez hoje, e o mapa.
+- **Quadro de Pedidos**: cada entrega mostra "🛵 Celso · por levantar" ou "a caminho".
+- **Detalhe do pedido**: o cartão ESTAFETA escolhe, troca ou tira o estafeta até ele levantar.
+- **Pagar** (só aparece ao gerente e ao dono, porque o quadro só lhes traz o saldo): paga o saldo inteiro, com dois toques, em dinheiro, M-Pesa ou e-Mola. Valores parciais e acertos ficam no painel, onde há teclado.
+
+Tudo lê o mesmo `get_couriers_board` da loja do terminal, uma vez a cada 15 s, partilhado por todos os ecrãs. A lógica de ordenação e de "quem leva o quê" está em [`lib/estafeta/board.ts`](../../apps/web/lib/estafeta/board.ts) e é testada.
+
 ## Dinheiro: conta-corrente
 
 `courier_ledger` regista em centavos o que a loja deve ao estafeta: positivo = a loja passa a dever. A conta é idempotente: `(delivery_id, kind)` e `(store_id, request_id)` são únicos.

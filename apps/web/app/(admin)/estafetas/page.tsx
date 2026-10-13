@@ -10,9 +10,9 @@ import { courierAdminErrorMessage } from '@/lib/estafeta/admin';
 import { isStale, positionAge } from '@/lib/estafeta/tracking';
 import { createClient } from '@/utils/supabase/client';
 
-import type { PontoEstafeta } from './mapa';
+import type { PontoEstafeta } from '@/components/estafetas/mapa';
 
-const MapaEstafetas = dynamic(() => import('./mapa').then((m) => m.MapaEstafetas), {
+const MapaEstafetas = dynamic(() => import('@/components/estafetas/mapa').then((m) => m.MapaEstafetas), {
   ssr: false,
   loading: () => <div className="h-[340px] animate-pulse rounded-2xl bg-white/[0.04]" />,
 });

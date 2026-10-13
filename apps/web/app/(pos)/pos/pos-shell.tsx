@@ -50,6 +50,7 @@ import {
 import { parseMTInput } from '@/lib/cash/input';
 import { DiscountPanel } from './discount-panel';
 import { OrdersBoard } from './orders-board';
+import { EstafetasTab } from './estafetas-tab';
 import { SenhasTab } from './senhas-tab';
 import { MesasTab } from './mesas-tab';
 import { CaixaTab } from './caixa-tab';
@@ -328,7 +329,7 @@ export function PosShell() {
   const warmedPhotoUrls = useRef<Set<string>>(new Set());
   // 'delivery' é só consulta — o cashier acompanha o que está a sair pela
   // loja online sem sair do POS nem precisar de acesso ao painel admin.
-  const [posView, setPosView] = useState<'menu' | 'delivery' | 'senhas' | 'mesas' | 'caixa'>('menu');
+  const [posView, setPosView] = useState<'menu' | 'delivery' | 'estafetas' | 'senhas' | 'mesas' | 'caixa'>('menu');
   /** Troca de turno guiada (aba Caixa): quem sai fecha, quem entra abre. */
   const [trocaTurno, setTrocaTurno] = useState<'fechar' | 'abrir' | null>(null);
   // Quem entra na troca vai direito a abrir o seu caixa, logo depois do PIN.
@@ -2217,6 +2218,16 @@ export function PosShell() {
             <PosIcon name="truck" size={18} className="shrink-0 opacity-80" />
             Delivery
           </button>
+          {/* Quem leva cada entrega, onde anda, e o saldo dele (1115). */}
+          <button
+            type="button"
+            aria-current={posView === 'estafetas' ? 'true' : undefined}
+            onClick={() => setPosView('estafetas')}
+            className="pos-rail-item min-w-28 shrink-0 !gap-2 lg:min-w-0"
+          >
+            <PosIcon name="user" size={18} className="shrink-0 opacity-80" />
+            Estafetas
+          </button>
           {/* A senha que a cozinha pôs no balcão vai daqui para a TV. */}
           <button
             type="button"
@@ -2287,6 +2298,8 @@ export function PosShell() {
               storeName={context.storeName}
               keyboardActive={!ocupado && !locked}
             />
+          ) : posView === 'estafetas' ? (
+            <EstafetasTab storeId={context.storeId} storeName={context.storeName} />
           ) : posView === 'delivery' ? (
             <OnlineOrdersTab
               storeName={context.storeName}
