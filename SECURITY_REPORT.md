@@ -49,4 +49,4 @@ servidor MCP `rea-agents`, análise estática sem execução.
 ### Verificação pós-deploy
 
 - **Staging, 13/10 (OK):** os 6 headers presentes e sem `x-powered-by`; `/api/track` → evento real 200, tipo inválido 400, corpo de 3 KB 413, payload aninhado 400, 61.º pedido no minuto 429. O staging serve a BD do LIVE: o teste gravou 1 evento `view_menu` com `utm_source=auditoria` em `analytics_events` (pode ser apagado ou ignorado no funil).
-- Staging (`hawsmash2-staging.up.railway.app`) e live (`hawsmash.com`): ver a resposta de `/` com os 6 headers e sem `x-powered-by`; `POST /api/track` com tipo inválido → 400, corpo > 2 KB → 413, evento real → 200.
+- **Live `hawsmash.com`, 13/10 (OK):** os 6 headers presentes e sem `x-powered-by`; `/api/track` com tipo inválido → 400; `/api/health` e `/api/menu` → 200.
