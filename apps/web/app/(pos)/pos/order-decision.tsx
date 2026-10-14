@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { createClient } from '@/utils/supabase/client';
+import { afterOrderDecision } from '@/lib/admin/order-decision-effects';
 import { REJECT_REASONS, advanceErrorMessage } from '@/lib/pos/orders-board';
 
 /**
@@ -48,6 +49,7 @@ export function OrderDecision({
       onError(advanceErrorMessage(error.message));
       return;
     }
+    afterOrderDecision(orderId, event, reason);
     onDone();
   }
 

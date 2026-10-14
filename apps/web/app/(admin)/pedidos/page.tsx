@@ -3,7 +3,7 @@
 import { Fragment, useCallback, useEffect, useReducer, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { createClient } from '@/utils/supabase/client';
-import { staffFetch } from '@/lib/admin/staff-fetch';
+import { afterOrderDecision } from '@/lib/admin/order-decision-effects';
 import { formatMT, type Cents } from '@delivery/core';
 import { format, parseISO, formatDistanceToNow } from 'date-fns';
 import { pt } from 'date-fns/locale';
@@ -247,15 +247,7 @@ export default function PedidosPage() {
   const advance = async (order: Order, event: string, reason?: string) => {
     const { data, error } = await supabase.rpc('advance_order', { p_order_id: order.id, p_event: event, ...(reason ? { p_reason: reason } : {}) });
     if (error) { setMessage({ type: 'error', text: error.message }); return false; }
-    if (event === 'APPROVE') {
-      staffFetch('/api/conversions/fire', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ orderId: order.id }) }).catch(() => {});
-    }
-    if (event === 'APPROVE' && order.customer_email) {
-      staffFetch('/api/emails/send-approval-email', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ orderId: order.id }) }).catch(console.error);
-    }
-    if (event === 'CANCEL' && order.customer_email) {
-      staffFetch('/api/emails/send-rejection-email', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ orderId: order.id, reason }) }).catch(console.error);
-    }
+    afterOrderDecision(order.id, event, reason);
     setMessage({ type: 'success', text: data?.message || 'Pedido atualizado!' });
     await refreshData();
     return true;

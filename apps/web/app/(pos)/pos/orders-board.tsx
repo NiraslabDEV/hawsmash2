@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { formatMT, type Cents } from '@delivery/core';
 import { createClient } from '@/utils/supabase/client';
+import { afterOrderDecision } from '@/lib/admin/order-decision-effects';
 import {
   BOARD_LIMIT,
   BOARD_ORDER,
@@ -173,6 +174,7 @@ export function OrdersBoard({
       void load();
       return;
     }
+    afterOrderDecision(order.id, passo.event);
     setError(null);
     setAberto(null);
     void load();
