@@ -9,6 +9,7 @@ import { format, parseISO, formatDistanceToNow } from 'date-fns';
 import { pt } from 'date-fns/locale';
 import { initialOrdersView, ORDERS_PAGE_SIZE as PAGE_SIZE, ordersViewReducer, requestOrdersPage, type OrdersPeriod, type OrdersViewAction } from '@/lib/orders-pagination';
 import { maputoDate } from '@/lib/admin/analysis-period';
+import { scheduledDayLabel } from '@/lib/scheduled-day';
 import { AnularEntregue } from './anular-entregue';
 import { AtribuirEstafeta } from './atribuir-estafeta';
 import { OrderPromoLines } from './promo-lines';
@@ -195,6 +196,14 @@ export default function PedidosPage() {
     if (counts) setListCounts({ key: countsKey, counts });
   }, [ordersQuery.data, countsKey]);
 
+  // Pedidos vivos marcados de amanhã em diante (1116), na loja escolhida.
+  // Guarda-se o último valor para o aviso não piscar entre consultas.
+  const [scheduledAhead, setScheduledAhead] = useState<number | null>(null);
+  useEffect(() => {
+    const ahead = ordersQuery.data?.scheduledAhead;
+    if (ahead != null) setScheduledAhead(ahead);
+  }, [ordersQuery.data]);
+
   function changeView(action: OrdersViewAction) {
     dispatchView(action);
     setExpandedId(null);
@@ -308,8 +317,10 @@ export default function PedidosPage() {
     if (key === 'all') return Object.values(counts).reduce((a, b) => a + (b || 0), 0);
     return counts[key] ?? 0;
   };
-  const emptyText = period === 'current' && statusFilter === 'all' && !search
-    ? 'Ainda não há pedidos no dia de hoje.'
+  const emptyText = statusFilter !== 'all' || search
+    ? 'Nenhum pedido encontrado'
+    : period === 'current' ? 'Ainda não há pedidos no dia de hoje.'
+    : period === 'scheduled' ? 'Não há pedidos agendados para os próximos dias.'
     : 'Nenhum pedido encontrado';
 
   // A resposta já é a página. O total vem da mesma consulta no servidor.
@@ -443,6 +454,25 @@ export default function PedidosPage() {
         </div>
       )}
 
+      {/* Aviso de agendados: um pedido para amanhã não pode ficar escondido no Histórico */}
+      {period !== 'scheduled' && scheduledAhead != null && scheduledAhead > 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-sky-400/30 bg-sky-400/[0.07] px-5 py-4">
+          <div className="flex items-center gap-3">
+            <span aria-hidden className="text-xl">📅</span>
+            <div>
+              <p className="font-semibold text-sky-200">
+                {scheduledAhead === 1 ? '1 pedido agendado' : `${scheduledAhead} pedidos agendados`} para os próximos dias
+              </p>
+              <p className="text-sm text-[#C9BCAC]">No dia marcado entram sozinhos no Dia actual.</p>
+            </div>
+          </div>
+          <button onClick={() => changeView({ type: 'period', period: 'scheduled' })}
+            className="shrink-0 rounded-xl border border-sky-400/30 bg-sky-400/15 px-4 py-2 text-sm font-semibold text-sky-200 transition-all hover:bg-sky-400/25">
+            Ver agendados
+          </button>
+        </div>
+      )}
+
       {/* Barra de filtros */}
       <div className={`${GLASS} p-3 flex flex-wrap items-center gap-3`}>
         <div className="flex-1 min-w-[200px] flex items-center gap-2 bg-black/20 border border-white/[0.08] rounded-xl px-3 py-2.5">
@@ -455,6 +485,7 @@ export default function PedidosPage() {
           <select value={period} onChange={(e) => changeView({ type: 'period', period: e.target.value as OrdersPeriod })} aria-label="Período"
             className="bg-transparent py-2.5 focus:outline-none cursor-pointer">
             <option value="current" className="bg-[#231610] text-white">Dia actual</option>
+            <option value="scheduled" className="bg-[#231610] text-white">Agendados (próximos dias){scheduledAhead ? ` · ${scheduledAhead}` : ''}</option>
             <option value="history" className="bg-[#231610] text-white">Histórico</option>
           </select>
         </div>
@@ -479,8 +510,10 @@ export default function PedidosPage() {
       </div>
       <p className="-mt-2 text-xs text-[#8A7A69]">
         {period === 'current'
-          ? 'Pedidos do dia em curso. Ao fechar o dia no Caixa, passam para o Histórico.'
-          : historyDate ? 'Pedidos feitos neste dia.' : 'Todos os pedidos. Escolhe um dia para ver só esse.'}
+          ? 'Pedidos do dia em curso e os agendados para hoje. Ao fechar o dia no Caixa, passam para o Histórico.'
+          : period === 'scheduled'
+            ? 'Pedidos marcados de amanhã em diante, pela hora marcada. No dia, aparecem também no Dia actual.'
+            : historyDate ? 'Pedidos feitos neste dia.' : 'Todos os pedidos. Escolhe um dia para ver só esse.'}
       </p>
 
       {/* Abas de status com contagem */}
@@ -542,6 +575,7 @@ export default function PedidosPage() {
                         <td className="px-4 py-3 text-sm text-[#C9BCAC] max-w-[220px] truncate">{order.fulfillment_type === 'delivery' ? (order.address || '—') : 'Levantamento no balcão'}</td>
                         <td className="px-4 py-3">
                           <div className="text-sm text-[#F3E4CE]">{formatDate(order.scheduled_for)}</div>
+                          <DayTag iso={order.scheduled_for} />
                           <div className="text-[11px] text-[#8A7A69]" title={`Pedido feito: ${format(parseISO(order.created_at), "dd/MM 'às' HH:mm", { locale: pt })}`}>{relativeTime(order.created_at)}</div>
                         </td>
                         <td className="px-4 py-3"><div className="font-bold text-white">{money(order.total_cents)}</div><div className="mt-0.5"><PayBadge method={order.payment_method} /></div></td>
@@ -594,7 +628,7 @@ export default function PedidosPage() {
                   <StatusPill status={order.status} />
                 </div>
                 <div className="flex items-center justify-between text-sm mb-3">
-                  <span className="text-[#C9BCAC] flex items-center gap-1.5 flex-wrap"><TypeBadge type={order.fulfillment_type} /> · {formatDate(order.scheduled_for)} <span className="text-[11px] text-[#8A7A69]">· {relativeTime(order.created_at)}</span></span>
+                  <span className="text-[#C9BCAC] flex items-center gap-1.5 flex-wrap"><TypeBadge type={order.fulfillment_type} /> · {formatDate(order.scheduled_for)} <DayTag iso={order.scheduled_for} /> <span className="text-[11px] text-[#8A7A69]">· {relativeTime(order.created_at)}</span></span>
                   <span className="font-bold text-white">{money(order.total_cents)}</span>
                 </div>
                 <ActionButtons order={order} />
@@ -679,6 +713,13 @@ function TypeBadge({ type }: { type: string }) {
     : <span className="inline-flex items-center gap-1 text-[11px] font-semibold rounded-full px-2 py-0.5 bg-blue-500/10 text-blue-400">🏃 Levantamento</span>;
 }
 
+// Marcado para outro dia: "Amanhã", "Dom 25/10". Hoje não leva etiqueta.
+function DayTag({ iso }: { iso: string | null }) {
+  const label = scheduledDayLabel(iso);
+  if (!label) return null;
+  return <span className="inline-flex items-center gap-1 text-[11px] font-semibold rounded-full px-2 py-0.5 bg-sky-500/10 text-sky-300">📅 {label}</span>;
+}
+
 function PayBadge({ method }: { method: string }) {
   const map: Record<string, { label: string; cls: string }> = {
     mpesa: { label: 'M-Pesa', cls: 'bg-[#00BF63]/10 text-[#00BF63]' },
@@ -732,7 +773,7 @@ function OrderDetail({ order, proofUrl, actions }: { order: Order; proofUrl: str
         <div className="text-[11px] font-medium text-[#8A7A69] uppercase tracking-wide mb-2">{order.fulfillment_type === 'delivery' ? 'Entrega' : 'Levantamento'}</div>
         <p><span className="text-white font-medium">Tipo: </span>{order.fulfillment_type === 'delivery' ? 'Entrega ao domicílio' : 'Levantamento no balcão'}</p>
         {order.fulfillment_type === 'delivery' && order.address && <p><span className="text-white font-medium">Morada: </span>{order.address}</p>}
-        <p><span className="text-white font-medium">Horário: </span>{order.scheduled_for ? format(parseISO(order.scheduled_for), "dd/MM 'às' HH:mm", { locale: pt }) : 'Agora'}</p>
+        <p><span className="text-white font-medium">Horário: </span>{order.scheduled_for ? format(parseISO(order.scheduled_for), "dd/MM 'às' HH:mm", { locale: pt }) : 'Agora'} <DayTag iso={order.scheduled_for} /></p>
         <p><span className="text-white font-medium">Pagamento: </span>{order.payment_method?.toUpperCase()}</p>
       </div>
 

@@ -10,6 +10,13 @@ const allOrders = Array.from({ length: 125 }, (_, index) => ({
   total_cents: 10000, payment_method: 'cash', created_at: '2026-01-01T10:00:00Z',
   scheduled_for: null, payment_proof_path: null, items: [],
 }));
+// Três pedidos feitos hoje para amanhã às 12:00 de Maputo (1116).
+const tomorrowNoon = new Date(Date.parse(`${new Intl.DateTimeFormat('en-CA', { timeZone: 'Africa/Maputo' }).format(new Date())}T12:00:00+02:00`) + 86_400_000).toISOString();
+const scheduledOrders = Array.from({ length: 3 }, (_, index) => ({
+  ...allOrders[index],
+  id: `92000000-0000-4000-8000-${String(index + 1).padStart(12, '0')}`,
+  order_number: `AGENDA-${index + 1}`, status: 'awaiting_approval', scheduled_for: tomorrowNoon,
+}));
 
 async function openPanel(page: Page, delayStoreA = false, dayAware = false) {
   const requests: Filters[] = [];
@@ -33,7 +40,8 @@ async function openPanel(page: Page, delayStoreA = false, dayAware = false) {
       requests.push(filters);
       // Com `dayAware`, a RPC simula a 1110: só os 10 primeiros são do dia em
       // curso, e as contagens por estado seguem o recorte da lista.
-      const base = allOrders.filter((order, index) => (!filters.store || order.store_slug === filters.store)
+      const source = dayAware && filters.day === 'scheduled' ? scheduledOrders : allOrders;
+      const base = source.filter((order, index) => (!filters.store || order.store_slug === filters.store)
         && (!dayAware || filters.day !== 'current' || index < 10)
         && (!filters.search || order.order_number.includes(filters.search) || order.customer_name.includes(filters.search)));
       const matching = base.filter((order) => !filters.status || order.status === filters.status);
@@ -41,7 +49,7 @@ async function openPanel(page: Page, delayStoreA = false, dayAware = false) {
       const statusCounts = base.reduce<Record<string, number>>((acc, order) => ({ ...acc, [order.status]: (acc[order.status] ?? 0) + 1 }), {});
       body = {
         orders: matching.slice(filters.offset ?? 0, (filters.offset ?? 0) + (filters.limit ?? 100)), total: matching.length, limit: filters.limit, offset: filters.offset,
-        ...(dayAware ? { status_counts: statusCounts } : {}),
+        ...(dayAware ? { status_counts: statusCounts, scheduled_ahead: scheduledOrders.length } : {}),
       };
     }
     await route.fulfill({ json: body, headers: { 'Access-Control-Allow-Origin': 'http://127.0.0.1:3019', 'Access-Control-Allow-Headers': 'Content-Type, Authorization, apikey, X-Client-Info' } }).catch(() => {});
@@ -112,4 +120,20 @@ test('abre só com o dia em curso; o histórico e o dia escolhido vão ao servid
   await expect(page.getByText('Exibindo 1 a 10 de 10 pedidos')).toBeVisible();
   expect(requests.at(-1)).toMatchObject({ day: 'current' });
   expect(requests.at(-1)).not.toHaveProperty('date_from');
+});
+
+test('um pedido feito hoje para amanhã é avisado e tem vista própria', async ({ page }) => {
+  const requests = await openPanel(page, false, true);
+  await expect(page.getByText('3 pedidos agendados para os próximos dias')).toBeVisible();
+
+  await page.getByRole('button', { name: 'Ver agendados' }).click();
+  await expect(page.getByText('Exibindo 1 a 3 de 3 pedidos')).toBeVisible();
+  expect(requests.at(-1)).toMatchObject({ day: 'scheduled', offset: 0 });
+  await expect(page.getByRole('combobox', { name: 'Período' })).toHaveValue('scheduled');
+  await expect(page.getByRole('cell', { name: /AGENDA-1/ })).toBeVisible();
+  await expect(page.getByText('📅 Amanhã').first()).toBeVisible();
+  await expect(page.getByRole('button', { name: /^Novos\s*3$/ })).toBeVisible();
+  // Dentro da vista, o aviso não se repete.
+  await expect(page.getByRole('button', { name: 'Ver agendados' })).toHaveCount(0);
+  await page.screenshot({ path: 'output/orders/agendados.png', fullPage: true });
 });

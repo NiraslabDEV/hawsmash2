@@ -10,7 +10,7 @@ O = owner; M = manager da loja; C = cashier. A tabela descreve **guard de navega
 
 | Rota / aba | Perfis UI | Função e principais acessos |
 |---|---|---|
-| /pedidos | O/M/C | Quadro paginado do **dia em curso** (1110), filtros, conciliação needs_review, comprovativo assinado, advance_order e reprint; linhas de desconto no detalhe (1113) e `void_delivered_order` só para O nos entregues (1112) |
+| /pedidos | O/M/C | Quadro paginado do **dia em curso** (1110) e dos **agendados** para os próximos dias (1116), filtros, conciliação needs_review, comprovativo assinado, advance_order e reprint; linhas de desconto no detalhe (1113) e `void_delivered_order` só para O nos entregues (1112) |
 | /cardapio | O/M | Catálogo/variantes/adicionais, store_items, fotos menu-photos; CRUD directo em várias tabelas. O suporte a modificadores na BD/site não implica editor nesta aba |
 | /mesas | O/M | CRUD tables por loja e QR /m/[token]; não é a conta/pagamento do POS |
 | /caixa | O/M/C | get_cash_dashboard, abrir/fechar turno, movimentos, PDF/email; lista de cash_day_closes |
