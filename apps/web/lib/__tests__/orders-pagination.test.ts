@@ -78,6 +78,23 @@ describe('paginação dos pedidos no servidor', () => {
     expect(buildOrdersFilters({ ...back, date: '2026-09-28' })).not.toHaveProperty('date_from');
   });
 
+  it('os agendados pedem ao servidor os de amanhã em diante, sem datas de criação', () => {
+    const scheduled = ordersViewReducer({ ...initialOrdersView, page: 3 }, { type: 'period', period: 'scheduled' });
+    expect(scheduled).toMatchObject({ period: 'scheduled', page: 1 });
+    expect(buildOrdersFilters({ ...scheduled, date: '2026-09-28' })).toEqual({ limit: 10, offset: 0, day: 'scheduled' });
+  });
+
+  it('passa quantos pedidos há marcados para os próximos dias, só se for um número', async () => {
+    const ok = vi.fn(async () => ({ data: { orders: [], total: 0, scheduled_ahead: 2 }, error: null }));
+    await expect(requestOrdersPage(ok, initialOrdersView)).resolves.toMatchObject({ scheduledAhead: 2 });
+
+    const old = vi.fn(async () => ({ data: { orders: [], total: 0 }, error: null }));
+    expect(await requestOrdersPage(old, initialOrdersView)).not.toHaveProperty('scheduledAhead');
+
+    const bad = vi.fn(async () => ({ data: { orders: [], total: 0, scheduled_ahead: '2' }, error: null }));
+    expect(await requestOrdersPage(bad, initialOrdersView)).not.toHaveProperty('scheduledAhead');
+  });
+
   it('passa as contagens por estado e ignora as que não são números', async () => {
     const ok = vi.fn(async () => ({ data: { orders: [], total: 0, status_counts: { paid: 2, ready: 1 } }, error: null }));
     await expect(requestOrdersPage(ok, initialOrdersView)).resolves.toMatchObject({ statusCounts: { paid: 2, ready: 1 } });

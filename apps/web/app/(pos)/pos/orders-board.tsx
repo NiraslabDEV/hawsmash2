@@ -29,6 +29,7 @@ import {
   type DeliveryZoneOption,
 } from '@/lib/pos/order-edit';
 import { buildPickupSlots, formatSlot } from '@/lib/pos/schedule';
+import { isForLaterDay, scheduledDayLabel } from '@/lib/scheduled-day';
 import { TouchKeyboard } from './touch-keyboard';
 import { OrderDecision } from './order-decision';
 import { canAssignCourier } from '@/lib/estafeta/board';
@@ -294,11 +295,17 @@ export function OrdersBoard({
                     {/* A hora marcada só aparece quando existe e é para mais
                         tarde. Um "agora" escrito em todos os cartões deixa de
                         se ver, e é justamente o que não pode passar despercebido. */}
-                    {isScheduled(order, agora) && (
+                    {/* Marcado para outro dia, o dia vem à frente da hora e
+                        o cartão muda de cor: não é para fazer hoje. */}
+                    {isScheduled(order, agora) && (isForLaterDay(order.scheduled_for) ? (
+                      <p className="mt-2 rounded-lg bg-sky-500/25 px-2 py-1 text-center text-sm font-bold text-sky-100">
+                        📅 {scheduledDayLabel(order.scheduled_for)?.toUpperCase()} · {hora(order.scheduled_for)}
+                      </p>
+                    ) : (
                       <p className="mt-2 rounded-lg bg-black/30 px-2 py-1 text-center text-sm font-bold">
                         {hora(order.scheduled_for)}
                       </p>
-                    )}
+                    ))}
                     {atrasado && (
                       <p className="mt-2 rounded-lg bg-red-500/20 px-2 py-1 text-center text-sm font-bold text-red-200">
                         ATRASADO · {hora(order.scheduled_for)}
@@ -558,7 +565,12 @@ export function DetalhePedido({
             >
               <div>
                 <p className="pos-eyebrow">HORA</p>
-                <p className="mt-1 text-2xl font-bold">{formatSlot(order.scheduled_for)}</p>
+                <p className="mt-1 text-2xl font-bold">
+                  {scheduledDayLabel(order.scheduled_for) && (
+                    <span className="text-sky-200">{scheduledDayLabel(order.scheduled_for)} · </span>
+                  )}
+                  {formatSlot(order.scheduled_for)}
+                </p>
               </div>
               {horaEditavel && (
                 <button

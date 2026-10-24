@@ -4,10 +4,11 @@ export const ORDERS_PAGE_SIZE = 10;
 
 /**
  * `current`: só o dia em curso — desde o último fecho do dia de cada loja, no
- * servidor (1110). `history`: tudo, ou um dia de calendário de Maputo se
- * `date` (`YYYY-MM-DD`) vier preenchido.
+ * servidor (1110), mais os pedidos marcados para hoje (1116). `scheduled`: os
+ * marcados de amanhã em diante, pela hora marcada (1116). `history`: tudo, ou
+ * um dia de calendário de Maputo se `date` (`YYYY-MM-DD`) vier preenchido.
  */
-export type OrdersPeriod = 'current' | 'history';
+export type OrdersPeriod = 'current' | 'scheduled' | 'history';
 
 export type OrdersView = { search: string; status: string; store: string; period: OrdersPeriod; date: string; page: number };
 export type OrdersViewAction =
@@ -34,7 +35,7 @@ export function buildOrdersFilters(view: OrdersView): Record<string, string | nu
     ...(view.search ? { search: view.search } : {}),
     ...(view.status !== 'all' ? { status: view.status } : {}),
     ...(view.store !== 'all' ? { store: view.store } : {}),
-    ...(view.period === 'current' ? { day: 'current' } : {}),
+    ...(view.period !== 'history' ? { day: view.period } : {}),
     ...(day
       ? {
           date_from: new Date(`${day}T00:00:00+02:00`).toISOString(),
@@ -57,7 +58,7 @@ export async function requestOrdersPage<T>(
   rpc: (filters: ReturnType<typeof buildOrdersFilters>, signal?: AbortSignal) => PromiseLike<{ data: unknown; error: unknown }>,
   view: OrdersView,
   signal?: AbortSignal,
-): Promise<{ orders: T[]; total: number; statusCounts?: Record<string, number> }> {
+): Promise<{ orders: T[]; total: number; statusCounts?: Record<string, number>; scheduledAhead?: number }> {
   const filters = buildOrdersFilters(view);
   const { data, error } = await rpc(filters, signal);
   if (error || !data || typeof data !== 'object' || !('orders' in data) || !Array.isArray(data.orders) || !('total' in data) || typeof data.total !== 'number' || !Number.isSafeInteger(data.total) || data.total < 0) {
@@ -67,5 +68,13 @@ export async function requestOrdersPage<T>(
     throw new Error('Actualiza a base de dados para activar a paginação de pedidos.');
   }
   const statusCounts = 'status_counts' in data ? readStatusCounts(data.status_counts) : null;
-  return { orders: data.orders as T[], total: data.total, ...(statusCounts ? { statusCounts } : {}) };
+  // Sem a 1116 não vem: o aviso de agendados simplesmente não aparece.
+  const ahead = 'scheduled_ahead' in data ? data.scheduled_ahead : null;
+  const scheduledAhead = typeof ahead === 'number' && Number.isSafeInteger(ahead) && ahead >= 0 ? ahead : null;
+  return {
+    orders: data.orders as T[],
+    total: data.total,
+    ...(statusCounts ? { statusCounts } : {}),
+    ...(scheduledAhead != null ? { scheduledAhead } : {}),
+  };
 }
