@@ -33,7 +33,8 @@ Após criar um pedido, `record_order_attribution` grava a origem em passo best-e
 | Objecto | Uso |
 |---|---|
 | `analytics_events` | Eventos de medição; loja pode ser nula antes da escolha |
-| `analytics_sessions`, `online_analytics_events` | Views normalizadas e com `security_invoker`; as antigas views de funil foram removidas |
+| `analytics_session_stats` | Uma linha por sessão online (1120), recalculada por trigger a cada evento; é o que o funil e a atribuição lêem, por início de sessão. Reparação: `private.rebuild_analytics_sessions(desde)` |
+| `analytics_sessions`, `online_analytics_events` | Views normalizadas e com `security_invoker`; `analytics_sessions` lê o resumo acima (antes reagregava o histórico inteiro a cada leitura) |
 | `order_attribution` | Primeiro/último toque ligado a pedido real |
 | `conversion_jobs` | Fila de conversões externas |
 | `settings` | IDs/configuração de marketing e segredos usados no servidor |

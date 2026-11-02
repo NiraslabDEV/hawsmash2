@@ -333,6 +333,8 @@ export default function AnalisePage() {
         }
 
         // Uma falha de marketing mostra um aviso sem esconder as vendas.
+        if (fErr) console.error('[analise] get_funnel_metrics', fErr.code, fErr.message);
+        if (attr.error) console.error('[analise] get_attribution_report', attr.error.code, attr.error.message);
         setAcquisitionError(Boolean(fErr || attr.error));
         setFunnel(fErr ? null : (fData as FunnelMetrics));
         setAttribution(attr.error ? null : (attr.data as AttributionReport));
@@ -545,7 +547,7 @@ export default function AnalisePage() {
 
       {tab === 'aquisicao' && (
         <>
-          {acquisitionError && <div className="insight-notice" role="alert"><strong>Alguns dados de aquisição estão indisponíveis</strong><p>Não foi possível carregar todos os relatórios. Os dados disponíveis continuam abaixo.</p><button className="insight-button" onClick={() => setAttempt((n) => n + 1)}>Tentar novamente</button></div>}
+          {acquisitionError && <div className="insight-notice" role="alert"><strong>Alguns dados de aquisição estão indisponíveis</strong><p>{!funnel && !attribution ? 'O funil de conversão e a origem das vendas não carregaram.' : !funnel ? 'O funil de conversão não carregou.' : 'A origem das vendas não carregou.'} Os dados disponíveis continuam abaixo.</p><button className="insight-button" onClick={() => setAttempt((n) => n + 1)}>Tentar novamente</button></div>}
           {(funnel || attribution) && <div className="insight-grid">
             <MetricCard featured label="Sessões no site" value={funnel ? funnel.funnel.total_sessions.toLocaleString('pt-PT') : '—'} detail="Sessões únicas no período" icon="globe" />
             <MetricCard label="Conversão do funil" value={funnel?.funnel.pct_overall != null ? `${funnel.funnel.pct_overall.toLocaleString('pt-PT')}%` : '—'} detail="Sessões que chegaram à compra" icon="chart" />
