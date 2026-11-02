@@ -205,7 +205,7 @@ export function Footer({
             <h4>{store.short_name}</h4>
             <ul>
               {store.address && <li>{store.address}</li>}
-              {store.phone && <li>Encomendas · {store.phone}</li>}
+              {store.phone && <li>Apoio ao cliente · {store.phone}</li>}
               {store.maps_url && (
                 <li>
                   <a href={store.maps_url} target="_blank" rel="noopener noreferrer">
