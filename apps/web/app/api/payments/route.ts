@@ -7,6 +7,7 @@ import { createClient } from '@/utils/supabase/server';
 import { getPaymentConfig, buildProvider, isDirectFlow } from '@/lib/payments/config';
 import { runDirectCharge, serviceClient } from '@/lib/payments/direct';
 import { orderToReference } from '@/lib/payments/reference';
+import { recordOrderAttribution } from '@/lib/server-analytics/order-attribution';
 import { InvalidStoreSlugError, resolveStoreSlug } from '@/lib/store-context';
 
 /**
@@ -94,6 +95,10 @@ export async function POST(request: Request) {
       { status: 400 },
     );
   }
+
+  // De onde veio a venda — best-effort, antes do fornecedor, enquanto o
+  // pedido HTTP ainda é do cliente (cookies de origem e _fbp).
+  await recordOrderAttribution(supabase, orderId, request.headers);
 
   // 2. Ler total calculado pelo servidor (NUNCA confiar no client)
   const svc = serviceClient();
