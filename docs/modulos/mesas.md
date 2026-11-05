@@ -8,6 +8,8 @@ O dono cria, activa/desactiva e remove mesas em `/mesas`. A equipa autorizada l�
 
 O número é único dentro da loja: mesa 2 de uma unidade é diferente da mesa 2 da outra. `get_table_by_token(p_token)` devolve a mesa activa e a sua loja. O pedido do QR tem de pertencer à mesma unidade. Sem rede, mesas não funcionam como conta local offline; o balcão pode continuar no percurso offline próprio do [POS](pos.md).
 
+Desde a 1122 há uma terceira entrada: o garçom lança na mesa pelo telemóvel, em `/garcom`, e o pedido fica igual ao do balcão. Ver [Garçons](garcons.md).
+
 ## Lançar e acompanhar
 
 1. `pos_table_overview(p_device_id)` devolve as mesas e contas da loja vinculada.

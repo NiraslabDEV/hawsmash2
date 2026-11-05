@@ -31,6 +31,8 @@ export type TableOrder = {
   daily_number: number | null;
   status: string;
   origin: TableOrigin;
+  /** Quem o lançou pelo telemóvel (1122). Falta (ou null) = QR ou balcão. */
+  waiter_name?: string | null;
   customer_name: string | null;
   created_at: string;
   total_cents: number;

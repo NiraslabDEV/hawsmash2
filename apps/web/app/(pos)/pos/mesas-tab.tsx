@@ -274,7 +274,11 @@ export function MesasTab({
                   <li key={order.id} className="rounded-xl border border-white/[0.07] bg-bg1 p-3">
                     <p className="flex items-baseline justify-between gap-2 text-[11px] font-bold tracking-[0.12em] text-ink-dim">
                       <span>
-                        {order.origin === 'qr' ? 'QR' : 'BALCÃO'}
+                        {order.waiter_name
+                          ? `GARÇOM ${order.waiter_name.toUpperCase()}`
+                          : order.origin === 'qr'
+                            ? 'QR'
+                            : 'BALCÃO'}
                         {order.daily_number != null ? ` · SENHA ${order.daily_number}` : ''} · {hora(order.created_at)}
                       </span>
                       <span>{(TABLE_ORDER_STATUS_LABEL[order.status] ?? order.status).toUpperCase()}</span>

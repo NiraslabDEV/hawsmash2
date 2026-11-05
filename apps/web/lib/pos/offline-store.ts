@@ -73,6 +73,14 @@ const menuSchema = z.array(rawMenuCategorySchema).transform((categories) =>
 export type PosMenuCategory = z.infer<typeof menuSchema>[number];
 export type PosMenuItem = PosMenuCategory['items'][number];
 
+/**
+ * As categorias do `get_menu`, validadas como o POS as valida. Também as usa o
+ * telemóvel do garçom (1122), que lança no mesmo carrinho. Rebenta com lixo.
+ */
+export function parseMenuCategories(raw: unknown): PosMenuCategory[] {
+  return menuSchema.parse(raw);
+}
+
 export type PosItemAvailability = {
   sellable: boolean;
   badge: string | null;
