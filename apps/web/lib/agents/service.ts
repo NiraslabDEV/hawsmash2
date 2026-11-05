@@ -42,10 +42,17 @@ const menuSchema = z.object({
   categories: z.array(z.object({ id, name: text, items: z.array(itemSchema).max(10000) })).max(1000),
   zones: z.array(z.object({ id, name: text, fee_cents: money })).max(1000),
   hours: hoursSchema,
+  // Pagamento manual (o mesmo que o checkout mostra). Nunca sai nas ferramentas públicas dos agentes.
+  payment_provider: z.string().max(40).nullable().optional(),
+  emola_provider: z.string().max(40).nullable().optional(),
+  mpesa_number: z.string().max(40).nullable().optional(),
+  mpesa_name: z.string().max(120).nullable().optional(),
+  emola_number: z.string().max(40).nullable().optional(),
+  emola_name: z.string().max(120).nullable().optional(),
 });
-type CatalogueItem = z.infer<typeof itemSchema>;
-type Catalogue = z.infer<typeof menuSchema>;
-type PublicStore = z.infer<typeof storesSchema>[number];
+export type CatalogueItem = z.infer<typeof itemSchema>;
+export type Catalogue = z.infer<typeof menuSchema>;
+export type PublicStore = z.infer<typeof storesSchema>[number];
 
 function checkedMoney(value: number): number {
   if (!Number.isSafeInteger(value) || value < 0) throw new AgentToolError('O preço deste pedido não está disponível. Consulta a loja.', 'invalid_catalogue_price');
@@ -75,7 +82,7 @@ async function readStores(deps: AgentDependencies): Promise<PublicStore[]> {
   if (!parsed.success) throw genericError();
   return parsed.data;
 }
-async function readCatalogue(storeSlug: string, deps: AgentDependencies): Promise<{ menu: Catalogue; store: PublicStore }> {
+export async function readCatalogue(storeSlug: string, deps: AgentDependencies): Promise<{ menu: Catalogue; store: PublicStore }> {
   // DECISÃO: o catálogo herdado usa delivery também para levantamento; nunca
   // pedir p_channel=null, que publicaria artigos exclusivos de consumo na loja.
   const [rawMenu, stores] = await Promise.all([
@@ -94,7 +101,7 @@ function checkChannel(menu: Catalogue, store: PublicStore, channel: 'delivery' |
     : menu.store.pickup_enabled && store.pickup_enabled;
   if (!enabled) throw new AgentToolError('Este serviço não está disponível na loja escolhida. Escolhe outro serviço ou outra loja.', 'channel_unavailable');
 }
-function usableItem(item: CatalogueItem): boolean {
+export function usableItem(item: CatalogueItem): boolean {
   return item.available && item.available_delivery !== false
     && !(item.track_stock && typeof item.stock_qty === 'number' && item.stock_qty <= 0);
 }
@@ -119,7 +126,7 @@ function publicItem(item: CatalogueItem, category: { id: string; name: string })
 
 const QUOTE_NOTICE = 'Estimativa com os preços actuais, sem cupões. Não reserva stock nem cria uma encomenda. Preços, disponibilidade e total são novamente validados ao concluir no site.';
 
-function quoteLine(line: AgentOrderInput['items'][number], item: CatalogueItem) {
+export function quoteLine(line: AgentOrderInput['items'][number], item: CatalogueItem) {
   let unitPriceCents = item.price_cents;
   let variantName: string | undefined;
   const variants = item.variants.filter((variant) => variant.active !== false);
@@ -154,14 +161,15 @@ function quoteLine(line: AgentOrderInput['items'][number], item: CatalogueItem) 
   return { menuItemId: line.menuItemId, name: item.name, qty: line.qty, unitPriceCents, lineTotalCents: multiplyMoney(unitPriceCents, line.qty), ...(variantName ? { variantName } : {}), addonNames, modifierNames };
 }
 
-async function quoteOrder(input: AgentOrderInput, deps: AgentDependencies): Promise<Record<string, unknown>> {
-  const { menu, store } = await readCatalogue(input.storeSlug, deps);
-  checkChannel(menu, store, input.fulfillmentType);
-  if (!menu.accepting_orders || !store.accepting_orders) throw new AgentToolError('A loja não está a aceitar pedidos neste momento.', 'orders_paused');
+/**
+ * Preço das linhas com o catálogo actual, sem canal nem zona. Partilhado com o pedido pelo WhatsApp
+ * (ADR 0012): uma só regra de preço fora da BD, e a BD volta a calcular tudo no create_order.
+ */
+export function priceItems(menu: Catalogue, items: AgentOrderInput['items']) {
   const catalogue = new Map(menu.categories.flatMap((category) => category.items).map((item) => [item.id, item]));
   const quantities = new Map<string, number>();
-  for (const line of input.items) quantities.set(line.menuItemId, (quantities.get(line.menuItemId) ?? 0) + line.qty);
-  const lines = input.items.map((line) => {
+  for (const line of items) quantities.set(line.menuItemId, (quantities.get(line.menuItemId) ?? 0) + line.qty);
+  const lines = items.map((line) => {
     const item = catalogue.get(line.menuItemId);
     if (!item || !usableItem(item)) throw new AgentToolError('Um produto escolhido está indisponível nesta loja. Consulta novamente o cardápio.', 'item_unavailable');
     // O RPC anónimo só expõe disponibilidade. Se o catálogo fornecer uma
@@ -169,9 +177,17 @@ async function quoteOrder(input: AgentOrderInput, deps: AgentDependencies): Prom
     if (item.track_stock && typeof item.stock_qty === 'number' && item.stock_qty < (quantities.get(line.menuItemId) ?? 0)) throw new AgentToolError('A quantidade escolhida ultrapassa o stock disponível deste produto.', 'insufficient_stock');
     return quoteLine(line, item);
   });
+  const subtotalCents = lines.reduce((sum, line) => addMoney(sum, line.lineTotalCents), 0);
+  return { lines, subtotalCents };
+}
+
+async function quoteOrder(input: AgentOrderInput, deps: AgentDependencies): Promise<Record<string, unknown>> {
+  const { menu, store } = await readCatalogue(input.storeSlug, deps);
+  checkChannel(menu, store, input.fulfillmentType);
+  if (!menu.accepting_orders || !store.accepting_orders) throw new AgentToolError('A loja não está a aceitar pedidos neste momento.', 'orders_paused');
+  const { lines, subtotalCents } = priceItems(menu, input.items);
   const zone = input.fulfillmentType === 'delivery' ? menu.zones.find((entry) => entry.id === input.deliveryZoneId) : undefined;
   if (input.fulfillmentType === 'delivery' && !zone) throw new AgentToolError('A zona de entrega escolhida não está disponível nesta loja.', 'invalid_delivery_zone');
-  const subtotalCents = lines.reduce((sum, line) => addMoney(sum, line.lineTotalCents), 0);
   const deliveryFeeCents = zone?.fee_cents ?? 0;
   const totalCents = addMoney(subtotalCents, deliveryFeeCents);
   return { ...input, storeName: store.name, ...(zone ? { deliveryZoneName: zone.name } : {}), lines, subtotalCents, deliveryFeeCents, totalCents, totalFormatted: formatMT(cents(totalCents)), currency: 'MZN', requiresScheduling: !store.open_now, hours: menu.hours, notice: QUOTE_NOTICE };

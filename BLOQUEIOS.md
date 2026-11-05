@@ -948,6 +948,41 @@ validadas. Os requisitos GBP abaixo continuam fora da parcela Places instalada.
   nova em `delivery_zones` ou um acerto diário — uma migration pequena. Se os estafetas cobrarem à porta, falta o
   "dinheiro a devolver" na conta-corrente (hoje os pedidos saem pagos).
 
+
+### B-121 · [WhatsApp] Ligar a Cloud API da Meta ao número de Maputo (ADR 0011, 0012)
+
+- Estado: **aberto**. Categoria: **fornecedor/cliente**. Desbloqueia: Gabriel (app Meta) + Ridwan (Facebook Business, B-122).
+- Pergunta exacta: quem cria a app Meta e a WABA do HAWSMASH, e quando pode o +258 87 030 1006 ser registado na WABA?
+- Decidido a 05/11 (ADR 0012): **Cloud API da Meta directa**, não a Tyxter — a Tyxter só aluga números brasileiros,
+  factura em BRL com NFS-e e não liga o endpoint de dados dos Flows. A Tyxter fica no código como alternativa.
+- Como avancei: W1 (avisos) e W3 (pedido na conversa, comprovativo, IA) feitos contra o adaptador e testados com o
+  mock; transporte Meta testado contra os formatos da Graph API; migrations 1117/1118/1124/1125 ensaiadas na base local.
+- Para ligar: [plano](docs/planos/whatsapp.md) §7 (app Meta → token de sistema → migrations no LIVE → webhook →
+  templates → cron → número e `update stores`). O número de teste da Meta serve para ensaiar tudo antes do da loja.
+- A confirmar no primeiro envio real: os templates `hs_*` com parâmetros com nome em pt_PT, e a versão da Graph API
+  (`META_GRAPH_VERSION`, por defeito v23.0).
+- Onde está: [plano](docs/planos/whatsapp.md) §2 e §7 · [ADR 0012](docs/decisions/0012-pedido-pelo-whatsapp-na-conversa.md).
+- Se a resposta for outra: um fornecedor diferente é outro ficheiro em `packages/whatsapp`; fila, rotas e conversa não mudam.
+
+### B-122 · [WhatsApp] Número da Matola e o número de Maputo sair da app (ADR 0011)
+
+- Estado: **aberto**. Categoria: **cliente**. Desbloqueia: Ridwan.
+- Pergunta exacta: qual é o número WhatsApp da Matola, o +258 87 030 1006 (Maputo · Glória) pode deixar de ser
+  usado na app WhatsApp do telemóvel, e quem tem acesso ao Facebook Business do HAWSMASH para criar a conta WhatsApp Business?
+- Como avancei: Maputo configurado com o 87 030 1006; Matola com `whatsapp_enabled = false` e sem número — os
+  pedidos da Matola continuam só com email, nunca saem pelo número de Maputo.
+- Onde está: `stores.whatsapp_sender_id` (migration base do WhatsApp, W1).
+- Se a resposta for outra: número é dado (minutos). Se o 87 030 1006 tiver de continuar na app, é preciso outro
+  número para a API ou o modo de coexistência da Meta (B-121).
+
+### B-123 · [WhatsApp] Quem paga as mensagens (ADR 0011)
+
+- Estado: **resolvido a 05/11/2026** — passa ao arquivo na próxima arrumação.
+- Resposta (Gabriel): o custo do WhatsApp (mensagens da Meta) e da IA é **repassado ao HAWSMASH, pelo uso** — fora
+  dos 20.000 MT/mês. Falta a adenda à `NL-2026-HS-EXP` com o preço por mensagem/por conversa.
+- Onde está: [ADR 0012](docs/decisions/0012-pedido-pelo-whatsapp-na-conversa.md) · o painel/BD contam as mensagens por
+  tipo e por loja (`whatsapp_outbox.kind`), que é a base da factura.
+
 ---
 
 ## ARQUIVO — resolvidos

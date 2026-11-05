@@ -209,6 +209,9 @@ Quem sai do site para pagar no M-Pesa volta ao **mesmo** pedido, à espera do co
 vazio: o ecrã de pagamento é recuperável por uma nota em `localStorage` (regra 4).
 [Site e checkout](docs/modulos/site-checkout.md) · [conta do cliente](docs/modulos/conta-cliente.md).
 [Agentes](docs/modulos/agentes.md) preparam revisão; a pessoa conclui o checkout.
+**WhatsApp** ([ADR 0012](docs/decisions/0012-pedido-pelo-whatsapp-na-conversa.md)): o pedido faz-se na conversa e nasce no
+mesmo `create_order` só pelo botão "Confirmar" de um resumo (idempotente por esse resumo); paga-se por comprovativo,
+que entra pela conversa. A IA só interpreta texto livre — os números são sempre do servidor.
 [Marketing](docs/modulos/marketing.md) · [promoções](docs/modulos/promocoes.md) · [relatórios](docs/modulos/relatorios.md).
 2x1, entrega grátis e cupões por loja: a conta é do servidor nos dois canais e **não acumula** com campanha (1113).
 
