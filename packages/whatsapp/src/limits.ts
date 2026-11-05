@@ -41,6 +41,27 @@ function uniqueTitles<T extends { title: string }>(items: T[], max: number): T[]
 }
 
 /**
+ * Junta um texto à mensagem seguinte sempre que couber no limite do corpo. Desde 1/10/2026 a Meta cobra
+ * cada mensagem de sessão acima das 1.000 grátis por número e por mês: duas bolhas seguidas custam o dobro de uma.
+ */
+export function compactSession(messages: SessionContent[]): SessionContent[] {
+  const out: SessionContent[] = [];
+  for (const message of messages) {
+    const prev = out[out.length - 1];
+    if (prev?.type === 'text') {
+      const merged = `${prev.text}\n\n${message.text}`;
+      const max = message.type === 'text' ? LIMITS.text : LIMITS.interactiveBody;
+      if (Array.from(merged).length <= max) {
+        out[out.length - 1] = { ...message, text: merged } as SessionContent;
+        continue;
+      }
+    }
+    out.push(message);
+  }
+  return out;
+}
+
+/**
  * Ajusta uma mensagem de sessão aos limites da Meta, sem nunca a tornar inválida:
  * corta textos, limita botões e linhas, e cai para texto simples se não sobrar nada clicável.
  */
@@ -88,6 +109,8 @@ export function fitSession(content: SessionContent): SessionContent {
         button: clip(content.button || 'Ver opções', LIMITS.listButton), sections: fitted,
       };
     }
+    case 'request_contact':
+      return { type: 'request_contact', text: clipBody(content.text, LIMITS.interactiveBody) };
     case 'cta_url':
       return {
         type: 'cta_url', text: clipBody(content.text, LIMITS.interactiveBody), ...extras(content),

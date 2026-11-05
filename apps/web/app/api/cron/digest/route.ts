@@ -4,6 +4,7 @@ import { isEmailConfigured, sendMail } from "@/lib/email/transport";
 import { digestHtml, type DigestStore } from "@/lib/email/daily-template";
 import { getBrand } from "@/lib/brand/server";
 import { cronUnauthorized } from "@/lib/cron/auth";
+import { alertPhones, digestJobs, enqueueOwnerMessages } from "@/lib/alerts/whatsapp";
 
 export const dynamic = "force-dynamic";
 
@@ -69,6 +70,17 @@ export async function GET(request: Request) {
     }
   }
 
+  // Também por WhatsApp (F4). Best-effort: o email já foi.
+  const whatsapp = await enqueueOwnerMessages(
+    supabase,
+    digestJobs(
+      payload.day,
+      payload.stores,
+      await alertPhones(supabase, payload.stores.map((store) => store.store_id)),
+      Date.now(),
+    ),
+  );
+
   await supabase.from("event_log").insert(
     payload.stores.map((store) => ({
       store_id: store.store_id,
@@ -87,5 +99,6 @@ export async function GET(request: Request) {
     day: payload.day,
     stores: payload.stores.length,
     delivery,
+    whatsapp,
   });
 }

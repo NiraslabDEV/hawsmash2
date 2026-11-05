@@ -32,11 +32,19 @@ const ids = (m: SessionContent) =>
   m.type === "buttons" ? m.buttons.map((b) => b.id) : m.type === "list" ? m.sections.flatMap((s) => s.rows.map((r) => r.id)) : [];
 
 describe("conversa de pedido — boas-vindas e cardápio", () => {
-  it("«olá» apresenta a loja e os botões, pelo nome do perfil", async () => {
+  it("«olá» apresenta a loja pelo nome do perfil e já traz o cardápio no botão", async () => {
     const { last } = await talk(context(), deps(), [{ text: "Olá" }]);
+    expect(last).toHaveLength(1);
     expect(text(last[0])).toContain("Olá, Ana!");
     expect(text(last[0])).toContain("PLACEHOLDER Loja");
-    expect(ids(last[0])).toEqual(["menu", "human"]);
+    expect(last[0].type === "list" && last[0].button).toBe("Ver cardápio");
+    expect(ids(last[0])).toEqual([`cat:${ID.catBurger}`, `cat:${ID.catDrink}`, "human"]);
+  });
+
+  it("depois de partilhar o número escondido, segue como conversa normal", async () => {
+    const { last } = await talk(context(), deps(), [{ replyId: "contact:shared", contentType: "contacts", text: null, profileName: null }]);
+    expect(text(last[0])).toContain("Obrigado!");
+    expect(ids(last[0])).toContain(`cat:${ID.catBurger}`);
   });
 
   it("cardápio só com categorias com produtos disponíveis; esgotado não aparece", async () => {
@@ -99,8 +107,9 @@ describe("conversa de pedido — do produto ao pedido criado", () => {
       address: "Bairro Central, Rua 1, nº 5, perto da escola", paymentMethod: "mpesa",
       items: [expect.objectContaining({ menuItemId: ID.smash, qty: 2 })],
     }));
-    expect(text(done.all[0][0])).toContain("TST-0042");
-    const pay = done.all[0][1];
+    expect(done.all[0]).toHaveLength(1); // "registado" e os dados de pagamento numa só mensagem
+    const pay = done.all[0][0];
+    expect(text(pay)).toContain("TST-0042");
     expect(pay.type).toBe("cta_url");
     expect(text(pay)).toContain("84 000 0000");
     expect(text(pay)).toContain("PLACEHOLDER Titular");
@@ -112,6 +121,44 @@ describe("conversa de pedido — do produto ao pedido criado", () => {
     expect(done.state.step).toBe("proof");
     expect(done.state.cart).toEqual([]);
     expect(done.state.last).toMatchObject({ zoneId: ID.zone, name: "Ana Maria" });
+  });
+
+  it("carrinho grande: o total e a morada nunca se perdem no corte dos 1.024 caracteres", async () => {
+    const ctx = context();
+    ctx.menu.categories[0].items[0].name = "Smash de nome muito comprido para encher a linha do resumo do pedido";
+    // Oito combinações diferentes do mesmo produto: oito linhas no carrinho.
+    const cart = [ID.normal, ID.grande].flatMap((variantId) => [ID.bemPassado, ID.malPassado].flatMap((option) => [[], [ID.bacon]].map((addonIds) => ({
+      menuItemId: ID.smash, qty: 1, variantId, addonIds, modifiers: [{ groupId: ID.ponto, optionIds: [option] }],
+    }))));
+    const address = "Bairro Central, Rua 1, nº 5, perto da escola";
+    const r = await runTurn(
+      { ...freshState(), cart, step: "name", fulfillment: "delivery", zoneId: ID.zone, address, name: "Ana", paymentMethod: "mpesa", touchedAt: input({}).now },
+      input({ replyId: "checkout" }), ctx, deps(),
+    );
+    expect(r.replies).toHaveLength(2);
+    expect(r.replies[0].type).toBe("text");
+    expect(Array.from(text(r.replies[0])).length).toBeGreaterThan(1024);
+    expect(text(r.replies[0])).toContain("Total:");
+    expect(text(r.replies[0])).toContain(address);
+    // Os botões seguem à parte, com o total à vista e o id deste resumo.
+    expect(text(r.replies[1])).toMatch(/Confirmas o pedido de \*.+ MT\*/);
+    expect(ids(r.replies[1])[0]).toBe(`ok:${r.state.checkoutId}`);
+  });
+
+  it("um pedido típico (variante, grupo, adicional, entrega) cabe em 15 mensagens pagas", async () => {
+    const d = deps();
+    const ctx = context();
+    const { state, all } = await talk(ctx, d, [
+      { text: "olá" }, { replyId: `cat:${ID.catBurger}` }, ...flow,
+      { replyId: "checkout" }, { replyId: "ful:delivery" }, { replyId: `zone:${ID.zone}` },
+      { text: "Bairro Central, Rua 1, nº 5" }, { replyId: "name:ok" },
+    ]);
+    const done = await talk(ctx, d, [
+      { replyId: `ok:${state.checkoutId}` },
+      { contentType: "image", media: { id: "m1", mimeType: "image/jpeg", caption: null } },
+    ], state);
+    const total = [...all, ...done.all].reduce((n, turn) => n + turn.length, 0);
+    expect(total).toBeLessThanOrEqual(15);
   });
 
   it("«Confirmar» de um resumo antigo mostra o resumo actual em vez de criar", async () => {
@@ -199,8 +246,10 @@ describe("conversa de pedido — IA e limites", () => {
     }));
     const { state, last } = await talk(context({ ai: true }), deps({ interpret }), [{ text: "quero 2 refrescos e um unicórnio" }]);
     expect(state.cart).toEqual([{ menuItemId: ID.soda, qty: 2 }]);
-    expect(text(last[0])).toBe("Boa escolha!");
-    expect(text(last[1])).toMatch(/2× Refresco — 160 MT/);
+    // A frase da IA e o resumo do sistema vão na mesma mensagem.
+    expect(last).toHaveLength(1);
+    expect(text(last[0])).toMatch(/^Boa escolha!/);
+    expect(text(last[0])).toMatch(/2× Refresco — 160 MT/);
   });
 
   it("IA sem a escolha obrigatória → segue pelos botões desse produto", async () => {
@@ -224,6 +273,14 @@ describe("conversa de pedido — IA e limites", () => {
     const interpret = vi.fn(async () => { throw new Error("timeout"); });
     const { last } = await talk(context({ ai: true }), deps({ interpret }), [{ text: "quero comer algo" }]);
     expect(text(last[0])).toContain("Não percebi");
+  });
+
+  it("«correu mal»: a mensagem seguinte é para a loja, sem IA nem menu", async () => {
+    const interpret = vi.fn(async () => ({ reply: "x", action: "none" as const }));
+    const { state, last } = await talk(context({ ai: true }), deps({ interpret }), [{ replyId: "fb:down" }, { text: "o hambúrguer veio frio" }]);
+    expect(interpret).not.toHaveBeenCalled();
+    expect(text(last[0])).toContain("A loja vai ler");
+    expect(state.step).toBe("idle");
   });
 
   it("SAIR confirma; reacção não responde; carrinho esquecido há 7 h recomeça", async () => {

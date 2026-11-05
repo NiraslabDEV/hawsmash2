@@ -194,6 +194,24 @@ describe("webhook", () => {
     expect(res.status).toBe(400);
   });
 
+  it("número escondido: pede o número uma vez, fora da fila; falhar não trava o webhook", async () => {
+    const mock = createMockTransport("seg");
+    const hidden = { ...mock, parseWebhook: () => [{ eventId: "wa:msg:h1", event: { kind: "inbound_hidden" as const, providerMessageId: "h1", senderId: "111", userId: "MZ.1349", profileName: null } }] };
+    const { svc, calls } = fakeSvc(() => ({ data: true, error: null }));
+    const res = await handleWhatsAppWebhook({ svc, transport: hidden, ...signed({ type: "message.received", data: {} }) });
+    expect(res.status).toBe(200);
+    expect(calls[0]).toEqual(["whatsapp_receipt_once", { p_event_id: "wa:msg:h1", p_sender_id: "111" }]);
+    expect(mock.sent[0]).toMatchObject({ type: "request_contact", to: "MZ.1349", senderId: "111" });
+
+    const repeated = fakeSvc(() => ({ data: false, error: null }));
+    await handleWhatsAppWebhook({ svc: repeated.svc, transport: hidden, ...signed({ type: "message.received", data: {} }) });
+    expect(mock.sent).toHaveLength(1);
+
+    const down = fakeSvc(() => ({ data: null, error: { message: "ainda sem 1126" } }));
+    expect((await handleWhatsAppWebhook({ svc: down.svc, transport: hidden, ...signed({ type: "message.received", data: {} }) })).status).toBe(200);
+    expect(mock.sent).toHaveLength(1);
+  });
+
   it("aperto de mão GET só com o token certo", () => {
     expect(handleWhatsAppChallenge(transport, new URL("https://x.test/api/webhooks/whatsapp?hub.mode=subscribe&hub.verify_token=seg&hub.challenge=123"))).toEqual({ status: 200, body: "123" });
     expect(handleWhatsAppChallenge(transport, new URL("https://x.test/api/webhooks/whatsapp?hub.mode=subscribe&hub.verify_token=x&hub.challenge=123")).status).toBe(403);

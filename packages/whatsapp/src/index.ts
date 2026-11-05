@@ -4,7 +4,7 @@ export { verifyTimestampedSignature, signTimestamped, WEBHOOK_TOLERANCE_SECONDS 
 export { createTyxterTransport, parseTyxterEvent, tyxterDeliveries, type TyxterConfig } from './tyxter';
 export { createMetaTransport, metaMessageBody, parseMetaWebhook, META_DEFAULT_GRAPH_VERSION, type MetaConfig } from './meta';
 export { createMockTransport, type MockTransport } from './mock';
-export { clip, fitSession, LIMITS } from './limits';
+export { clip, compactSession, fitSession, LIMITS } from './limits';
 
 /**
  * Respostas que retiram o número de todos os avisos que não sejam códigos de acesso.

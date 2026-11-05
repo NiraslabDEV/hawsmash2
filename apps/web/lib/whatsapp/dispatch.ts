@@ -36,6 +36,7 @@ export const sessionContentSchema: z.ZodType<SessionContent> = z.discriminatedUn
     })).min(1).max(10),
   }),
   z.object({ type: z.literal("cta_url"), ...frame, displayText: title, url: z.string().url().max(2000).refine((u) => /^https:\/\//.test(u)) }),
+  z.object({ type: z.literal("request_contact"), text: z.string().min(1).max(4096) }),
 ]);
 
 function contentFor(job: Job, render: Render): MessageContent | null {
@@ -183,11 +184,29 @@ export async function handleWhatsAppWebhook(deps: {
       if (error) return { ...reject(503, "temporarily_unavailable"), inbound };
       const received = data as { inbound_id: string | null; is_new: boolean; chat_enabled: boolean } | null;
       if (received?.is_new && received.chat_enabled && received.inbound_id) inbound.push(received.inbound_id);
+    } else if (event.kind === "inbound_hidden") {
+      await askForPhone(svc, transport, eventId, event.senderId, event.userId);
     } else {
       ignored++;
     }
   }
   return { status: 200, body: { ok: true, events: deliveries.length, ignored }, inbound };
+}
+
+export const ASK_PHONE_TEXT = "Olá! 👋 Para continuarmos por aqui precisamos do teu número de telemóvel. Toca no botão para o partilhares connosco.";
+
+/**
+ * Username com número escondido: a Meta só dá o BSUID, e sem telefone não há pedido nem aviso. Pede-se o número
+ * uma vez por mensagem. Fica fora da fila porque ela só aceita E.164. Best-effort: nada aqui trava o webhook.
+ */
+async function askForPhone(svc: SupabaseClient, transport: WhatsAppTransport, eventId: string, senderId: string, userId: string) {
+  try {
+    const { data: first, error } = await svc.rpc("whatsapp_receipt_once", { p_event_id: eventId, p_sender_id: senderId });
+    if (error || !first) return;
+    await transport.send({ type: "request_contact", text: ASK_PHONE_TEXT, senderId, to: userId, idempotencyKey: eventId });
+  } catch {
+    // A pessoa volta a escrever e pede-se outra vez.
+  }
 }
 
 /** `GET` do webhook: a Meta confirma que o endereço é nosso antes de mandar eventos. */

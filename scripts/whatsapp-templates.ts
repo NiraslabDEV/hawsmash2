@@ -9,11 +9,12 @@
  * META_GRAPH_VERSION (opcional). Nunca apaga nem edita um template existente: um texto mudado vai com nome novo.
  */
 import { metaTemplatePayload, TEMPLATES, TEMPLATE_LANGUAGE } from "../apps/web/lib/whatsapp/templates";
+import { META_DEFAULT_GRAPH_VERSION } from "../packages/whatsapp/src/meta";
 
 const args = new Set(process.argv.slice(2));
 const dryRun = args.has("--dry-run");
 const statusOnly = args.has("--status");
-const version = process.env.META_GRAPH_VERSION?.trim() || "v23.0";
+const version = process.env.META_GRAPH_VERSION?.trim() || META_DEFAULT_GRAPH_VERSION;
 const baseUrl = process.env.APP_BASE_URL?.trim().replace(/\/+$/, "") ?? "";
 
 function fail(message: string): never {

@@ -1,6 +1,6 @@
 import { createHmac } from 'node:crypto';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createMetaTransport, fitSession, LIMITS, metaMessageBody, parseMetaWebhook } from '../index';
+import { createMetaTransport, fitSession, LIMITS, META_DEFAULT_GRAPH_VERSION, metaMessageBody, parseMetaWebhook } from '../index';
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -21,7 +21,7 @@ describe('Cloud API da Meta — envio', () => {
     });
     expect(result).toEqual({ ok: true, providerMessageId: 'wamid.ABC' });
     const [url, init] = fetch.mock.calls[0];
-    expect(url).toBe('https://graph.facebook.com/v23.0/123456789012345/messages');
+    expect(url).toBe(`https://graph.facebook.com/${META_DEFAULT_GRAPH_VERSION}/123456789012345/messages`);
     expect(init.headers).toMatchObject({ authorization: 'Bearer EAAG_token' });
     expect(JSON.parse(init.body)).toEqual({
       messaging_product: 'whatsapp', recipient_type: 'individual', to: '258841234567', type: 'template',
@@ -124,6 +124,45 @@ describe('Cloud API da Meta — webhook', () => {
   it('o que não é da WABA é malformado; outros campos ignoram-se', () => {
     expect(parseMetaWebhook({ object: 'page', entry: [] })).toBeNull();
     expect(parseMetaWebhook({ object: 'whatsapp_business_account', entry: [{ changes: [{ field: 'account_update', value: {} }] }] })).toEqual([]);
+  });
+});
+
+describe('Cloud API da Meta — quem esconde o número (username, BSUID)', () => {
+  const BSUID = 'MZ.13491208655302741918';
+  const entry = (messages: unknown[], contacts: unknown[] = []) => ({
+    object: 'whatsapp_business_account',
+    entry: [{ changes: [{ field: 'messages', value: { metadata: { phone_number_id: '111' }, contacts, messages } }] }],
+  });
+
+  it('sem telefone: não se perde em silêncio nem se inventa um número a partir do BSUID', () => {
+    const contacts = [{ user_id: BSUID, profile: { name: 'Ana', username: 'ana' } }];
+    expect(parseMetaWebhook(entry([{ id: 'wamid.h1', from_user_id: BSUID, type: 'text', text: { body: 'olá' } }], contacts))![0].event)
+      .toEqual({ kind: 'inbound_hidden', providerMessageId: 'wamid.h1', senderId: '111', userId: BSUID, profileName: 'Ana' });
+    // Variante relatada por fornecedores: o BSUID no próprio `from`.
+    expect(parseMetaWebhook(entry([{ id: 'wamid.h2', from: BSUID, type: 'text', text: { body: 'olá' } }]))![0].event)
+      .toMatchObject({ kind: 'inbound_hidden', userId: BSUID });
+  });
+
+  it('com telefone conhecido o BSUID é ignorado e segue o fluxo normal', () => {
+    expect(parseMetaWebhook(entry([{ id: 'wamid.h3', from: '258841234567', from_user_id: BSUID, type: 'text', text: { body: 'olá' } }]))![0].event)
+      .toMatchObject({ kind: 'inbound', from: '+258841234567', text: 'olá' });
+  });
+
+  it('o número partilhado no botão passa a ser o telefone; um cartão de outra pessoa não', () => {
+    const shared = { id: 'wamid.h4', from_user_id: BSUID, type: 'contacts', contacts: [{ origin: 'contact_request', phones: [{ phone: '+258 84 123 4567' }] }] };
+    expect(parseMetaWebhook(entry([shared]))![0].event)
+      .toMatchObject({ kind: 'inbound', from: '+258841234567', replyId: 'contact:shared', contentType: 'contacts' });
+    const card = { id: 'wamid.h5', from_user_id: BSUID, type: 'contacts', contacts: [{ origin: 'other', phones: [{ phone: '+258 84 999 9999' }] }] };
+    expect(parseMetaWebhook(entry([card]))![0].event).toMatchObject({ kind: 'inbound_hidden', userId: BSUID });
+  });
+
+  it('envio: BSUID em `recipient`, telefone em `to`; botão nativo de partilhar', () => {
+    const body = metaMessageBody({ senderId: '111', to: BSUID, idempotencyKey: 'k', type: 'request_contact', text: 'Partilha o número' });
+    expect(body).toEqual({
+      messaging_product: 'whatsapp', recipient_type: 'individual', recipient: BSUID, type: 'interactive',
+      interactive: { type: 'request_contact_info', body: { text: 'Partilha o número' }, action: { name: 'request_contact_info' } },
+    });
+    expect(metaMessageBody({ senderId: '111', to: '+258841234567', idempotencyKey: 'k', type: 'text', text: 'x' })).toMatchObject({ to: '258841234567' });
   });
 });
 

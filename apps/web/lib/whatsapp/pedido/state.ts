@@ -18,6 +18,7 @@ export const STEPS = [
   "payment",
   "confirm",   // resumo mostrado, à espera do "Confirmar"
   "proof",     // pedido criado, à espera do comprovativo
+  "feedback",  // tocou em "correu mal": a mensagem seguinte é para a loja ler, não para o bot
 ] as const;
 export type Step = (typeof STEPS)[number];
 

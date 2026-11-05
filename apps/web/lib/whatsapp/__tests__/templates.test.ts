@@ -3,7 +3,10 @@ import { renderWhatsAppEvent, WHATSAPP_EVENTS } from "../events";
 import { metaTemplatePayload, TEMPLATES, templateVariables } from "../templates";
 
 const ORDER_ID = "0a1b2c3d-0000-4000-8000-000000000042";
-const vars = { nome: "Ana", pedido: "MPT-0042", loja: "Loja", hora: "19:30", order_id: ORDER_ID };
+const vars = {
+  nome: "Ana", pedido: "MPT-0042", loja: "Loja", hora: "19:30", order_id: ORDER_ID,
+  alerta: "Impressão falhada", detalhe: "x".repeat(150), dia: "05/11/2026", pedidos: 42, total: "28 450 MT",
+};
 
 describe("catálogo de templates ↔ envio", () => {
   it("cada evento enviado tem template no catálogo, com exactamente as mesmas variáveis", () => {
@@ -27,6 +30,18 @@ describe("catálogo de templates ↔ envio", () => {
       for (const v of templateVariables(spec.body)) expect(spec.examples[v], `${spec.name}.${v}`).toBeTruthy();
       expect(spec.body).not.toMatch(/hawsmash/i);
     }
+  });
+
+  it("nenhum corpo começa ou acaba numa variável (a Meta recusa)", () => {
+    for (const spec of TEMPLATES) {
+      expect(spec.body.trim(), spec.name).not.toMatch(/^\{\{/);
+      expect(spec.body.trim(), spec.name).not.toMatch(/\}\}$/);
+    }
+  });
+
+  it("o detalhe do alerta chega inteiro; um nome continua cortado a 60", () => {
+    expect(renderWhatsAppEvent("alert.system", vars)?.variables?.detalhe).toHaveLength(150);
+    expect(renderWhatsAppEvent("alert.system", { ...vars, loja: "y".repeat(80) })?.variables?.loja).toHaveLength(60);
   });
 
   it("corpo para a Meta: parâmetros com nome, botão de URL com sufixo dinâmico", () => {

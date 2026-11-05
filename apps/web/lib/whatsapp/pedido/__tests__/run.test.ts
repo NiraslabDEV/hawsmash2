@@ -57,7 +57,7 @@ describe("processar uma mensagem recebida", () => {
     const outcome = await processInbound({ svc, transport, baseUrl: "https://loja.test", loadCatalogue: async () => catalogue() }, ID.inbound);
     expect(outcome).toBe("done");
     expect(transport.sent).toHaveLength(1);
-    expect(transport.sent[0]).toMatchObject({ senderId: "wpn_1", to: "+258841234567", type: "buttons" });
+    expect(transport.sent[0]).toMatchObject({ senderId: "wpn_1", to: "+258841234567", type: "list" });
     expect(db.version).toBe(1);
     expect(db.state).toMatchObject({ lastInboundId: ID.inbound });
     expect(db.finished).toEqual([null]);

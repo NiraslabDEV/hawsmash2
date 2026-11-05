@@ -1,4 +1,4 @@
-import { normalizeWord, type InboundMedia, type ListRow, type SessionContent } from "@delivery/whatsapp";
+import { compactSession, LIMITS, normalizeWord, type InboundMedia, type ListRow, type ReplyButton, type SessionContent } from "@delivery/whatsapp";
 import { encodeAgentHandoff } from "@/lib/agents/handoff";
 import { AgentToolError, priceItems, quoteLine, type Catalogue, type CatalogueItem, type PublicStore } from "@/lib/agents/service";
 import {
@@ -107,14 +107,34 @@ export async function runTurn(
     const name = firstName(input.profileName ?? s.name);
     const closed = !store.open_now ? `\n\n🕒 Agora estamos fechados. ${nextOpeningText(menu.hours, input.now) ?? ""}`.trimEnd() : "";
     const ai = ctx.aiEnabled ? "\nTambém podes escrever o que te apetece, por exemplo: _«quero 2 hambúrgueres e um refrigerante»_." : "";
-    const buttons = [{ id: "menu", title: "🍔 Ver cardápio" }];
-    if (s.cart.length) buttons.push({ id: "cart", title: `🛒 Carrinho (${cartCount()})` });
-    buttons.push({ id: "human", title: "💬 Falar com a loja" });
-    say({
-      type: "buttons",
-      text: `${prefix ? `${prefix}\n\n` : ""}Olá${name ? `, ${name}` : ""}! 👋 Bem-vindo à *${store.name}*.\nPodes fazer o pedido aqui mesmo, sem sair do WhatsApp.${ai}${closed}`,
-      buttons,
-    });
+    const text = `${prefix ? `${prefix}\n\n` : ""}Olá${name ? `, ${name}` : ""}! 👋 Bem-vindo à *${store.name}*.\nPodes fazer o pedido aqui mesmo, sem sair do WhatsApp.${ai}${closed}`;
+    const cats = usableCategories(menu);
+    if (!cats.length) {
+      say({ type: "buttons", text, buttons: [{ id: "human", title: "💬 Falar com a loja" }] });
+      return;
+    }
+    // O cardápio vem já no botão das boas-vindas: um passo a menos é uma mensagem a menos a pagar.
+    const rows = cats.slice(0, PAGE).map(categoryRow);
+    if (cats.length > PAGE) rows.push({ id: "catp:1", title: "➡️ Mais categorias" });
+    rows.push(s.cart.length ? { id: "cart", title: `🛒 Carrinho (${cartCount()})` } : { id: "human", title: "💬 Falar com a loja" });
+    say({ type: "list", text, button: "Ver cardápio", sections: [{ rows }] });
+  }
+
+  function categoryRow(c: ReturnType<typeof usableCategories>[number]): ListRow {
+    return { id: `cat:${c.id}`, title: c.name, description: `${c.usable.length} ${c.usable.length === 1 ? "opção" : "opções"}` };
+  }
+
+  /**
+   * O corpo com botões leva 1.024 caracteres e o corte é pelo fim — onde estão o total e a morada.
+   * O que não couber vai em texto à parte (até 4.096) e os botões seguem numa mensagem curta.
+   */
+  function sayLong(text: string, buttons: ReplyButton[], short: string) {
+    if (Array.from(text).length <= LIMITS.interactiveBody) {
+      say({ type: "buttons", text, buttons });
+    } else {
+      say({ type: "text", text });
+      say({ type: "buttons", text: short, buttons });
+    }
   }
 
   function categoryList(page = 0, prefix?: string) {
@@ -124,10 +144,7 @@ export async function runTurn(
       return;
     }
     const slice = cats.slice(page * PAGE, page * PAGE + PAGE);
-    const rows: ListRow[] = slice.map((c) => ({
-      id: `cat:${c.id}`, title: c.name,
-      description: `${c.usable.length} ${c.usable.length === 1 ? "opção" : "opções"}`,
-    }));
+    const rows: ListRow[] = slice.map(categoryRow);
     if ((page + 1) * PAGE < cats.length) rows.push({ id: `catp:${page + 1}`, title: "➡️ Mais categorias" });
     if (s.cart.length) rows.push({ id: "cart", title: `🛒 Carrinho (${cartCount()})` });
     say({ type: "list", text: `${prefix ? `${prefix}\n\n` : ""}Escolhe uma categoria 👇`, button: "Ver categorias", sections: [{ rows }] });
@@ -298,11 +315,11 @@ export async function runTurn(
       say({ type: "buttons", text: `⚠️ ${total.error}\nEsvaziei o carrinho para recomeçares.`, buttons: [{ id: "menu", title: "🍔 Ver cardápio" }] });
       return;
     }
-    say({
-      type: "buttons",
-      text: `${prefix ? `${prefix}\n\n` : ""}🛒 *O teu carrinho*\n${total.text}\n\nSubtotal: *${fmt(total.subtotal)}*\n_A taxa de entrega e as promoções entram no resumo final._`,
-      buttons: [{ id: "checkout", title: "✅ Finalizar" }, { id: "menu", title: "➕ Pedir mais" }, { id: "rm", title: "🗑️ Remover item" }],
-    });
+    sayLong(
+      `${prefix ? `${prefix}\n\n` : ""}🛒 *O teu carrinho*\n${total.text}\n\nSubtotal: *${fmt(total.subtotal)}*\n_A taxa de entrega e as promoções entram no resumo final._`,
+      [{ id: "checkout", title: "✅ Finalizar" }, { id: "menu", title: "➕ Pedir mais" }, { id: "rm", title: "🗑️ Remover item" }],
+      "O que queres fazer?",
+    );
   }
 
   function removeMenu() {
@@ -428,9 +445,8 @@ export async function runTurn(
     s = { ...s, step: "confirm", checkoutId };
     const where = s.fulfillment === "delivery" ? `🛵 Entrega em ${zone?.name ?? ""}: ${s.address}` : `🏃 Levantar na loja (${store.name})`;
     const closed = !store.open_now ? `\n\n🕒 Estamos fechados agora. ${nextOpeningText(menu.hours, input.now) ?? ""} Para agendar, usa o site.`.trimEnd() : "";
-    say({
-      type: "buttons",
-      text: [
+    sayLong(
+      [
         "🧾 *Resumo do pedido*",
         total.text,
         "",
@@ -444,8 +460,9 @@ export async function runTurn(
         "",
         "_Promoções da loja aplicam-se ao confirmar._",
       ].join("\n") + closed,
-      buttons: [{ id: `ok:${checkoutId}`, title: "✅ Confirmar" }, { id: "edit", title: "✏️ Alterar" }, { id: "clear", title: "❌ Cancelar" }],
-    });
+      [{ id: `ok:${checkoutId}`, title: "✅ Confirmar" }, { id: "edit", title: "✏️ Alterar" }, { id: "clear", title: "❌ Cancelar" }],
+      `Confirmas o pedido de *${fmt(total.subtotal + fee)}*?`,
+    );
   }
 
   function paymentInstructions(order: { number: string; totalCents: number; method: string; id: string }, estimate?: number) {
@@ -663,7 +680,11 @@ export async function runTurn(
         if (methods.some((m) => m.method === a)) s = { ...s, paymentMethod: a as "mpesa" | "emola" };
         return checkout();
       case "fb":
+        if (a !== "up") s = { ...s, step: "feedback" };
         return say({ type: "text", text: a === "up" ? "Obrigado! 🙏 Até à próxima." : "Lamentamos 😔 Conta-nos aqui o que correu mal — a loja vai ler." });
+      case "contact":
+        // Quem tinha o número escondido e acabou de o partilhar: agora é uma conversa normal.
+        return welcome("Obrigado! 🙏");
       // Configuração do produto em curso
       case "var": case "opt": case "grp": case "add": case "addok": case "pg": case "qty":
         return handleDraftReply(kind, a, b);
@@ -719,6 +740,11 @@ export async function runTurn(
     const word = normalizeWord(text);
     const command = COMMANDS[word];
     if (command) return handleReply(command);
+    // A queixa fica em whatsapp_inbound e o dono lê-a no painel. Não vai à IA nem recebe o menu por resposta.
+    if (s.step === "feedback") {
+      s = { ...s, step: "idle" };
+      return say({ type: "text", text: "Obrigado por nos contares. A loja vai ler a tua mensagem 🙏" });
+    }
 
     if (s.step === "qty" && /^\d{1,3}$/.test(word)) return handleDraftReply("qty", word);
     if (s.step === "address" && !s.zoneId) {
@@ -765,5 +791,5 @@ export async function runTurn(
     say({ type: "buttons", text: "Por aqui só consigo ler texto, botões e fotos do comprovativo 🙂", buttons: [{ id: "menu", title: "🍔 Ver cardápio" }, { id: "human", title: "💬 Falar com a loja" }] });
   }
   if (!out.length) welcome();
-  return { state: { ...s, touchedAt: input.now }, replies: out };
+  return { state: { ...s, touchedAt: input.now }, replies: compactSession(out) };
 }

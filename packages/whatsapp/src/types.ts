@@ -8,7 +8,7 @@ export type WhatsAppKind = 'utility' | 'authentication' | 'marketing' | 'service
 interface OutboundBase {
   /** Id do número no fornecedor (`stores.whatsapp_sender_id`). */
   senderId: string;
-  /** Destinatário em E.164 com `+` (`+258841234567`). */
+  /** Destinatário em E.164 com `+` (`+258841234567`), ou o BSUID de quem esconde o número (`MZ.1349…`). */
   to: string;
   /** Estável por mensagem: repetir o envio com a mesma chave não duplica onde o fornecedor deduplica. */
   idempotencyKey: string;
@@ -36,7 +36,9 @@ export type SessionContent =
   | { type: 'text'; text: string; previewUrl?: boolean }
   | { type: 'buttons'; text: string; header?: string; footer?: string; buttons: ReplyButton[] }
   | { type: 'list'; text: string; header?: string; footer?: string; button: string; sections: ListSection[] }
-  | { type: 'cta_url'; text: string; header?: string; footer?: string; displayText: string; url: string };
+  | { type: 'cta_url'; text: string; header?: string; footer?: string; displayText: string; url: string }
+  /** Botão nativo "partilhar o meu número", para quem tem username e o número escondido. */
+  | { type: 'request_contact'; text: string };
 
 export type MessageContent = TemplateContent | SessionContent;
 
@@ -81,6 +83,11 @@ export type WebhookEvent =
       media: InboundMedia | null;
       contentType: string;
     }
+  /**
+   * Quem tem username com o número escondido: a Meta omite o telefone e manda só o BSUID.
+   * Sem telefone não há pedido nem aviso; pede-se o número com `request_contact`.
+   */
+  | { kind: 'inbound_hidden'; providerMessageId: string; senderId: string; userId: string; profileName: string | null }
   | { kind: 'ignored'; type: string };
 
 /** Um evento com o id que o deduplica. Uma entrega de webhook pode trazer vários (Meta). */

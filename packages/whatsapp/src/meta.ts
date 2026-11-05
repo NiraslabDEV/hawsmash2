@@ -32,7 +32,8 @@ export interface MetaConfig {
   maxMediaBytes?: number;
 }
 
-export const META_DEFAULT_GRAPH_VERSION = 'v23.0';
+/** A mais recente a 05/11/2026 (v26.0, lançada a 29/07/2026). Confirmar em developers.facebook.com/docs/graph-api/changelog. */
+export const META_DEFAULT_GRAPH_VERSION = 'v26.0';
 
 type Json = Record<string, unknown>;
 const obj = (value: unknown): Json =>
@@ -51,7 +52,12 @@ const MEDIA_TYPES = new Set(['image', 'document', 'sticker', 'audio', 'video']);
 
 /** Corpo do `POST /{phone_number_id}/messages`. Exportado para teste. */
 export function metaMessageBody(message: OutboundMessage): Json {
-  const base = { messaging_product: 'whatsapp', recipient_type: 'individual', to: message.to.replace(/^\+/, '') };
+  // Telefone vai em `to`; o BSUID de quem esconde o número vai em `recipient`.
+  const isPhone = /^\+?\d{8,15}$/.test(message.to);
+  const base = {
+    messaging_product: 'whatsapp', recipient_type: 'individual',
+    ...(isPhone ? { to: message.to.replace(/^\+/, '') } : { recipient: message.to }),
+  };
   if (message.type === undefined || message.type === 'template') {
     const components: Array<Record<string, unknown>> = [];
     const vars = Object.entries(message.variables ?? {});
@@ -72,6 +78,12 @@ export function metaMessageBody(message: OutboundMessage): Json {
   const content = fitSession(message as SessionContent);
   if (content.type === 'text') {
     return { ...base, type: 'text', text: { body: content.text, preview_url: Boolean(content.previewUrl) } };
+  }
+  if (content.type === 'request_contact') {
+    return {
+      ...base, type: 'interactive',
+      interactive: { type: 'request_contact_info', body: { text: content.text }, action: { name: 'request_contact_info' } },
+    };
   }
   const frame = {
     ...(content.header ? { header: { type: 'text', text: content.header } } : {}),
@@ -199,11 +211,38 @@ export function createMetaTransport(config: MetaConfig): WhatsAppTransport {
   };
 }
 
+/** Número que a própria pessoa partilhou no botão `request_contact_info`. Um cartão qualquer não conta: não é dela. */
+function sharedPhone(message: Json): string | null {
+  for (const contact of arr(message.contacts)) {
+    const c = obj(contact);
+    if (c.origin !== 'contact_request') continue;
+    const digits = str(obj(arr(c.phones)[0]).phone)?.replace(/\D/g, '');
+    if (digits && /^\d{8,15}$/.test(digits)) return digits;
+  }
+  return null;
+}
+
 function inboundFromMeta(message: Json, senderId: string, names: Map<string, string>): WebhookEvent {
   const id = str(message.id);
-  const fromDigits = str(message.from)?.replace(/\D/g, '');
   const type = str(message.type) ?? 'unknown';
-  if (!id || !fromDigits) return { kind: 'ignored', type };
+  // DECISÃO: `from` só conta se for um telefone. Com username escondido a Meta omite-o; fornecedores relatam
+  // também o BSUID neste campo, e tirar-lhe os não-dígitos inventaria um número que não é de ninguém.
+  const rawFrom = str(message.from);
+  const phone = rawFrom && /^\+?\d{8,15}$/.test(rawFrom) ? rawFrom.replace(/\D/g, '') : null;
+  const userId = str(message.from_user_id) ?? (rawFrom && !phone ? rawFrom : null);
+  if (!id) return { kind: 'ignored', type };
+  const shared = phone ? null : type === 'contacts' ? sharedPhone(message) : null;
+  const fromDigits = phone ?? shared;
+  if (!fromDigits) {
+    if (!userId) return { kind: 'ignored', type };
+    return { kind: 'inbound_hidden', providerMessageId: id, senderId, userId: userId.slice(0, 200), profileName: names.get(userId)?.slice(0, 120) ?? null };
+  }
+  if (shared) {
+    return {
+      kind: 'inbound', providerMessageId: id, senderId, from: `+${shared}`, text: null,
+      replyId: 'contact:shared', profileName: (userId && names.get(userId)?.slice(0, 120)) || null, media: null, contentType: type.slice(0, 40),
+    };
+  }
   let text: string | null = null;
   let replyId: string | null = null;
   let media: InboundMedia | null = null;
@@ -251,8 +290,10 @@ export function parseMetaWebhook(payload: unknown): WebhookDelivery[] | null {
       const names = new Map<string, string>();
       for (const contact of arr(value.contacts)) {
         const waId = str(obj(contact).wa_id)?.replace(/\D/g, '');
+        const userId = str(obj(contact).user_id);
         const name = str(obj(obj(contact).profile).name);
-        if (waId && name) names.set(waId, name);
+        if (name && waId) names.set(waId, name);
+        if (name && userId) names.set(userId, name);
       }
       for (const message of arr(value.messages)) {
         const m = obj(message);

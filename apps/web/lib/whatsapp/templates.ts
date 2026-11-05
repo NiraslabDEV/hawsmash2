@@ -4,6 +4,7 @@
  * obriga a submetê-lo outra vez (`npx tsx scripts/whatsapp-templates.ts`).
  *
  * Utility, pt_PT, parâmetros com nome. Os textos não levam o nome da marca: a loja entra por {{loja}}.
+ * A Meta recusa corpos que comecem ou acabem numa variável e os que tenham variáveis a mais para o texto.
  */
 
 export type TemplateButton =
@@ -21,7 +22,11 @@ export interface TemplateSpec {
 export const TEMPLATE_LANGUAGE = "pt_PT";
 export const TEMPLATE_CATEGORY = "UTILITY";
 
-const EX = { nome: "Ana", pedido: "MPT-0042", loja: "Loja Centro", hora: "19:30" };
+const EX = {
+  nome: "Ana", pedido: "MPT-0042", loja: "Loja Centro", hora: "19:30",
+  alerta: "Impressão falhada", detalhe: "A impressora da cozinha não responde há 5 minutos",
+  dia: "05/11/2026", pedidos: "42", total: "28 450 MT",
+};
 const pick = (...keys: Array<keyof typeof EX>) => Object.fromEntries(keys.map((k) => [k, EX[k]]));
 const ACOMPANHAR: TemplateButton = { type: "order_status", text: "Acompanhar" };
 
@@ -46,12 +51,12 @@ export const TEMPLATES: TemplateSpec[] = [
   },
   {
     name: "hs_pedido_pronto",
-    body: "{{nome}}, o teu pedido {{pedido}} está pronto para levantar na {{loja}}.",
+    body: "Olá {{nome}}, o teu pedido {{pedido}} está pronto para levantar na {{loja}}.",
     examples: pick("nome", "pedido", "loja"),
   },
   {
     name: "hs_pedido_a_caminho",
-    body: "{{nome}}, o teu pedido {{pedido}} já saiu com o estafeta.",
+    body: "Olá {{nome}}, o teu pedido {{pedido}} já saiu com o estafeta.",
     examples: pick("nome", "pedido"),
     buttons: [ACOMPANHAR],
   },
@@ -69,6 +74,17 @@ export const TEMPLATES: TemplateSpec[] = [
     name: "hs_pedido_cancelado",
     body: "Olá {{nome}}, o pedido {{pedido}} foi cancelado. Se tiveres dúvidas, responde a esta mensagem.",
     examples: pick("nome", "pedido"),
+  },
+  // Para o dono e o gerente (F4), não para clientes.
+  {
+    name: "hs_alerta_loja",
+    body: "Alerta do sistema na loja {{loja}}: {{alerta}}. Detalhe: {{detalhe}}. Abre o painel para veres o que fazer.",
+    examples: pick("loja", "alerta", "detalhe"),
+  },
+  {
+    name: "hs_resumo_diario",
+    body: "Resumo de {{dia}} na loja {{loja}}: {{pedidos}} pedidos, no total de {{total}}. O detalhe segue por email.",
+    examples: pick("dia", "loja", "pedidos", "total"),
   },
 ];
 
