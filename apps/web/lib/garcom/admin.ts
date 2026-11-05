@@ -6,6 +6,7 @@ const MENSAGENS: Record<string, string> = {
   invalid_waiter_name: 'Nome inválido (2 a 80 letras).',
   invalid_pin_format: 'O PIN tem 4 a 6 dígitos.',
   waiter_not_found: 'Garçom não encontrado.',
+  invalid_remove_minutes: 'O limite é de 0 a 30 minutos.',
 };
 
 export function waiterAdminErrorMessage(message: string | null | undefined): string {
@@ -22,6 +23,7 @@ export type WaiterRow = {
   full_name: string;
   phone: string;
   active: boolean;
+  can_charge: boolean;
   last_seen_at: string | null;
   has_pin: boolean;
   orders_today: number;

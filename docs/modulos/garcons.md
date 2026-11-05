@@ -26,6 +26,23 @@ O desenho é o do [estafeta](estafetas.md), e pela mesma razão: toda a RLS da l
 - `orders.waiter_id` regista quem lançou. `pos_table_overview` devolve `waiter_name`, e o separador Mesas do POS mostra "GARÇOM ANA" em vez de "BALCÃO".
 - Eventos: `table.order_launched` (com `source: 'waiter'`), `table.order_served`, `waiter.login`, `waiter.login_failed`, `waiter.saved`, `waiter.pin_set`.
 
+## O mini POS (1127)
+
+| No telemóvel | Regra |
+|---|---|
+| **Retirar artigo** | Só nos pedidos dele, ainda "Na cozinha", dentro de `stores.waiter_remove_minutes` (3 min de fábrica, 0 desliga). Motivo obrigatório. Sai o papel "ANULAR" na cozinha, o total desce e o stock volta. Depois do limite, é no POS |
+| **Cobrar** | Só com `waiters.can_charge`, desligado de fábrica. M-Pesa, e-Mola ou cartão, entre os que a loja tem ligados. **Dinheiro em notas continua no balcão**: não há registo de "o garçom entregou X ao caixa", e sem isso a gaveta fechava a faltar sem se saber a quem pedir. Registar M-Pesa não fala com a operadora: o garçom confirma que entrou |
+| **Pedir a conta** | Mostra as linhas e imprime no balcão com o total. Não fecha nada |
+| **Mudar de mesa** | Leva a conta inteira. Se a mesa de destino estiver ocupada, as contas juntam-se. A cozinha recebe "MUDOU DE MESA" |
+| **Reimprimir** | A comanda sai na cozinha com REIMPRESSÃO nas observações, e fica em `event_log` |
+| **Esgotados** | Marca e desmarca na loja dele. Vale para o POS, o site e os outros telemóveis. Fica em `event_log` com `role: 'waiter'` |
+| **Notas rápidas** | As da loja, as mesmas do POS |
+| **Os meus pedidos** | Hoje, 7 ou 30 dias, com o que foi retirado e porquê |
+
+`close_table_bill` e `remove_table_item` têm o corpo em `private.close_table_bill_core` e `private.remove_table_item_core`, usados também por `waiter_close_bill` e `waiter_remove_item`: a repartição de pagamentos, o stock e o papel são uma conta só. Quem cobrou fica em `table_bills.waiter_id`, com `closed_by` e `device_id` a null. Uma conta cobrada por um garçom sem turno aberto abre o turno sozinha, como as contas do POS.
+
+O telemóvel não dá desconto nem cria venda sem mesa: desconto manual é de gerente (1113), e venda sem mesa exige pagamento na hora.
+
 ## O módulo no painel
 
 A aba **Garçons** (`/garcons`, gerente e dono) tem dois separadores: **Desempenho** e **Equipa**.
@@ -48,18 +65,20 @@ Os destaques de ticket médio e rapidez só contam a partir de 5 pedidos, para u
 
 As comparações com o período anterior usam uma janela do mesmo tamanho, imediatamente antes.
 
+Ao tocar num garçom aparece o **histórico**: `get_waiter_orders`, 20 pedidos por página, com artigos, estado, como foi paga, quem cobrou e o que foi retirado, com o motivo e onde.
+
 ## Gestão
 
-No painel, em **Garçons → Equipa** ([garcons-equipa.tsx](../../apps/web/app/(admin)/garcons-equipa.tsx)), o dono ou o gerente da loja cria o garçom (nome, telefone, PIN), troca o PIN, edita e desactiva. `get_waiters` mostra também quantos pedidos cada um lançou hoje e o valor.
+No painel, em **Garçons → Equipa** ([garcons-equipa.tsx](../../apps/web/app/(admin)/garcons-equipa.tsx)), o dono ou o gerente da loja cria o garçom (nome, telefone, PIN), troca o PIN, edita, desactiva, autoriza a cobrar e define o limite para retirar. `get_waiters` mostra também quantos pedidos cada um lançou hoje e o valor.
 
 ## Limites
 
 - Precisa de rede: a conta da mesa vive no servidor, como no POS. Sem rede, o rascunho fica no telemóvel e envia-se quando a rede voltar.
-- O telemóvel não retira artigos nem cobra. Retirar é `remove_table_item` no POS, e cobrar é `close_table_bill`.
-- As notas rápidas do POS (`store_pos_settings`) exigem sessão da equipa. No telemóvel a nota escreve-se à mão.
+- Dinheiro em notas, desconto e venda sem mesa continuam no POS.
 
 ## Testes
 
 - BD: [`garcons.test.ts`](../../packages/db/tests/garcons.test.ts) cobre quem gere, as RPCs fechadas à `anon` e à equipa, PIN errado e bloqueio, isolamento Maputo/Matola, preço da loja, stock, papel com o nome do garçom, envio repetido, chave de outro garçom, esgotado recusado, Servido e revogação de sessões.
 - Métricas: [`garcons-metricas.test.ts`](../../packages/db/tests/garcons-metricas.test.ts) cobre quem lê, o isolamento entre lojas, cancelados, extras, servidos, retirados, pago e por cobrar, período e fuso de Maputo.
+- Mini POS: [`garcons-mini-pos.test.ts`](../../packages/db/tests/garcons-mini-pos.test.ts) cobre retirar, cobrar, mudar de mesa, papel, esgotados e histórico, incluindo os limites, o dinheiro recusado, a repetição e o POS a funcionar como antes.
 - Puros: [`lib/garcom/__tests__`](../../apps/web/lib/garcom/__tests__/garcom.test.ts) cobre a linha igual à do POS, o rascunho, "recusado vs incerto", os prontos e o contrato da rota.

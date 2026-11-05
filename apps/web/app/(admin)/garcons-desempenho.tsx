@@ -6,6 +6,7 @@ import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxi
 import { formatMT, type Cents } from '@delivery/core';
 
 import { InsightEmpty, InsightPanel, MetricCard } from '@/components/admin/insights-ui';
+import { GarconsHistorico } from './garcons-historico';
 import { waiterAdminErrorMessage } from '@/lib/garcom/admin';
 import {
   deltaPct,
@@ -203,7 +204,7 @@ export function GarconsDesempenho() {
             label="Ticket médio"
             icon="ticket"
             value={money(t.avg_ticket_cents)}
-            detail={<><Trend pct={deltaPct(t.avg_ticket_cents, antes?.avg_ticket_cents)} /> {itemsPerOrder(t).toLocaleString('pt-PT')} artigos por pedido</>}
+            detail={<><Trend pct={deltaPct(t.avg_ticket_cents, antes?.avg_ticket_cents)} /> {itemsPerOrder(t).toLocaleString('pt-PT')} {itemsPerOrder(t) === 1 ? 'artigo' : 'artigos'} por pedido</>}
           />
           <MetricCard
             label="Extras vendidos"
@@ -230,7 +231,7 @@ export function GarconsDesempenho() {
 
       <InsightPanel
         title="Ranking dos garçons"
-        description="Toca num garçom para ver só os números dele"
+        description="Toca num garçom para ver os números e o histórico dele"
         aside={
           <div className="insight-segment" role="group" aria-label="Ordenar o ranking">
             {RANK_KEYS.slice(0, 4).map((key) => (
@@ -275,6 +276,16 @@ export function GarconsDesempenho() {
           </ol>
         )}
       </InsightPanel>
+
+      {selecionado && pronto && (
+        <GarconsHistorico
+          storeId={storeId ?? null}
+          waiterId={selecionado.id}
+          nome={selecionado.full_name}
+          from={range.from}
+          to={range.to}
+        />
+      )}
 
       {ordenados.length > 0 && <TabelaCompleta waiters={ordenados} rankKey={rankKey} setRankKey={setRankKey} mostrarLoja={storeId === null} />}
 

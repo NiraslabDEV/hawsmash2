@@ -1,6 +1,6 @@
 import { parseMenuCategories, type PosMenuCategory } from '@/lib/pos/offline-store';
 
-import type { WaiterAction, WaiterState } from './contract';
+import type { WaiterAction, WaiterHistory, WaiterState } from './contract';
 
 /**
  * As chamadas do telemóvel do garçom a `/api/garcom` (1122). O token vai no
@@ -18,12 +18,22 @@ export async function lerEstado(): Promise<WaiterState> {
   return body as WaiterState;
 }
 
-export async function lerCardapio(): Promise<PosMenuCategory[]> {
+export type Cardapio = { categories: PosMenuCategory[]; unavailable: Array<{ id: string; name: string }> };
+
+export async function lerHistorico(dias: number): Promise<WaiterHistory> {
+  const res = await fetch(`/api/garcom/historico?dias=${dias}`, { cache: 'no-store' });
+  if (res.status === 401) throw new SemSessao();
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(body.error ?? 'Sem ligação.');
+  return body as WaiterHistory;
+}
+
+export async function lerCardapio(): Promise<Cardapio> {
   const res = await fetch('/api/garcom/cardapio', { cache: 'no-store' });
   if (res.status === 401) throw new SemSessao();
   const body = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(body.error ?? 'Sem ligação.');
-  return parseMenuCategories(body.categories);
+  return { categories: parseMenuCategories(body.categories), unavailable: body.unavailable ?? [] };
 }
 
 export type Resposta<T = unknown> = {

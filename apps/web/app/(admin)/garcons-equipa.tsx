@@ -20,7 +20,7 @@ type StoreRow = { id: string; short_name: string };
 /**
  * Os garçons de cada loja (1122). O garçom não é uma conta da equipa: entra
  * em /garcom no telemóvel com o telefone e o PIN que se define aqui, e só
- * lança pedidos nas mesas da sua loja. Trocar o PIN ou desactivá-lo fecha o
+ * trabalha nas mesas da sua loja. Trocar o PIN ou desactivá-lo fecha o
  * telemóvel antigo.
  */
 export function GarconsSection() {
@@ -45,6 +45,32 @@ export function GarconsSection() {
         setStoreId((actual) => actual ?? lojas[0]?.id ?? null);
       });
   }, [supabase]);
+
+  const definicoes = useQuery({
+    queryKey: ['garcons-definicoes', storeId],
+    enabled: Boolean(storeId),
+    queryFn: async (): Promise<{ remove_minutes: number }> => {
+      const { data, error } = await supabase.rpc('get_waiter_settings', { p_store_id: storeId });
+      if (error) throw new Error(waiterAdminErrorMessage(error.message));
+      return data as { remove_minutes: number };
+    },
+  });
+
+  const mudarLimite = async (minutos: number) => {
+    const { error } = await supabase.rpc('set_waiter_remove_minutes', { p_store_id: storeId, p_minutes: minutos });
+    if (error) return falhou(waiterAdminErrorMessage(error.message));
+    setMensagem({
+      tipo: 'ok',
+      texto: minutos === 0 ? 'Retirar artigos passa a ser só no balcão.' : `Os garçons podem retirar até ${minutos} min depois de lançar.`,
+    });
+    void definicoes.refetch();
+  };
+
+  const alternarCobrar = async (w: WaiterRow) => {
+    const { error } = await supabase.rpc('set_waiter_can_charge', { p_waiter_id: w.id, p_can_charge: !w.can_charge });
+    if (error) return falhou(waiterAdminErrorMessage(error.message));
+    terminou(w.can_charge ? `${w.full_name} deixa de poder cobrar.` : `${w.full_name} pode cobrar por M-Pesa, e-Mola e cartão.`);
+  };
 
   const lista = useQuery({
     queryKey: ['garcons', storeId],
@@ -85,8 +111,8 @@ export function GarconsSection() {
       <p className="text-sm text-[#C9BCAC]">
         O garçom tira o pedido na mesa, no telemóvel: abre{' '}
         <code className="text-[#F5A623]">{baseUrl || ''}/garcom</code> e entra com o telefone e o PIN. O pedido sai na
-        cozinha e no balcão, como o lançado no POS, e fica na conta da mesa. A conta cobra-se no POS, na aba Mesas. No
-        telemóvel, &quot;Adicionar ao ecrã inicial&quot; deixa-o como uma app.
+        cozinha e no balcão, como o lançado no POS, e fica na conta da mesa. A conta cobra-se no POS, na aba Mesas, ou no telemóvel de quem tiver
+        &quot;Pode cobrar&quot; ligado, por M-Pesa, e-Mola ou cartão (em notas, só no balcão). No telemóvel, &quot;Adicionar ao ecrã inicial&quot; deixa-o como uma app.
       </p>
 
       {stores.length > 1 && (
@@ -111,6 +137,24 @@ export function GarconsSection() {
       )}
 
       {storeId && <NovoGarcom storeId={storeId} loja={loja?.short_name} onDone={terminou} onErro={falhou} />}
+
+      {storeId && definicoes.data && (
+        <label className="flex flex-wrap items-center gap-3 text-sm text-[#C9BCAC]">
+          O garçom pode retirar um artigo do pedido dele até
+          <select
+            className={INPUT}
+            value={definicoes.data.remove_minutes}
+            onChange={(e) => void mudarLimite(Number(e.target.value))}
+          >
+            {/* DECISÃO: de fábrica 3 min. Depois disso a comida pode estar feita. */}
+            {[0, 1, 2, 3, 5, 10, 15, 30].map((m) => (
+              <option key={m} value={m}>
+                {m === 0 ? 'nunca (só no balcão)' : `${m} min depois de lançar`}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
 
       {mensagem && (
         <p
@@ -157,6 +201,16 @@ export function GarconsSection() {
                       }`}
                     >
                       {w.active ? 'Activo' : 'Desactivado'}
+                    </button>
+                    <button
+                      onClick={() => void alternarCobrar(w)}
+                      aria-pressed={w.can_charge}
+                      title="Fechar a conta da mesa no telemóvel, sem dinheiro em notas"
+                      className={`text-xs font-semibold px-3 py-1.5 rounded-full ${
+                        w.can_charge ? 'bg-green-900/30 text-green-400 border border-green-700' : 'bg-white/[0.08] text-[#C9BCAC]'
+                      }`}
+                    >
+                      {w.can_charge ? 'Pode cobrar' : 'Não cobra'}
                     </button>
                   </div>
                   {pinDe?.id === w.id && <FormPin waiter={w} onDone={terminou} onCancelar={() => setPinDe(null)} />}

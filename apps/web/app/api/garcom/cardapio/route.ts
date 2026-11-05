@@ -27,7 +27,10 @@ export async function GET() {
     );
   }
   return NextResponse.json(
-    { categories: (data as { categories?: unknown } | null)?.categories ?? [] },
+    {
+      categories: (data as { categories?: unknown } | null)?.categories ?? [],
+      unavailable: (data as { unavailable?: unknown } | null)?.unavailable ?? [],
+    },
     { headers: { 'Cache-Control': 'no-store' } },
   );
 }

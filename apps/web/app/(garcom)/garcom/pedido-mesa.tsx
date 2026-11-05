@@ -27,7 +27,8 @@ import {
   type PosVariant,
 } from '@/lib/pos/cart';
 import { posItemAvailability, type PosMenuItem } from '@/lib/pos/offline-store';
-import { tableName } from '@/lib/pos/tables';
+import { noteHasChip, toggleNoteChip } from '@/lib/pos/notes';
+import { tableName, tableNote } from '@/lib/pos/tables';
 
 const money = (c: number) => formatMT(c as Cents);
 
@@ -58,7 +59,12 @@ function useRascunho(tableId: string) {
   useEffect(() => {
     try {
       const vazio =
-        cartCount(rascunho.cart) === 0 && !rascunho.pendente && !rascunho.customerName && !rascunho.notes;
+        cartCount(rascunho.cart) === 0 &&
+        !rascunho.pendente &&
+        !rascunho.customerName &&
+        !rascunho.customerPhone &&
+        !rascunho.tabNote &&
+        !rascunho.notes;
       if (vazio) window.localStorage.removeItem(rascunhoKey(tableId));
       else window.localStorage.setItem(rascunhoKey(tableId), JSON.stringify(rascunho));
     } catch {
@@ -75,12 +81,15 @@ function useRascunho(tableId: string) {
 export function PedidoMesa({
   mesa,
   lojaAberta,
+  notasRapidas,
   onVoltar,
   onEnviado,
   onSemSessao,
 }: {
   mesa: WaiterTable;
   lojaAberta: boolean;
+  /** As notas rápidas da loja (aba POS): as mesmas do balcão. */
+  notasRapidas: readonly string[];
   onVoltar: () => void;
   onEnviado: (r: LaunchResult) => void;
   onSemSessao: () => void;
@@ -105,7 +114,7 @@ export function PedidoMesa({
   const [toque, setToque] = useState<string | null>(null);
 
   const categorias = useMemo(
-    () => (cardapio.data ?? []).filter((categoria) => categoria.items.length > 0),
+    () => (cardapio.data?.categories ?? []).filter((categoria) => categoria.items.length > 0),
     [cardapio.data],
   );
   const categoriaActual = categorias.find((c) => c.id === categoriaId) ?? categorias[0] ?? null;
@@ -258,6 +267,7 @@ export function PedidoMesa({
       {aEscolher && (
         <EscolherArtigo
           item={aEscolher}
+          notasRapidas={notasRapidas}
           onFechar={() => setAEscolher(null)}
           onAdicionar={(variant, addonIds, notes, qty) => {
             const sellable = buildSellable(aEscolher, variant, addonIds, notes);
@@ -295,10 +305,12 @@ export function PedidoMesa({
 // ─── Escolher variante, extras e nota ─────────────────────────────────────────
 function EscolherArtigo({
   item,
+  notasRapidas,
   onFechar,
   onAdicionar,
 }: {
   item: PosMenuItem;
+  notasRapidas: readonly string[];
   onFechar: () => void;
   onAdicionar: (variant: PosVariant | null, addonIds: string[], notes: string | null, qty: number) => void;
 }) {
@@ -367,6 +379,24 @@ function EscolherArtigo({
           placeholder="ex.: sem cebola, bem passado"
           className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 outline-none focus:border-[var(--gold)]"
         />
+        {notasRapidas.length > 0 && (
+          <span className="flex flex-wrap gap-2 pt-1">
+            {notasRapidas.map((atalho) => (
+              <button
+                key={atalho}
+                type="button"
+                onClick={() => setNota((n) => toggleNoteChip(n, atalho).slice(0, 140))}
+                className={`rounded-full border px-3 py-1.5 text-xs font-semibold ${
+                  noteHasChip(nota, atalho)
+                    ? 'border-[var(--gold)] bg-[var(--gold)]/15 text-[var(--gold)]'
+                    : 'border-white/10 text-[var(--ink-dim)]'
+                }`}
+              >
+                {atalho}
+              </button>
+            ))}
+          </span>
+        )}
       </label>
 
       <div className="flex items-center justify-between gap-3">
@@ -436,6 +466,8 @@ function Revisao({
       // Os mesmos ids e quantidades que o balcão manda — nunca o preço (Regra 2).
       items: salePayloadItems(linhas),
       ...(rascunho.customerName.trim() ? { customerName: rascunho.customerName.trim() } : {}),
+      ...(rascunho.customerPhone.trim() ? { customerPhone: rascunho.customerPhone.trim() } : {}),
+      ...(rascunho.tabNote.trim() ? { tabNote: rascunho.tabNote.trim() } : {}),
       ...(rascunho.notes.trim() ? { notes: rascunho.notes.trim() } : {}),
     });
     setAEnviar(false);
@@ -495,6 +527,31 @@ function Revisao({
         />
       )}
       <input
+        value={rascunho.customerPhone}
+        disabled={bloqueado}
+        type="tel"
+        inputMode="tel"
+        autoComplete="off"
+        maxLength={20}
+        onChange={(e) => mudar((r) => ({ ...r, customerPhone: e.target.value }))}
+        placeholder="Telefone do cliente (opcional)"
+        className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 outline-none focus:border-[var(--gold)] disabled:opacity-60"
+      />
+      {tableNote(mesa) ? (
+        <p className="text-sm text-[var(--ink-dim)]">
+          Cliente: <b className="text-[var(--ink)]">{tableNote(mesa)}</b>
+        </p>
+      ) : (
+        <input
+          value={rascunho.tabNote}
+          disabled={bloqueado}
+          maxLength={120}
+          onChange={(e) => mudar((r) => ({ ...r, tabNote: e.target.value }))}
+          placeholder="Característica do cliente, ex.: camisa azul (opcional)"
+          className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 outline-none focus:border-[var(--gold)] disabled:opacity-60"
+        />
+      )}
+      <input
         value={rascunho.notes}
         disabled={bloqueado}
         maxLength={300}
@@ -541,7 +598,7 @@ function Revisao({
 }
 
 // ─── Peças ────────────────────────────────────────────────────────────────────
-function Folha({
+export function Folha({
   titulo,
   onFechar,
   fechar = true,
@@ -572,7 +629,7 @@ function Folha({
   );
 }
 
-function Contador({
+export function Contador({
   qty,
   onMenos,
   onMais,

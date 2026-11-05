@@ -11,20 +11,30 @@ import {
   lerRascunho,
   novosProntos,
   origemPedido,
+  podeRetirar,
   podeServir,
   prontosParaServir,
   rascunhoKey,
 } from '@/lib/garcom/pedido';
 import { cartCount } from '@/lib/pos/cart';
+import { resolvePosSettings } from '@/lib/pos/settings';
 import { itemLabel, minutesOpen, tableName, tableTotalCents, type TableOrder } from '@/lib/pos/tables';
 
+import { Esgotados } from './esgotados';
+import { Historico } from './historico';
+import { BotoesDaMesa, ReimprimirComanda, RetirarArtigo } from './mesa-accoes';
 import { PedidoMesa } from './pedido-mesa';
 
 const money = (c: number) => formatMT(c as Cents);
 const hora = (iso: string) =>
   new Date(iso).toLocaleTimeString('pt-PT', { timeZone: 'Africa/Maputo', hour: '2-digit', minute: '2-digit' });
 
-type View = { kind: 'mesas' } | { kind: 'mesa'; tableId: string } | { kind: 'pedir'; tableId: string };
+type View =
+  | { kind: 'mesas' }
+  | { kind: 'historico' }
+  | { kind: 'esgotados' }
+  | { kind: 'mesa'; tableId: string }
+  | { kind: 'pedir'; tableId: string };
 
 /**
  * O ecrã em que se está vive no histórico do browser: o botão "voltar" do
@@ -43,7 +53,12 @@ function useNavegacao() {
     setView(v);
   }, []);
   const voltar = useCallback(() => window.history.back(), []);
-  return { view, abrir, voltar };
+  /** Mudar de separador não enche o histórico: o "voltar" não os percorre um a um. */
+  const trocar = useCallback((v: View) => {
+    window.history.replaceState({ garcom: v }, '');
+    setView(v);
+  }, []);
+  return { view, abrir, voltar, trocar };
 }
 
 export default function GarcomPage() {
@@ -165,7 +180,8 @@ type Aviso = { tipo: 'ok' | 'erro'; texto: string };
 
 function App({ estado, recarregar }: { estado: WaiterState; recarregar: () => void }) {
   const queryClient = useQueryClient();
-  const { view, abrir, voltar } = useNavegacao();
+  const { view, abrir, voltar, trocar } = useNavegacao();
+  const notasRapidas = resolvePosSettings(estado.pos_config ?? {}).quickNotes;
   const [aviso, setAviso] = useState<Aviso | null>(null);
 
   // Pedido que ficou pronto: o telemóvel vibra, para quem o tem no bolso.
@@ -206,7 +222,8 @@ function App({ estado, recarregar }: { estado: WaiterState; recarregar: () => vo
     semSessao();
   };
 
-  const mesa = view.kind === 'mesas' ? null : estado.tables.find((t) => t.id === view.tableId) ?? null;
+  const mesa =
+    view.kind === 'mesa' || view.kind === 'pedir' ? estado.tables.find((t) => t.id === view.tableId) ?? null : null;
 
   let ecra: React.ReactNode;
   if (view.kind === 'pedir' && mesa) {
@@ -214,6 +231,7 @@ function App({ estado, recarregar }: { estado: WaiterState; recarregar: () => vo
       <PedidoMesa
         mesa={mesa}
         lojaAberta={estado.store.open}
+        notasRapidas={notasRapidas}
         onVoltar={voltar}
         onSemSessao={semSessao}
         onEnviado={(r: LaunchResult) => {
@@ -232,12 +250,19 @@ function App({ estado, recarregar }: { estado: WaiterState; recarregar: () => vo
     ecra = (
       <DetalheMesa
         mesa={mesa}
-        lojaAberta={estado.store.open}
+        estado={estado}
         onVoltar={voltar}
         onPedir={() => abrir({ kind: 'pedir', tableId: mesa.id })}
         servir={servir}
+        aviso={setAviso}
+        recarregar={recarregar}
+        semSessao={semSessao}
       />
     );
+  } else if (view.kind === 'historico') {
+    ecra = <Historico onSemSessao={semSessao} />;
+  } else if (view.kind === 'esgotados') {
+    ecra = <Esgotados aviso={setAviso} onSemSessao={semSessao} />;
   } else {
     ecra = (
       <ListaMesas
@@ -249,9 +274,34 @@ function App({ estado, recarregar }: { estado: WaiterState; recarregar: () => vo
     );
   }
 
+  const separador = view.kind === 'mesas' || view.kind === 'historico' || view.kind === 'esgotados';
+
   return (
     <>
       {ecra}
+      {separador && (
+        <nav
+          aria-label="Secções"
+          className="fixed inset-x-0 bottom-0 z-30 mx-auto grid max-w-md grid-cols-3 border-t border-white/10 bg-[var(--bg-1)]"
+        >
+          {(
+            [
+              ['mesas', 'Mesas'],
+              ['historico', 'Os meus pedidos'],
+              ['esgotados', 'Esgotados'],
+            ] as const
+          ).map(([kind, label]) => (
+            <button
+              key={kind}
+              aria-current={view.kind === kind ? 'page' : undefined}
+              onClick={() => trocar({ kind })}
+              className={`py-4 text-sm font-semibold ${view.kind === kind ? 'text-[var(--gold)]' : 'text-[var(--ink-dim)]'}`}
+            >
+              {label}
+            </button>
+          ))}
+        </nav>
+      )}
       {aviso && (
         <div className="pointer-events-none fixed inset-x-0 top-3 z-50 flex justify-center px-4">
           <p
@@ -295,7 +345,7 @@ function ListaMesas({
   const agora = new Date();
 
   return (
-    <main className="mx-auto max-w-md space-y-5 px-4 pb-10 pt-4">
+    <main className="mx-auto max-w-md space-y-5 px-4 pb-24 pt-4">
       <header className="flex items-center justify-between gap-3">
         <div className="min-w-0">
           <p className="truncate text-lg font-semibold">{estado.waiter.full_name}</p>
@@ -403,19 +453,27 @@ function ListaMesas({
 // ─── Mesa ─────────────────────────────────────────────────────────────────────
 function DetalheMesa({
   mesa,
-  lojaAberta,
+  estado,
   onVoltar,
   onPedir,
   servir,
+  aviso,
+  recarregar,
+  semSessao,
 }: {
   mesa: WaiterTable;
-  lojaAberta: boolean;
+  estado: WaiterState;
   onVoltar: () => void;
   onPedir: () => void;
   servir: (orderId: string) => Promise<boolean>;
+  aviso: (a: Aviso) => void;
+  recarregar: () => void;
+  semSessao: () => void;
 }) {
+  const lojaAberta = estado.store.open;
   const nome = tableName(mesa);
   const porEnviar = artigosPorEnviar(mesa.id);
+  const agoraMs = Date.now();
   const podePedir = lojaAberta && mesa.active;
 
   return (
@@ -457,21 +515,47 @@ function DetalheMesa({
         <>
           <ul className="space-y-2">
             {mesa.orders.map((order) => (
-              <PedidoNaMesa key={order.id} order={order} servir={servir} />
+              <PedidoNaMesa
+                key={order.id}
+                order={order}
+                servir={servir}
+                podeRetirarAgora={podeRetirar(order, estado.waiter.id, estado.store.remove_minutes, agoraMs)}
+                aviso={aviso}
+                recarregar={recarregar}
+                semSessao={semSessao}
+              />
             ))}
           </ul>
           <div className="flex items-baseline justify-between rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3">
             <span className="text-sm text-[var(--ink-dim)]">Conta da mesa</span>
             <span className="text-xl font-bold text-[var(--gold)]">{money(tableTotalCents(mesa))}</span>
           </div>
-          <p className="text-center text-xs text-[var(--ink-mute)]">A conta paga-se no balcão, no fim.</p>
+          <BotoesDaMesa mesa={mesa} estado={estado} aviso={aviso} recarregar={recarregar} semSessao={semSessao} aoFechar={onVoltar} />
+          {!estado.waiter.can_charge && (
+            <p className="text-center text-xs text-[var(--ink-mute)]">A conta paga-se no balcão, no fim.</p>
+          )}
         </>
       )}
     </main>
   );
 }
 
-function PedidoNaMesa({ order, servir }: { order: TableOrder; servir: (orderId: string) => Promise<boolean> }) {
+function PedidoNaMesa({
+  order,
+  servir,
+  podeRetirarAgora,
+  aviso,
+  recarregar,
+  semSessao,
+}: {
+  order: TableOrder;
+  servir: (orderId: string) => Promise<boolean>;
+  podeRetirarAgora: boolean;
+  aviso: (a: Aviso) => void;
+  recarregar: () => void;
+  semSessao: () => void;
+}) {
+  const [aRetirar, setARetirar] = useState<TableOrder['items'][number] | null>(null);
   const cor =
     order.status === 'ready'
       ? 'bg-emerald-500/20 text-emerald-300'
@@ -492,11 +576,26 @@ function PedidoNaMesa({ order, servir }: { order: TableOrder; servir: (orderId: 
           <li key={item.id ?? i}>
             <span className="font-bold text-[var(--gold)]">{item.qty}×</span> {itemLabel(item)}
             {item.notes && <span className="block pl-6 text-xs italic text-[var(--ink-dim)]">{item.notes}</span>}
+            {podeRetirarAgora && item.id && (
+              <button onClick={() => setARetirar(item)} className="ml-6 block py-1 text-xs font-semibold text-red-300 underline">
+                Retirar
+              </button>
+            )}
           </li>
         ))}
       </ul>
       {order.notes && <p className="rounded-lg bg-white/5 px-2 py-1 text-sm">📝 {order.notes}</p>}
       {podeServir(order) && <BotaoServir orderId={order.id} servir={servir} />}
+      {podeServir(order) && <ReimprimirComanda orderId={order.id} aviso={aviso} semSessao={semSessao} />}
+      {aRetirar && (
+        <RetirarArtigo
+          item={aRetirar}
+          aviso={aviso}
+          recarregar={recarregar}
+          semSessao={semSessao}
+          onFechar={() => setARetirar(null)}
+        />
+      )}
     </li>
   );
 }

@@ -10,13 +10,15 @@
  *  - o rascunho por mesa guardado no telemóvel, com o `clientSaleId` — um
  *    ecrã que recarrega a meio, ou rede que cai no envio, não perde o pedido
  *    nem o lança duas vezes (Regra 4);
- *  - o que está pronto para levar à mesa.
+ *  - o que está pronto para levar à mesa;
+ *  - o que o mini POS pode mostrar: retirar e cobrar (1127).
  */
 
 import { z } from 'zod';
 
 import { cartKey, resolveSellable, type Cart, type PosAddon, type PosVariant, type Sellable } from '@/lib/pos/cart';
 import type { PosMenuItem } from '@/lib/pos/offline-store';
+import { enabledPaymentMethods, resolvePosSettings } from '@/lib/pos/settings';
 import type { PosTable, TableOrder } from '@/lib/pos/tables';
 
 /**
@@ -58,6 +60,10 @@ export type Rascunho = {
   clientSaleId: string;
   cart: Cart;
   customerName: string;
+  /** Da conta, como o nome (1129). O garçom escreve-o, mas não lê o que lá está. */
+  customerPhone: string;
+  /** A característica do cliente, "camisa azul" (1129). */
+  tabNote: string;
   notes: string;
   /**
    * O envio saiu e não se sabe se chegou (rede caiu, servidor não respondeu).
@@ -96,13 +102,25 @@ const rascunhoSchema = z.object({
   clientSaleId: z.string().uuid(),
   cart: z.record(z.string(), lineSchema),
   customerName: z.string().max(60).default(''),
+  customerPhone: z.string().max(20).default(''),
+  tabNote: z.string().max(120).default(''),
   notes: z.string().max(300).default(''),
   pendente: z.boolean().default(false),
   updatedAt: z.number(),
 });
 
 export function novoRascunho(tableId: string, clientSaleId: string, now: number): Rascunho {
-  return { tableId, clientSaleId, cart: {}, customerName: '', notes: '', pendente: false, updatedAt: now };
+  return {
+    tableId,
+    clientSaleId,
+    cart: {},
+    customerName: '',
+    customerPhone: '',
+    tabNote: '',
+    notes: '',
+    pendente: false,
+    updatedAt: now,
+  };
 }
 
 /**
@@ -145,6 +163,7 @@ export const ESTADO_PEDIDO: Record<string, string> = {
   in_preparation: 'Na cozinha',
   ready: 'Pronto',
   delivered: 'Servido',
+  cancelled: 'Cancelado',
 };
 
 /** Quem lançou o pedido: "Garçom Ana", "QR" ou "Balcão". */
@@ -170,4 +189,26 @@ export function novosProntos(antes: ReadonlySet<string>, tables: readonly PosTab
 /** Pode o garçom marcar "Servido"? Só o que já foi para a cozinha e não foi servido. */
 export function podeServir(order: Pick<TableOrder, 'status'>): boolean {
   return order.status === 'in_preparation' || order.status === 'ready';
+}
+
+/**
+ * Pode o garçom retirar deste pedido? Só o que ele lançou, ainda na cozinha e
+ * dentro do limite da loja (1127). É só para o ecrã não mostrar um botão que vai
+ * ser recusado: quem decide é `waiter_remove_item`, com o relógio do servidor.
+ */
+export function podeRetirar(
+  order: Pick<TableOrder, 'status' | 'created_at' | 'waiter_id'>,
+  waiterId: string,
+  limiteMinutos: number,
+  now: number,
+): boolean {
+  if (order.waiter_id !== waiterId || order.status !== 'in_preparation' || limiteMinutos <= 0) return false;
+  return now - new Date(order.created_at).getTime() <= limiteMinutos * 60_000;
+}
+
+/** Os meios com que o garçom pode cobrar: os ligados na loja, sem dinheiro em notas. */
+export function meiosDeCobrar(raw: unknown): Array<{ id: 'mpesa' | 'emola' | 'credit_card'; label: string }> {
+  return enabledPaymentMethods(resolvePosSettings(raw ?? {})).flatMap((m) =>
+    m.id === 'cash' ? [] : [{ id: m.id, label: m.label }],
+  );
 }

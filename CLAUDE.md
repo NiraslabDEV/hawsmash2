@@ -192,7 +192,9 @@ Estafeta (1115): `deliveries` com estado próprio ao lado do pedido; "Levantei" 
 telefone + PIN com token opaco — **não** é conta Supabase nem perfil, para a RLS da loja não lhe abrir nada.
 Taxa creditada uma vez por entrega; pagar em dinheiro é despesa do turno.
 Garçom (1122): lança o pedido da mesa no telemóvel (`/garcom`), pelo mesmo caminho de preço, stock e comanda
-do balcão. Entra como o estafeta, com telefone + PIN e token opaco, e não toca em dinheiro.
+do balcão. Entra como o estafeta, com telefone + PIN e token opaco. Mini POS (1127): retira artigo dentro do limite
+da loja, muda de mesa, pede a conta, reimprime e marca esgotado; cobra só com autorização (`waiters.can_charge`) e
+**nunca em notas**, porque a gaveta não sabe o que está na mão dele. Desconto e venda sem mesa ficam no POS.
 [Pedidos](docs/modulos/pedidos.md) · [mesas](docs/modulos/mesas.md) · [garçons](docs/modulos/garcons.md) · [estafetas](docs/modulos/estafetas.md).
 
 ---

@@ -9,10 +9,12 @@ import {
   buildSellable,
   falhaDeEnvio,
   lerRascunho,
+  meiosDeCobrar,
   needsItemSheet,
   novoRascunho,
   novosProntos,
   origemPedido,
+  podeRetirar,
   podeServir,
   prontosParaServir,
   RASCUNHO_MAX_IDADE_MS,
@@ -192,6 +194,43 @@ describe('as mesas no telemóvel', () => {
     expect(origemPedido({ origin: 'pos', waiter_name: 'Ana' })).toBe('Ana');
     expect(origemPedido({ origin: 'qr', waiter_name: null })).toBe('QR');
     expect(origemPedido({ origin: 'pos' })).toBe('Balcão');
+  });
+});
+
+describe('o mini POS', () => {
+  const agora = Date.UTC(2026, 10, 5, 12, 0);
+  const pedidoDe = (extra: Partial<TableOrder>) => pedido('p', 'in_preparation', 1, { waiter_id: 'ana', ...extra });
+
+  it('retirar: só o dele, na cozinha, dentro do limite', () => {
+    expect(podeRetirar(pedidoDe({}), 'ana', 3, agora)).toBe(true);
+    expect(podeRetirar(pedidoDe({}), 'beto', 3, agora)).toBe(false);
+    expect(podeRetirar(pedidoDe({ status: 'ready' }), 'ana', 3, agora)).toBe(false);
+    expect(podeRetirar(pedido('p', 'in_preparation', 4, { waiter_id: 'ana' }), 'ana', 3, agora)).toBe(false);
+    expect(podeRetirar(pedidoDe({}), 'ana', 0, agora)).toBe(false);
+  });
+
+  it('cobrar: nunca oferece dinheiro em notas, e respeita o que a loja desligou', () => {
+    expect(meiosDeCobrar(null).map((m) => m.id)).not.toContain('cash');
+    const config = {
+      payments: {
+        methods: [
+          { id: 'cash', enabled: true, label: 'Dinheiro' },
+          { id: 'mpesa', enabled: true, label: 'M-Pesa' },
+          { id: 'emola', enabled: false, label: 'e-Mola' },
+          { id: 'credit_card', enabled: true, label: 'POS Millennium' },
+        ],
+      },
+    };
+    expect(meiosDeCobrar(config)).toEqual([
+      { id: 'mpesa', label: 'M-Pesa' },
+      { id: 'credit_card', label: 'POS Millennium' },
+    ]);
+  });
+
+  it('o contrato não aceita dinheiro em notas no cobrar', () => {
+    const base = { action: 'close', clientCloseId: UUID, tableId: MESA, expectedTotalCents: 100 };
+    expect(actionSchema.safeParse({ ...base, method: 'mpesa' }).success).toBe(true);
+    expect(actionSchema.safeParse({ ...base, method: 'cash' }).success).toBe(false);
   });
 });
 
