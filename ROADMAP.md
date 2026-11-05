@@ -798,14 +798,18 @@ fechado aqui, vai para o Gym OS e para o motor sem edição (plano §4 e §6).
   [`events.ts`](apps/web/lib/whatsapp/events.ts) → templates `hs_*` (catálogo no [plano §3.1](docs/planos/whatsapp.md))
 - [x] W1 — [Ensaio SQL](supabase/tests/whatsapp.sql) na base local: 34/34 (idempotência, claim, retry, estado só para
   a frente, opt-out, loja do número, balcão e loja desligada não enviam). Suite a 30/10: **1432 testes, 152 ficheiros**
-- [ ] W1 — Aplicar 1117 e 1118 no LIVE fora do horário (skill `aplicar-migration-supabase`). São inofensivas sem
-  número: nenhuma loja fica ligada
 - [x] W1 — Transporte **Meta Cloud API** ([`meta.ts`](packages/whatsapp/src/meta.ts)): envio de templates e mensagens
   interactivas, `X-Hub-Signature-256`, `hub.challenge`, várias mensagens por entrega, media; limites da Meta em
   [`limits.ts`](packages/whatsapp/src/limits.ts) — pacote com 61 testes
-- [ ] W1 — Aplicar 1124 e 1125 no LIVE com as anteriores (mesma regra)
-- [~] **B-121** — Ligar ([plano §7](docs/planos/whatsapp.md)): app Meta, token, webhook, templates, cron, número de Maputo
-- [ ] W2 — **F4** alertas e digest ao dono por WhatsApp, arrefecimento de 30 min
+- [~] **B-121** — Ligar ([plano §7](docs/planos/whatsapp.md)): app Meta, token, método de pagamento, webhook, templates, cron, número de Maputo
+- [x] W1 — Migrations 1117, 1118, 1124 e 1125 no LIVE a 05/11, fora do horário (`anon` recusado, verificado)
+- [x] Painel do dono ([1126](supabase/migrations/20261105190000_1126_whatsapp_no_painel.sql), Lojas → WhatsApp): ligar e desligar
+  sem deploy, números, uso do mês por tipo (base da cobrança, B-123), últimas enviadas e recebidas
+- [ ] Aplicar a 1126 no LIVE
+- [x] W2 — **F4** alertas e resumo do dia também por WhatsApp, para os telemóveis escolhidos no painel; best-effort, o email fica
+- [x] Revisão ao preço novo da Meta (1/10/2026, [plano §8](docs/planos/whatsapp.md)): bolhas juntas numa mensagem, cardápio nas
+  boas-vindas, 13 mensagens num pedido típico. Corrigidos: resumo longo perdia o total, dois templates seriam recusados,
+  quem esconde o número ficava sem resposta (BSUID, **B-124**)
 - [x] W3 — **F2** pedido dentro da conversa (ADR 0012): [1124](supabase/migrations/20261105180000_1124_whatsapp_conversas.sql)
   conversas portáteis (estado com versão, respostas na fila idempotentes por mensagem recebida, retoma pelo cron);
   [1125](supabase/migrations/20261105180100_1125_whatsapp_pedido_na_conversa.sql) `whatsapp_create_order` (mesmo

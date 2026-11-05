@@ -2,15 +2,19 @@
 
 > Para um agente de código a trabalhar neste repositório. Lê primeiro [`AGENTS.md`](../../AGENTS.md) e
 > [`CLAUDE.md`](../../CLAUDE.md) (regras 1–4 e §17), depois [ADR 0011](../decisions/0011-whatsapp-business-por-adaptador.md),
-> [ADR 0012](../decisions/0012-pedido-pelo-whatsapp-na-conversa.md) e [o plano](whatsapp.md). Estado escrito a
-> 05/11/2026, 23h de Maputo.
+> [ADR 0012](../decisions/0012-pedido-pelo-whatsapp-na-conversa.md) e [o plano](whatsapp.md), incluindo o §8 (custo).
+> Estado actualizado a 05/11/2026, perto da meia-noite de Maputo.
+
+> **Já feito, não repitas:** T1 (commit), T2 (1117/1118/1124/1125 no LIVE), T8 (painel), T9 (alertas). **T10 cancelada**
+> (ver lá). **Falta:** aplicar a 1126, T3 se ainda não tiver sido feita, e T4–T7, que dependem das contas na Meta.
 
 ---
 
 ## 0. Onde estamos
 
 O cliente vai poder **pedir, pagar e mandar o comprovativo sem sair do WhatsApp**, e receber os avisos do pedido
-(pago, pronto, a caminho, entregue). O código está escrito e testado; **nada está ligado** e **nada foi commitado**.
+(pago, pronto, a caminho, entregue). O código está escrito, testado e commitado no `dev`; **nada está ligado** e nada foi
+ensaiado ainda contra a Meta real (B-124).
 
 | Peça | Onde | Estado |
 |---|---|---|
@@ -20,16 +24,16 @@ O cliente vai poder **pedir, pagar e mandar o comprovativo sem sair do WhatsApp*
 | Conversas: estado com versão, respostas na fila, retoma (portátil) | `supabase/migrations/20261105180000_1124_whatsapp_conversas.sql` | ✅ |
 | Pedido na conversa + comprovativo (restaurante) | `supabase/migrations/20261105180100_1125_whatsapp_pedido_na_conversa.sql` | ✅ ensaio 11/11 |
 | Despacho/webhook | `apps/web/lib/whatsapp/dispatch.ts`, `config.ts`, `events.ts`, `templates.ts` | ✅ |
-| Motor da conversa, IA, orquestrador | `apps/web/lib/whatsapp/pedido/{engine,ai,run,state,catalogue}.ts` | ✅ 51 testes na pasta |
+| Motor da conversa, IA, orquestrador | `apps/web/lib/whatsapp/pedido/{engine,ai,run,state,catalogue}.ts` | ✅ |
+| Painel do dono + uso do mês (T8) | `apps/web/app/(admin)/lojas/whatsapp-section.tsx`, `apps/web/lib/whatsapp/painel.ts`, migration 1126 | ✅ falta aplicar a 1126 |
+| Alertas e resumo por WhatsApp (T9) | `apps/web/lib/alerts/whatsapp.ts` | ✅ |
 | Rotas | `apps/web/app/api/webhooks/whatsapp/route.ts` (GET hub.challenge + POST), `apps/web/app/api/cron/whatsapp/route.ts` | ✅ |
 | Submeter templates | `scripts/whatsapp-templates.ts` (`--dry-run`, `--status`) | ✅ dry-run verificado |
 | Cron | `scripts/sql/install-whatsapp-cron.sql` | ✅ por instalar |
-| Ensaios SQL | `supabase/tests/whatsapp.sql` (pgTAP), `supabase/tests/whatsapp_conversa.sql` (DO + ROLLBACK) | ✅ |
+| Ensaios SQL | `supabase/tests/whatsapp.sql` (pgTAP), `whatsapp_conversa.sql` e `whatsapp_painel.sql` (DO + ROLLBACK) | ✅ |
 
-**Migrations no LIVE:** a 05/11 o dry-run na pasta isolada mostrou exactamente as quatro (1117, 1118, 1124, 1125)
-e mais nada; o `db push --yes` foi bloqueado pelo modo automático do Claude Code e o comando ficou com o Gabriel.
-**Confirma antes de tudo** com `supabase migration list --linked` (o CLI está ligado ao LIVE `pqjoan…`): se as
-quatro versões já aparecem na coluna Remote, salta a T2.
+**Migrations no LIVE:** 1117, 1118, 1124 e 1125 aplicadas a 05/11 pelo Gabriel. **Confirma antes de tudo** com
+`supabase migration list --linked` (o CLI está ligado ao LIVE `pqjoan…`) se a 1126 já lá está.
 
 **Há outras sessões a trabalhar na mesma árvore** (ex.: garçons, migration `20261105120000_1122_garcons.sql`, já
 aplicada no LIVE). Os ficheiros partilhados (`CLAUDE.md`, `BLOQUEIOS.md`, `ROADMAP.md`, `.env.example`,
@@ -72,13 +76,17 @@ Lista para o Gabriel/Ridwan. Quando cada valor chegar, retoma a tarefa correspon
 | H5 | Ridwan | Decidir que o **+258 87 030 1006** sai da app do telemóvel e registá-lo na WABA (ou dar outro número) — B-122 | T7 |
 | H6 | Gabriel | `ANTHROPIC_API_KEY` para a IA (opcional; sem ela a conversa é só por botões) | T4 |
 | H7 | Gabriel | Ordem para aplicar no LIVE e para fazer deploy (dev → main) | T2, T3 |
-| H8 | Gabriel | Adenda à proposta `NL-2026-HS-EXP`: preço por mensagem/conversa repassado (B-123 resolvido: custo vai para o cliente) | facturação |
+| H8 | Gabriel | Adenda à proposta `NL-2026-HS-EXP`: preço repassado, com o valor confirmado no rate card da Meta ("Rest of Africa"; contas no plano §8) | facturação |
+| H9 | Ridwan/Gabriel | **Método de pagamento na conta WhatsApp** (Meta Business Suite). Sem ele a Meta deixa de entregar as respostas (regra desde 1/10/2026) | T6, T7 |
 
 ---
 
 ## 3. Tarefas do agente, por ordem
 
-### T1 — Commit isolado do WhatsApp (sem levar trabalho alheio)
+### T1 — Commit isolado do WhatsApp (sem levar trabalho alheio) · ✅ feito (`b75c6f3`)
+
+Mantém-se a técnica para os commits seguintes: há outras sessões com coisas no índice partilhado, por isso usa um
+`GIT_INDEX_FILE` privado e `git update-ref refs/heads/dev <novo> <antigo>`, que falha se o HEAD mudar a meio.
 
 1. `git status --short` e `git diff --stat`. Os ficheiros **novos** do WhatsApp entram inteiros:
    `packages/whatsapp/`, `apps/web/lib/whatsapp/`, `apps/web/app/api/{cron,webhooks}/whatsapp/`,
@@ -102,7 +110,7 @@ Lista para o Gabriel/Ridwan. Quando cada valor chegar, retoma a tarefa correspon
 Aceitação: `git show --stat HEAD` sem ficheiros de garçons/mesas/storefront; `git status` continua a mostrar o
 trabalho das outras sessões intacto.
 
-### T2 — Migrations no LIVE (se ainda não estiverem)
+### T2 — Migrations no LIVE · ✅ 1117/1118/1124/1125 · ⏳ falta a 1126, com o mesmo procedimento
 
 Procedimento `aplicar-migration-supabase`:
 1. Fora do horário (regra 3) e com H7.
@@ -112,7 +120,7 @@ Procedimento `aplicar-migration-supabase`:
    `20260928093400_assistente_clips.sql`, `20260928111820_checkout_manual_idempotente.sql`,
    `20260928111824_comprovativo_estado_publico.sql`. **Nunca** `supabase migration repair`.
 3. Apaga da pasta qualquer migration pendente que não seja do WhatsApp.
-4. `supabase db push --include-all --dry-run` → tem de listar **só** 1117, 1118, 1124, 1125.
+4. `supabase db push --include-all --dry-run` → tem de listar **só** as do WhatsApp por aplicar.
 5. `supabase db push --include-all` (ou entrega o comando ao Gabriel).
 6. Verifica: `supabase migration list --linked`; e, pelo REST com a chave pública, que `whatsapp_conversations`
    **não** é legível por anon (deve dar 401/403/permission denied).
@@ -130,9 +138,9 @@ Nenhum fluxo existente pode mudar: smoke do checkout manual e do POS como de cos
 ### T4 — Variáveis no Railway (com H2, H3, H6)
 
 `WHATSAPP_PROVIDER=meta`, `META_WHATSAPP_TOKEN`, `META_APP_SECRET`, `META_WEBHOOK_VERIFY_TOKEN` (gerar ≥ 32
-caracteres aleatórios, `openssl rand -hex 24`), opcional `META_GRAPH_VERSION` (por defeito `v23.0` — confirma na
-documentação da Meta que ainda é suportada), `ANTHROPIC_API_KEY`, opcional `WHATSAPP_AI_MODEL`
-(por defeito `claude-opus-5-5` com esforço baixo; `claude-haiku-5-5` é a opção mais barata). Pelo `railway` CLI
+caracteres aleatórios, `openssl rand -hex 24`), opcional `META_GRAPH_VERSION` (por defeito `v26.0`, a mais recente a
+05/11/2026), `ANTHROPIC_API_KEY`, opcional `WHATSAPP_AI_MODEL` (por defeito `claude-opus-5-5` com esforço baixo;
+`claude-haiku-5-5` é a opção mais barata, decisão do Gabriel em B-124). Pelo `railway` CLI
 no serviço web certo (confirma com `railway status`), sem ecoar valores. Redeploy.
 
 Aceitação: `curl "https://hawsmash.com/api/webhooks/whatsapp?hub.mode=subscribe&hub.verify_token=<token>&hub.challenge=123"`
@@ -150,10 +158,9 @@ Aceitação: `curl "https://hawsmash.com/api/webhooks/whatsapp?hub.mode=subscrib
 
 ### T6 — Ensaio de ponta a ponta com o número de teste
 
-1. Migration nova (regra 2) a ligar uma **loja de ensaio**, não a de Maputo: se não houver loja de ensaio no LIVE,
-   regista em BLOQUEIOS e pergunta ao Gabriel qual usar — não ligues Maputo ao número de teste.
-   Campos: `whatsapp_sender_id = '<phone_number_id do teste>'`, `whatsapp_enabled = true`,
-   `whatsapp_chat_enabled = true`, `whatsapp_handoff_phone`.
+1. No painel (Lojas → WhatsApp, sessão de dono), ligar uma **loja de ensaio**, não a de Maputo: se não houver loja de
+   ensaio no LIVE, regista em BLOQUEIOS e pergunta ao Gabriel qual usar — não ligues Maputo ao número de teste.
+   Id do número = `phone_number_id` do teste; interruptores Avisos e Conversa; número de atendimento.
 2. Instala o cron: `scripts/sql/install-whatsapp-cron.sql` (só depois de `GET /api/cron/whatsapp` dar 200).
 3. De um telemóvel verificado (H4) escreve para o número de teste e percorre: "olá" → Ver cardápio → produto
    com variante e molho → quantidade 2 → Finalizar → Levantar → nome → Confirmar → recebe total + M-Pesa →
@@ -163,20 +170,20 @@ Aceitação: `curl "https://hawsmash.com/api/webhooks/whatsapp?hub.mode=subscrib
 4. Verifica na BD (leitura): `whatsapp_outbox` com `kind='service'` aceites; `whatsapp_inbound.processed_at`
    preenchido; `order_attribution.channel='whatsapp'` no pedido; `event_log` com `whatsapp.order_created` e
    `whatsapp.proof_received`.
-5. Desliga a loja de ensaio por migration no fim.
+5. Mede: quantas mensagens saíram num pedido real (o plano §8 diz 13) e o custo da IA por mensagem (`usage` na resposta
+   da API), para o Gabriel decidir o modelo em B-124. Ensaia também quem esconde o número, se houver como.
+6. Desliga a loja de ensaio no painel no fim.
 
 Regista o resultado no ROADMAP (`[x] ⏳` → `[x]`) e no plano.
 
 ### T7 — Ligar Maputo (com H5 e o ensaio verde)
 
-Duas migrations, em dias/horas diferentes se o Gabriel quiser:
-1. **Avisos:** `whatsapp_sender_id = '<phone_number_id de Maputo>'`, `whatsapp_phone = '+258870301006'`,
-   `whatsapp_enabled = true` `where slug = 'maputo'`. Idempotente (`update … where … and whatsapp_sender_id is distinct from …`).
-2. **Conversa:** `whatsapp_chat_enabled = true`, `whatsapp_handoff_phone = '+258860760009'` (o número da marca
-   que fica na app — confirma com o Gabriel).
-Matola fica desligada até haver número (B-122). Desligar = migration com `false` (ou o painel da T8).
+No painel (Lojas → WhatsApp), em dias/horas diferentes se o Gabriel quiser:
+1. **Avisos:** id do número = `phone_number_id` de Maputo, telefone `+258870301006`, telemóveis dos alertas, interruptor Avisos.
+2. **Conversa:** número de atendimento `+258860760009` (o da marca, que fica na app — confirma com o Gabriel), interruptor Conversa.
+Matola fica desligada até haver número (B-122). Desligar = o mesmo interruptor.
 
-### T8 — Ecrã "WhatsApp" no painel do dono *(pode começar já, não depende da Meta)*
+### T8 — Ecrã "WhatsApp" no painel do dono · ✅ feito (falta aplicar a 1126)
 
 Para deixar de precisar de migration para ligar/desligar e para facturar o uso (B-123).
 1. RPC `save_store_whatsapp(p_store_id, p_payload)` `security definer`, **só owner**
@@ -187,11 +194,11 @@ Para deixar de precisar de migration para ligar/desligar e para facturar o uso (
    "Avisos" e "Conversa de pedido", número de atendimento humano. Mesmo padrão visual das páginas de definições
    existentes (lê uma antes de escrever).
 3. Histórico só de leitura (RLS da 1117/1124 já restringe a owner + loja): últimas mensagens enviadas
-   (`whatsapp_outbox`: evento, estado, erro) e recebidas; **contagem do mês por `kind`** (`utility` = paga,
-   `service` = grátis na janela de 24 h) — é a base da cobrança ao cliente.
+   (`whatsapp_outbox`: evento, estado, erro) e recebidas; **contagem do mês por `kind`** (`utility` paga sempre;
+   `service` paga acima de 1.000 por número) — é a base da cobrança ao cliente.
 4. Testes de componente/RLS e `pnpm test` verde.
 
-### T9 — W2: alertas ao dono por WhatsApp (F4 do plano)
+### T9 — W2: alertas ao dono por WhatsApp (F4 do plano) · ✅ feito (`stores.whatsapp_alert_phones`, escolhidos no painel)
 
 Os alertas de `/api/cron/alerts` (POS offline, impressora, stock crítico, pedido sem aprovação) e o digest diário
 passam a sair também por template para os telemóveis do dono/gerente, com o mesmo arrefecimento de 30 min; o email
@@ -199,11 +206,10 @@ fica. Templates novos em `templates.ts` (`hs_alerta_*`, Utility) com teste de pa
 por loja (decide onde guardar — coluna nova ou `staff_profiles` — e escreve a decisão no plano); enfileirar por
 `whatsapp_enqueue` com `subject_type='alert'`. Nunca bloquear o cron de alertas se o WhatsApp falhar.
 
-### T10 — Opcional: avisos grátis dentro da janela de 24 h
+### T10 — ~~Avisos grátis dentro da janela de 24 h~~ · ✖ cancelada
 
-Se `whatsapp_conversations.last_inbound_at` do destinatário tiver menos de 23 h, o aviso do pedido pode sair como
-mensagem de sessão (texto + botão de URL) em vez de template pago. Implementar no despacho, com teste, só se o
-Gabriel quiser reduzir o custo repassado.
+A premissa caiu: desde 1/10/2026 a Meta cobra também o que sai dentro da janela (plano §8). Trocar avisos por mensagens de
+sessão só pouparia enquanto houvesse folga nas 1.000 grátis, e essa folga já é gasta pela conversa. Não implementar.
 
 ---
 
@@ -240,6 +246,10 @@ APP_BASE_URL=https://exemplo.test npx tsx scripts/whatsapp-templates.ts --dry-ru
 | Webhook demora com a IA | uma chamada à API Claude por texto livre | o webhook responde 200 aos 8 s e o processamento continua no processo Node; o cron retoma o que morrer |
 | Botões dos templates sem efeito | quick replies sem payload | `events.ts` manda `fb:up`/`fb:down`; o motor responde |
 | Templates com `{{1}}` em vez de nomes | falta `parameter_format: NAMED` | o script já manda; não mudar para posicional sem mudar `meta.ts` |
+| Template recusado por "leading or trailing params" | corpo a começar ou acabar numa variável | o teste de `templates.test.ts` já o trava; mantém-no |
+| Respostas deixam de chegar sem erro no envio | conta na Meta sem método de pagamento (regra de 1/10/2026) | H9 |
+| Mensagem sem `from` no webhook | username com o número escondido: só `from_user_id` (BSUID) | já tratado (`inbound_hidden` → `request_contact_info`); validar com um payload real (B-124) |
+| Número de mensagens a subir | cada resposta conta para as 1.000 grátis | `compactSession` junta bolhas; o teste "um pedido típico" trava em 15 |
 
 ---
 

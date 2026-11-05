@@ -47,8 +47,15 @@ WhatsApp reduzido a "manda o link do cardápio" (F2). Duas coisas mudaram em 05/
 ## Consequências
 
 - O cliente pede, paga e manda o comprovativo sem sair do WhatsApp; o caixa trabalha exactamente como hoje.
-- Respostas na janela de 24 h depois de o cliente escrever são grátis na Meta; os avisos por template (W1)
-  continuam pagos. O custo das mensagens e da IA é **repassado ao HAWSMASH** (B-123, resolvido).
+- **Custo, corrigido no próprio dia:** desde 1/10/2026 a Meta cobra por mensagem entregue também dentro da janela
+  de 24 h. As respostas da conversa são grátis só até **1.000 por número e por mês**; os templates pagam sempre.
+  Sai barato (contas no [plano §8](../planos/whatsapp.md)), mas cada mensagem conta: o motor junta bolhas seguidas
+  e o cardápio vem logo nas boas-vindas. O custo das mensagens e da IA é **repassado ao HAWSMASH** (B-123).
+- **A conta na Meta precisa de método de pagamento**, senão as respostas deixam de ser entregues.
+- A Meta proíbe IA como produto principal na plataforma, mas permite-a em apoio e vendas de um negócio. Por isso a
+  IA fica limitada aos pedidos deste restaurante e recusa o resto numa frase.
+- **Quem tem username com o número escondido** chega sem telefone (só BSUID): pede-se o número com o botão nativo
+  `request_contact_info`; sem ele não há pedido nem aviso.
 - Nova superfície best-effort: WhatsApp, Meta ou IA em baixo não tocam no POS, na cozinha, no caixa nem no
   site (regra 1). Uma mensagem processada a meio é retomada pelo cron; reprocessar não avança o estado nem
   duplica respostas (o estado guarda a última mensagem tratada e o que se respondeu).
