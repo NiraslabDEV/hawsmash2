@@ -36,6 +36,8 @@ export const ADMIN_NAV: AdminNavItem[] = [
   { href: '/estafetas', label: 'Estafetas', icon: 'estafetas', roles: ['owner', 'manager', 'cashier'] },
   { href: '/cardapio', label: 'Cardápio', icon: 'cardapio', roles: ['owner', 'manager'] },
   { href: '/mesas', label: 'Mesas', icon: 'mesas', roles: ['owner', 'manager'] },
+  // Valores de venda e gestão de PIN: gerente e dono (1122/1123). A BD diz o mesmo.
+  { href: '/garcons', label: 'Garçons', icon: 'garcons', roles: ['owner', 'manager'] },
   { href: '/caixa', label: 'Caixa', icon: 'caixa', roles: ['owner', 'manager', 'cashier'] },
   { href: '/estoque', label: 'Estoque', icon: 'estoque', roles: ['owner', 'manager'] },
   { href: '/analise', label: 'Análise', icon: 'analise', roles: ['owner', 'manager'] },
