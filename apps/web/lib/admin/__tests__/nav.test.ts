@@ -39,6 +39,13 @@ describe('painel — onde cada perfil pode entrar', () => {
     expect(canAccessAdminPath('cashier', '/pagina-nova')).toBe(false);
   });
 
+  it('os garçons têm valores de venda e PIN: gerente e dono, não o Balcão', () => {
+    expect(canAccessAdminPath('owner', '/garcons')).toBe(true);
+    expect(canAccessAdminPath('manager', '/garcons')).toBe(true);
+    expect(canAccessAdminPath('cashier', '/garcons')).toBe(false);
+    expect(canAccessAdminPath('kitchen', '/garcons')).toBe(false);
+  });
+
   it('os estafetas: o Balcão atribui e vê o mapa; a cozinha não', () => {
     expect(canAccessAdminPath('cashier', '/estafetas')).toBe(true);
     expect(canAccessAdminPath('manager', '/estafetas')).toBe(true);

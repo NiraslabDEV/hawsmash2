@@ -26,9 +26,31 @@ O desenho é o do [estafeta](estafetas.md), e pela mesma razão: toda a RLS da l
 - `orders.waiter_id` regista quem lançou. `pos_table_overview` devolve `waiter_name`, e o separador Mesas do POS mostra "GARÇOM ANA" em vez de "BALCÃO".
 - Eventos: `table.order_launched` (com `source: 'waiter'`), `table.order_served`, `waiter.login`, `waiter.login_failed`, `waiter.saved`, `waiter.pin_set`.
 
+## O módulo no painel
+
+A aba **Garçons** (`/garcons`, gerente e dono) tem dois separadores: **Desempenho** e **Equipa**.
+
+**Desempenho** ([garcons-desempenho.tsx](../../apps/web/app/(admin)/garcons-desempenho.tsx)) lê tudo de `get_waiter_metrics(p_store_id, p_from, p_to, p_waiter_id)` (1123). Filtra por loja e período (hoje, 7 dias, 30 dias, este mês, tudo). "Todas as lojas" é só do dono. Tocar num garçom filtra os cartões, os gráficos e os artigos por ele.
+
+| Número | O que quer dizer |
+|---|---|
+| Pedidos, vendas, ticket médio | Pedidos lançados pelo garçom em preparo, prontos ou entregues. O cancelado não é venda e conta à parte. `total_cents` já desce quando se retira um artigo |
+| Artigos, artigos por pedido | Quantidades das linhas desses pedidos |
+| Mesas | Mesas diferentes por dia: a mesa 5 de ontem e a de hoje são duas |
+| Extras | O que os extras somaram, ao preço gravado na linha |
+| Servidos | Quem levou à mesa (`table.order_served`), mesmo que outro tenha lançado |
+| Até servir | Mediana entre lançar e entregar. Só há valor quando alguém marca entregue |
+| Por cobrar | Vendas sem `table_bill_id`. É a conta da mesa, não dinheiro na mão do garçom |
+| Retirados | Artigos retirados dos pedidos dele (`table.item_removed`), em número e valor |
+| Dias | Dias de Maputo com pelo menos um pedido |
+
+Os destaques de ticket médio e rapidez só contam a partir de 5 pedidos, para um pedido caro não fazer um campeão ([metricas.ts](../../apps/web/lib/garcom/metricas.ts)). O painel "De onde vêm os pedidos de mesa" compara garçons, balcão e QR em toda a sala.
+
+As comparações com o período anterior usam uma janela do mesmo tamanho, imediatamente antes.
+
 ## Gestão
 
-No painel, em **Mesas → Garçons** ([garcons-section.tsx](../../apps/web/app/(admin)/garcons-section.tsx)), o dono ou o gerente da loja cria o garçom (nome, telefone, PIN), troca o PIN, edita e desactiva. `get_waiters` mostra também quantos pedidos cada um lançou hoje e o valor.
+No painel, em **Garçons → Equipa** ([garcons-equipa.tsx](../../apps/web/app/(admin)/garcons-equipa.tsx)), o dono ou o gerente da loja cria o garçom (nome, telefone, PIN), troca o PIN, edita e desactiva. `get_waiters` mostra também quantos pedidos cada um lançou hoje e o valor.
 
 ## Limites
 
@@ -39,4 +61,5 @@ No painel, em **Mesas → Garçons** ([garcons-section.tsx](../../apps/web/app/(
 ## Testes
 
 - BD: [`garcons.test.ts`](../../packages/db/tests/garcons.test.ts) cobre quem gere, as RPCs fechadas à `anon` e à equipa, PIN errado e bloqueio, isolamento Maputo/Matola, preço da loja, stock, papel com o nome do garçom, envio repetido, chave de outro garçom, esgotado recusado, Servido e revogação de sessões.
+- Métricas: [`garcons-metricas.test.ts`](../../packages/db/tests/garcons-metricas.test.ts) cobre quem lê, o isolamento entre lojas, cancelados, extras, servidos, retirados, pago e por cobrar, período e fuso de Maputo.
 - Puros: [`lib/garcom/__tests__`](../../apps/web/lib/garcom/__tests__/garcom.test.ts) cobre a linha igual à do POS, o rascunho, "recusado vs incerto", os prontos e o contrato da rota.
