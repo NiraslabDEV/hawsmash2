@@ -191,7 +191,9 @@ pagamentos a `refunded`, turno já fechado fica como fechou — 1112). Apagar co
 Estafeta (1115): `deliveries` com estado próprio ao lado do pedido; "Levantei" = o antigo "Enviar". Entra por
 telefone + PIN com token opaco — **não** é conta Supabase nem perfil, para a RLS da loja não lhe abrir nada.
 Taxa creditada uma vez por entrega; pagar em dinheiro é despesa do turno.
-[Pedidos](docs/modulos/pedidos.md) · [mesas](docs/modulos/mesas.md) · [estafetas](docs/modulos/estafetas.md).
+Garçom (1122): lança o pedido da mesa no telemóvel (`/garcom`), pelo mesmo caminho de preço, stock e comanda
+do balcão. Entra como o estafeta, com telefone + PIN e token opaco, e não toca em dinheiro.
+[Pedidos](docs/modulos/pedidos.md) · [mesas](docs/modulos/mesas.md) · [garçons](docs/modulos/garcons.md) · [estafetas](docs/modulos/estafetas.md).
 
 ---
 

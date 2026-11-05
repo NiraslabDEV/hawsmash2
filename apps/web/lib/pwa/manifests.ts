@@ -75,6 +75,24 @@ export function estafetaManifest(brand: ResolvedBrand): MetadataRoute.Manifest {
   };
 }
 
+/** O telemóvel do garçom (1122): de pé, sem barra do browser, só /garcom. */
+export function garcomManifest(brand: ResolvedBrand): MetadataRoute.Manifest {
+  return {
+    id: '/garcom',
+    name: `${brand.name} Garçom`,
+    short_name: 'Garçom',
+    description: `Pedidos de mesa ${brand.name}`,
+    start_url: '/garcom',
+    scope: '/garcom',
+    display: 'standalone',
+    orientation: 'portrait',
+    background_color: brand.theme.bg0,
+    theme_color: brand.theme.bg0,
+    lang: 'pt-PT',
+    icons: ICONS,
+  };
+}
+
 export function manifestResponse(manifest: MetadataRoute.Manifest): Response {
   return new Response(JSON.stringify(manifest), {
     headers: { 'Content-Type': 'application/manifest+json; charset=utf-8' },
