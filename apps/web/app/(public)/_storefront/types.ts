@@ -16,6 +16,15 @@ export interface MenuVariant {
   photo_url?: string | null;
 }
 
+/** Extra pago do produto (`menu_addons`). O preço que vale é o do servidor. */
+export interface MenuAddon {
+  id: string;
+  name: string;
+  price_cents: number;
+  /** Foto do ingrediente (1078). */
+  photo_url?: string | null;
+}
+
 export interface MenuItem {
   id: string;
   name: string;
@@ -26,6 +35,7 @@ export interface MenuItem {
   /** Oferecido no ecrã de upsell (marcado no painel). */
   is_upsell?: boolean;
   variants?: MenuVariant[];
+  addons?: MenuAddon[];
 }
 
 export interface MenuCategory {
@@ -69,6 +79,8 @@ export interface MenuPayload {
   upsell_subtitle?: string;
   /** Promoções da loja (1113), juntas pela /api/menu. null = sem promoções ou BD antiga. */
   promotions?: StorefrontPromotions | null;
+  /** Atalhos de observação da loja (1131) — os mesmos do balcão. Ausente = BD antiga. */
+  quick_notes?: string[];
 }
 
 export interface StorefrontPromotions {
@@ -81,6 +93,8 @@ export interface CartView {
   index: number;
   item: MenuItem;
   variant: MenuVariant | null;
+  /** Extras desta linha, pela ordem do Cardápio. O preço deles já está em `unitCents`. */
+  addons: MenuAddon[];
   qty: number;
   unitCents: number;
   notes: string;

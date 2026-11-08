@@ -14,6 +14,7 @@ import type { PublicStoreOption } from '@/lib/public-stores';
 
 import './landing.css';
 import { CartDrawer, StoreSwitchDialog } from './cart-drawer';
+import { ExtrasSheet } from './extras-sheet';
 import { CartIcon, MenuIcon, StoreIcon } from './icons';
 import { MenuBanners } from './menu-banners';
 import { Footer, Hero, Marquee, Story } from './sections';
@@ -109,46 +110,67 @@ export function Storefront({
 
   /* ── carrinho ─────────────────────────────────────────────── */
 
-  const indexOfLine = useCallback(
-    (itemId: string, variantId: string | null) =>
-      cart.findIndex(
-        (line) => line.menuItemId === itemId && (line.variantId ?? null) === variantId,
-      ),
-    [cart],
+  const quickNotes = useMemo(() => data?.quick_notes ?? [], [data]);
+  // Produto com extras abre a escolha antes de entrar no carrinho (1132).
+  const [customizing, setCustomizing] = useState<{ item: MenuItem; variant: MenuVariant | null } | null>(null);
+
+  // Com extras e observações, o mesmo lanche pode estar em várias linhas
+  // (um com macon, outro "sem molho"). O cartão mostra a soma de todas.
+  const isLineOf = useCallback(
+    (itemId: string, variantId: string | null) => (line: (typeof cart)[number]) =>
+      line.menuItemId === itemId && (line.variantId ?? null) === variantId,
+    [],
   );
 
   const qtyFor = useCallback(
-    (item: MenuItem, variant: MenuVariant | null) => {
-      const index = indexOfLine(item.id, variant?.id ?? null);
-      return index < 0 ? 0 : cart[index].qty;
-    },
-    [cart, indexOfLine],
+    (item: MenuItem, variant: MenuVariant | null) =>
+      cart.filter(isLineOf(item.id, variant?.id ?? null)).reduce((sum, line) => sum + line.qty, 0),
+    [cart, isLineOf],
   );
 
-  const handleAdd = useCallback(
-    (item: MenuItem, variant: MenuVariant | null) => {
-      add(item.id, 1, variant ? { variantId: variant.id } : {});
+  const addToCart = useCallback(
+    (item: MenuItem, variant: MenuVariant | null, addonIds: string[] = [], notes = '') => {
+      add(item.id, 1, {
+        ...(variant ? { variantId: variant.id } : {}),
+        ...(addonIds.length ? { addonIds } : {}),
+        ...(notes ? { notes } : {}),
+      });
+      const extras = (item.addons ?? []).filter((addon) => addonIds.includes(addon.id));
       trackAddToCart({
         id: item.id,
         name: item.name,
-        price_cents: variant?.price_cents ?? item.price_cents,
+        price_cents: (variant?.price_cents ?? item.price_cents) + extras.reduce((s, a) => s + a.price_cents, 0),
         qty: 1,
       });
-      setToast(`${item.name}${variant ? ` · ${variant.name}` : ''} no carrinho`);
+      const detalhe = [variant?.name, ...extras.map((a) => `+${a.name}`)].filter(Boolean).join(' · ');
+      setToast(`${item.name}${detalhe ? ` · ${detalhe}` : ''} no carrinho`);
     },
     [add],
   );
 
+  const handleAdd = useCallback(
+    (item: MenuItem, variant: MenuVariant | null) => {
+      if ((item.addons ?? []).length > 0) setCustomizing({ item, variant });
+      else addToCart(item, variant);
+    },
+    [addToCart],
+  );
+
   const step = useCallback(
     (item: MenuItem, variant: MenuVariant | null, delta: number) => {
-      const index = indexOfLine(item.id, variant?.id ?? null);
-      if (index < 0) {
-        if (delta > 0) handleAdd(item, variant);
+      if (delta > 0) {
+        handleAdd(item, variant);
         return;
       }
-      setQtyByIndex(index, cart[index].qty + delta);
+      // Tira da última linha que se pôs desse lanche.
+      const match = isLineOf(item.id, variant?.id ?? null);
+      let index = -1;
+      cart.forEach((line, i) => {
+        if (match(line)) index = i;
+      });
+      if (index >= 0) setQtyByIndex(index, cart[index].qty + delta);
     },
-    [cart, handleAdd, indexOfLine, setQtyByIndex],
+    [cart, handleAdd, isLineOf, setQtyByIndex],
   );
 
   // Linhas do carrinho cruzadas com o cardápio — o drawer mostra nome, foto e
@@ -159,13 +181,16 @@ export function Storefront({
       const item = byId.get(line.menuItemId);
       if (!item) return [];
       const variant = (item.variants ?? []).find((v) => v.id === line.variantId) ?? null;
+      const addons = (item.addons ?? []).filter((addon) => (line.addonIds ?? []).includes(addon.id));
       return [
         {
           index,
           item,
           variant,
+          addons,
           qty: line.qty,
-          unitCents: variant?.price_cents ?? item.price_cents,
+          unitCents:
+            (variant?.price_cents ?? item.price_cents) + addons.reduce((sum, addon) => sum + addon.price_cents, 0),
           notes: line.notes ?? '',
         },
       ];
@@ -294,7 +319,21 @@ export function Storefront({
         onInc={(line) => setQtyByIndex(line.index, line.qty + 1)}
         onDec={(line) => setQtyByIndex(line.index, line.qty - 1)}
         onNotes={(line, notes) => setNotesByIndex(line.index, notes)}
+        quickNotes={quickNotes}
       />
+
+      {customizing && (
+        <ExtrasSheet
+          item={customizing.item}
+          variant={customizing.variant}
+          quickNotes={quickNotes}
+          onClose={() => setCustomizing(null)}
+          onConfirm={({ addonIds, notes }) => {
+            addToCart(customizing.item, customizing.variant, addonIds, notes);
+            setCustomizing(null);
+          }}
+        />
+      )}
 
       {switchOpen && (
         <StoreSwitchDialog

@@ -4,8 +4,10 @@ import { useState } from 'react';
 import Image from 'next/image';
 import { formatMT, type Cents } from '@delivery/core';
 
+import { noteHasChip, toggleNoteChip } from '@/lib/pos/notes';
 import { storeStatusLabel, type PublicStoreOption } from '@/lib/public-stores';
 
+import { NOTE_MAX } from './extras-sheet';
 import { CloseIcon } from './icons';
 import type { CartView } from './types';
 
@@ -24,6 +26,7 @@ export function CartDrawer({
   onNotes,
   onCheckout,
   canCheckout,
+  quickNotes = [],
 }: {
   open: boolean;
   lines: CartView[];
@@ -34,6 +37,8 @@ export function CartDrawer({
   onNotes: (line: CartView, notes: string) => void;
   onCheckout: () => void;
   canCheckout: boolean;
+  /** Atalhos de observação da loja (1131). */
+  quickNotes?: string[];
 }) {
   // Pré-visualização apenas: o total que vale é o que o `create_order`
   // recalcula no servidor (CLAUDE §1, regra 2).
@@ -77,6 +82,9 @@ export function CartDrawer({
               <div>
                 <div className="nm">{line.item.name}</div>
                 {line.variant && <div className="vr">{line.variant.name}</div>}
+                {line.addons.length > 0 && (
+                  <div className="vr">+ {line.addons.map((addon) => addon.name).join(', ')}</div>
+                )}
                 <div className="pr">{mt(line.unitCents)} cada</div>
               </div>
               <span className="hs-chip-qty">
@@ -96,7 +104,7 @@ export function CartDrawer({
                   +
                 </button>
               </span>
-              <LineNote line={line} onNotes={onNotes} />
+              <LineNote line={line} onNotes={onNotes} quickNotes={quickNotes} />
             </div>
             );
           })}
@@ -128,7 +136,15 @@ export function CartDrawer({
 
 /* Observação para a cozinha, por lanche. Fechada por defeito para não pesar
    no carrinho; abre sozinha quando a linha já traz uma nota. */
-function LineNote({ line, onNotes }: { line: CartView; onNotes: (line: CartView, notes: string) => void }) {
+function LineNote({
+  line,
+  onNotes,
+  quickNotes,
+}: {
+  line: CartView;
+  onNotes: (line: CartView, notes: string) => void;
+  quickNotes: string[];
+}) {
   const [open, setOpen] = useState(line.notes !== '');
 
   if (!open) {
@@ -140,18 +156,36 @@ function LineNote({ line, onNotes }: { line: CartView; onNotes: (line: CartView,
   }
 
   return (
-    <label className="hs-drawer-note">
+    <div className="hs-drawer-note">
       <span className="hs-drawer-note-l">Observação para a cozinha</span>
+      {quickNotes.length > 0 && (
+        <div className="hs-notechips is-small">
+          {quickNotes.map((chip) => {
+            const on = noteHasChip(line.notes, chip);
+            return (
+              <button
+                key={chip}
+                type="button"
+                className={`hs-notechip${on ? ' is-on' : ''}`}
+                aria-pressed={on}
+                onClick={() => onNotes(line, toggleNoteChip(line.notes, chip).slice(0, NOTE_MAX))}
+              >
+                {chip}
+              </button>
+            );
+          })}
+        </div>
+      )}
       <input
         type="text"
         value={line.notes}
-        maxLength={200}
-        autoFocus={line.notes === ''}
+        maxLength={NOTE_MAX}
+        autoFocus={line.notes === '' && quickNotes.length === 0}
         placeholder="Ex.: sem cebola, molho à parte"
         aria-label={`Observação para ${line.item.name}`}
         onChange={(e) => onNotes(line, e.target.value)}
       />
-    </label>
+    </div>
   );
 }
 

@@ -95,6 +95,9 @@ const EXTRA_PHOTOS = [
   { label: 'Carne', url: '/assets/storefront/extras/carne.webp', match: /carne|burger|hamb|patty|smash/i },
   { label: 'Jalapeño', url: '/assets/storefront/extras/jalapeno.webp', match: /jalape|pimenta|chili/i },
   { label: 'Picles', url: '/assets/storefront/extras/picles.webp', match: /picle|pickle/i },
+  { label: 'Brisket', url: '/assets/storefront/extras/brisket.webp', match: /brisket|peito fumado/i },
+  { label: 'Azeitonas', url: '/assets/storefront/extras/azeitonas.webp', match: /azeiton|olive|kalamata/i },
+  { label: 'Atum', url: '/assets/storefront/extras/atum.webp', match: /atum|tuna/i },
 ] as const;
 
 /** A foto que o nome do extra sugere ("Queijo extra" → queijo). Null = nenhuma. */

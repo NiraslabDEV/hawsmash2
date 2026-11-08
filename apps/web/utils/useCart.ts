@@ -93,10 +93,13 @@ export function useCart() {
       ...(opts.notes ? { notes: opts.notes } : {}),
     };
     const sig = lineSignature(incoming);
+    // A observação também separa linhas: um "sem molho" e um normal são dois
+    // pratos para a cozinha. Juntá-los dava `2x sem molho`, que ninguém pediu.
+    const same = (l: CartLine) => lineSignature(l) === sig && (l.notes ?? '') === (incoming.notes ?? '');
     setCart((prev) => {
-      const existing = prev.find((l) => lineSignature(l) === sig);
+      const existing = prev.find(same);
       if (existing) {
-        return prev.map((l) => (lineSignature(l) === sig ? { ...l, qty: l.qty + qty, upsell: mergeUpsell(l.upsell, incoming.upsell, l.qty + qty) } : l));
+        return prev.map((l) => (same(l) ? { ...l, qty: l.qty + qty, upsell: mergeUpsell(l.upsell, incoming.upsell, l.qty + qty) } : l));
       }
       return [...prev, incoming];
     });

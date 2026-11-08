@@ -1251,6 +1251,18 @@ export function PosShell() {
     [itemById, lines],
   );
   const extrasLine = extrasLines.find((line) => line.id === extrasLineId) ?? extrasLines[0] ?? null;
+  /**
+   * Extras a partir da linha do carrinho (1132): o cliente pede "com macon" na
+   * hora de pedir, não no fim. O mesmo painel do passo Extras, sem esperar pelo
+   * funil, e funciona com o upsell desligado.
+   */
+  const [extrasOpen, setExtrasOpen] = useState(false);
+  const extrasEditLine = extrasOpen ? (extrasLines.find((line) => line.id === extrasLineId) ?? null) : null;
+  // A linha saiu do carrinho (venda feita, carrinho limpo): o painel fecha e
+  // não volta a abrir por cima do passo Extras do funil.
+  useEffect(() => {
+    if (extrasOpen && !extrasEditLine) setExtrasOpen(false);
+  }, [extrasEditLine, extrasOpen]);
 
   function toggleExtra(line: CartLine, addon: PosAddon) {
     const catalogo = addonsOf(itemById.get(line.menuItemId) ?? {});
@@ -1928,6 +1940,7 @@ export function PosShell() {
     !!keyboardField ||
     !!variantPick ||
     !!noteLine ||
+    !!extrasEditLine ||
     !!cartPicker ||
     boardOpen ||
     availabilityOpen ||
@@ -2602,6 +2615,22 @@ export function PosShell() {
                         <span className="pos-num shrink-0 text-[0.8125rem] font-bold text-gold">
                           {mt(line.price_cents * line.qty)}
                         </span>
+                        {addonsOf(itemById.get(line.menuItemId) ?? {}).length > 0 && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setExtrasLineId(line.id);
+                              setExtrasOpen(true);
+                            }}
+                            className={`pos-press inline-flex min-h-8 shrink-0 items-center rounded-lg px-2 text-[0.625rem] font-bold uppercase tracking-wide ${
+                              line.addons?.length
+                                ? 'bg-[color:var(--pos-accent-soft)] text-gold'
+                                : 'bg-white/[0.05] text-ink-mute'
+                            }`}
+                          >
+                            + extra
+                          </button>
+                        )}
                         {/* "SEM JALAPENO" é meio balcão. Sai na comanda da
                             cozinha e no talão, e faz da linha uma linha própria:
                             um sem jalapeño e um normal não são `2x Classic`. */}
@@ -3468,6 +3497,66 @@ export function PosShell() {
             setKeyboardField(null);
           }}
         />
+      )}
+
+      {/* Extras da linha (1132). Cada toque põe ou tira o extra de UM lanche:
+          numa linha de dois, esse passa a linha própria e o painel segue-o. */}
+      {extrasEditLine && (
+        <div className="fixed inset-0 z-[70] grid place-items-center p-4">
+          <div aria-hidden className="pos-scrim" onClick={() => setExtrasOpen(false)} />
+          <section className="pos-sheet relative w-full max-w-3xl !p-6">
+            <p className="pos-eyebrow">EXTRAS</p>
+            <h2 className="pos-title mt-1">{extrasEditLine.name}</h2>
+            <p className="mt-1 text-sm font-bold uppercase tracking-wide text-gold">
+              {extrasEditLine.addons?.length
+                ? `+ ${extrasEditLine.addons.map((addon) => addon.name).join(', ')}`
+                : 'Sem extras'}
+            </p>
+            <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-4">
+              {addonsOf(itemById.get(extrasEditLine.menuItemId) ?? {}).map((addon) => {
+                const posto = extrasEditLine.addons?.some((escolhido) => escolhido.id === addon.id) ?? false;
+                return (
+                  <button
+                    key={addon.id}
+                    type="button"
+                    aria-pressed={posto}
+                    onClick={() => toggleExtra(extrasEditLine, addon)}
+                    className="pos-choice !min-h-24 !flex-col !gap-1 !py-3 !text-ink aria-pressed:!text-[color:var(--pos-on-accent)]"
+                  >
+                    {addon.photo_url && (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={addon.photo_url}
+                        alt=""
+                        loading="lazy"
+                        draggable={false}
+                        className="h-16 w-16 object-contain drop-shadow-[0_8px_12px_rgba(0,0,0,.45)]"
+                      />
+                    )}
+                    <span className="text-lg font-bold leading-tight">
+                      {posto ? `✓ ${addon.name}` : addon.name}
+                    </span>
+                    <span className="pos-num text-base font-bold opacity-80">+{mt(addon.price_cents)}</span>
+                  </button>
+                );
+              })}
+            </div>
+            {extrasEditLine.qty > 1 && (
+              <p className="mt-3 text-sm text-ink-mute">
+                São {extrasEditLine.qty} iguais: o extra vai só para um deles.
+              </p>
+            )}
+            <div className="mt-5 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setExtrasOpen(false)}
+                className="pos-btn pos-btn--primary min-w-40 !text-lg"
+              >
+                OK
+              </button>
+            </div>
+          </section>
+        </div>
       )}
 
       {/* "Sem jalapeño" — a nota do artigo, com os SEM de todos os dias a um

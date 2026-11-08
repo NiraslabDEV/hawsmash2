@@ -50,8 +50,8 @@ O POS **pré-visualiza**; o total, o troco e o plano de pagamento definitivos sa
 |---|---|
 | `payments` | Quatro IDs fechados: `cash`, `mpesa`, `emola`, `credit_card`; nome, ordem, activo e `allowMixed`. Um meio omitido reaparece desligado; se todos estiverem desligados, o resolver conserva dinheiro. |
 | `upsell` | Ligado/desligado e passos `extras`, `companion`, `dessert`; cada passo tem título, frases, estado e lista ordenada `productIds`. Lista vazia usa os produtos marcados no Cardápio. Ignora produtos apagados, esgotados ou já no carrinho. |
-| Extras | Usa `menu_addons` do produto, nunca um preço inventado na configuração. O passo só aparece quando há adicionais elegíveis; separa a unidade alterada numa linha própria. |
-| `quickNotes` | Atalhos de artigo e pedido somam-se; um segundo toque retira o atalho. |
+| Extras | Usa `menu_addons` do produto, nunca um preço inventado na configuração. O passo só aparece quando há adicionais elegíveis; separa a unidade alterada numa linha própria. Desde a 1132 também há um botão **+ extra** em cada linha do carrinho com adicionais: o mesmo painel, sem esperar pelo funil e com o upsell desligado. |
+| `quickNotes` | Atalhos de artigo e pedido somam-se; um segundo toque retira o atalho. Desde a 1131 a mesma lista aparece no site (folha de extras e carrinho), via `get_menu.quick_notes`. |
 | `cart` | Canal inicial e pedido de nome/telefone no balcão. Canal indisponível ou offline cai em balcão. |
 | `sale` | Confirmação de 1–15 segundos, por omissão 3; dinheiro exige OK. |
 | `session` | `lockAfterMinutes`: minutos sem toques até voltar aos cartões e pedir o PIN; 0 = nunca (fábrica), tecto 240. Valor estragado ou negativo cai em nunca, não num bloqueio instantâneo. Lojas que gravaram antes do campo ficam com o de fábrica. |
