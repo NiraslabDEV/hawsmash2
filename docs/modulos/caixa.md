@@ -24,7 +24,15 @@ Fontes: [1007 caixa](../../supabase/migrations/20260819220000_1007_cash.sql), [d
 
 ## Fecho do dia
 
-`get_cash_day(p_store)` mostra turno aberto, turnos fechados ainda não agregados e último fecho do dia. `close_cash_day(p_store,p_request_id)` exige não haver turno aberto e pelo menos um turno pendente. Usa o mesmo lock da abertura/fecho de turno, liga os turnos por `cash_sessions.day_close_id` e grava `cash_day_closes`.
+**O fecho do dia é obrigatório (1128).** O dia de trabalho é a data do primeiro turno que ainda não entrou num fecho do dia e só muda com esse fecho, não à meia-noite; o POS mostra-o na aba Caixa.
+
+- `open_cash_session` recusa com `day_close_required` se há turno fechado de uma data anterior por agregar. A troca de turno no mesmo dia continua livre.
+- `get_cash_day` devolve `business_date`, `day_overdue` e `open_tables`. Com turno aberto desde outra data, `day_overdue` só fica verdadeiro às 06:00 de Maputo: um turno pode atravessar a meia-noite com a loja a servir.
+- Com o dia atrasado e o carrinho vazio, o POS troca o cardápio por "O dia DD/MM ainda não foi fechado" e leva ao caixa. Uma venda a meio acaba sempre.
+- **A venda não é recusada no servidor (Regra 1).** O auto-open de `create_counter_sale` e de `close_table_bill` não passa por `open_cash_session`, e sem rede ou sem resposta do `get_cash_day` o POS não trava nada. Uma venda offline sincronizada de manhã entra num turno automático e fica no fecho desse dia de trabalho, por isso o dia pode ainda juntar duas datas nesse caso.
+- O relógio não muda: cada venda mantém a hora real e os relatórios por data continuam a ser de calendário. A senha (`daily_number`) continua a reiniciar à meia-noite de Maputo.
+
+`get_cash_day(p_store)` mostra turno aberto, turnos fechados ainda não agregados e último fecho do dia. `close_cash_day(p_store,p_request_id)` exige não haver turno aberto, nenhuma mesa por pagar (1128) e pelo menos um turno pendente. Usa o mesmo lock da abertura/fecho de turno, liga os turnos por `cash_sessions.day_close_id` e grava `cash_day_closes`.
 
 O dia soma os relatórios congelados dos turnos; não recalcula as vendas. Cada turno pertence a um único fecho do dia. Repetir a mesma loja e `p_request_id` devolve o mesmo relatório com indicação de duplicado. Uma nova chave não permite incorporar novamente os mesmos turnos. O papel usa `kind=cash_close` com informação `day`, mantendo compatibilidade com o formato anterior do bridge. A listagem de artigos vendidos foi acrescentada pela 1095; fechos históricos sem esse bloco não ganham retrospectivamente dados inventados.
 
@@ -36,7 +44,9 @@ Fonte: [migration 1091](../../supabase/migrations/20260925100000_1091_fecho_do_d
 
 As operações de caixa exigem servidor; vendas de balcão podem continuar na fila offline. A interface avisa sobre vendas por sincronizar: só entram no servidor quando sincronizadas. Fechar sem resolver a fila pode fazer a receita aparecer num período posterior, por isso o aviso é operacionalmente relevante.
 
-Mesas ainda por pagar não são dinheiro em caixa. O POS mostra mesas abertas e o total pendente; liquidá-las chama `close_table_bill`, não `close_cash_session`. Ver [Mesas](mesas.md). Fechar o turno não liquida implicitamente contas de mesa.
+Mesas ainda por pagar não são dinheiro em caixa. Liquidá-las chama `close_table_bill`, não `close_cash_session`. Ver [Mesas](mesas.md).
+
+**O caixa não fecha com mesa por pagar (1128).** `close_cash_session` e `close_cash_day` recusam com `tables_open:N,M`, antes da contagem e sem gravar nada; o POS mostra as mesas e o caminho para as cobrar. Vale também para a troca de turno. Não é só disciplina: o turno conta o dinheiro pela hora do pedido (`orders.created_at`), por isso uma mesa aberta num turno e paga no seguinte não entrava no esperado de nenhum dos dois. Repetir um fecho do dia já feito devolve o mesmo fecho, mesmo com mesa aberta entretanto (Regra 4). Uma conta a zero fica de fora, porque `close_table_bill` não a cobra. Para uma mesa que não vai pagar, a saída é retirar os artigos com motivo (1102), que também repõe o stock.
 
 **Descontos e anulações que vêm de fora do caixa.** Os descontos (2x1, cupão, manual, entrega grátis — 1113) não mudam nada aqui: `orders.discount_cents` continua a ser todo o abatimento aos produtos e `total = subtotal − desconto + entrega`, que é o valor que o turno e o fecho do dia já contavam. As colunas novas só dizem de onde veio cada parte. Já a anulação de um pedido **entregue** (`void_delivered_order`, 1112) passa os pagamentos `confirmed` a `refunded`: saem do turno aberto, do fecho do dia e dos relatórios, porque o fecho conta só `confirmed` de pedidos não cancelados. **Um turno que já fechou com esse pedido fica como fechou** — o relatório é congelado e não se reescreve; a resposta da RPC diz `shift_closed` para o painel avisar quem anulou.
 
@@ -83,6 +93,7 @@ cash_movements (id, session_id, store_id, type, amount_cents, reason, created_by
   Imprime o fecho, gera PDF e envia email ao dono (herdado do 1.0 `send-caixa` e do motor `close_cash_session`).
 - **Conta desde o último fecho** — nunca "desde a meia-noite UTC" (bug real corrigido no motor; não repetir).
 - Consolidado das duas lojas num ecrã, com a decomposição por loja, por turno e por forma de pagamento.
+- **Fecho obrigatório (1128):** sem fecho do dia não abre turno noutra data, e com mesa por pagar nem o turno nem o dia fecham.
 - **Turno e dia (1091):** o turno fecha com a contagem e a pessoa seguinte abre o seu, no POS (aba Caixa).
   No fim, o **fecho do dia** (`close_cash_day`) junta os turnos fechados **desde o último fecho do dia** —
   cada turno pertence a um só (`cash_sessions.day_close_id`). Soma o que os turnos congelaram, não recalcula;

@@ -12,12 +12,17 @@ import {
   removeTableItem,
   tableErrorMessage,
   tableName,
+  tableNote,
+  tablePhone,
+  tableRef,
   tableTotalCents,
+  updateTableCustomer,
   type PosTable,
   type TableOrderItem,
   type TableRef,
 } from '@/lib/pos/tables';
 import { PosIcon } from './pos-icons';
+import { TouchKeyboard } from './touch-keyboard';
 
 const mt = (cents: number) => formatMT(cents as Cents);
 
@@ -31,6 +36,16 @@ type Retirada = {
   qty: number;
   reason: string | null;
   requestId: string;
+};
+
+/** Os dados do cliente a editar na conta aberta (1129). */
+type ClienteDraft = { tableId: string; name: string; phone: string; note: string };
+type CampoCliente = 'name' | 'phone' | 'note';
+
+const CAMPO_CLIENTE: Record<CampoCliente, { label: string; vazio: string; max: number }> = {
+  name: { label: 'Nome do cliente', vazio: 'Tocar para escrever', max: 60 },
+  phone: { label: 'Telefone', vazio: 'Tocar para escrever', max: 20 },
+  note: { label: 'Característica (OBS)', vazio: 'Ex.: camisa azul, junto à janela', max: 120 },
 };
 
 function hora(iso: string): string {
@@ -78,6 +93,10 @@ export function MesasTab({
   const [retirando, setRetirando] = useState(false);
   const [retiradaErro, setRetiradaErro] = useState<string | null>(null);
   const [retiradaFeita, setRetiradaFeita] = useState<string | null>(null);
+  const [cliente, setCliente] = useState<ClienteDraft | null>(null);
+  const [campoCliente, setCampoCliente] = useState<CampoCliente | null>(null);
+  const [aGuardarCliente, setAGuardarCliente] = useState(false);
+  const [clienteErro, setClienteErro] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -154,6 +173,27 @@ export function MesasTab({
     }
   }
 
+  async function guardarCliente() {
+    if (!cliente || aGuardarCliente) return;
+    setAGuardarCliente(true);
+    setClienteErro(null);
+    try {
+      await updateTableCustomer(supabase, {
+        deviceId,
+        tableId: cliente.tableId,
+        customerName: cliente.name,
+        customerPhone: cliente.phone,
+        tabNote: cliente.note,
+      });
+      setCliente(null);
+    } catch (error) {
+      setClienteErro(tableErrorMessage(error instanceof Error ? error.message : undefined));
+    } finally {
+      setAGuardarCliente(false);
+      void load();
+    }
+  }
+
   if (tables === null) {
     return (
       <div className="mx-auto w-full max-w-5xl">
@@ -200,6 +240,8 @@ export function MesasTab({
                       setRetirada(null);
                       setRetiradaErro(null);
                       setRetiradaFeita(null);
+                      setCliente(null);
+                      setClienteErro(null);
                     }}
                     className={`flex min-h-32 w-full flex-col items-start justify-between rounded-2xl border p-3 text-left active:bg-white/10 ${
                       selectedId === table.id
@@ -224,6 +266,9 @@ export function MesasTab({
                         é o que a caixa procura (1092). */}
                     {nome && (
                       <span className="block w-full truncate text-base font-bold text-ink">{nome}</span>
+                    )}
+                    {tableNote(table) && (
+                      <span className="block w-full truncate text-xs text-ink-mute">{tableNote(table)}</span>
                     )}
                     {ocupada ? (
                       <span className="w-full">
@@ -260,6 +305,83 @@ export function MesasTab({
                 {mt(tableTotalCents(selected))}
               </span>
             </div>
+
+            {/* Quem é o cliente da conta (1129): herda-se de pedido em pedido e
+                corrige-se aqui, sem lançar nada. */}
+            {selected.orders.length > 0 && !cliente && (
+              <button
+                type="button"
+                onClick={() => {
+                  setClienteErro(null);
+                  setCliente({
+                    tableId: selected.id,
+                    name: tableName(selected) ?? '',
+                    phone: tablePhone(selected) ?? '',
+                    note: tableNote(selected) ?? '',
+                  });
+                }}
+                className="pos-field !min-h-12 w-full"
+              >
+                <PosIcon name="user" size={16} className="shrink-0 text-ink-mute" />
+                <span className="min-w-0 flex-1">
+                  <span className="pos-eyebrow !block truncate">Cliente da mesa</span>
+                  <span
+                    className={`block truncate text-[0.8125rem] ${
+                      tablePhone(selected) || tableNote(selected) ? 'font-semibold text-ink' : 'font-medium text-ink-mute'
+                    }`}
+                  >
+                    {[tablePhone(selected), tableNote(selected)].filter(Boolean).join(' · ') ||
+                      'Tocar para pôr telefone e característica'}
+                  </span>
+                </span>
+                <PosIcon name="pencil" size={16} className="shrink-0 text-ink-mute" />
+              </button>
+            )}
+            {cliente && cliente.tableId === selected.id && (
+              <section className="flex flex-col gap-2 rounded-xl border border-white/[0.07] bg-bg1 p-3">
+                <p className="pos-eyebrow">Cliente da mesa {selected.number}</p>
+                {(Object.keys(CAMPO_CLIENTE) as CampoCliente[]).map((campo) => (
+                  <button
+                    key={campo}
+                    type="button"
+                    disabled={aGuardarCliente}
+                    onClick={() => setCampoCliente(campo)}
+                    className="pos-field !min-h-12 w-full"
+                  >
+                    <span className="min-w-0 flex-1">
+                      <span className="pos-eyebrow !block truncate">{CAMPO_CLIENTE[campo].label}</span>
+                      <span
+                        className={`block truncate text-[0.8125rem] ${
+                          cliente[campo] ? 'font-semibold text-ink' : 'font-medium text-ink-mute'
+                        }`}
+                      >
+                        {cliente[campo] || CAMPO_CLIENTE[campo].vazio}
+                      </span>
+                    </span>
+                    <PosIcon name="pencil" size={16} className="shrink-0 text-ink-mute" />
+                  </button>
+                ))}
+                {clienteErro && <p role="alert" className="pos-note pos-note--danger">{clienteErro}</p>}
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    disabled={aGuardarCliente}
+                    onClick={() => setCliente(null)}
+                    className="pos-btn"
+                  >
+                    Voltar
+                  </button>
+                  <button
+                    type="button"
+                    disabled={aGuardarCliente}
+                    onClick={() => void guardarCliente()}
+                    className="pos-btn pos-btn--primary"
+                  >
+                    {aGuardarCliente ? 'A guardar…' : 'Guardar'}
+                  </button>
+                </div>
+              </section>
+            )}
 
             {retiradaFeita && <p role="status" className="pos-note pos-note--ok">{retiradaFeita}</p>}
             {retiradaErro && <p role="alert" className="pos-note pos-note--danger">{retiradaErro}</p>}
@@ -399,9 +521,7 @@ export function MesasTab({
             <button
               type="button"
               disabled={!selected.active}
-              onClick={() =>
-                onPedir({ id: selected.id, number: selected.number, name: tableName(selected) })
-              }
+              onClick={() => onPedir(tableRef(selected))}
               className="pos-btn w-full"
             >
               <PosIcon name="plus" size={20} />
@@ -419,6 +539,20 @@ export function MesasTab({
           </div>
         )}
       </aside>
+
+      {cliente && campoCliente && (
+        <TouchKeyboard
+          label={CAMPO_CLIENTE[campoCliente].label}
+          mode={campoCliente === 'phone' ? 'tel' : 'text'}
+          value={cliente[campoCliente]}
+          maxLength={CAMPO_CLIENTE[campoCliente].max}
+          onCancel={() => setCampoCliente(null)}
+          onConfirm={(valor) => {
+            setCliente({ ...cliente, [campoCliente]: valor });
+            setCampoCliente(null);
+          }}
+        />
+      )}
     </div>
   );
 }

@@ -77,11 +77,14 @@ import {
   fetchTableOverview,
   tableErrorMessage,
   tableName,
+  tableRef,
   tableTotalCents,
   type PosTable,
   type TableRef,
 } from '@/lib/pos/tables';
 import { TouchKeyboard } from './touch-keyboard';
+import { parseCashDay } from '@/lib/pos/caixa';
+import { businessDateLabel } from '@/lib/cash/day';
 import { buildPickupSlots, formatSlot } from '@/lib/pos/schedule';
 import { noteHasChip, toggleNoteChip } from '@/lib/pos/notes';
 import {
@@ -246,6 +249,7 @@ const KEYBOARD_LABELS = {
   phone: 'Telefone',
   address: 'Morada da entrega',
   orderNote: 'Nota do pedido',
+  tabNote: 'Característica do cliente (OBS)',
   coupon: 'Código do cupão',
   discountValue: 'Valor do desconto',
   discountReason: 'Motivo do desconto',
@@ -397,6 +401,12 @@ export function PosShell() {
   const [reprintPending, setReprintPending] = useState(false);
   const [reprintFeedback, setReprintFeedback] = useState<string | null>(null);
   const [online, setOnline] = useState(true);
+  /**
+   * O dia de trabalho que ficou por fechar, ou null (1128). Com ele, o POS leva
+   * ao fecho do dia antes de vender. Sem rede ou sem resposta fica null: a falta
+   * de ligação nunca trava uma venda (Regra 1), e o servidor aceita-a na mesma.
+   */
+  const [diaPorFechar, setDiaPorFechar] = useState<string | null>(null);
   const [pendingSales, setPendingSales] = useState(0);
   const [recentlySynced, setRecentlySynced] = useState(0);
 
@@ -1015,6 +1025,7 @@ export function PosShell() {
       setCustomerAddress('');
       setZoneId('');
       setOrderNote('');
+      setTabNote('');
       setScheduledFor('');
       setCustomerOpen(false);
       setMesaAlvo(null);
@@ -1222,8 +1233,28 @@ export function PosShell() {
   /** O que o ecrã de pagamento cobra: a conta da mesa, ou o carrinho. */
   const cobrarCents = contaMesa ? contaMesa.totalCents : totalCents;
   const [orderNote, setOrderNote] = useState('');
+  /** Quem é o cliente da mesa, "camisa azul" (1129). Não é a nota à cozinha. */
+  const [tabNote, setTabNote] = useState('');
   /** Hora marcada, em ISO com fuso. Vazio = para agora. */
   const [scheduledFor, setScheduledFor] = useState('');
+  const storeIdDoDia = context?.storeId ?? null;
+  const lerDiaPorFechar = useCallback(async () => {
+    if (!storeIdDoDia) return;
+    const { data, error: diaError } = await supabase.rpc('get_cash_day', { p_store: storeIdDoDia });
+    const dia = diaError ? null : parseCashDay(data);
+    setDiaPorFechar(dia?.overdue ? dia.businessDate : null);
+  }, [storeIdDoDia, supabase]);
+
+  useEffect(() => {
+    if (!online || locked) {
+      setDiaPorFechar(null);
+      return;
+    }
+    void lerDiaPorFechar();
+    const timer = window.setInterval(() => void lerDiaPorFechar(), 60_000);
+    return () => window.clearInterval(timer);
+  }, [lerDiaPorFechar, locked, online]);
+
   const [funnel, setFunnel] = useState<PosUpsellStep[]>([]);
   const [funnelIndex, setFunnelIndex] = useState(0);
   const funnelStep = funnel[funnelIndex] ?? null;
@@ -1593,6 +1624,8 @@ export function PosShell() {
     // O nome é da conta (1092): a mesa que já o tem traz-no; numa livre abre-se
     // o campo, para a caixa escrever de quem é.
     if (mesa.name) setCustomerName(mesa.name);
+    if (mesa.phone) setCustomerPhone(mesa.phone);
+    if (mesa.note) setTabNote(mesa.note);
     setCustomerOpen(!mesa.name && !customerName.trim());
     setMesaPicker(null);
     setError(null);
@@ -1618,6 +1651,8 @@ export function PosShell() {
         tableId: mesa.id,
         items: salePayloadItems(lines),
         ...(customerName.trim() ? { customerName: customerName.trim() } : {}),
+        ...(customerPhone.trim() ? { customerPhone: customerPhone.trim() } : {}),
+        ...(tabNote.trim() ? { tabNote: tabNote.trim() } : {}),
         ...(orderNote.trim() ? { notes: orderNote.trim() } : {}),
       },
     });
@@ -2278,12 +2313,16 @@ export function PosShell() {
             <CaixaTab
               storeId={context.storeId}
               storeName={context.storeName}
-              deviceId={context.deviceId}
               online={online}
               pendingSales={pendingSales}
               keyboardActive={!ocupado && !locked}
               troca={trocaTurno}
               onCancelarTroca={() => setTrocaTurno(null)}
+              onIrMesas={() => {
+                setTrocaTurno(null);
+                setPosView('mesas');
+              }}
+              onDiaMudou={() => void lerDiaPorFechar()}
               onPassarTurno={() => {
                 setTrocaTurno('abrir');
                 void lockDevice();
@@ -2323,6 +2362,27 @@ export function PosShell() {
               closesAt={channels.closesAt}
               onRefresh={() => void fetchDeliveryOrders()}
             />
+          ) : diaPorFechar && lines.length === 0 ? (
+            // Uma venda a meio acaba sempre: isto só aparece com o carrinho vazio.
+            <div className="mx-auto flex max-w-xl flex-col gap-4 rounded-2xl border border-red-400/30 bg-bg2 p-6 text-center">
+              <PosIcon name="lock" size={36} className="mx-auto text-amber-300" />
+              <div>
+                <h2 className="text-2xl font-extrabold">
+                  O dia {businessDateLabel(diaPorFechar)} ainda não foi fechado
+                </h2>
+                <p className="mt-2 text-ink-mute">
+                  Faz o fecho do dia antes de começar a vender. A data de trabalho só muda depois disso.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPosView('caixa')}
+                className="pos-btn pos-btn--primary pos-btn--lg w-full"
+              >
+                <PosIcon name="cash" size={22} />
+                IR AO CAIXA
+              </button>
+            </div>
           ) : (
           <div className="grid grid-cols-2 gap-2.5 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
             {visibleItems.map((item) => {
@@ -2462,6 +2522,7 @@ export function PosShell() {
                 fulfillment === 'delivery' ? customerAddress.trim() : '',
                 fulfillment === 'delivery' && zona ? zona.name : '',
                 fulfillment !== 'counter' ? formatSlot(scheduledFor || null) : '',
+                mesaAlvo && tabNote.trim() ? `OBS: ${tabNote.trim()}` : '',
                 orderNote.trim() ? `Nota: ${orderNote.trim()}` : '',
               ]
                 .filter(Boolean)
@@ -2579,9 +2640,18 @@ export function PosShell() {
                         onClick={() => setCartPicker('zone')}
                       />
                     )}
+                    {mesaAlvo && (
+                      <CartField
+                        className="col-span-2"
+                        label="Característica do cliente (OBS)"
+                        value={tabNote.trim()}
+                        placeholder="Ex.: camisa azul, junto à janela"
+                        onClick={() => setKeyboardField('tabNote')}
+                      />
+                    )}
                     <CartField
                       className="col-span-2"
-                      label="Observações"
+                      label={mesaAlvo ? 'Nota para a cozinha' : 'Observações'}
                       value={orderNote.trim()}
                       placeholder="+ Nota do pedido"
                       onClick={() => setKeyboardField('orderNote')}
@@ -3091,7 +3161,7 @@ export function PosShell() {
                     <li key={table.id}>
                       <button
                         type="button"
-                        onClick={() => escolherMesa({ id: table.id, number: table.number, name: tableName(table) })}
+                        onClick={() => escolherMesa(tableRef(table))}
                         className={`flex min-h-24 w-full flex-col items-center justify-center rounded-2xl border p-2 active:bg-white/10 ${
                           mesaAlvo?.id === table.id ? 'border-gold bg-gold/[0.08]' : 'border-white/[0.07] bg-bg2'
                         }`}
@@ -3482,9 +3552,12 @@ export function PosShell() {
                       ? manualValue
                       : keyboardField === 'discountReason'
                         ? manualReason
-                        : orderNote
+                        : keyboardField === 'tabNote'
+                          ? tabNote
+                          : orderNote
           }
           suggestions={keyboardField === 'orderNote' ? quickNotes : []}
+          maxLength={keyboardField === 'tabNote' ? 120 : undefined}
           onCancel={() => setKeyboardField(null)}
           onConfirm={(valor) => {
             if (keyboardField === 'name') setCustomerName(valor);
@@ -3493,6 +3566,7 @@ export function PosShell() {
             else if (keyboardField === 'coupon') { setCouponCode(valor.toUpperCase()); setCouponError(null); }
             else if (keyboardField === 'discountValue') setManualValue(valor.replace(/[^\d.,]/g, ''));
             else if (keyboardField === 'discountReason') setManualReason(valor);
+            else if (keyboardField === 'tabNote') setTabNote(valor);
             else setOrderNote(valor);
             setKeyboardField(null);
           }}

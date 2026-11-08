@@ -6,6 +6,9 @@ import {
   orderCustomerName,
   tableErrorMessage,
   tableName,
+  tableNote,
+  tablePhone,
+  tableRef,
   tableTotalCents,
   type PosTable,
   type TableOrder,
@@ -30,6 +33,41 @@ function pedido(parcial: Partial<TableOrder>): TableOrder {
 function mesa(orders: TableOrder[]): PosTable {
   return { id: 't2', number: 2, active: true, orders };
 }
+
+describe('mesas · o cliente da conta (1129)', () => {
+  const primeiro = pedido({
+    id: 'a',
+    created_at: '2026-11-05T18:00:00.000Z',
+    customer_name: 'Mesa 2 · João',
+    customer_phone: '800000001',
+    tab_note: 'Camisa azul',
+  });
+  const segundo = pedido({ id: 'b', created_at: '2026-11-05T19:00:00.000Z', customer_name: 'Mesa 2' });
+
+  it('o telefone e a OBS são os mais recentes que a conta tem', () => {
+    const conta = mesa([primeiro, segundo]);
+    expect(tablePhone(conta)).toBe('800000001');
+    expect(tableNote(conta)).toBe('Camisa azul');
+
+    const corrigida = mesa([primeiro, { ...segundo, tab_note: 'Boné vermelho' }]);
+    expect(tableNote(corrigida)).toBe('Boné vermelho');
+  });
+
+  it('sem nada escrito, ou no telemóvel do garçom, é null', () => {
+    expect(tablePhone(mesa([segundo]))).toBeNull();
+    expect(tableNote(mesa([{ ...segundo, tab_note: '   ' }]))).toBeNull();
+  });
+
+  it('o carrinho herda da mesa tudo o que a conta já sabe', () => {
+    expect(tableRef(mesa([primeiro]))).toEqual({
+      id: 't2',
+      number: 2,
+      name: 'João',
+      phone: '800000001',
+      note: 'Camisa azul',
+    });
+  });
+});
 
 describe('mesas · o nome do artigo', () => {
   it('junta a variante e os extras, como o talão', () => {

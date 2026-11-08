@@ -3,6 +3,7 @@ import {
   CASH_MAX_CENTS,
   cashErrorMessage,
   movementReady,
+  openTablesLabel,
   openTablesNotice,
   parseCashDay,
   parseCashStore,
@@ -97,27 +98,21 @@ describe('movimento de caixa', () => {
 });
 
 describe('mesas por fechar no fecho', () => {
-  function mesa(number: number, totals: number[]) {
-    return {
-      id: `mesa-${number}`,
-      number,
-      active: true,
-      orders: totals.map((total_cents, index) => ({ id: `p-${number}-${index}`, total_cents })),
-    };
-  }
-
   it('sem contas abertas não há aviso', () => {
-    expect(openTablesNotice({ tables: [mesa(1, []), mesa(2, [])] })).toBeNull();
+    expect(openTablesNotice([])).toBeNull();
   });
 
   it('diz que mesas têm conta aberta e quanto falta cobrar', () => {
-    const aviso = openTablesNotice({ tables: [mesa(1, []), mesa(2, [30_000, 15_000]), mesa(5, [60_000])] });
+    const aviso = openTablesNotice([
+      { number: 5, total_cents: 60_000 },
+      { number: 2, total_cents: 45_000 },
+    ]);
     expect(aviso).toEqual({ numbers: [2, 5], totalCents: 105_000 });
   });
 
-  it('sem a lista de mesas (loja sem mesas, RPC por aplicar) não há aviso', () => {
-    expect(openTablesNotice(null)).toBeNull();
-    expect(openTablesNotice({ tables: 'x' })).toBeNull();
+  it('a frase concorda com o número de mesas', () => {
+    expect(openTablesLabel([3])).toBe('A mesa 3 tem');
+    expect(openTablesLabel([2, 5])).toBe('As mesas 2, 5 têm');
   });
 });
 
@@ -175,6 +170,36 @@ describe('fecho do dia no POS', () => {
     expect(dia?.lastDayClose).toBeNull();
   });
 
+  it('lê o dia de trabalho, o atraso e as mesas por pagar', () => {
+    const dia = parseCashDay({
+      open_session: null,
+      pending: pendente,
+      last_day_close: null,
+      business_date: '2026-09-25',
+      day_overdue: true,
+      open_tables: [{ number: 3, total_cents: 45_000 }],
+    });
+    expect(dia).toMatchObject({
+      businessDate: '2026-09-25',
+      overdue: true,
+      openTables: [{ number: 3, total_cents: 45_000 }],
+    });
+  });
+
+  it('um servidor anterior à 1128 não trava a venda: sem certeza, não há atraso', () => {
+    const dia = parseCashDay({ open_session: null, pending: pendente, last_day_close: null });
+    expect(dia).toMatchObject({ businessDate: null, overdue: false, openTables: [] });
+  });
+
+  it('uma mesa mal formada não entra na conta', () => {
+    const dia = parseCashDay({
+      open_session: null,
+      pending: null,
+      open_tables: [{ number: 3, total_cents: 1.5 }, { number: 4, total_cents: 100 }, null],
+    });
+    expect(dia?.openTables).toEqual([{ number: 4, total_cents: 100 }]);
+  });
+
   it('um resumo do dia mal formado não se mostra como se fosse certo', () => {
     expect(parseCashDay(null)).toBeNull();
     expect(parseCashDay({ open_session: null, pending: { ...pendente, total_faturado_cents: 1.5 } })).toBeNull();
@@ -191,6 +216,9 @@ describe('mensagens do caixa', () => {
     expect(cashErrorMessage('Failed to fetch')).toMatch(/ligação/i);
     expect(cashErrorMessage('session_open')).toMatch(/fecha primeiro o turno/i);
     expect(cashErrorMessage('no_shifts_to_close')).toMatch(/não há turnos/i);
+    expect(cashErrorMessage('tables_open:3')).toMatch(/a mesa 3 tem conta por fechar/i);
+    expect(cashErrorMessage('tables_open:3,12')).toMatch(/as mesas 3, 12 têm conta por fechar/i);
+    expect(cashErrorMessage('day_close_required')).toMatch(/fecho do dia/i);
     expect(cashErrorMessage('Could not find the function public.close_cash_day(p_request_id, p_store)')).toMatch(
       /ainda não está disponível/i,
     );

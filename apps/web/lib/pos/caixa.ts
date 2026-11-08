@@ -138,54 +138,70 @@ export function parseCashStore(data: unknown, storeId: string): CashStore | null
   };
 }
 
-/** Só o que o aviso de mesas lê do `pos_table_overview` (1081). */
-type OpenTable = { number: number; orders: { total_cents: number }[] };
+/** Uma mesa por pagar, como o `get_cash_day` a diz (1128). */
+export type OpenTable = { number: number; total_cents: number };
 
 /**
- * Mesas com conta por fechar. O que a mesa ainda não pagou não está na gaveta
- * nem entra neste fecho — é o aviso que o ROADMAP pedia no fecho de caixa.
- * Lê o que vier do servidor sem confiar na forma: sem mesas, sem aviso.
+ * A frase de quem está a tentar fechar: que mesas faltam e, com o total, quanto.
+ * O servidor recusa o fecho na mesma (`tables_open`) — isto é só para a caixa
+ * saber antes de contar a gaveta.
  */
-export function openTablesNotice(overview: unknown): { numbers: number[]; totalCents: number } | null {
-  const tables = (overview as { tables?: unknown } | null)?.tables;
-  if (!Array.isArray(tables)) return null;
-  const abertas = (tables as OpenTable[]).filter(
-    (table) => Number.isSafeInteger(table?.number) && Array.isArray(table.orders) && table.orders.length > 0,
-  );
-  if (abertas.length === 0) return null;
+export function openTablesLabel(numbers: number[]): string {
+  return numbers.length === 1 ? `A mesa ${numbers[0]} tem` : `As mesas ${numbers.join(', ')} têm`;
+}
+
+export function openTablesNotice(tables: OpenTable[]): { numbers: number[]; totalCents: number } | null {
+  if (tables.length === 0) return null;
   return {
-    numbers: abertas.map((table) => table.number).sort((a, b) => a - b),
-    totalCents: abertas.reduce(
-      (soma, table) => soma + table.orders.reduce((conta, order) => conta + (order.total_cents ?? 0), 0),
-      0,
-    ),
+    numbers: tables.map((table) => table.number).sort((a, b) => a - b),
+    totalCents: tables.reduce((soma, table) => soma + table.total_cents, 0),
   };
 }
 
 /**
- * O que o `get_cash_day` (1091) diz ao POS: os turnos fechados à espera do
- * fecho do dia, se há um turno aberto (que o trava) e o último fecho do dia.
+ * O que o `get_cash_day` (1091, 1128) diz ao POS: os turnos fechados à espera
+ * do fecho do dia, se há um turno aberto (que o trava), o último fecho do dia,
+ * o dia de trabalho e as mesas por pagar.
  */
 export type CashDay = {
   hasOpenSession: boolean;
   pending: CashDayReport | null;
   lastDayClose: { id: string; business_date: string; closed_at: string } | null;
+  /** O dia de trabalho: só muda com o fecho do dia. Null num servidor anterior à 1128. */
+  businessDate: string | null;
+  /** O dia de trabalho ficou para trás: o POS guia ao fecho antes de vender. */
+  overdue: boolean;
+  openTables: OpenTable[];
 };
 
 export function parseCashDay(data: unknown): CashDay | null {
   if (!data || typeof data !== 'object') return null;
-  const raw = data as { open_session?: unknown; pending?: unknown; last_day_close?: unknown };
+  const raw = data as {
+    open_session?: unknown;
+    pending?: unknown;
+    last_day_close?: unknown;
+    business_date?: unknown;
+    day_overdue?: unknown;
+    open_tables?: unknown;
+  };
   let pending: CashDayReport | null = null;
   if (raw.pending != null) {
     pending = parseCashDayReport(raw.pending);
     if (!pending) return null;
   }
   const last = raw.last_day_close as CashDay['lastDayClose'] | undefined;
+  const mesas = Array.isArray(raw.open_tables) ? (raw.open_tables as Partial<OpenTable>[]) : [];
   return {
     hasOpenSession: raw.open_session != null,
     pending,
     lastDayClose:
       last && typeof last.id === 'string' && typeof last.business_date === 'string' ? last : null,
+    businessDate: typeof raw.business_date === 'string' ? raw.business_date : null,
+    // Na dúvida, não está atrasado: o POS só trava a venda com a certeza do servidor.
+    overdue: raw.day_overdue === true,
+    openTables: mesas.filter(
+      (mesa): mesa is OpenTable => Number.isSafeInteger(mesa?.number) && isCents(mesa?.total_cents),
+    ),
   };
 }
 
@@ -193,6 +209,14 @@ export function cashErrorMessage(message?: string): string {
   if (!message) return 'Não foi possível concluir. Tenta outra vez.';
   if (message.includes('difference_reason_required')) {
     return 'A diferença passa a tolerância. Conta outra vez; se estiver certa, escreve o motivo.';
+  }
+  if (message.includes('tables_open')) {
+    const numeros = message.split('tables_open:')[1]?.match(/\d+/g)?.map(Number) ?? [];
+    const quem = numeros.length > 0 ? openTablesLabel(numeros) : 'Há mesas com';
+    return `${quem} conta por fechar. Cobra primeiro em Mesas; o caixa só fecha com todas as mesas pagas.`;
+  }
+  if (message.includes('day_close_required')) {
+    return 'O dia anterior ainda não foi fechado. Faz o fecho do dia (aba Caixa do POS) antes de abrir um turno novo.';
   }
   if (message.includes('session_already_open')) return 'O caixa desta loja já está aberto.';
   if (message.includes('session_open')) return 'Há um turno aberto: fecha primeiro o turno, depois o dia.';

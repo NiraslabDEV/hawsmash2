@@ -2,7 +2,7 @@
  * As mesas da loja no POS (migration 1081).
  *
  * Quem está na mesa 2 pede pelo QR ou ao balcão, e vai tudo para a mesma mesa.
- * A mesa paga no fim, tudo junto: a conta é o que a mesa pediu hoje e ainda não
+ * A mesa paga no fim, tudo junto: a conta é o que a mesa pediu desde o último fecho do dia e ainda não
  * pagou. Quem define a conta é o servidor (`pos_table_overview` e
  * `close_table_bill` usam a mesma função); aqui só se lê, soma e mostra — e o
  * fecho manda o total que o caixa viu, para o servidor recusar se entretanto
@@ -35,6 +35,10 @@ export type TableOrder = {
   waiter_id?: string | null;
   waiter_name?: string | null;
   customer_name: string | null;
+  /** Só no POS: não vai para o telemóvel do garçom (1129). */
+  customer_phone?: string | null;
+  /** A característica do cliente, "camisa azul" (1129). Não é a nota à cozinha. */
+  tab_note?: string | null;
   created_at: string;
   total_cents: number;
   notes: string | null;
@@ -54,7 +58,13 @@ export type TableOverview = {
 };
 
 /** A mesa para onde vai o carrinho, ou a conta que se está a fechar. */
-export type TableRef = { id: string; number: number; name?: string | null };
+export type TableRef = {
+  id: string;
+  number: number;
+  name?: string | null;
+  phone?: string | null;
+  note?: string | null;
+};
 
 export const TABLE_ORDER_STATUS_LABEL: Record<string, string> = {
   in_preparation: 'Em preparo',
@@ -86,15 +96,39 @@ export function orderCustomerName(customerName: string | null | undefined): stri
   return nome || null;
 }
 
-export function tableName(table: PosTable): string | null {
+/** O valor mais recente que a conta tem: nome, telefone e OBS são da conta. */
+function latestOnTab(table: PosTable, read: (order: TableOrder) => string | null | undefined): string | null {
   const recentes = [...table.orders].sort(
     (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
   );
   for (const order of recentes) {
-    const nome = orderCustomerName(order.customer_name);
-    if (nome) return nome;
+    const valor = read(order)?.trim();
+    if (valor) return valor;
   }
   return null;
+}
+
+export function tableName(table: PosTable): string | null {
+  return latestOnTab(table, (order) => orderCustomerName(order.customer_name));
+}
+
+export function tablePhone(table: PosTable): string | null {
+  return latestOnTab(table, (order) => order.customer_phone);
+}
+
+export function tableNote(table: PosTable): string | null {
+  return latestOnTab(table, (order) => order.tab_note);
+}
+
+/** A mesa com o que a conta já sabe do cliente, para o carrinho o herdar. */
+export function tableRef(table: PosTable): TableRef {
+  return {
+    id: table.id,
+    number: table.number,
+    name: tableName(table),
+    phone: tablePhone(table),
+    note: tableNote(table),
+  };
 }
 
 export function tableTotalCents(table: PosTable): number {
@@ -169,6 +203,18 @@ export async function fetchTableOverview(
   const { data, error } = await supabase.rpc('pos_table_overview', { p_device_id: deviceId });
   if (error || !data) throw new Error(error?.message ?? 'pos_table_overview');
   return data as TableOverview;
+}
+
+/**
+ * Corrige nome, telefone e OBS da conta aberta (1129). O servidor reescreve-os
+ * em todos os pedidos da conta; o que não for enviado fica, vazio apaga.
+ */
+export async function updateTableCustomer(
+  supabase: SupabaseClient,
+  input: { deviceId: string; tableId: string; customerName: string; customerPhone: string; tabNote: string },
+): Promise<void> {
+  const { error } = await supabase.rpc('update_table_tab_customer', { p_payload: input });
+  if (error) throw new Error(error.message);
 }
 
 /** Os motivos de um toque; o servidor exige um (fica no registo). */

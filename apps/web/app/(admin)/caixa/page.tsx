@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { parseMTInput } from '@/lib/cash/input';
 import { addCashMovement, movementRequestKeeper } from '@/lib/cash/movement';
+import { cashErrorMessage } from '@/lib/pos/caixa';
 import { createClient } from '@/utils/supabase/client';
 import { staffFetch } from '@/lib/admin/staff-fetch';
 
@@ -157,7 +158,7 @@ export default function CaixaPage() {
     });
     setBusy(false);
     if (error) {
-      setMessage({ tone: 'error', text: `Não foi possível abrir o caixa: ${error.message}` });
+      setMessage({ tone: 'error', text: `Não foi possível abrir o caixa: ${cashErrorMessage(error.message)}` });
       return;
     }
     resetDialog();
@@ -210,7 +211,7 @@ export default function CaixaPage() {
         tone: 'error',
         text: error.message.includes('difference_reason_required')
           ? 'A diferença ultrapassa a tolerância. Indica o motivo antes de fechar.'
-          : `Fecho recusado: ${error.message}`,
+          : `Fecho recusado: ${cashErrorMessage(error.message)}`,
       });
       return;
     }

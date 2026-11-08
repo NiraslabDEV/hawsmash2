@@ -161,6 +161,8 @@ Dois talões completos por defeito; modelos e vias configuráveis (ADR 0007).
 
 Turno: fundo, movimentos, contagem, diferença e fecho; dinheiro separado dos restantes meios.
 Fecho do dia agrega turnos congelados desde o último fecho, com chave de idempotência.
+Fecho do dia obrigatório (1128): o dia de trabalho só muda com ele, e sem ele não abre turno noutra data. Com mesa por
+pagar não fecha o turno nem o dia. O POS guia a caixa, mas o servidor nunca recusa a venda (Regra 1).
 [Caixa e falhas conhecidas](docs/modulos/caixa.md).
 
 ---
@@ -195,6 +197,7 @@ Garçom (1122): lança o pedido da mesa no telemóvel (`/garcom`), pelo mesmo ca
 do balcão. Entra como o estafeta, com telefone + PIN e token opaco. Mini POS (1127): retira artigo dentro do limite
 da loja, muda de mesa, pede a conta, reimprime e marca esgotado; cobra só com autorização (`waiters.can_charge`) e
 **nunca em notas**, porque a gaveta não sabe o que está na mão dele. Desconto e venda sem mesa ficam no POS.
+Conta da mesa (1128, 1129): vive até ao fecho do dia, não até à meia-noite. Nome, telefone e característica são da conta.
 [Pedidos](docs/modulos/pedidos.md) · [mesas](docs/modulos/mesas.md) · [garçons](docs/modulos/garcons.md) · [estafetas](docs/modulos/estafetas.md).
 
 ---

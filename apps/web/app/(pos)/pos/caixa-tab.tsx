@@ -13,6 +13,7 @@ import {
   CASH_MOVEMENT_TYPES,
   cashErrorMessage,
   movementReady,
+  openTablesLabel,
   openTablesNotice,
   parseCashDay,
   parseCashStore,
@@ -28,7 +29,6 @@ import {
   parseCashDayReport,
   type CashDayReport,
 } from '@/lib/cash/day';
-import { fetchTableOverview } from '@/lib/pos/tables';
 import { CaixaHistorico, Reimprimir } from './caixa-historico';
 import { PosIcon } from './pos-icons';
 import { TouchKeyboard } from './touch-keyboard';
@@ -94,7 +94,6 @@ function differenceLabel(cents: number): string {
 export function CaixaTab({
   storeId,
   storeName,
-  deviceId,
   online,
   pendingSales,
   keyboardActive,
@@ -102,10 +101,11 @@ export function CaixaTab({
   onPassarTurno,
   onTrocaConcluida,
   onCancelarTroca,
+  onIrMesas,
+  onDiaMudou,
 }: {
   storeId: string;
   storeName: string;
-  deviceId: string;
   online: boolean;
   /** Vendas offline ainda por subir: entram no servidor à hora da sincronização. */
   pendingSales: number;
@@ -121,6 +121,10 @@ export function CaixaTab({
   /** Quem entra abriu o turno: a troca acabou. */
   onTrocaConcluida?: () => void;
   onCancelarTroca?: () => void;
+  /** O caixa não fecha com mesa por pagar (1128): leva a quem as cobra. */
+  onIrMesas?: () => void;
+  /** Turno ou dia mudou de estado: o POS relê se ainda há um dia por fechar. */
+  onDiaMudou?: () => void;
 }) {
   const [supabase] = useState(() => createClient());
   const movementKey = useRef(movementRequestKeeper());
@@ -139,8 +143,8 @@ export function CaixaTab({
   const [feedback, setFeedback] = useState<Feedback | null>(null);
   const [reasonMissing, setReasonMissing] = useState(false);
   const [lastClose, setLastClose] = useState<CashCloseReport | null>(null);
-  const [tablesNotice, setTablesNotice] = useState<ReturnType<typeof openTablesNotice>>(null);
   const [day, setDay] = useState<CashDay | null>(null);
+  const tablesNotice = openTablesNotice(day?.openTables ?? []);
   const [reprintBusy, setReprintBusy] = useState(false);
 
   // 1100: o talão do dia volta à impressora do balcão, marcado REIMPRESSÃO.
@@ -227,14 +231,8 @@ export function CaixaTab({
     setFeedback(null);
     setReasonMissing(false);
     setAcao({ kind, sessionId: session.id });
-    if (kind === 'fecho') {
-      // Best-effort: sem a lista de mesas (ou sem a 1081 aplicada) o fecho
-      // faz-se na mesma, só sem o aviso.
-      setTablesNotice(null);
-      fetchTableOverview(supabase, deviceId)
-        .then((overview) => setTablesNotice(openTablesNotice(overview)))
-        .catch(() => undefined);
-    }
+    // As mesas por pagar decidem se o fecho avança: lê-se agora, não há 30 s.
+    if (kind === 'fecho') void load();
   }
 
   // Troca de turno: quem sai vai direito à contagem da gaveta — uma vez por
@@ -251,7 +249,26 @@ export function CaixaTab({
     if (session) return;
     setFeedback(null);
     setDayRequest(crypto.randomUUID());
+    void load();
   }
+
+  /** O bloqueio do caixa: que mesas faltam, e o caminho para as cobrar (1128). */
+  const mesasPorFechar = tablesNotice && (
+    <section role="alert" className="pos-note pos-note--danger flex flex-col gap-3 !text-base">
+      <span>
+        <strong className="block">
+          {openTablesLabel(tablesNotice.numbers)} conta por fechar ({mt(tablesNotice.totalCents)}).
+        </strong>
+        O caixa só fecha com todas as mesas pagas.
+      </span>
+      {onIrMesas && (
+        <button type="button" onClick={onIrMesas} className="pos-btn pos-btn--lg w-full">
+          <PosIcon name="table" size={22} />
+          IR ÀS MESAS
+        </button>
+      )}
+    </section>
+  );
 
   const cancel = useCallback(() => {
     movementKey.current.done();
@@ -279,8 +296,9 @@ export function CaixaTab({
     setDraft(emptyDraft('abrir'));
     setFeedback({ tone: 'ok', text: `Turno aberto · fundo ${mt(current.amount)}` });
     void load();
+    onDiaMudou?.();
     if (troca === 'abrir') onTrocaConcluida?.();
-  }, [busy, current.amount, load, onTrocaConcluida, storeId, supabase, troca]);
+  }, [busy, current.amount, load, onDiaMudou, onTrocaConcluida, storeId, supabase, troca]);
 
   const addMovement = useCallback(async () => {
     if (busy || !movementReady(current.amount, current.reason)) return;
@@ -334,7 +352,8 @@ export function CaixaTab({
     setFeedback(null);
     cancel();
     void load();
-  }, [busy, cancel, current.amount, current.reason, current.typed, load, storeId, supabase]);
+    onDiaMudou?.();
+  }, [busy, cancel, current.amount, current.reason, current.typed, load, onDiaMudou, storeId, supabase]);
 
   const closeDay = useCallback(async () => {
     if (busy || !dayRequest) return;
@@ -364,7 +383,8 @@ export function CaixaTab({
     setFeedback(report ? null : { tone: 'ok', text: 'Dia fechado. O talão do dia sai no balcão.' });
     cancel();
     void load();
-  }, [busy, cancel, dayRequest, load, storeId, supabase]);
+    onDiaMudou?.();
+  }, [busy, cancel, dayRequest, load, onDiaMudou, storeId, supabase]);
 
   const submit = useCallback(() => {
     if (!online) return;
@@ -433,6 +453,8 @@ export function CaixaTab({
         <h2 className="text-xl font-bold">Caixa · {storeName}</h2>
         <p className="text-sm text-ink-mute">
           {session ? `${session.shift_label} · aberto às ${hora(session.opened_at)}` : 'Sem turno aberto'}
+          {/* O dia de trabalho só muda com o fecho do dia, não à meia-noite (1128). */}
+          {day?.businessDate ? ` · Dia de trabalho ${businessDateLabel(day.businessDate)}` : ''}
         </p>
       </div>
       {!troca && (
@@ -512,7 +534,31 @@ export function CaixaTab({
           </section>
         )}
 
-        {modo === 'abrir' && troca !== 'fechar' && (
+        {/* O dia de trabalho ficou para trás: o fecho do dia vem antes de tudo.
+            O servidor recusa o turno novo (`day_close_required`). */}
+        {modo === 'abrir' && troca !== 'fechar' && day?.overdue && day.pending && (
+          <section className="flex flex-col gap-3">
+            <div role="alert" className="pos-note pos-note--danger !text-base">
+              <strong className="block">
+                O dia {businessDateLabel(day.pending.business_date)} ainda não foi fechado.
+              </strong>
+              {dayShiftsLabel(day.pending.shifts_count)} à espera · {mt(day.pending.total_faturado_cents)} facturados.
+              Faz o fecho do dia antes de abrir o turno de hoje.
+            </div>
+            {mesasPorFechar}
+            <button
+              type="button"
+              disabled={busy || !online}
+              onClick={startDay}
+              className="pos-btn pos-btn--primary pos-btn--lg w-full"
+            >
+              <PosIcon name="lock" size={22} />
+              Fecho do dia
+            </button>
+          </section>
+        )}
+
+        {modo === 'abrir' && troca !== 'fechar' && !(day?.overdue && day.pending) && (
           <>
             <div className="pos-well !flex !min-h-20 !items-center !justify-between !px-5">
               <span className="text-sm font-semibold text-ink-mute">Fundo inicial</span>
@@ -563,6 +609,7 @@ export function CaixaTab({
             ) : (
               <p className="pos-note pos-note--warn">Não há turnos fechados à espera do fecho do dia.</p>
             )}
+            {mesasPorFechar}
             {pendingSales > 0 && (
               <p role="alert" className="pos-note pos-note--warn">
                 {pendingSales === 1 ? 'Há 1 venda offline' : `Há ${pendingSales} vendas offline`} por
@@ -575,7 +622,7 @@ export function CaixaTab({
               </button>
               <button
                 type="button"
-                disabled={busy || !online || !day?.pending}
+                disabled={busy || !online || !day?.pending || !!tablesNotice}
                 onClick={() => void closeDay()}
                 className="pos-btn pos-btn--primary pos-btn--lg flex-[2]"
               >
@@ -587,6 +634,14 @@ export function CaixaTab({
 
         {modo === null && (
           <>
+            {day?.overdue && day.businessDate && (
+              <p role="alert" className="pos-note pos-note--danger !text-base">
+                <strong className="block">
+                  O dia {businessDateLabel(day.businessDate)} ainda não foi fechado.
+                </strong>
+                Fecha este turno e faz o fecho do dia antes de continuar a vender.
+              </p>
+            )}
             <button
               type="button"
               disabled={!online}
@@ -654,6 +709,8 @@ export function CaixaTab({
 
         {modo === 'fecho' && store && (
           <>
+            {/* Primeiro: não vale a pena contar a gaveta com uma mesa por pagar. */}
+            {mesasPorFechar}
             <div className="pos-well !flex !min-h-20 !items-center !justify-between !px-5">
               <span className="text-sm font-semibold text-ink-mute">Contado na gaveta</span>
               <strong className={`pos-num text-4xl font-extrabold ${current.typed ? '' : 'text-ink-mute'}`}>
@@ -686,14 +743,6 @@ export function CaixaTab({
                 espera pela confirmação verde antes de fechar.
               </p>
             )}
-            {tablesNotice && (
-              <p role="alert" className="pos-note pos-note--warn">
-                {tablesNotice.numbers.length === 1
-                  ? `A mesa ${tablesNotice.numbers[0]} tem`
-                  : `As mesas ${tablesNotice.numbers.join(', ')} têm`}{' '}
-                conta por fechar ({mt(tablesNotice.totalCents)}). O que não for pago agora não entra neste fecho.
-              </p>
-            )}
             {reasonField('Motivo da diferença (se passar a tolerância)', reasonMissing)}
             <div className="flex gap-2">
               <button type="button" disabled={busy} onClick={cancel} className="pos-btn pos-btn--quiet pos-btn--lg flex-1">
@@ -701,7 +750,7 @@ export function CaixaTab({
               </button>
               <button
                 type="button"
-                disabled={busy || !online || !current.typed}
+                disabled={busy || !online || !current.typed || !!tablesNotice}
                 onClick={() => void closeSession()}
                 className="pos-btn pos-btn--primary pos-btn--lg flex-[2]"
               >

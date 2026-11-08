@@ -18,7 +18,7 @@ import {
 } from '@/lib/garcom/pedido';
 import { cartCount } from '@/lib/pos/cart';
 import { resolvePosSettings } from '@/lib/pos/settings';
-import { itemLabel, minutesOpen, tableName, tableTotalCents, type TableOrder } from '@/lib/pos/tables';
+import { itemLabel, minutesOpen, tableName, tableNote, tableTotalCents, type TableOrder } from '@/lib/pos/tables';
 
 import { Esgotados } from './esgotados';
 import { Historico } from './historico';
@@ -491,6 +491,8 @@ function DetalheMesa({
             Mesa {mesa.number}
           </h1>
           <p className="truncate text-sm text-[var(--ink-dim)]">{nome ?? (mesa.orders.length > 0 ? 'Conta aberta' : 'Livre')}</p>
+          {/* Quem é o cliente (1129): é assim que o prato chega à pessoa certa. */}
+          {tableNote(mesa) && <p className="truncate text-sm font-semibold text-[var(--ink)]">{tableNote(mesa)}</p>}
         </div>
       </header>
 
