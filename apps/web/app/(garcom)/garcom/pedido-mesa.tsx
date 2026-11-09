@@ -1,5 +1,6 @@
 'use client';
 
+import Image from 'next/image';
 import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { formatMT, type Cents } from '@delivery/core';
@@ -223,8 +224,18 @@ export function PedidoMesa({
                   }`}
                 >
                   {item.photo_url ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={item.photo_url} alt="" loading="lazy" className="h-14 w-14 shrink-0 rounded-xl object-cover" />
+                    // A foto do cardápio é a original (centenas de KB); no
+                    // telemóvel com dados móveis a lista ficava a carregar.
+                    // O otimizador do Next serve-a a 56 px, em WebP.
+                    <Image
+                      src={item.photo_url}
+                      alt=""
+                      width={56}
+                      height={56}
+                      sizes="56px"
+                      quality={60}
+                      className="h-14 w-14 shrink-0 rounded-xl object-cover"
+                    />
                   ) : (
                     <span className="h-14 w-14 shrink-0 rounded-xl bg-white/5" />
                   )}
