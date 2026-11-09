@@ -715,6 +715,7 @@ function PedidoNaMesa({
             </span>
             <span className="min-w-0 flex-1 pt-0.5">
               <span className="block font-semibold leading-snug">{itemLabel(item)}</span>
+              {item.person && <span className="block text-xs font-bold text-gold">{item.person}</span>}
               {item.notes && <span className="block text-xs italic text-amber-200/90">{item.notes}</span>}
             </span>
             {podeRetirarAgora && item.id && (

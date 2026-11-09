@@ -1,7 +1,7 @@
 'use client';
 
 import Image from 'next/image';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { formatMT, type Cents } from '@delivery/core';
 
@@ -11,10 +11,18 @@ import type { LaunchResult, WaiterTable } from '@/lib/garcom/contract';
 import {
   buildSellable,
   falhaDeEnvio,
+  itensDoEnvio,
   lerRascunho,
+  MAX_PESSOA,
+  naPessoa,
   needsItemSheet,
+  nomeDePessoa,
   novoRascunho,
+  porPessoa,
+  pratosDe,
   rascunhoKey,
+  renomearPessoa,
+  tirarPessoa,
   type Rascunho,
 } from '@/lib/garcom/pedido';
 import {
@@ -24,7 +32,6 @@ import {
   changeQty,
   defaultVariant,
   qtyOfItem,
-  salePayloadItems,
   type CartLine,
   type PosVariant,
 } from '@/lib/pos/cart';
@@ -68,7 +75,8 @@ function useRascunho(tableId: string) {
         !rascunho.customerName &&
         !rascunho.customerPhone &&
         !rascunho.tabNote &&
-        !rascunho.notes;
+        !rascunho.notes &&
+        rascunho.pessoas.length === 0;
       if (vazio) window.localStorage.removeItem(rascunhoKey(tableId));
       else window.localStorage.setItem(rascunhoKey(tableId), JSON.stringify(rascunho));
     } catch {
@@ -116,6 +124,8 @@ export function PedidoMesa({
   const [aEscolher, setAEscolher] = useState<PosMenuItem | null>(null);
   const [aRever, setARever] = useState(false);
   const [toque, setToque] = useState<{ texto: string; n: number } | null>(null);
+  /** A folha de juntar alguém (NOVA) ou de corrigir quem já está. */
+  const [aEditarPessoa, setAEditarPessoa] = useState<string | null>(null);
 
   const categorias = useMemo(
     () => (cardapio.data?.categories ?? []).filter((categoria) => categoria.items.length > 0),
@@ -138,6 +148,7 @@ export function PedidoMesa({
   }, [toque]);
 
   const avisarToque = (texto: string) => setToque((t) => ({ texto, n: (t?.n ?? 0) + 1 }));
+  const paraQuem = rascunho.pessoa ? ` · ${rascunho.pessoa}` : '';
 
   const tocarItem = (item: PosMenuItem) => {
     if (bloqueado || !posItemAvailability(item).sellable) return;
@@ -145,9 +156,9 @@ export function PedidoMesa({
       setAEscolher(item);
       return;
     }
-    const sellable = buildSellable(item, defaultVariant(item), [], null);
+    const sellable = naPessoa(buildSellable(item, defaultVariant(item), [], null), rascunho.pessoa);
     mudar((r) => ({ ...r, cart: changeQty(r.cart, sellable, 1) }));
-    avisarToque(`+1 ${sellable.name}`);
+    avisarToque(`+1 ${sellable.name}${paraQuem}`);
   };
 
   return (
@@ -204,7 +215,7 @@ export function PedidoMesa({
         )}
       </Topo>
 
-      <section className="flex-1 space-y-3 px-4 pb-32 pt-4">
+      <section className="flex-1 space-y-3 px-4 pb-48 pt-4">
         {!lojaAberta && <Nota tom="warn">A loja não está a receber pedidos de mesa agora. O pedido fica guardado aqui até abrir.</Nota>}
         {bloqueado && (
           <Nota tom="warn">O último envio ficou sem resposta. Abre o pedido e envia outra vez antes de mudar alguma coisa.</Nota>
@@ -276,7 +287,7 @@ export function PedidoMesa({
       {toque && (
         <p
           key={toque.n}
-          className="pos-pop pointer-events-none fixed inset-x-0 bottom-28 z-30 mx-auto flex w-fit items-center gap-2 rounded-full bg-white px-4 py-2 text-sm font-bold text-black shadow-[0_12px_30px_-10px_rgba(0,0,0,0.8)]"
+          className="pos-pop pointer-events-none fixed inset-x-0 bottom-44 z-30 mx-auto flex w-fit items-center gap-2 rounded-full bg-white px-4 py-2 text-sm font-bold text-black shadow-[0_12px_30px_-10px_rgba(0,0,0,0.8)]"
         >
           <PosIcon name="check" size={16} strokeWidth={2.8} className="text-emerald-600" />
           {toque.texto}
@@ -284,6 +295,12 @@ export function PedidoMesa({
       )}
 
       <footer className="fixed inset-x-0 bottom-0 z-20 border-t border-white/[0.07] bg-bg1 px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3">
+        <ParaQuem
+          rascunho={rascunho}
+          bloqueado={bloqueado}
+          onEscolher={(pessoa) => mudar((r) => ({ ...r, pessoa }))}
+          onEditar={setAEditarPessoa}
+        />
         <button
           onClick={() => setARever(true)}
           disabled={artigos === 0}
@@ -300,13 +317,35 @@ export function PedidoMesa({
       {aEscolher && (
         <EscolherArtigo
           item={aEscolher}
+          pessoa={rascunho.pessoa}
           notasRapidas={notasRapidas}
           onFechar={() => setAEscolher(null)}
           onAdicionar={(variant, addonIds, notes, qty) => {
-            const sellable = buildSellable(aEscolher, variant, addonIds, notes);
+            const sellable = naPessoa(buildSellable(aEscolher, variant, addonIds, notes), rascunho.pessoa);
             mudar((r) => ({ ...r, cart: changeQty(r.cart, sellable, qty) }));
-            avisarToque(`+${qty} ${sellable.name}`);
+            avisarToque(`+${qty} ${sellable.name}${paraQuem}`);
             setAEscolher(null);
+          }}
+        />
+      )}
+
+      {aEditarPessoa !== null && (
+        <PessoaFolha
+          nome={aEditarPessoa === NOVA ? null : aEditarPessoa}
+          rascunho={rascunho}
+          onFechar={() => setAEditarPessoa(null)}
+          onJuntar={(nome) => {
+            mudar((r) => ({ ...r, pessoas: [...r.pessoas, nome], pessoa: nome }));
+            avisarToque(`${nome} na mesa`);
+            setAEditarPessoa(null);
+          }}
+          onRenomear={(de, para) => {
+            mudar((r) => renomearPessoa(r, de, para));
+            setAEditarPessoa(null);
+          }}
+          onTirar={(nome) => {
+            mudar((r) => tirarPessoa(r, nome));
+            setAEditarPessoa(null);
           }}
         />
       )}
@@ -338,11 +377,13 @@ export function PedidoMesa({
 // ─── Escolher variante, extras e nota ─────────────────────────────────────────
 function EscolherArtigo({
   item,
+  pessoa,
   notasRapidas,
   onFechar,
   onAdicionar,
 }: {
   item: PosMenuItem;
+  pessoa: string | null;
   notasRapidas: readonly string[];
   onFechar: () => void;
   onAdicionar: (variant: PosVariant | null, addonIds: string[], notes: string | null, qty: number) => void;
@@ -357,7 +398,7 @@ function EscolherArtigo({
   const linha = buildSellable(item, variante, escolhidos, nota);
 
   return (
-    <Folha onFechar={onFechar} titulo={item.name} subtitulo={precoDoCartao(item)}>
+    <Folha onFechar={onFechar} titulo={item.name} subtitulo={`${precoDoCartao(item)}${pessoa ? ` · para ${pessoa}` : ''}`}>
       {variantes.length > 1 && (
         <div className="space-y-2">
           <p className="pos-eyebrow">Qual?</p>
@@ -507,7 +548,8 @@ function Revisao({
       clientSaleId: rascunho.clientSaleId,
       tableId: mesa.id,
       // Os mesmos ids e quantidades que o balcão manda — nunca o preço (Regra 2).
-      items: salePayloadItems(linhas),
+      // E de quem é cada prato (1137): a comanda sai arrumada por pessoa.
+      items: itensDoEnvio(linhas),
       ...(rascunho.customerName.trim() ? { customerName: rascunho.customerName.trim() } : {}),
       ...(rascunho.customerPhone.trim() ? { customerPhone: rascunho.customerPhone.trim() } : {}),
       ...(rascunho.tabNote.trim() ? { tabNote: rascunho.tabNote.trim() } : {}),
@@ -533,21 +575,34 @@ function Revisao({
       {linhas.length === 0 ? (
         <p className="py-4 text-center text-ink-mute">O pedido está vazio.</p>
       ) : (
-        <ul className="pos-well divide-y divide-white/[0.06] overflow-hidden">
-          {linhas.map((linha) => (
-            <li key={linha.id} className="flex items-center gap-3 px-3.5 py-3">
-              <span className="min-w-0 flex-1">
-                <span className="block font-bold leading-snug">{linha.name}</span>
-                {linha.addons && linha.addons.length > 0 && (
-                  <span className="block text-xs text-ink-mute">+ {linha.addons.map((a) => a.name).join(' + ')}</span>
-                )}
-                {linha.notes && <span className="block text-xs italic text-amber-200/90">{linha.notes}</span>}
-                <span className="pos-num block text-sm font-semibold text-gold">{money(linha.price_cents * linha.qty)}</span>
-              </span>
-              <Contador qty={linha.qty} disabled={bloqueado} onMenos={() => mexer(linha, -1)} onMais={() => mexer(linha, 1)} />
-            </li>
-          ))}
-        </ul>
+        porPessoa(rascunho).map((grupo) => (
+          <section key={grupo.pessoa ?? ''} className="space-y-2">
+            {rascunho.pessoas.length > 0 && (
+              <p className="flex items-center gap-2">
+                <Inicial nome={grupo.pessoa} />
+                <span className="min-w-0 flex-1 truncate font-extrabold">{grupo.pessoa ?? 'Mesa toda'}</span>
+                <span className="pos-num shrink-0 text-sm font-bold text-ink-dim">
+                  {money(grupo.linhas.reduce((soma, l) => soma + l.price_cents * l.qty, 0))}
+                </span>
+              </p>
+            )}
+            <ul className="pos-well divide-y divide-white/[0.06] overflow-hidden">
+              {grupo.linhas.map((linha) => (
+                <li key={linha.id} className="flex items-center gap-3 px-3.5 py-3">
+                  <span className="min-w-0 flex-1">
+                    <span className="block font-bold leading-snug">{linha.name}</span>
+                    {linha.addons && linha.addons.length > 0 && (
+                      <span className="block text-xs text-ink-mute">+ {linha.addons.map((a) => a.name).join(' + ')}</span>
+                    )}
+                    {linha.notes && <span className="block text-xs italic text-amber-200/90">{linha.notes}</span>}
+                    <span className="pos-num block text-sm font-semibold text-gold">{money(linha.price_cents * linha.qty)}</span>
+                  </span>
+                  <Contador qty={linha.qty} disabled={bloqueado} onMenos={() => mexer(linha, -1)} onMais={() => mexer(linha, 1)} />
+                </li>
+              ))}
+            </ul>
+          </section>
+        ))
       )}
 
       <div className="space-y-2">
@@ -631,6 +686,170 @@ function Revisao({
               : 'Tocar outra vez para apagar o pedido'
             : 'Apagar este pedido'}
         </button>
+      )}
+    </Folha>
+  );
+}
+
+// ─── Para quem (1137) ─────────────────────────────────────────────────────────
+/** A chave de "juntar alguém novo" na folha (nenhum nome escrito a tem). */
+const NOVA = '\u0000nova';
+
+/** O círculo com a inicial da pessoa; a mesa toda tem o ícone da mesa. */
+function Inicial({ nome, activo = false }: { nome: string | null; activo?: boolean }) {
+  return (
+    <span
+      aria-hidden
+      className={`grid h-7 w-7 shrink-0 place-items-center rounded-full text-xs font-extrabold ${
+        activo ? 'bg-gold text-[var(--pos-on-accent)]' : 'bg-white/[0.08] text-ink-dim'
+      }`}
+    >
+      {nome ? nome.trim().charAt(0).toLocaleUpperCase('pt') : <PosIcon name="table" size={14} />}
+    </span>
+  );
+}
+
+/**
+ * A fila "Para: Mesa toda · Ana · Rui · + Pessoa", por cima de "Ver pedido".
+ * Tocar escolhe para quem vão os próximos artigos; tocar outra vez em quem já
+ * está escolhido abre o nome para corrigir.
+ */
+function ParaQuem({
+  rascunho,
+  bloqueado,
+  onEscolher,
+  onEditar,
+}: {
+  rascunho: Rascunho;
+  bloqueado: boolean;
+  onEscolher: (pessoa: string | null) => void;
+  onEditar: (pessoa: string) => void;
+}) {
+  const opcoes: Array<string | null> = [null, ...rascunho.pessoas];
+  const fila = useRef<HTMLDivElement>(null);
+  // Quem acabou de entrar fica à vista, mesmo com a mesa cheia.
+  useEffect(() => {
+    fila.current?.querySelector('[aria-pressed="true"]')?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  }, [rascunho.pessoa, rascunho.pessoas.length]);
+  return (
+    <div className="mx-auto mb-2.5 flex max-w-md items-center gap-2.5">
+      <span className="pos-eyebrow shrink-0">Para</span>
+      <div
+        ref={fila}
+        className="-mr-4 flex min-w-0 flex-1 gap-2 overflow-x-auto pr-4 [scrollbar-width:none]"
+        role="group"
+        aria-label="Para quem é o pedido"
+      >
+        {opcoes.map((pessoa) => {
+          const activo = rascunho.pessoa === pessoa;
+          const pratos = pratosDe(rascunho.cart, pessoa);
+          return (
+            <button
+              key={pessoa ?? ''}
+              disabled={bloqueado}
+              aria-pressed={activo}
+              onClick={() => (activo && pessoa ? onEditar(pessoa) : onEscolher(pessoa))}
+              className={`pos-press flex h-11 shrink-0 items-center gap-2 rounded-full pl-2 pr-3.5 text-sm font-bold disabled:opacity-50 ${
+                activo
+                  ? 'bg-[var(--pos-accent-soft)] text-gold shadow-[inset_0_0_0_1.5px_var(--gold)]'
+                  : 'bg-white/[0.04] text-ink-dim shadow-[inset_0_0_0_1px_rgba(255,255,255,0.08)]'
+              }`}
+            >
+              <Inicial nome={pessoa} activo={activo} />
+              <span className="max-w-[9rem] truncate">{pessoa ?? 'Mesa toda'}</span>
+              {pratos > 0 && <span className="pos-num text-xs opacity-80">{pratos}</span>}
+              {activo && pessoa && <PosIcon name="pencil" size={12} className="opacity-70" />}
+            </button>
+          );
+        })}
+        <button
+          disabled={bloqueado}
+          onClick={() => onEditar(NOVA)}
+          className="pos-press flex h-11 shrink-0 items-center gap-1.5 rounded-full border border-dashed border-white/25 px-3.5 text-sm font-bold text-ink-dim disabled:opacity-50"
+        >
+          <PosIcon name="plus" size={15} strokeWidth={2.6} />
+          Pessoa
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/** Juntar alguém à mesa, ou corrigir/tirar quem já lá está. */
+function PessoaFolha({
+  nome,
+  rascunho,
+  onFechar,
+  onJuntar,
+  onRenomear,
+  onTirar,
+}: {
+  /** Null = juntar alguém novo. */
+  nome: string | null;
+  rascunho: Rascunho;
+  onFechar: () => void;
+  onJuntar: (nome: string) => void;
+  onRenomear: (de: string, para: string) => void;
+  onTirar: (nome: string) => void;
+}) {
+  const [escrito, setEscrito] = useState(nome ?? '');
+  const [erro, setErro] = useState<string | null>(null);
+  const pratos = nome ? pratosDe(rascunho.cart, nome) : 0;
+  const sugestao = nomeDePessoa('', rascunho.pessoas) ?? 'Pessoa';
+
+  const guardar = () => {
+    const final = nomeDePessoa(escrito, rascunho.pessoas, nome ?? undefined);
+    if (!final) return setErro('Já há alguém com esse nome nesta mesa.');
+    if (nome) onRenomear(nome, final);
+    else onJuntar(final);
+  };
+
+  return (
+    <Folha
+      onFechar={onFechar}
+      titulo={nome ?? 'Quem está na mesa?'}
+      subtitulo={
+        nome
+          ? pratos > 0
+            ? `${pratos} ${pratos === 1 ? 'artigo' : 'artigos'} neste pedido`
+            : 'Ainda sem artigos'
+          : 'Os próximos artigos ficam em nome desta pessoa'
+      }
+    >
+      <form
+        className="space-y-3"
+        onSubmit={(e) => {
+          e.preventDefault();
+          guardar();
+        }}
+      >
+        <label className="block space-y-2">
+          <span className="pos-eyebrow">Nome</span>
+          <input
+            autoFocus
+            value={escrito}
+            maxLength={MAX_PESSOA}
+            enterKeyHint="done"
+            onChange={(e) => {
+              setEscrito(e.target.value);
+              setErro(null);
+            }}
+            placeholder={nome ? nome : `ex.: Ana, camisa azul. Vazio fica ${sugestao}`}
+            className={CAMPO}
+          />
+        </label>
+        {erro && <Nota tom="danger">{erro}</Nota>}
+        <button type="submit" className="pos-btn pos-btn--primary pos-btn--lg w-full">
+          {nome ? 'Guardar nome' : 'Juntar à mesa'}
+        </button>
+      </form>
+      {nome && (
+        <div className="space-y-1.5">
+          <button onClick={() => onTirar(nome)} className="pos-btn pos-btn--quiet w-full !min-h-12 text-sm">
+            Tirar {nome} da mesa
+          </button>
+          {pratos > 0 && <p className="text-center text-xs text-ink-mute">Os artigos passam para a mesa toda.</p>}
+        </div>
       )}
     </Folha>
   );

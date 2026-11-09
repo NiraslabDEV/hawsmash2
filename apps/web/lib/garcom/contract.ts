@@ -25,6 +25,8 @@ const itemSchema = z.object({
   variantId: z.string().uuid().optional(),
   addonIds: z.array(z.string().uuid()).max(20).optional(),
   notes: z.string().trim().max(140).optional(),
+  /** De quem é o prato (1137). Texto livre: "Ana", "camisa azul". */
+  person: z.string().trim().max(40).optional(),
 });
 
 export const actionSchema = z.discriminatedUnion('action', [

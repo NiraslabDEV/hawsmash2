@@ -16,7 +16,17 @@
 
 import { z } from 'zod';
 
-import { cartKey, resolveSellable, type Cart, type PosAddon, type PosVariant, type Sellable } from '@/lib/pos/cart';
+import {
+  cartKey,
+  cartLines,
+  resolveSellable,
+  salePayloadItems,
+  type Cart,
+  type CartLine,
+  type PosAddon,
+  type PosVariant,
+  type Sellable,
+} from '@/lib/pos/cart';
 import type { PosMenuItem } from '@/lib/pos/offline-store';
 import { enabledPaymentMethods, resolvePosSettings } from '@/lib/pos/settings';
 import type { PosTable, TableOrder } from '@/lib/pos/tables';
@@ -66,6 +76,13 @@ export type Rascunho = {
   tabNote: string;
   notes: string;
   /**
+   * As pessoas da mesa, pela ordem em que o garçom as juntou (1137). Vazio =
+   * pedido da mesa toda, como antes.
+   */
+  pessoas: string[];
+  /** Para quem vão os próximos toques. Null = a mesa toda. */
+  pessoa: string | null;
+  /**
    * O envio saiu e não se sabe se chegou (rede caiu, servidor não respondeu).
    * Enquanto estiver assim o pedido não se mexe: reenviar com a mesma chave
    * devolve o pedido que já lá estiver, mas um pedido alterado não seria
@@ -94,6 +111,7 @@ const lineSchema = z.object({
   photo_url: z.string().nullable(),
   notes: z.string().nullable(),
   addons: z.array(addonSchema).optional(),
+  person: z.string().max(40).nullable().optional(),
   qty: z.number().int().min(1).max(99),
 });
 
@@ -105,6 +123,8 @@ const rascunhoSchema = z.object({
   customerPhone: z.string().max(20).default(''),
   tabNote: z.string().max(120).default(''),
   notes: z.string().max(300).default(''),
+  pessoas: z.array(z.string().min(1).max(40)).max(30).default([]),
+  pessoa: z.string().max(40).nullable().default(null),
   pendente: z.boolean().default(false),
   updatedAt: z.number(),
 });
@@ -118,6 +138,8 @@ export function novoRascunho(tableId: string, clientSaleId: string, now: number)
     customerPhone: '',
     tabNote: '',
     notes: '',
+    pessoas: [],
+    pessoa: null,
     pendente: false,
     updatedAt: now,
   };
@@ -143,6 +165,95 @@ export function lerRascunho(raw: string | null, tableId: string, now: number): R
   const rascunho = parsed.data as Rascunho;
   if (!rascunho.pendente && now - rascunho.updatedAt > RASCUNHO_MAX_IDADE_MS) return null;
   return rascunho;
+}
+
+// ─── Pessoas da mesa (1137) ──────────────────────────────────────────────────
+
+export const MAX_PESSOA = 40;
+
+const mesmaPessoa = (a: string, b: string) => a.toLocaleLowerCase('pt') === b.toLocaleLowerCase('pt');
+
+/**
+ * O nome que fica: aparado e curto. Em branco, "Pessoa N", para o garçom poder
+ * juntar alguém sem escrever. Null se já houver alguém com esse nome.
+ */
+export function nomeDePessoa(escrito: string, pessoas: readonly string[], ignorar?: string): string | null {
+  const nome = escrito.trim().replace(/\s+/g, ' ').slice(0, MAX_PESSOA);
+  const outras = pessoas.filter((p) => p !== ignorar);
+  if (nome) return outras.some((p) => mesmaPessoa(p, nome)) ? null : nome;
+  for (let n = pessoas.length + 1; ; n++) {
+    const sugestao = `Pessoa ${n}`;
+    if (!outras.some((p) => mesmaPessoa(p, sugestao))) return sugestao;
+  }
+}
+
+const prefixo = (pessoa: string) => `p:${pessoa.toLocaleLowerCase('pt')}|`;
+
+/** O artigo, mas para esta pessoa: o mesmo Classic da Ana e do Rui são duas linhas. */
+export function naPessoa(sellable: Sellable, pessoa: string | null): Sellable {
+  const actual = sellable.person ? prefixo(sellable.person) : '';
+  const base = actual && sellable.id.startsWith(actual) ? sellable.id.slice(actual.length) : sellable.id;
+  if (!pessoa) return { ...sellable, id: base, person: null };
+  return { ...sellable, id: prefixo(pessoa) + base, person: pessoa };
+}
+
+
+/** Mudar de nome leva os pratos dela consigo. */
+export function renomearPessoa(r: Rascunho, de: string, para: string): Rascunho {
+  const cart: Cart = {};
+  for (const linha of cartLines(r.cart)) {
+    const nova = linha.person === de ? { ...naPessoa(linha, para), qty: linha.qty } : linha;
+    cart[nova.id] = nova;
+  }
+  return {
+    ...r,
+    cart,
+    pessoas: r.pessoas.map((p) => (p === de ? para : p)),
+    pessoa: r.pessoa === de ? para : r.pessoa,
+  };
+}
+
+/** Tirar alguém da mesa: os pratos dela ficam, passam para a mesa toda. */
+export function tirarPessoa(r: Rascunho, nome: string): Rascunho {
+  const cart: Cart = {};
+  for (const linha of cartLines(r.cart)) {
+    const nova = linha.person === nome ? { ...naPessoa(linha, null), qty: linha.qty } : linha;
+    const existente = cart[nova.id];
+    cart[nova.id] = existente ? { ...existente, qty: Math.min(99, existente.qty + nova.qty) } : nova;
+  }
+  return { ...r, cart, pessoas: r.pessoas.filter((p) => p !== nome), pessoa: r.pessoa === nome ? null : r.pessoa };
+}
+
+/** Quantos pratos tem cada pessoa (null = a mesa toda). */
+export function pratosDe(cart: Cart, pessoa: string | null): number {
+  return cartLines(cart)
+    .filter((linha) => (linha.person ?? null) === pessoa)
+    .reduce((soma, linha) => soma + linha.qty, 0);
+}
+
+/**
+ * O pedido arrumado por pessoa, pela ordem em que se juntaram; o que é da mesa
+ * toda vai no fim. Pessoas sem nada não aparecem.
+ */
+export function porPessoa(r: Pick<Rascunho, 'cart' | 'pessoas'>): Array<{ pessoa: string | null; linhas: CartLine[] }> {
+  const linhas = cartLines(r.cart);
+  const grupos = [...r.pessoas, null].map((pessoa) => ({
+    pessoa,
+    linhas: linhas.filter((linha) => (linha.person ?? null) === pessoa),
+  }));
+  // Uma linha de alguém que já não está na lista (rascunho antigo) não se perde.
+  const conhecidas = new Set(r.pessoas);
+  const orfas = linhas.filter((linha) => linha.person && !conhecidas.has(linha.person));
+  if (orfas.length > 0) grupos[grupos.length - 1].linhas.push(...orfas);
+  return grupos.filter((g) => g.linhas.length > 0);
+}
+
+/** O que vai ao servidor: os ids do balcão e, quando há, de quem é cada prato. */
+export function itensDoEnvio(linhas: CartLine[]) {
+  return salePayloadItems(linhas).map((item, i) => {
+    const pessoa = linhas[i].person?.trim();
+    return pessoa ? { ...item, person: pessoa } : item;
+  });
 }
 
 /**

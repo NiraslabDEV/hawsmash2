@@ -49,6 +49,12 @@ export type CartLine = {
    * um sem são dois pratos, não `2x Classic`.
    */
   addons?: PosAddon[];
+  /**
+   * De quem é o prato na mesa ("Ana"), só no telemóvel do garçom (1137). O
+   * balcão nunca o põe. Entra na identidade da linha pelo `id`, que o garçom
+   * compõe em `naPessoa`.
+   */
+  person?: string | null;
   qty: number;
 };
 
