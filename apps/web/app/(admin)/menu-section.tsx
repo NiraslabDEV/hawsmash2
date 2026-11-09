@@ -10,6 +10,7 @@ import {
   type Cents,
   type CategoryTreeNode,
 } from '@delivery/core';
+import { fotoParaWebp } from '@/lib/admin/foto-webp';
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 
@@ -771,11 +772,11 @@ function ItemModal({
     // Upload da foto (path: {uuid}.{ext})
     let photoUrl = item?.photo_url ?? null;
     if (photoFile) {
-      const ext = photoFile.name.split('.').pop()?.toLowerCase() ?? 'jpg';
+      const { blob, ext } = await fotoParaWebp(photoFile);
       const path = `${crypto.randomUUID()}.${ext}`;
       const { error: upErr } = await supabase.storage
         .from('menu-photos')
-        .upload(path, photoFile, { cacheControl: '3600', upsert: false });
+        .upload(path, blob, { cacheControl: '3600', upsert: false, contentType: blob.type || undefined });
       if (upErr) {
         setError(`Erro no upload da foto: ${upErr.message}`);
         setSaving(false);
@@ -1107,11 +1108,11 @@ function OptionsEditor({ itemId }: { itemId: string }) {
    */
   async function uploadVariantPhoto(id: string, file: File) {
     setErr('');
-    const ext = file.name.split('.').pop()?.toLowerCase() ?? 'jpg';
+    const { blob, ext } = await fotoParaWebp(file);
     const path = `${crypto.randomUUID()}.${ext}`;
     const { error: upErr } = await supabase.storage
       .from('menu-photos')
-      .upload(path, file, { cacheControl: '3600', upsert: false });
+      .upload(path, blob, { cacheControl: '3600', upsert: false, contentType: blob.type || undefined });
     if (upErr) { setErr(`Erro no upload da foto: ${upErr.message}`); return; }
     await setVariantPhoto(id, supabase.storage.from('menu-photos').getPublicUrl(path).data.publicUrl);
   }
@@ -1526,11 +1527,11 @@ function CategoryModal({
   async function uploadPhoto(file: File) {
     setUploading(true);
     setUploadErr('');
-    const ext = file.name.split('.').pop()?.toLowerCase() ?? 'jpg';
+    const { blob, ext } = await fotoParaWebp(file);
     const path = `cat-${crypto.randomUUID()}.${ext}`;
     const { error: upErr } = await supabase.storage
       .from('menu-photos')
-      .upload(path, file, { cacheControl: '3600', upsert: false });
+      .upload(path, blob, { cacheControl: '3600', upsert: false, contentType: blob.type || undefined });
     if (upErr) { setUploadErr(`Erro: ${upErr.message}`); setUploading(false); return; }
     setPhotoUrl(supabase.storage.from('menu-photos').getPublicUrl(path).data.publicUrl);
     setUploading(false);
