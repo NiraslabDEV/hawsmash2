@@ -8,11 +8,11 @@ import type { CloseResult, WaiterState, WaiterTable } from '@/lib/garcom/contrac
 import { meiosDeCobrar } from '@/lib/garcom/pedido';
 import { billLines, itemLabel, REMOVE_ITEM_REASONS, tableTotalCents, type TableOrderItem } from '@/lib/pos/tables';
 
-import { Contador, Folha } from './pedido-mesa';
+import { PosIcon } from '@/app/(pos)/pos/pos-icons';
+
+import { Contador, Folha, Nota, type Aviso } from './ui';
 
 const money = (c: number) => formatMT(c as Cents);
-
-type Aviso = { tipo: 'ok' | 'erro'; texto: string };
 
 /** Dois toques para confirmar: nada de confirm() do browser em fluxo de venda (§7). */
 function useDoisToques(ms = 4000) {
@@ -24,8 +24,6 @@ function useDoisToques(ms = 4000) {
   }, [armado, ms]);
   return { armado, armar: () => setArmado(true), desarmar: () => setArmado(false) };
 }
-
-const BOTAO_LINHA = 'rounded-xl border border-white/15 py-3 text-sm font-semibold disabled:opacity-50';
 
 /** O que se faz à conta da mesa: pedir a conta, mudar de mesa e, com autorização, cobrar. */
 export function BotoesDaMesa({
@@ -51,19 +49,22 @@ export function BotoesDaMesa({
   return (
     <>
       <div className="grid grid-cols-2 gap-2">
-        <button className={BOTAO_LINHA} onClick={() => setFolha('conta')}>
+        <button className="pos-btn !min-h-[3.5rem] !gap-2 !px-3 whitespace-nowrap text-[0.9375rem]" onClick={() => setFolha('conta')}>
+          <PosIcon name="printer" size={19} className="text-ink-mute" />
           Pedir a conta
         </button>
-        <button className={BOTAO_LINHA} onClick={() => setFolha('mudar')}>
+        <button className="pos-btn !min-h-[3.5rem] !gap-2 !px-3 whitespace-nowrap text-[0.9375rem]" onClick={() => setFolha('mudar')}>
+          <PosIcon name="arrow" size={19} className="text-ink-mute" />
           Mudar de mesa
         </button>
       </div>
       {podeCobrar && (
-        <button
-          className="w-full rounded-2xl bg-emerald-500 py-4 text-lg font-bold text-black"
-          onClick={() => setFolha('cobrar')}
-        >
-          Cobrar {money(tableTotalCents(mesa))}
+        <button className="pos-btn pos-btn--ok pos-btn--lg w-full !justify-between !px-5" onClick={() => setFolha('cobrar')}>
+          <span className="flex items-center gap-2">
+            <PosIcon name="cash" size={24} />
+            Cobrar
+          </span>
+          <span className="pos-num">{money(tableTotalCents(mesa))}</span>
         </button>
       )}
 
@@ -100,21 +101,23 @@ export function BotoesDaMesa({
 function LinhasDaConta({ mesa }: { mesa: WaiterTable }) {
   return (
     <>
-      <ul className="divide-y divide-white/5 rounded-2xl border border-white/10">
-        {billLines(mesa).map((linha) => (
-          <li key={linha.key} className="flex items-start justify-between gap-3 px-3 py-2 text-sm">
-            <span className="min-w-0">
-              <b className="text-[var(--gold)]">{linha.qty}×</b> {linha.label}
-              {linha.notes && <span className="block text-xs italic text-[var(--ink-dim)]">{linha.notes}</span>}
-            </span>
-            <span className="shrink-0">{money(linha.totalCents)}</span>
-          </li>
-        ))}
-      </ul>
-      <p className="flex items-baseline justify-between">
-        <span className="text-[var(--ink-dim)]">Total da mesa</span>
-        <b className="text-2xl text-[var(--gold)]">{money(tableTotalCents(mesa))}</b>
-      </p>
+      <div className="pos-well overflow-hidden">
+        <ul className="divide-y divide-white/[0.06]">
+          {billLines(mesa).map((linha) => (
+            <li key={linha.key} className="flex items-start justify-between gap-3 px-4 py-3 text-[0.9375rem]">
+              <span className="min-w-0">
+                <span className="pos-num font-extrabold text-gold">{linha.qty}×</span> {linha.label}
+                {linha.notes && <span className="block text-xs italic text-ink-mute">{linha.notes}</span>}
+              </span>
+              <span className="pos-num shrink-0 font-semibold text-ink-dim">{money(linha.totalCents)}</span>
+            </li>
+          ))}
+        </ul>
+        <p className="flex items-baseline justify-between border-t border-white/[0.08] bg-white/[0.03] px-4 py-3">
+          <span className="pos-eyebrow">Total da mesa</span>
+          <span className="pos-num text-2xl font-extrabold text-gold">{money(tableTotalCents(mesa))}</span>
+        </p>
+      </div>
     </>
   );
 }
@@ -147,17 +150,14 @@ function PedirConta({
   };
 
   return (
-    <Folha titulo={`Conta · Mesa ${mesa.number}`} onFechar={onFechar}>
+    <Folha titulo={`Conta da mesa ${mesa.number}`} subtitulo="Para ler ao cliente ou imprimir" onFechar={onFechar}>
       <LinhasDaConta mesa={mesa} />
-      {erro && <p className="rounded-xl bg-red-500/15 px-4 py-3 text-sm text-red-300">{erro}</p>}
-      <button
-        onClick={imprimir}
-        disabled={aEnviar}
-        className="w-full rounded-2xl bg-[var(--gold)] py-4 text-lg font-bold text-black disabled:opacity-60"
-      >
+      {erro && <Nota tom="danger">{erro}</Nota>}
+      <button onClick={imprimir} disabled={aEnviar} className="pos-btn pos-btn--primary w-full">
+        <PosIcon name="printer" size={20} />
         {aEnviar ? 'A enviar…' : 'Imprimir no balcão'}
       </button>
-      <p className="text-center text-xs text-[var(--ink-mute)]">Isto não fecha a conta.</p>
+      <p className="text-center text-xs text-ink-mute">Isto não fecha a conta.</p>
     </Folha>
   );
 }
@@ -200,20 +200,15 @@ function MudarMesa({
   };
 
   return (
-    <Folha titulo={`Mudar a mesa ${mesa.number}`} onFechar={onFechar} fechar={!aEnviar}>
-      <p className="text-sm text-[var(--ink-dim)]">Para qual mesa vai a conta?</p>
+    <Folha titulo={`Mudar a mesa ${mesa.number}`} subtitulo="Para qual mesa vai a conta?" onFechar={onFechar} fechar={!aEnviar}>
       <ul className="grid grid-cols-4 gap-2">
         {opcoes.map((t) => (
           <li key={t.id}>
             <button
               onClick={() => setDestino(t)}
               aria-pressed={destino?.id === t.id}
-              className={`h-14 w-full rounded-xl border font-bold ${
-                destino?.id === t.id
-                  ? 'border-[var(--gold)] bg-[var(--gold)] text-black'
-                  : t.orders.length > 0
-                    ? 'border-[var(--gold)]/50 text-[var(--gold)]'
-                    : 'border-white/10'
+              className={`pos-choice pos-num w-full !min-h-14 !text-lg !font-extrabold ${
+                t.orders.length > 0 && destino?.id !== t.id ? '!text-gold !shadow-[inset_0_0_0_1px_var(--pos-accent-line)]' : ''
               }`}
             >
               {t.number}
@@ -221,17 +216,15 @@ function MudarMesa({
           </li>
         ))}
       </ul>
+      <p className="flex items-center gap-2 text-xs text-ink-mute">
+        <span className="h-3 w-3 rounded-[4px] shadow-[inset_0_0_0_1px_var(--pos-accent-line)]" aria-hidden />
+        Com conta aberta
+      </p>
       {destino && destino.orders.length > 0 && (
-        <p className="rounded-xl bg-amber-500/15 px-4 py-3 text-sm text-amber-200">
-          A mesa {destino.number} já tem conta aberta: as duas juntam-se e pagam-se juntas.
-        </p>
+        <Nota tom="warn">A mesa {destino.number} já tem conta aberta: as duas juntam-se e pagam-se juntas.</Nota>
       )}
-      {erro && <p className="rounded-xl bg-red-500/15 px-4 py-3 text-sm text-red-300">{erro}</p>}
-      <button
-        onClick={mudar}
-        disabled={!destino || aEnviar}
-        className="w-full rounded-2xl bg-[var(--gold)] py-4 text-lg font-bold text-black disabled:opacity-50"
-      >
+      {erro && <Nota tom="danger">{erro}</Nota>}
+      <button onClick={mudar} disabled={!destino || aEnviar} className="pos-btn pos-btn--primary w-full">
         {aEnviar ? 'A mudar…' : destino ? `Mudar para a mesa ${destino.number}` : 'Escolhe a mesa'}
       </button>
     </Folha>
@@ -292,35 +285,34 @@ function Cobrar({
   };
 
   return (
-    <Folha titulo={`Cobrar · Mesa ${mesa.number}`} onFechar={onFechar} fechar={!aEnviar}>
+    <Folha titulo={`Cobrar a mesa ${mesa.number}`} onFechar={onFechar} fechar={!aEnviar}>
       <LinhasDaConta mesa={mesa} />
-      <div className="grid grid-cols-3 gap-2" role="group" aria-label="Meio de pagamento">
-        {meios.map((m) => (
-          <button
-            key={m.id}
-            aria-pressed={metodo === m.id}
-            onClick={() => {
-              setMetodo(m.id);
-              confirmacao.desarmar();
-            }}
-            className={`rounded-xl border px-2 py-3 text-sm font-semibold ${
-              metodo === m.id ? 'border-[var(--gold)] bg-[var(--gold)]/15 text-[var(--gold)]' : 'border-white/10'
-            }`}
-          >
-            {m.label}
-          </button>
-        ))}
+      <div className="space-y-2">
+        <p className="pos-eyebrow">Como pagou?</p>
+        <div className="grid grid-cols-3 gap-2" role="group" aria-label="Meio de pagamento">
+          {meios.map((m) => (
+            <button
+              key={m.id}
+              aria-pressed={metodo === m.id}
+              onClick={() => {
+                setMetodo(m.id);
+                confirmacao.desarmar();
+              }}
+              className="pos-choice !min-h-[3.25rem] !px-2 text-sm"
+            >
+              {m.label}
+            </button>
+          ))}
+        </div>
       </div>
-      <p className="rounded-xl bg-white/5 px-4 py-3 text-sm text-[var(--ink-dim)]">
+      <Nota tom="warn">
         Confirma que o dinheiro entrou antes de tocar: este registo não fala com a operadora. Em notas, cobra-se no balcão.
-      </p>
-      {erro && <p className="rounded-xl bg-red-500/15 px-4 py-3 text-sm text-red-300">{erro}</p>}
+      </Nota>
+      {erro && <Nota tom="danger">{erro}</Nota>}
       <button
         onClick={cobrar}
         disabled={aEnviar}
-        className={`w-full rounded-2xl py-4 text-lg font-bold text-black disabled:opacity-60 ${
-          confirmacao.armado ? 'bg-emerald-300' : 'bg-emerald-500'
-        }`}
+        className={`pos-btn pos-btn--ok pos-btn--lg w-full !text-lg ${confirmacao.armado ? 'pos-pop !bg-emerald-300' : ''}`}
       >
         {aEnviar
           ? 'A registar…'
@@ -370,11 +362,10 @@ export function RetirarArtigo({
   };
 
   return (
-    <Folha titulo="Retirar artigo" onFechar={onFechar} fechar={!aEnviar}>
-      <p className="font-semibold">{itemLabel(item)}</p>
+    <Folha titulo="Retirar artigo" subtitulo={itemLabel(item)} onFechar={onFechar} fechar={!aEnviar}>
       {item.qty > 1 && (
         <div className="flex items-center justify-between">
-          <span className="text-sm text-[var(--ink-dim)]">Quantos?</span>
+          <span className="pos-eyebrow">Quantos?</span>
           <Contador
             qty={qty}
             onMenos={() => setQty((q) => Math.max(1, q - 1))}
@@ -382,26 +373,19 @@ export function RetirarArtigo({
           />
         </div>
       )}
-      <div className="grid grid-cols-2 gap-2" role="group" aria-label="Motivo">
-        {REMOVE_ITEM_REASONS.map((r) => (
-          <button
-            key={r}
-            aria-pressed={motivo === r}
-            onClick={() => setMotivo(r)}
-            className={`rounded-xl border px-2 py-3 text-sm font-semibold ${
-              motivo === r ? 'border-[var(--gold)] bg-[var(--gold)]/15 text-[var(--gold)]' : 'border-white/10'
-            }`}
-          >
-            {r}
-          </button>
-        ))}
+      <div className="space-y-2">
+        <p className="pos-eyebrow">Porquê?</p>
+        <div className="grid grid-cols-2 gap-2" role="group" aria-label="Motivo">
+          {REMOVE_ITEM_REASONS.map((r) => (
+            <button key={r} aria-pressed={motivo === r} onClick={() => setMotivo(r)} className="pos-choice !min-h-[3.25rem] !px-2 text-sm">
+              {r}
+            </button>
+          ))}
+        </div>
       </div>
-      {erro && <p className="rounded-xl bg-red-500/15 px-4 py-3 text-sm text-red-300">{erro}</p>}
-      <button
-        onClick={retirar}
-        disabled={!motivo || aEnviar}
-        className="w-full rounded-2xl bg-red-500 py-4 text-lg font-bold text-white disabled:opacity-40"
-      >
+      <p className="text-xs text-ink-mute">Sai um papel &quot;ANULAR&quot; na cozinha e o stock volta.</p>
+      {erro && <Nota tom="danger">{erro}</Nota>}
+      <button onClick={retirar} disabled={!motivo || aEnviar} className="pos-btn pos-btn--danger-solid w-full">
         {aEnviar ? 'A retirar…' : motivo ? `Retirar ${qty} · ${money(qty * item.unit_price_cents)}` : 'Escolhe o motivo'}
       </button>
     </Folha>
@@ -436,7 +420,14 @@ export function ReimprimirComanda({
   };
 
   return (
-    <button onClick={tocar} disabled={aEnviar} className="w-full py-1 text-xs font-semibold text-[var(--ink-dim)] underline disabled:opacity-60">
+    <button
+      onClick={tocar}
+      disabled={aEnviar}
+      className={`pos-press flex w-full items-center justify-center gap-1.5 rounded-xl py-2.5 text-xs font-bold disabled:opacity-60 ${
+        confirmacao.armado ? 'bg-white/[0.08] text-ink' : 'text-ink-mute'
+      }`}
+    >
+      <PosIcon name="printer" size={14} />
       {aEnviar ? 'A enviar…' : confirmacao.armado ? 'Tocar outra vez para reimprimir' : 'Reimprimir comanda'}
     </button>
   );

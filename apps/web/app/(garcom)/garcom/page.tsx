@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { formatMT, type Cents } from '@delivery/core';
 
+import { PosIcon, type PosIconName } from '@/app/(pos)/pos/pos-icons';
 import { enviarAcao, lerEstado, SemSessao } from '@/lib/garcom/client';
 import type { LaunchResult, WaiterState, WaiterTable } from '@/lib/garcom/contract';
 import {
@@ -24,10 +25,18 @@ import { Esgotados } from './esgotados';
 import { Historico } from './historico';
 import { BotoesDaMesa, ReimprimirComanda, RetirarArtigo } from './mesa-accoes';
 import { PedidoMesa } from './pedido-mesa';
+import { CAMPO, Nota, Secao, Topo, Vazio, type Aviso } from './ui';
 
 const money = (c: number) => formatMT(c as Cents);
 const hora = (iso: string) =>
   new Date(iso).toLocaleTimeString('pt-PT', { timeZone: 'Africa/Maputo', hour: '2-digit', minute: '2-digit' });
+const iniciais = (nome: string) =>
+  nome
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((p) => p[0]!.toUpperCase())
+    .join('');
 
 type View =
   | { kind: 'mesas' }
@@ -77,19 +86,22 @@ export default function GarcomPage() {
   }
   if (!estado.data) {
     return (
-      <main className="grid min-h-[100dvh] place-items-center p-6 text-center text-[var(--ink-dim)]">
+      <main className="grid min-h-[100dvh] place-items-center p-6 text-center text-ink-mute">
         {estado.error ? (
-          <div className="space-y-3">
-            <p>{(estado.error as Error).message}</p>
-            <button
-              className="rounded-xl bg-[var(--gold)] px-5 py-3 font-semibold text-black"
-              onClick={() => void estado.refetch()}
-            >
+          <div className="flex max-w-xs flex-col items-center gap-4">
+            <span className="pos-mark pos-mark--warn" aria-hidden>
+              <PosIcon name="clock" size={28} />
+            </span>
+            <p className="text-ink-dim">{(estado.error as Error).message}</p>
+            <button className="pos-btn pos-btn--primary w-full" onClick={() => void estado.refetch()}>
               Tentar outra vez
             </button>
           </div>
         ) : (
-          'A carregar…'
+          <div className="flex flex-col items-center gap-3">
+            <span className="h-8 w-8 animate-spin rounded-full border-2 border-white/10 border-t-gold" aria-hidden />
+            A carregar…
+          </div>
         )}
       </main>
     );
@@ -129,14 +141,19 @@ function Entrar({ onEntrou }: { onEntrou: () => void }) {
   };
 
   return (
-    <main className="mx-auto flex min-h-[100dvh] max-w-sm flex-col justify-center gap-6 px-5">
-      <div>
-        <h1 className="font-[family-name:var(--font-display)] text-4xl tracking-wide text-[var(--gold)]">Garçom</h1>
-        <p className="mt-1 text-sm text-[var(--ink-dim)]">Entra com o teu telefone e o PIN que a loja te deu.</p>
+    <main className="mx-auto flex min-h-[100dvh] max-w-sm flex-col justify-center gap-8 px-5 py-10">
+      <div className="flex flex-col items-center gap-4 text-center">
+        <span className="grid h-16 w-16 place-items-center rounded-[20px] bg-[var(--pos-accent-soft)] text-gold shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--gold)_35%,transparent)]">
+          <PosIcon name="table" size={30} />
+        </span>
+        <div>
+          <h1 className="text-3xl font-extrabold tracking-tight">Garçom</h1>
+          <p className="mt-1 text-sm text-ink-mute">Entra com o teu telefone e o PIN que a loja te deu.</p>
+        </div>
       </div>
-      <form onSubmit={submeter} className="space-y-4">
-        <label className="block">
-          <span className="text-sm text-[var(--ink-dim)]">Telefone</span>
+      <form onSubmit={submeter} className="pos-card space-y-4 p-5">
+        <label className="block space-y-1.5">
+          <span className="pos-eyebrow">Telefone</span>
           <input
             type="tel"
             inputMode="tel"
@@ -144,12 +161,12 @@ function Entrar({ onEntrou }: { onEntrou: () => void }) {
             value={phone}
             onChange={(e) => setPhone(e.target.value)}
             placeholder="84 123 4567"
-            className="mt-1 w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-lg outline-none focus:border-[var(--gold)]"
+            className={`${CAMPO} pos-num text-lg`}
             required
           />
         </label>
-        <label className="block">
-          <span className="text-sm text-[var(--ink-dim)]">PIN</span>
+        <label className="block space-y-1.5">
+          <span className="pos-eyebrow">PIN</span>
           <input
             type="password"
             inputMode="numeric"
@@ -158,16 +175,12 @@ function Entrar({ onEntrou }: { onEntrou: () => void }) {
             maxLength={6}
             value={pin}
             onChange={(e) => setPin(e.target.value.replace(/\D/g, ''))}
-            className="mt-1 w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-lg tracking-[0.4em] outline-none focus:border-[var(--gold)]"
+            className={`${CAMPO} text-lg tracking-[0.5em]`}
             required
           />
         </label>
-        {erro && <p className="rounded-lg bg-red-500/15 px-3 py-2 text-sm text-red-300">{erro}</p>}
-        <button
-          type="submit"
-          disabled={aEntrar}
-          className="w-full rounded-xl bg-[var(--gold)] py-4 text-lg font-semibold text-black disabled:opacity-60"
-        >
+        {erro && <Nota tom="danger">{erro}</Nota>}
+        <button type="submit" disabled={aEntrar} className="pos-btn pos-btn--primary w-full">
           {aEntrar ? 'A entrar…' : 'Entrar'}
         </button>
       </form>
@@ -176,7 +189,11 @@ function Entrar({ onEntrou }: { onEntrou: () => void }) {
 }
 
 // ─── App ──────────────────────────────────────────────────────────────────────
-type Aviso = { tipo: 'ok' | 'erro'; texto: string };
+const SEPARADORES: ReadonlyArray<readonly ['mesas' | 'historico' | 'esgotados', string, PosIconName]> = [
+  ['mesas', 'Mesas', 'table'],
+  ['historico', 'Os meus pedidos', 'ticket'],
+  ['esgotados', 'Esgotados', 'ban'],
+];
 
 function App({ estado, recarregar }: { estado: WaiterState; recarregar: () => void }) {
   const queryClient = useQueryClient();
@@ -275,6 +292,7 @@ function App({ estado, recarregar }: { estado: WaiterState; recarregar: () => vo
   }
 
   const separador = view.kind === 'mesas' || view.kind === 'historico' || view.kind === 'esgotados';
+  const prontos = prontosParaServir(estado.tables).length;
 
   return (
     <>
@@ -282,37 +300,45 @@ function App({ estado, recarregar }: { estado: WaiterState; recarregar: () => vo
       {separador && (
         <nav
           aria-label="Secções"
-          className="fixed inset-x-0 bottom-0 z-30 mx-auto grid max-w-md grid-cols-3 border-t border-white/10 bg-[var(--bg-1)]"
+          className="fixed inset-x-0 bottom-0 z-30 border-t border-white/[0.07] bg-bg1 pb-[env(safe-area-inset-bottom)]"
         >
-          {(
-            [
-              ['mesas', 'Mesas'],
-              ['historico', 'Os meus pedidos'],
-              ['esgotados', 'Esgotados'],
-            ] as const
-          ).map(([kind, label]) => (
-            <button
-              key={kind}
-              aria-current={view.kind === kind ? 'page' : undefined}
-              onClick={() => trocar({ kind })}
-              className={`py-4 text-sm font-semibold ${view.kind === kind ? 'text-[var(--gold)]' : 'text-[var(--ink-dim)]'}`}
-            >
-              {label}
-            </button>
-          ))}
+          <div className="mx-auto grid max-w-md grid-cols-3 gap-1 px-2 py-1.5">
+            {SEPARADORES.map(([kind, label, icone]) => {
+              const activo = view.kind === kind;
+              return (
+                <button
+                  key={kind}
+                  aria-current={activo ? 'page' : undefined}
+                  onClick={() => trocar({ kind })}
+                  className={`pos-press relative flex flex-col items-center gap-1 rounded-2xl py-2 text-[11px] font-bold tracking-wide ${
+                    activo ? 'bg-[var(--pos-accent-soft)] text-gold' : 'text-ink-mute'
+                  }`}
+                >
+                  <PosIcon name={icone} size={22} strokeWidth={activo ? 2.2 : 1.8} />
+                  {label}
+                  {kind === 'mesas' && prontos > 0 && !activo && (
+                    <span className="pos-num absolute right-[calc(50%-1.6rem)] top-1 grid h-[18px] min-w-[18px] place-items-center rounded-full bg-emerald-400 px-1 text-[10px] font-extrabold text-black">
+                      {prontos}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
         </nav>
       )}
       {aviso && (
-        <div className="pointer-events-none fixed inset-x-0 top-3 z-50 flex justify-center px-4">
-          <p
+        <div className="pointer-events-none fixed inset-x-0 top-[max(0.75rem,env(safe-area-inset-top))] z-50 flex justify-center px-4">
+          <button
             role="status"
-            className={`pointer-events-auto max-w-md rounded-xl px-4 py-3 text-center text-sm font-semibold shadow-2xl ${
-              aviso.tipo === 'ok' ? 'bg-emerald-500 text-black' : 'bg-red-500 text-white'
-            }`}
             onClick={() => setAviso(null)}
+            className={`pos-pop pointer-events-auto flex max-w-md items-center gap-3 rounded-2xl px-4 py-3 text-left text-sm font-bold shadow-[0_18px_40px_-12px_rgba(0,0,0,0.8)] ${
+              aviso.tipo === 'ok' ? 'bg-emerald-400 text-[#04130d]' : 'bg-red-500 text-white'
+            }`}
           >
+            <PosIcon name={aviso.tipo === 'ok' ? 'check' : 'ban'} size={20} strokeWidth={2.6} className="shrink-0" />
             {aviso.texto}
-          </p>
+          </button>
         </div>
       )}
     </>
@@ -330,6 +356,8 @@ function artigosPorEnviar(tableId: string): number {
 }
 
 // ─── Lista de mesas ───────────────────────────────────────────────────────────
+type Filtro = 'todas' | 'ocupadas' | 'livres';
+
 function ListaMesas({
   estado,
   abrirMesa,
@@ -341,112 +369,195 @@ function ListaMesas({
   servir: (orderId: string) => Promise<boolean>;
   sair: () => void;
 }) {
+  const [filtro, setFiltro] = useState<Filtro>('todas');
   const prontos = prontosParaServir(estado.tables);
   const agora = new Date();
+  const ocupadas = estado.tables.filter((t) => t.orders.length > 0);
+  const abertoNaSala = ocupadas.reduce((soma, t) => soma + tableTotalCents(t), 0);
+  const visiveis = estado.tables.filter((t) =>
+    filtro === 'ocupadas' ? t.orders.length > 0 : filtro === 'livres' ? t.orders.length === 0 : true,
+  );
 
   return (
-    <main className="mx-auto max-w-md space-y-5 px-4 pb-24 pt-4">
-      <header className="flex items-center justify-between gap-3">
-        <div className="min-w-0">
-          <p className="truncate text-lg font-semibold">{estado.waiter.full_name}</p>
-          <p className="truncate text-xs text-[var(--ink-dim)]">
-            {estado.store.name} · {estado.today.orders} {estado.today.orders === 1 ? 'pedido' : 'pedidos'} hoje
-          </p>
+    <main className="mx-auto max-w-md pb-28">
+      <header className="sticky top-0 z-20 border-b border-white/[0.07] bg-bg0 px-4 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))]">
+        <div className="flex items-center gap-3">
+          <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-[var(--pos-accent-soft)] text-sm font-extrabold text-gold shadow-[inset_0_0_0_1px_color-mix(in_srgb,var(--gold)_35%,transparent)]">
+            {iniciais(estado.waiter.full_name)}
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-base font-extrabold leading-tight">{estado.waiter.full_name}</p>
+            <p className="flex items-center gap-1.5 truncate text-xs text-ink-mute">
+              <span
+                className={`h-1.5 w-1.5 shrink-0 rounded-full ${estado.store.open ? 'bg-emerald-400' : 'bg-amber-400'}`}
+                aria-hidden
+              />
+              {estado.store.name} · {estado.store.open ? 'aberta' : 'fechada'}
+            </p>
+          </div>
+          <button onClick={sair} className="pos-btn pos-btn--quiet !min-h-10 shrink-0 !rounded-xl !px-3 text-sm">
+            Sair
+          </button>
         </div>
-        <button onClick={sair} className="shrink-0 rounded-lg border border-white/10 px-3 py-2 text-sm text-[var(--ink-dim)]">
-          Sair
-        </button>
       </header>
 
-      {!estado.store.open && (
-        <p className="rounded-xl bg-amber-500/15 px-4 py-3 text-sm text-amber-200">
-          A loja não está a receber pedidos de mesa agora. Fala com o balcão.
-        </p>
-      )}
-
-      {prontos.length > 0 && (
-        <section className="space-y-2">
-          <h2 className="text-sm font-semibold uppercase tracking-wider text-emerald-300">
-            Prontos para servir ({prontos.length})
-          </h2>
-          <ul className="space-y-2">
-            {prontos.map(({ table, order }) => (
-              <li key={order.id} className="rounded-2xl border border-emerald-400/40 bg-emerald-500/10 p-3">
-                <button className="block w-full text-left" onClick={() => abrirMesa(table.id)}>
-                  <p className="flex items-baseline justify-between gap-2">
-                    <span className="font-[family-name:var(--font-display)] text-2xl tracking-wide text-emerald-300">
-                      Mesa {table.number}
-                    </span>
-                    <span className="text-xs text-[var(--ink-dim)]">
-                      {order.daily_number != null ? `Senha ${order.daily_number} · ` : ''}
-                      {hora(order.created_at)}
-                    </span>
-                  </p>
-                  <p className="mt-1 line-clamp-2 text-sm text-[var(--ink-dim)]">
-                    {order.items.map((item) => `${item.qty}× ${itemLabel(item)}`).join(' · ')}
-                  </p>
-                </button>
-                <div className="mt-2">
-                  <BotaoServir orderId={order.id} servir={servir} />
-                </div>
-              </li>
-            ))}
-          </ul>
+      <div className="space-y-5 px-4 pt-4">
+        <section className="grid grid-cols-3 gap-2">
+          <Indicador titulo="Ocupadas" valor={`${ocupadas.length}`} sufixo={`/${estado.tables.length}`} />
+          <Indicador titulo="Prontos" valor={`${prontos.length}`} tom={prontos.length > 0 ? 'ok' : undefined} />
+          <Indicador titulo="Hoje" valor={`${estado.today.orders}`} sufixo={estado.today.orders === 1 ? ' pedido' : ' pedidos'} />
         </section>
-      )}
 
-      <section className="space-y-2">
-        <h2 className="text-sm font-semibold uppercase tracking-wider text-[var(--ink-dim)]">Mesas</h2>
-        {estado.tables.length === 0 ? (
-          <p className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 text-center text-sm text-[var(--ink-dim)]">
-            Esta loja ainda não tem mesas. O dono cria-as no painel, em Mesas.
-          </p>
-        ) : (
-          <ul className="grid grid-cols-3 gap-2">
-            {estado.tables.map((table) => {
-              const ocupada = table.orders.length > 0;
-              const nome = tableName(table);
-              const minutos = minutesOpen(table, agora);
-              const temPronto = table.orders.some((order) => order.status === 'ready');
-              const porEnviar = artigosPorEnviar(table.id);
-              return (
-                <li key={table.id}>
-                  <button
-                    onClick={() => abrirMesa(table.id)}
-                    className={`relative flex h-24 w-full flex-col items-center justify-center rounded-2xl border px-1 text-center transition-colors ${
-                      temPronto
-                        ? 'border-emerald-400/70 bg-emerald-500/15'
-                        : ocupada
-                          ? 'border-[var(--gold)]/60 bg-[var(--gold)]/10'
-                          : 'border-white/10 bg-white/[0.03]'
-                    } ${table.active ? '' : 'opacity-60'}`}
-                  >
-                    <span
-                      className={`font-[family-name:var(--font-display)] text-3xl leading-none tracking-wide ${
-                        ocupada ? 'text-[var(--gold)]' : 'text-[var(--ink-dim)]'
-                      }`}
-                    >
-                      {table.number}
-                    </span>
-                    <span className="mt-1 w-full truncate text-[11px] text-[var(--ink-dim)]">
-                      {nome ?? (ocupada ? money(tableTotalCents(table)) : table.active ? 'Livre' : 'Desactivada')}
-                    </span>
-                    {ocupada && minutos != null && (
-                      <span className="text-[10px] text-[var(--ink-mute)]">{minutos} min</span>
-                    )}
-                    {porEnviar > 0 && (
-                      <span className="absolute right-1.5 top-1.5 rounded-full bg-amber-400 px-1.5 text-[10px] font-bold text-black">
-                        {porEnviar}
+        {!estado.store.open && <Nota tom="warn">A loja não está a receber pedidos de mesa agora. Fala com o balcão.</Nota>}
+
+        {prontos.length > 0 && (
+          <section className="space-y-2">
+            <Secao titulo="Prontos para servir" conta={prontos.length} tom="ok" />
+            <ul className="space-y-2">
+              {prontos.map(({ table, order }) => (
+                <li
+                  key={order.id}
+                  className="pos-pop overflow-hidden rounded-[20px] bg-emerald-400/[0.08] shadow-[inset_0_0_0_1px_rgba(52,211,153,0.35)]"
+                >
+                  <button className="pos-press block w-full p-4 pb-3 text-left" onClick={() => abrirMesa(table.id)}>
+                    <p className="flex items-center justify-between gap-2">
+                      <span className="flex items-baseline gap-2">
+                        <span className="pos-eyebrow !text-emerald-300/80">Mesa</span>
+                        <span className="pos-num text-3xl font-extrabold leading-none text-emerald-300">{table.number}</span>
                       </span>
-                    )}
+                      <span className="pos-num text-xs text-ink-mute">
+                        {order.daily_number != null ? `Senha ${order.daily_number} · ` : ''}
+                        {hora(order.created_at)}
+                      </span>
+                    </p>
+                    <p className="mt-2 line-clamp-2 text-sm text-ink-dim">
+                      {order.items.map((item) => `${item.qty}× ${itemLabel(item)}`).join(' · ')}
+                    </p>
                   </button>
+                  <div className="px-4 pb-4">
+                    <BotaoServir orderId={order.id} servir={servir} />
+                  </div>
                 </li>
-              );
-            })}
-          </ul>
+              ))}
+            </ul>
+          </section>
         )}
-      </section>
+
+        <section className="space-y-3">
+          <div className="flex items-end justify-between gap-3">
+            <Secao titulo="Mesas" />
+            {abertoNaSala > 0 && (
+              <p className="text-xs text-ink-mute">
+                Em aberto <span className="pos-num font-bold text-ink-dim">{money(abertoNaSala)}</span>
+              </p>
+            )}
+          </div>
+          {estado.tables.length === 0 ? (
+            <Vazio>Esta loja ainda não tem mesas. O dono cria-as no painel, em Mesas.</Vazio>
+          ) : (
+            <>
+              <div className="pos-seg" role="group" aria-label="Filtrar mesas">
+                {(
+                  [
+                    ['todas', 'Todas', estado.tables.length],
+                    ['ocupadas', 'Ocupadas', ocupadas.length],
+                    ['livres', 'Livres', estado.tables.length - ocupadas.length],
+                  ] as const
+                ).map(([id, label, n]) => (
+                  <button key={id} aria-pressed={filtro === id} onClick={() => setFiltro(id)} className="!min-h-11 !text-sm">
+                    {label}
+                    <span className="pos-num text-xs opacity-70">{n}</span>
+                  </button>
+                ))}
+              </div>
+              {visiveis.length === 0 ? (
+                <Vazio>{filtro === 'ocupadas' ? 'Nenhuma mesa com conta aberta.' : 'Todas as mesas estão ocupadas.'}</Vazio>
+              ) : (
+                <ul className="grid grid-cols-3 gap-2">
+                  {visiveis.map((table) => (
+                    <CartaoMesa key={table.id} table={table} agora={agora} onAbrir={() => abrirMesa(table.id)} />
+                  ))}
+                </ul>
+              )}
+            </>
+          )}
+        </section>
+      </div>
     </main>
+  );
+}
+
+function Indicador({ titulo, valor, sufixo, tom }: { titulo: string; valor: string; sufixo?: string; tom?: 'ok' }) {
+  return (
+    <div
+      className={`rounded-2xl px-3 py-2.5 ${
+        tom === 'ok' ? 'bg-emerald-400/10 shadow-[inset_0_0_0_1px_rgba(52,211,153,0.3)]' : 'pos-card !rounded-2xl'
+      }`}
+    >
+      <p className={`pos-eyebrow ${tom === 'ok' ? '!text-emerald-300/80' : ''}`}>{titulo}</p>
+      <p className="mt-0.5 truncate">
+        <span className={`pos-num text-2xl font-extrabold leading-none ${tom === 'ok' ? 'text-emerald-300' : ''}`}>{valor}</span>
+        {sufixo && <span className="text-xs font-semibold text-ink-mute">{sufixo}</span>}
+      </p>
+    </div>
+  );
+}
+
+function CartaoMesa({ table, agora, onAbrir }: { table: WaiterTable; agora: Date; onAbrir: () => void }) {
+  const ocupada = table.orders.length > 0;
+  const nome = tableName(table);
+  const minutos = minutesOpen(table, agora);
+  const temPronto = table.orders.some((order) => order.status === 'ready');
+  const porEnviar = artigosPorEnviar(table.id);
+
+  const fundo = temPronto
+    ? 'bg-emerald-400/[0.09] shadow-[inset_0_0_0_1.5px_rgba(52,211,153,0.55)]'
+    : ocupada
+      ? 'bg-[radial-gradient(120%_90%_at_50%_0%,color-mix(in_srgb,var(--gold)_14%,var(--bg-2))_0%,var(--bg-2)_70%)] shadow-[inset_0_0_0_1px_var(--pos-accent-line)]'
+      : 'bg-white/[0.025] shadow-[inset_0_0_0_1px_rgba(255,255,255,0.06)]';
+
+  return (
+    <li>
+      <button
+        onClick={onAbrir}
+        className={`pos-press relative flex h-[7.25rem] w-full flex-col justify-between rounded-[18px] p-2.5 text-left ${fundo} ${
+          table.active ? '' : 'opacity-50'
+        }`}
+      >
+        <span className="flex items-center justify-between gap-1">
+          <span className={`text-[10px] font-bold tracking-[0.14em] ${ocupada ? 'text-gold opacity-80' : 'text-ink-mute'}`}>MESA</span>
+          {temPronto ? (
+            <span className="rounded-full bg-emerald-400 px-1.5 py-px text-[9px] font-extrabold tracking-wide text-black">PRONTO</span>
+          ) : porEnviar > 0 ? (
+            <span className="rounded-full bg-amber-400 px-1.5 py-px text-[9px] font-extrabold tracking-wide text-black">
+              {porEnviar} POR ENVIAR
+            </span>
+          ) : ocupada && minutos != null ? (
+            <span className="pos-num flex items-center gap-0.5 text-[10px] font-semibold text-ink-mute">
+              <PosIcon name="clock" size={11} />
+              {minutos}m
+            </span>
+          ) : null}
+        </span>
+        <span
+          className={`pos-num text-[2.5rem] font-extrabold leading-none ${
+            temPronto ? 'text-emerald-300' : ocupada ? 'text-gold' : 'text-ink-mute'
+          }`}
+        >
+          {table.number}
+        </span>
+        <span className="block w-full min-w-0">
+          {ocupada ? (
+            <>
+              {nome && <span className="block truncate text-[11px] font-bold text-ink">{nome}</span>}
+              <span className="pos-num block truncate text-xs font-bold text-ink-dim">{money(tableTotalCents(table))}</span>
+            </>
+          ) : (
+            <span className="block truncate text-[11px] font-semibold text-ink-mute">{table.active ? 'Livre' : 'Desactivada'}</span>
+          )}
+        </span>
+      </button>
+    </li>
   );
 }
 
@@ -472,75 +583,93 @@ function DetalheMesa({
 }) {
   const lojaAberta = estado.store.open;
   const nome = tableName(mesa);
+  const nota = tableNote(mesa);
   const porEnviar = artigosPorEnviar(mesa.id);
   const agoraMs = Date.now();
   const podePedir = lojaAberta && mesa.active;
+  const minutos = minutesOpen(mesa, new Date(agoraMs));
+  const temConta = mesa.orders.length > 0;
 
   return (
-    <main className="mx-auto max-w-md space-y-4 px-4 pb-10 pt-4">
-      <header className="flex items-center gap-3">
+    <main className="mx-auto max-w-md pb-10">
+      <Topo
+        onVoltar={onVoltar}
+        sobre={temConta ? `Conta aberta${minutos != null ? ` · há ${minutos} min` : ''}` : 'Livre'}
+        titulo={
+          <>
+            Mesa <span className="pos-num text-gold">{mesa.number}</span>
+          </>
+        }
+        detalhe={
+          nome || nota ? (
+            <span className="flex min-w-0 items-center gap-1.5">
+              <PosIcon name="user" size={13} className="shrink-0" />
+              <span className="truncate">
+                {nome && <b className="font-bold text-ink">{nome}</b>}
+                {nome && nota ? ' · ' : ''}
+                {/* Quem é o cliente (1129): é assim que o prato chega à pessoa certa. */}
+                {nota}
+              </span>
+            </span>
+          ) : undefined
+        }
+        direita={
+          temConta ? (
+            <div className="shrink-0 text-right">
+              <p className="pos-eyebrow">Total</p>
+              <p className="pos-num text-xl font-extrabold text-gold">{money(tableTotalCents(mesa))}</p>
+            </div>
+          ) : undefined
+        }
+      />
+
+      <div className="space-y-4 px-4 pt-4">
         <button
-          onClick={onVoltar}
-          aria-label="Voltar às mesas"
-          className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-white/10 text-xl"
+          onClick={onPedir}
+          disabled={!podePedir}
+          className={`pos-btn pos-btn--lg w-full ${porEnviar > 0 ? '!bg-amber-400 !font-extrabold !text-black' : 'pos-btn--primary'}`}
         >
-          ←
+          <PosIcon name={porEnviar > 0 ? 'pencil' : 'plus'} size={24} strokeWidth={2.4} />
+          {porEnviar > 0 ? `Continuar o pedido · ${porEnviar}` : 'Novo pedido'}
         </button>
-        <div className="min-w-0">
-          <h1 className="font-[family-name:var(--font-display)] text-3xl leading-none tracking-wide text-[var(--gold)]">
-            Mesa {mesa.number}
-          </h1>
-          <p className="truncate text-sm text-[var(--ink-dim)]">{nome ?? (mesa.orders.length > 0 ? 'Conta aberta' : 'Livre')}</p>
-          {/* Quem é o cliente (1129): é assim que o prato chega à pessoa certa. */}
-          {tableNote(mesa) && <p className="truncate text-sm font-semibold text-[var(--ink)]">{tableNote(mesa)}</p>}
-        </div>
-      </header>
+        {!mesa.active && <Nota tom="warn">Mesa desactivada no painel: só se cobra a conta, no balcão.</Nota>}
 
-      <button
-        onClick={onPedir}
-        disabled={!podePedir}
-        className={`w-full rounded-2xl py-5 text-lg font-bold disabled:opacity-50 ${
-          porEnviar > 0 ? 'bg-amber-400 text-black' : 'bg-[var(--gold)] text-black'
-        }`}
-      >
-        {porEnviar > 0 ? `Continuar o pedido (${porEnviar} por enviar)` : '+ Novo pedido'}
-      </button>
-      {!mesa.active && (
-        <p className="text-center text-sm text-amber-200">Mesa desactivada no painel: só se cobra a conta, no balcão.</p>
-      )}
-
-      {mesa.orders.length === 0 ? (
-        <p className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 text-center text-sm text-[var(--ink-dim)]">
-          Mesa livre. O pedido que lançares vai para a cozinha e fica na conta da mesa.
-        </p>
-      ) : (
-        <>
-          <ul className="space-y-2">
-            {mesa.orders.map((order) => (
-              <PedidoNaMesa
-                key={order.id}
-                order={order}
-                servir={servir}
-                podeRetirarAgora={podeRetirar(order, estado.waiter.id, estado.store.remove_minutes, agoraMs)}
-                aviso={aviso}
-                recarregar={recarregar}
-                semSessao={semSessao}
-              />
-            ))}
-          </ul>
-          <div className="flex items-baseline justify-between rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3">
-            <span className="text-sm text-[var(--ink-dim)]">Conta da mesa</span>
-            <span className="text-xl font-bold text-[var(--gold)]">{money(tableTotalCents(mesa))}</span>
-          </div>
-          <BotoesDaMesa mesa={mesa} estado={estado} aviso={aviso} recarregar={recarregar} semSessao={semSessao} aoFechar={onVoltar} />
-          {!estado.waiter.can_charge && (
-            <p className="text-center text-xs text-[var(--ink-mute)]">A conta paga-se no balcão, no fim.</p>
-          )}
-        </>
-      )}
+        {!temConta ? (
+          <Vazio>Mesa livre. O pedido que lançares vai para a cozinha e fica na conta da mesa.</Vazio>
+        ) : (
+          <>
+            <section className="space-y-2">
+              <Secao titulo="Pedidos" conta={mesa.orders.length} />
+              <ul className="space-y-2">
+                {mesa.orders.map((order) => (
+                  <PedidoNaMesa
+                    key={order.id}
+                    order={order}
+                    servir={servir}
+                    podeRetirarAgora={podeRetirar(order, estado.waiter.id, estado.store.remove_minutes, agoraMs)}
+                    aviso={aviso}
+                    recarregar={recarregar}
+                    semSessao={semSessao}
+                  />
+                ))}
+              </ul>
+            </section>
+            <section className="space-y-2">
+              <Secao titulo="Conta" />
+              <BotoesDaMesa mesa={mesa} estado={estado} aviso={aviso} recarregar={recarregar} semSessao={semSessao} aoFechar={onVoltar} />
+              {!estado.waiter.can_charge && <p className="text-center text-xs text-ink-mute">A conta paga-se no balcão, no fim.</p>}
+            </section>
+          </>
+        )}
+      </div>
     </main>
   );
 }
+
+const TOM_DO_ESTADO: Record<string, string> = {
+  ready: 'bg-emerald-400/15 text-emerald-300',
+  delivered: 'bg-white/[0.08] text-ink-mute',
+};
 
 function PedidoNaMesa({
   order,
@@ -558,37 +687,59 @@ function PedidoNaMesa({
   semSessao: () => void;
 }) {
   const [aRetirar, setARetirar] = useState<TableOrder['items'][number] | null>(null);
-  const cor =
-    order.status === 'ready'
-      ? 'bg-emerald-500/20 text-emerald-300'
-      : order.status === 'delivered'
-        ? 'bg-white/10 text-[var(--ink-dim)]'
-        : 'bg-amber-500/20 text-amber-300';
+  const pronto = order.status === 'ready';
   return (
-    <li className="space-y-2 rounded-2xl border border-white/10 bg-white/[0.04] p-3">
-      <p className="flex items-center justify-between gap-2 text-xs text-[var(--ink-mute)]">
-        <span>
+    <li
+      className={`space-y-3 rounded-[20px] p-4 ${
+        pronto ? 'bg-emerald-400/[0.06] shadow-[inset_0_0_0_1px_rgba(52,211,153,0.3)]' : 'pos-card'
+      }`}
+    >
+      <p className="flex items-center justify-between gap-2">
+        <span className="pos-num truncate text-xs font-semibold text-ink-mute">
           {origemPedido(order)} · {hora(order.created_at)}
           {order.daily_number != null ? ` · Senha ${order.daily_number}` : ''}
         </span>
-        <span className={`rounded-full px-2 py-0.5 font-semibold ${cor}`}>{ESTADO_PEDIDO[order.status] ?? order.status}</span>
+        <span
+          className={`shrink-0 rounded-full px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-wider ${
+            TOM_DO_ESTADO[order.status] ?? 'bg-amber-400/15 text-amber-300'
+          }`}
+        >
+          {ESTADO_PEDIDO[order.status] ?? order.status}
+        </span>
       </p>
-      <ul className="space-y-1 text-[0.95rem]">
+      <ul className="space-y-2">
         {order.items.map((item, i) => (
-          <li key={item.id ?? i}>
-            <span className="font-bold text-[var(--gold)]">{item.qty}×</span> {itemLabel(item)}
-            {item.notes && <span className="block pl-6 text-xs italic text-[var(--ink-dim)]">{item.notes}</span>}
+          <li key={item.id ?? i} className="flex items-start gap-3">
+            <span className="pos-num grid h-7 min-w-7 shrink-0 place-items-center rounded-lg bg-[var(--pos-accent-soft)] px-1.5 text-sm font-extrabold text-gold">
+              {item.qty}
+            </span>
+            <span className="min-w-0 flex-1 pt-0.5">
+              <span className="block font-semibold leading-snug">{itemLabel(item)}</span>
+              {item.notes && <span className="block text-xs italic text-amber-200/90">{item.notes}</span>}
+            </span>
             {podeRetirarAgora && item.id && (
-              <button onClick={() => setARetirar(item)} className="ml-6 block py-1 text-xs font-semibold text-red-300 underline">
+              <button
+                onClick={() => setARetirar(item)}
+                className="pos-btn pos-btn--danger !min-h-8 shrink-0 !rounded-lg !px-2.5 text-xs"
+              >
                 Retirar
               </button>
             )}
           </li>
         ))}
       </ul>
-      {order.notes && <p className="rounded-lg bg-white/5 px-2 py-1 text-sm">📝 {order.notes}</p>}
-      {podeServir(order) && <BotaoServir orderId={order.id} servir={servir} />}
-      {podeServir(order) && <ReimprimirComanda orderId={order.id} aviso={aviso} semSessao={semSessao} />}
+      {order.notes && (
+        <p className="pos-well flex gap-2 px-3 py-2 text-sm text-ink-dim">
+          <PosIcon name="pencil" size={14} className="mt-0.5 shrink-0" />
+          {order.notes}
+        </p>
+      )}
+      {podeServir(order) && (
+        <div className="space-y-1">
+          <BotaoServir orderId={order.id} servir={servir} />
+          <ReimprimirComanda orderId={order.id} aviso={aviso} semSessao={semSessao} />
+        </div>
+      )}
       {aRetirar && (
         <RetirarArtigo
           item={aRetirar}
@@ -631,11 +782,12 @@ function BotaoServir({ orderId, servir }: { orderId: string; servir: (orderId: s
     <button
       onClick={tocar}
       disabled={aEnviar}
-      className={`w-full rounded-xl py-3 font-bold disabled:opacity-60 ${
-        aConfirmar ? 'bg-emerald-400 text-black' : 'border border-emerald-400/50 text-emerald-300'
+      className={`pos-btn w-full !min-h-[3.25rem] ${
+        aConfirmar ? 'pos-btn--ok' : '!bg-emerald-400/10 !text-emerald-300 !shadow-[inset_0_0_0_1px_rgba(52,211,153,0.4)]'
       }`}
     >
-      {aEnviar ? 'A registar…' : aConfirmar ? 'Tocar outra vez para confirmar' : 'Servido ✓'}
+      <PosIcon name="check" size={20} strokeWidth={2.6} />
+      {aEnviar ? 'A registar…' : aConfirmar ? 'Tocar outra vez para confirmar' : 'Servido'}
     </button>
   );
 }

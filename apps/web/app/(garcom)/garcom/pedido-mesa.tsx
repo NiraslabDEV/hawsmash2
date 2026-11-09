@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { formatMT, type Cents } from '@delivery/core';
 
+import { PosIcon } from '@/app/(pos)/pos/pos-icons';
 import { enviarAcao, lerCardapio, SemSessao } from '@/lib/garcom/client';
 import type { LaunchResult, WaiterTable } from '@/lib/garcom/contract';
 import {
@@ -30,6 +31,8 @@ import {
 import { posItemAvailability, type PosMenuItem } from '@/lib/pos/offline-store';
 import { noteHasChip, toggleNoteChip } from '@/lib/pos/notes';
 import { tableName, tableNote } from '@/lib/pos/tables';
+
+import { CAMPO, Contador, Folha, Nota, Topo } from './ui';
 
 const money = (c: number) => formatMT(c as Cents);
 
@@ -112,7 +115,7 @@ export function PedidoMesa({
   const [busca, setBusca] = useState('');
   const [aEscolher, setAEscolher] = useState<PosMenuItem | null>(null);
   const [aRever, setARever] = useState(false);
-  const [toque, setToque] = useState<string | null>(null);
+  const [toque, setToque] = useState<{ texto: string; n: number } | null>(null);
 
   const categorias = useMemo(
     () => (cardapio.data?.categories ?? []).filter((categoria) => categoria.items.length > 0),
@@ -134,6 +137,8 @@ export function PedidoMesa({
     return () => clearTimeout(t);
   }, [toque]);
 
+  const avisarToque = (texto: string) => setToque((t) => ({ texto, n: (t?.n ?? 0) + 1 }));
+
   const tocarItem = (item: PosMenuItem) => {
     if (bloqueado || !posItemAvailability(item).sellable) return;
     if (needsItemSheet(item)) {
@@ -142,75 +147,87 @@ export function PedidoMesa({
     }
     const sellable = buildSellable(item, defaultVariant(item), [], null);
     mudar((r) => ({ ...r, cart: changeQty(r.cart, sellable, 1) }));
-    setToque(`+1 ${sellable.name}`);
+    avisarToque(`+1 ${sellable.name}`);
   };
 
   return (
     <main className="mx-auto flex min-h-[100dvh] max-w-md flex-col">
-      <header className="sticky top-0 z-20 space-y-3 border-b border-white/10 bg-[var(--bg-0)]/95 px-4 pb-3 pt-4 backdrop-blur">
-        <div className="flex items-center gap-3">
-          <button
-            onClick={onVoltar}
-            aria-label="Voltar à mesa"
-            className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-white/10 text-xl"
-          >
-            ←
-          </button>
-          <div className="min-w-0">
-            <h1 className="font-[family-name:var(--font-display)] text-2xl leading-none tracking-wide text-[var(--gold)]">
-              Mesa {mesa.number} · Novo pedido
-            </h1>
-            <p className="truncate text-xs text-[var(--ink-dim)]">{tableName(mesa) ?? 'Toca nos artigos para os juntar'}</p>
-          </div>
-        </div>
-        <input
-          type="search"
-          value={busca}
-          onChange={(e) => setBusca(e.target.value)}
-          placeholder="Procurar no cardápio"
-          className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 outline-none focus:border-[var(--gold)]"
-        />
+      <Topo
+        onVoltar={onVoltar}
+        sobre="Novo pedido"
+        titulo={
+          <>
+            Mesa <span className="pos-num text-gold">{mesa.number}</span>
+          </>
+        }
+        detalhe={tableName(mesa) ?? 'Toca nos artigos para os juntar'}
+      >
+        <label className="relative mt-3 block">
+          <PosIcon name="search" size={18} className="pointer-events-none absolute left-3.5 top-1/2 -translate-y-1/2 text-ink-mute" />
+          <input
+            type="search"
+            value={busca}
+            onChange={(e) => setBusca(e.target.value)}
+            placeholder="Procurar no cardápio"
+            aria-label="Procurar no cardápio"
+            className={`${CAMPO} !py-3 !pl-11`}
+          />
+        </label>
         {!termo && categorias.length > 1 && (
-          <nav className="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1">
-            {categorias.map((categoria) => (
-              <button
-                key={categoria.id}
-                onClick={() => setCategoriaId(categoria.id)}
-                className={`shrink-0 rounded-full px-4 py-2 text-sm font-semibold ${
-                  categoria.id === categoriaActual?.id ? 'bg-[var(--gold)] text-black' : 'border border-white/10 text-[var(--ink-dim)]'
-                }`}
-              >
-                {categoria.name}
-              </button>
-            ))}
+          <nav className="-mx-4 mt-3 flex gap-2 overflow-x-auto px-4 [scrollbar-width:none]" aria-label="Categorias">
+            {categorias.map((categoria) => {
+              const activa = categoria.id === categoriaActual?.id;
+              const naCategoria = categoria.items.reduce((n, item) => n + qtyOfItem(rascunho.cart, item.id), 0);
+              return (
+                <button
+                  key={categoria.id}
+                  onClick={() => setCategoriaId(categoria.id)}
+                  aria-pressed={activa}
+                  className={`pos-press flex shrink-0 items-center gap-1.5 rounded-full px-4 py-2 text-sm font-bold ${
+                    activa ? 'bg-gold text-[var(--pos-on-accent)]' : 'bg-white/[0.06] text-ink-dim'
+                  }`}
+                >
+                  {categoria.name}
+                  {naCategoria > 0 && (
+                    <span
+                      className={`pos-num grid h-5 min-w-5 place-items-center rounded-full px-1 text-[11px] font-extrabold ${
+                        activa ? 'bg-black/20' : 'bg-gold text-[var(--pos-on-accent)]'
+                      }`}
+                    >
+                      {naCategoria}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
           </nav>
         )}
-      </header>
+      </Topo>
 
-      <section className="flex-1 space-y-2 px-4 pb-32 pt-3">
-        {!lojaAberta && (
-          <p className="rounded-xl bg-amber-500/15 px-4 py-3 text-sm text-amber-200">
-            A loja não está a receber pedidos de mesa agora. O pedido fica guardado aqui até abrir.
-          </p>
-        )}
+      <section className="flex-1 space-y-3 px-4 pb-32 pt-4">
+        {!lojaAberta && <Nota tom="warn">A loja não está a receber pedidos de mesa agora. O pedido fica guardado aqui até abrir.</Nota>}
         {bloqueado && (
-          <p className="rounded-xl bg-amber-500/15 px-4 py-3 text-sm text-amber-200">
-            O último envio ficou sem resposta. Abre o pedido e envia outra vez antes de mudar alguma coisa.
-          </p>
+          <Nota tom="warn">O último envio ficou sem resposta. Abre o pedido e envia outra vez antes de mudar alguma coisa.</Nota>
         )}
-        {cardapio.isLoading && <p className="py-8 text-center text-[var(--ink-dim)]">A carregar o cardápio…</p>}
+        {cardapio.isLoading && (
+          <ul className="grid grid-cols-2 gap-2.5" aria-hidden>
+            {Array.from({ length: 6 }, (_, i) => (
+              <li key={i} className="h-48 animate-pulse rounded-2xl bg-white/[0.04]" />
+            ))}
+          </ul>
+        )}
         {cardapio.error && !(cardapio.error instanceof SemSessao) && (
           <div className="space-y-3 py-6 text-center">
-            <p className="text-[var(--ink-dim)]">{(cardapio.error as Error).message}</p>
-            <button className="rounded-xl bg-[var(--gold)] px-5 py-3 font-semibold text-black" onClick={() => void cardapio.refetch()}>
+            <p className="text-ink-dim">{(cardapio.error as Error).message}</p>
+            <button className="pos-btn pos-btn--primary" onClick={() => void cardapio.refetch()}>
               Tentar outra vez
             </button>
           </div>
         )}
         {cardapio.data && itens.length === 0 && (
-          <p className="py-8 text-center text-sm text-[var(--ink-dim)]">{termo ? 'Nada com esse nome.' : 'Sem artigos.'}</p>
+          <p className="py-8 text-center text-sm text-ink-mute">{termo ? 'Nada com esse nome.' : 'Sem artigos.'}</p>
         )}
-        <ul className="space-y-2">
+        <ul className="grid grid-cols-2 gap-2.5">
           {itens.map((item) => {
             const disponivel = posItemAvailability(item);
             const noPedido = qtyOfItem(rascunho.cart, item.id);
@@ -219,38 +236,36 @@ export function PedidoMesa({
                 <button
                   onClick={() => tocarItem(item)}
                   disabled={!disponivel.sellable || bloqueado}
-                  className={`flex w-full items-center gap-3 rounded-2xl border p-2.5 text-left disabled:opacity-50 ${
-                    noPedido > 0 ? 'border-[var(--gold)]/60 bg-[var(--gold)]/10' : 'border-white/10 bg-white/[0.03]'
-                  }`}
+                  data-in-cart={noPedido > 0 ? 'true' : undefined}
+                  className="pos-product h-full w-full"
                 >
-                  {item.photo_url ? (
-                    // A foto do cardápio é a original (centenas de KB); no
-                    // telemóvel com dados móveis a lista ficava a carregar.
-                    // O otimizador do Next serve-a a 56 px, em WebP.
-                    <Image
-                      src={item.photo_url}
-                      alt=""
-                      width={56}
-                      height={56}
-                      sizes="56px"
-                      quality={60}
-                      className="h-14 w-14 shrink-0 rounded-xl object-cover"
-                    />
-                  ) : (
-                    <span className="h-14 w-14 shrink-0 rounded-xl bg-white/5" />
-                  )}
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate font-semibold">{item.name}</span>
-                    <span className="block text-sm text-[var(--ink-dim)]">
-                      {precoDoCartao(item)}
-                      {disponivel.badge && <span className="ml-2 text-xs text-amber-300">{disponivel.badge}</span>}
-                    </span>
+                  <span className="pos-product__media aspect-[4/3]">
+                    {item.photo_url ? (
+                      // O otimizador do Next serve a foto à medida do cartão,
+                      // em WebP: com dados móveis a lista abre logo.
+                      <Image
+                        src={item.photo_url}
+                        alt=""
+                        fill
+                        sizes="(max-width: 448px) 50vw, 220px"
+                        quality={70}
+                        draggable={false}
+                        className="object-contain p-2.5 drop-shadow-[0_10px_14px_rgba(0,0,0,.45)]"
+                      />
+                    ) : (
+                      <span className="absolute inset-0 grid place-items-center text-ink-mute opacity-40">
+                        <PosIcon name="bag" size={32} strokeWidth={1.5} />
+                      </span>
+                    )}
+                    {disponivel.badge && (
+                      <span className="pos-tag pos-tag--danger absolute bottom-2 left-2">{disponivel.badge}</span>
+                    )}
+                    {noPedido > 0 && <span className="pos-qty absolute right-2 top-2">{noPedido}</span>}
                   </span>
-                  {noPedido > 0 && (
-                    <span className="grid h-8 min-w-8 place-items-center rounded-full bg-[var(--gold)] px-2 text-sm font-bold text-black">
-                      {noPedido}
-                    </span>
-                  )}
+                  <span className="flex flex-1 flex-col justify-between gap-1 p-3">
+                    <span className="line-clamp-2 text-[0.9375rem] font-bold leading-snug">{item.name}</span>
+                    <span className="pos-num text-sm font-bold text-gold">{precoDoCartao(item)}</span>
+                  </span>
                 </button>
               </li>
             );
@@ -259,19 +274,26 @@ export function PedidoMesa({
       </section>
 
       {toque && (
-        <p className="pointer-events-none fixed inset-x-0 bottom-24 z-30 mx-auto w-fit rounded-full bg-white/90 px-4 py-2 text-sm font-semibold text-black shadow-xl">
-          {toque}
+        <p
+          key={toque.n}
+          className="pos-pop pointer-events-none fixed inset-x-0 bottom-28 z-30 mx-auto flex w-fit items-center gap-2 rounded-full bg-white px-4 py-2 text-sm font-bold text-black shadow-[0_12px_30px_-10px_rgba(0,0,0,0.8)]"
+        >
+          <PosIcon name="check" size={16} strokeWidth={2.8} className="text-emerald-600" />
+          {toque.texto}
         </p>
       )}
 
-      <footer className="fixed inset-x-0 bottom-0 z-20 mx-auto max-w-md border-t border-white/10 bg-[var(--bg-0)]/95 p-3 backdrop-blur">
+      <footer className="fixed inset-x-0 bottom-0 z-20 border-t border-white/[0.07] bg-bg1 px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3">
         <button
           onClick={() => setARever(true)}
           disabled={artigos === 0}
-          className="flex w-full items-center justify-between rounded-2xl bg-[var(--gold)] px-5 py-4 text-lg font-bold text-black disabled:opacity-40"
+          className="pos-btn pos-btn--primary mx-auto flex w-full max-w-md !justify-between !px-5"
         >
-          <span>Ver pedido{artigos > 0 ? ` (${artigos})` : ''}</span>
-          <span>{money(total)}</span>
+          <span className="flex items-center gap-2.5">
+            <span className="pos-num grid h-7 min-w-7 place-items-center rounded-full bg-black/20 px-1.5 text-sm">{artigos}</span>
+            Ver pedido
+          </span>
+          <span className="pos-num">{money(total)}</span>
         </button>
       </footer>
 
@@ -283,7 +305,7 @@ export function PedidoMesa({
           onAdicionar={(variant, addonIds, notes, qty) => {
             const sellable = buildSellable(aEscolher, variant, addonIds, notes);
             mudar((r) => ({ ...r, cart: changeQty(r.cart, sellable, qty) }));
-            setToque(`+${qty} ${sellable.name}`);
+            avisarToque(`+${qty} ${sellable.name}`);
             setAEscolher(null);
           }}
         />
@@ -335,21 +357,20 @@ function EscolherArtigo({
   const linha = buildSellable(item, variante, escolhidos, nota);
 
   return (
-    <Folha onFechar={onFechar} titulo={item.name}>
+    <Folha onFechar={onFechar} titulo={item.name} subtitulo={precoDoCartao(item)}>
       {variantes.length > 1 && (
         <div className="space-y-2">
-          <p className="text-sm text-[var(--ink-dim)]">Qual?</p>
+          <p className="pos-eyebrow">Qual?</p>
           <div className="grid grid-cols-2 gap-2">
             {variantes.map((v) => (
               <button
                 key={v.id}
                 onClick={() => setVariante(v)}
-                className={`rounded-xl border px-3 py-3 text-left ${
-                  variante?.id === v.id ? 'border-[var(--gold)] bg-[var(--gold)]/15' : 'border-white/10'
-                }`}
+                aria-pressed={variante?.id === v.id}
+                className="pos-choice !min-h-[3.75rem] !flex-col !items-start !gap-0.5 !px-3.5 text-left"
               >
-                <span className="block font-semibold">{v.name}</span>
-                <span className="text-sm text-[var(--ink-dim)]">{money(v.price_cents)}</span>
+                <span className="font-bold">{v.name}</span>
+                <span className="pos-num text-sm opacity-80">{money(v.price_cents)}</span>
               </button>
             ))}
           </div>
@@ -358,22 +379,30 @@ function EscolherArtigo({
 
       {extras.length > 0 && (
         <div className="space-y-2">
-          <p className="text-sm text-[var(--ink-dim)]">Extras</p>
+          <p className="pos-eyebrow">Extras</p>
           <div className="grid grid-cols-2 gap-2">
             {extras.map((extra) => {
               const ligado = escolhidos.includes(extra.id);
               return (
                 <button
                   key={extra.id}
+                  aria-pressed={ligado}
                   onClick={() =>
                     setEscolhidos((atual) => (ligado ? atual.filter((id) => id !== extra.id) : [...atual, extra.id]))
                   }
-                  className={`rounded-xl border px-3 py-3 text-left ${
-                    ligado ? 'border-[var(--gold)] bg-[var(--gold)]/15' : 'border-white/10'
-                  }`}
+                  className="pos-choice !min-h-[3.75rem] !justify-start !gap-2.5 !px-3 text-left"
                 >
-                  <span className="block font-semibold">{ligado ? '✓ ' : '+ '}{extra.name}</span>
-                  <span className="text-sm text-[var(--ink-dim)]">{money(extra.price_cents)}</span>
+                  <span
+                    className={`grid h-6 w-6 shrink-0 place-items-center rounded-lg ${
+                      ligado ? 'bg-black/20' : 'shadow-[inset_0_0_0_1.5px_rgba(255,255,255,0.2)]'
+                    }`}
+                  >
+                    <PosIcon name={ligado ? 'check' : 'plus'} size={14} strokeWidth={2.8} />
+                  </span>
+                  <span className="min-w-0">
+                    <span className="block truncate font-bold">{extra.name}</span>
+                    <span className="pos-num block text-xs opacity-80">+{money(extra.price_cents)}</span>
+                  </span>
                 </button>
               );
             })}
@@ -382,41 +411,44 @@ function EscolherArtigo({
       )}
 
       <label className="block space-y-2">
-        <span className="text-sm text-[var(--ink-dim)]">Nota para a cozinha</span>
+        <span className="pos-eyebrow">Nota para a cozinha</span>
         <input
           value={nota}
           maxLength={140}
           onChange={(e) => setNota(e.target.value)}
           placeholder="ex.: sem cebola, bem passado"
-          className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 outline-none focus:border-[var(--gold)]"
+          className={CAMPO}
         />
         {notasRapidas.length > 0 && (
           <span className="flex flex-wrap gap-2 pt-1">
-            {notasRapidas.map((atalho) => (
-              <button
-                key={atalho}
-                type="button"
-                onClick={() => setNota((n) => toggleNoteChip(n, atalho).slice(0, 140))}
-                className={`rounded-full border px-3 py-1.5 text-xs font-semibold ${
-                  noteHasChip(nota, atalho)
-                    ? 'border-[var(--gold)] bg-[var(--gold)]/15 text-[var(--gold)]'
-                    : 'border-white/10 text-[var(--ink-dim)]'
-                }`}
-              >
-                {atalho}
-              </button>
-            ))}
+            {notasRapidas.map((atalho) => {
+              const ligado = noteHasChip(nota, atalho);
+              return (
+                <button
+                  key={atalho}
+                  type="button"
+                  aria-pressed={ligado}
+                  onClick={() => setNota((n) => toggleNoteChip(n, atalho).slice(0, 140))}
+                  className={`pos-press rounded-full px-3.5 py-2 text-xs font-bold ${
+                    ligado ? 'bg-gold text-[var(--pos-on-accent)]' : 'bg-white/[0.06] text-ink-dim'
+                  }`}
+                >
+                  {atalho}
+                </button>
+              );
+            })}
           </span>
         )}
       </label>
 
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex items-center gap-3 pt-1">
         <Contador qty={qty} onMenos={() => setQty((q) => Math.max(1, q - 1))} onMais={() => setQty((q) => Math.min(99, q + 1))} />
         <button
           onClick={() => onAdicionar(variante, escolhidos, nota, qty)}
-          className="flex-1 rounded-2xl bg-[var(--gold)] py-4 text-lg font-bold text-black"
+          className="pos-btn pos-btn--primary flex-1 !justify-between !px-4"
         >
-          Juntar · {money(linha.price_cents * qty)}
+          Juntar
+          <span className="pos-num">{money(linha.price_cents * qty)}</span>
         </button>
       </div>
     </Folha>
@@ -497,105 +529,101 @@ function Revisao({
   };
 
   return (
-    <Folha onFechar={onFechar} titulo={`Mesa ${mesa.number}`} fechar={!aEnviar}>
+    <Folha onFechar={onFechar} titulo={`Pedido da mesa ${mesa.number}`} subtitulo="Confere com o cliente antes de enviar" fechar={!aEnviar}>
       {linhas.length === 0 ? (
-        <p className="py-4 text-center text-[var(--ink-dim)]">O pedido está vazio.</p>
+        <p className="py-4 text-center text-ink-mute">O pedido está vazio.</p>
       ) : (
-        <ul className="divide-y divide-white/5 rounded-2xl border border-white/10">
+        <ul className="pos-well divide-y divide-white/[0.06] overflow-hidden">
           {linhas.map((linha) => (
-            <li key={linha.id} className="flex items-center gap-3 px-3 py-2.5">
+            <li key={linha.id} className="flex items-center gap-3 px-3.5 py-3">
               <span className="min-w-0 flex-1">
-                <span className="block font-semibold">{linha.name}</span>
+                <span className="block font-bold leading-snug">{linha.name}</span>
                 {linha.addons && linha.addons.length > 0 && (
-                  <span className="block text-xs text-[var(--ink-dim)]">+ {linha.addons.map((a) => a.name).join(' + ')}</span>
+                  <span className="block text-xs text-ink-mute">+ {linha.addons.map((a) => a.name).join(' + ')}</span>
                 )}
-                {linha.notes && <span className="block text-xs italic text-amber-200">{linha.notes}</span>}
-                <span className="block text-sm text-[var(--ink-dim)]">{money(linha.price_cents * linha.qty)}</span>
+                {linha.notes && <span className="block text-xs italic text-amber-200/90">{linha.notes}</span>}
+                <span className="pos-num block text-sm font-semibold text-gold">{money(linha.price_cents * linha.qty)}</span>
               </span>
-              <Contador
-                qty={linha.qty}
-                disabled={bloqueado}
-                onMenos={() => mexer(linha, -1)}
-                onMais={() => mexer(linha, 1)}
-              />
+              <Contador qty={linha.qty} disabled={bloqueado} onMenos={() => mexer(linha, -1)} onMais={() => mexer(linha, 1)} />
             </li>
           ))}
         </ul>
       )}
 
-      {nomeDaConta ? (
-        <p className="text-sm text-[var(--ink-dim)]">
-          Conta de <b className="text-[var(--ink)]">{nomeDaConta}</b>
-        </p>
-      ) : (
+      <div className="space-y-2">
+        <p className="pos-eyebrow">Cliente (opcional)</p>
+        {nomeDaConta ? (
+          <p className="pos-well flex items-center gap-2 px-4 py-3 text-sm text-ink-dim">
+            <PosIcon name="user" size={15} />
+            Conta de <b className="text-ink">{nomeDaConta}</b>
+          </p>
+        ) : (
+          <input
+            value={rascunho.customerName}
+            disabled={bloqueado}
+            maxLength={60}
+            onChange={(e) => mudar((r) => ({ ...r, customerName: e.target.value }))}
+            placeholder="Nome do cliente"
+            className={CAMPO}
+          />
+        )}
         <input
-          value={rascunho.customerName}
+          value={rascunho.customerPhone}
           disabled={bloqueado}
-          maxLength={60}
-          onChange={(e) => mudar((r) => ({ ...r, customerName: e.target.value }))}
-          placeholder="Nome do cliente (opcional)"
-          className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 outline-none focus:border-[var(--gold)] disabled:opacity-60"
+          type="tel"
+          inputMode="tel"
+          autoComplete="off"
+          maxLength={20}
+          onChange={(e) => mudar((r) => ({ ...r, customerPhone: e.target.value }))}
+          placeholder="Telefone do cliente"
+          className={CAMPO}
         />
-      )}
-      <input
-        value={rascunho.customerPhone}
-        disabled={bloqueado}
-        type="tel"
-        inputMode="tel"
-        autoComplete="off"
-        maxLength={20}
-        onChange={(e) => mudar((r) => ({ ...r, customerPhone: e.target.value }))}
-        placeholder="Telefone do cliente (opcional)"
-        className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 outline-none focus:border-[var(--gold)] disabled:opacity-60"
-      />
-      {tableNote(mesa) ? (
-        <p className="text-sm text-[var(--ink-dim)]">
-          Cliente: <b className="text-[var(--ink)]">{tableNote(mesa)}</b>
-        </p>
-      ) : (
+        {tableNote(mesa) ? (
+          <p className="pos-well px-4 py-3 text-sm text-ink-dim">
+            Cliente: <b className="text-ink">{tableNote(mesa)}</b>
+          </p>
+        ) : (
+          <input
+            value={rascunho.tabNote}
+            disabled={bloqueado}
+            maxLength={120}
+            onChange={(e) => mudar((r) => ({ ...r, tabNote: e.target.value }))}
+            placeholder="Característica, ex.: camisa azul"
+            className={CAMPO}
+          />
+        )}
         <input
-          value={rascunho.tabNote}
+          value={rascunho.notes}
           disabled={bloqueado}
-          maxLength={120}
-          onChange={(e) => mudar((r) => ({ ...r, tabNote: e.target.value }))}
-          placeholder="Característica do cliente, ex.: camisa azul (opcional)"
-          className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 outline-none focus:border-[var(--gold)] disabled:opacity-60"
+          maxLength={300}
+          onChange={(e) => mudar((r) => ({ ...r, notes: e.target.value }))}
+          placeholder="Nota do pedido"
+          className={CAMPO}
         />
-      )}
-      <input
-        value={rascunho.notes}
-        disabled={bloqueado}
-        maxLength={300}
-        onChange={(e) => mudar((r) => ({ ...r, notes: e.target.value }))}
-        placeholder="Nota do pedido (opcional)"
-        className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 outline-none focus:border-[var(--gold)] disabled:opacity-60"
-      />
+      </div>
 
       {rascunho.pendente && !aEnviar && (
-        <p className="rounded-xl bg-amber-500/15 px-4 py-3 text-sm text-amber-200">
-          Não sabemos se chegou à cozinha. Envia outra vez: se já tinha chegado, não fica em dobro.
-        </p>
+        <Nota tom="warn">Não sabemos se chegou à cozinha. Envia outra vez: se já tinha chegado, não fica em dobro.</Nota>
       )}
-      {erro && <p className="rounded-xl bg-red-500/15 px-4 py-3 text-sm text-red-300">{erro}</p>}
-
-      <div className="flex items-baseline justify-between">
-        <span className="text-[var(--ink-dim)]">Total</span>
-        <span className="text-2xl font-bold text-[var(--gold)]">{money(cartTotalCents(rascunho.cart))}</span>
-      </div>
+      {erro && <Nota tom="danger">{erro}</Nota>}
 
       <button
         onClick={enviar}
         disabled={aEnviar || linhas.length === 0 || !lojaAberta}
-        className="w-full rounded-2xl bg-[var(--gold)] py-5 text-lg font-bold text-black disabled:opacity-50"
+        className="pos-btn pos-btn--primary pos-btn--lg w-full !justify-between !px-5"
       >
-        {aEnviar ? 'A enviar…' : rascunho.pendente ? 'Enviar outra vez' : 'Enviar para a cozinha'}
+        <span className="flex items-center gap-2">
+          <PosIcon name="arrow" size={22} strokeWidth={2.4} />
+          {aEnviar ? 'A enviar…' : rascunho.pendente ? 'Enviar outra vez' : 'Enviar à cozinha'}
+        </span>
+        <span className="pos-num whitespace-nowrap">{money(cartTotalCents(rascunho.cart))}</span>
       </button>
-      <p className="text-center text-xs text-[var(--ink-mute)]">Sai na cozinha e no balcão. A mesa paga no fim, no balcão.</p>
+      <p className="text-center text-xs text-ink-mute">Sai na cozinha e no balcão. A mesa paga no fim, no balcão.</p>
 
       {!aEnviar && (
         <button
           onClick={() => (aDescartar ? onDescartar() : setADescartar(true))}
-          className={`w-full rounded-xl py-3 text-sm ${aDescartar ? 'bg-red-500 font-bold text-white' : 'text-[var(--ink-mute)]'}`}
+          className={`pos-btn w-full !min-h-12 text-sm ${aDescartar ? 'pos-btn--danger-solid' : 'pos-btn--quiet'}`}
         >
           {aDescartar
             ? rascunho.pendente
@@ -605,71 +633,5 @@ function Revisao({
         </button>
       )}
     </Folha>
-  );
-}
-
-// ─── Peças ────────────────────────────────────────────────────────────────────
-export function Folha({
-  titulo,
-  onFechar,
-  fechar = true,
-  children,
-}: {
-  titulo: string;
-  onFechar: () => void;
-  fechar?: boolean;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="fixed inset-0 z-40 flex items-end justify-center bg-black/70" onClick={() => fechar && onFechar()}>
-      <div
-        className="max-h-[92dvh] w-full max-w-md space-y-4 overflow-y-auto rounded-t-3xl border-t border-white/10 bg-[var(--bg-1)] p-5 pb-8"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex items-center justify-between gap-3">
-          <h2 className="text-xl font-bold">{titulo}</h2>
-          {fechar && (
-            <button onClick={onFechar} aria-label="Fechar" className="grid h-10 w-10 place-items-center rounded-xl border border-white/10">
-              ✕
-            </button>
-          )}
-        </div>
-        {children}
-      </div>
-    </div>
-  );
-}
-
-export function Contador({
-  qty,
-  onMenos,
-  onMais,
-  disabled = false,
-}: {
-  qty: number;
-  onMenos: () => void;
-  onMais: () => void;
-  disabled?: boolean;
-}) {
-  return (
-    <div className="flex shrink-0 items-center gap-1">
-      <button
-        onClick={onMenos}
-        disabled={disabled}
-        aria-label="Menos um"
-        className="grid h-11 w-11 place-items-center rounded-xl border border-white/10 text-xl disabled:opacity-40"
-      >
-        −
-      </button>
-      <span className="w-8 text-center text-lg font-bold">{qty}</span>
-      <button
-        onClick={onMais}
-        disabled={disabled}
-        aria-label="Mais um"
-        className="grid h-11 w-11 place-items-center rounded-xl border border-white/10 text-xl disabled:opacity-40"
-      >
-        +
-      </button>
-    </div>
   );
 }

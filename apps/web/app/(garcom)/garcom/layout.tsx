@@ -3,6 +3,9 @@ import type { ReactNode } from 'react';
 
 import { getBrand } from '@/lib/brand/server';
 
+// O mesmo vocabulário do balcão (pos.css): botões, folhas, superfícies.
+import '../../(pos)/pos/pos.css';
+
 export async function generateMetadata(): Promise<Metadata> {
   return {
     title: `Garçom · ${(await getBrand()).name}`,
@@ -15,9 +18,10 @@ export const viewport: Viewport = {
   width: 'device-width',
   initialScale: 1,
   maximumScale: 1,
+  viewportFit: 'cover',
 };
 
 /** Telemóvel do garçom (1122): uma coluna, alvos grandes, uma mão livre. */
 export default function GarcomLayout({ children }: { children: ReactNode }) {
-  return <div className="min-h-[100dvh] bg-[var(--bg-0)] text-[var(--ink)]">{children}</div>;
+  return <div className="pos-ui min-h-[100dvh]">{children}</div>;
 }
