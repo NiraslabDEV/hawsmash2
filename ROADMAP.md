@@ -774,3 +774,54 @@ e alargado ao balcão. Contrato completo em [promoções](docs/modulos/promocoes
   `create_counter_sale_unlocked` por substituição verificada: **pára se a âncora não existir**.
 - [~] **B-119**: o `.exe` das lojas é anterior às linhas novas do talão; até ser trocado sai a linha única
   "Desconto:" com o total certo.
+
+---
+
+## WhatsApp Business — 2026-10-30 (ADR 0011)
+
+Avisos do pedido, alertas e conversas pelo WhatsApp, **um número por loja**, a começar por **Maputo (Glória) ·
++258 87 030 1006**. Contrato em [plano](docs/planos/whatsapp.md). Construído como **bloco portátil**: depois de
+fechado aqui, vai para o Gym OS e para o motor sem edição (plano §4 e §6).
+
+- [x] W0 — ADR 0011, número de Maputo, plano com fluxos, templates e bloco portátil
+- [x] W0 — [ADR 0012](docs/decisions/0012-pedido-pelo-whatsapp-na-conversa.md) (05/11): **Cloud API da Meta** em vez da
+  Tyxter; **pedido dentro da conversa**, pago por comprovativo; **B-123** resolvido — custo repassado ao HAWSMASH
+- [~] **B-121** — ligar a Meta (plano §7) · **B-122** — número da Matola e Facebook Business
+- [x] W1 — [`packages/whatsapp`](packages/whatsapp/src/index.ts): contrato `WhatsAppTransport`, transporte Tyxter
+  (`POST /v1/messages`, HMAC sobre `timestamp.corpo`) e mock, telefone `+258`, opt-out — 43 testes
+- [x] W1 — [1117](supabase/migrations/20261030190000_1117_whatsapp_base.sql) base portátil: fila idempotente com
+  validade, recepção, opt-out, dedupe de webhooks, `stores.whatsapp_*`, RLS só dono e só a sua loja
+- [x] W1 — `GET /api/cron/whatsapp` e `POST /api/webhooks/whatsapp`, lógica em `lib/whatsapp/dispatch.ts` — 16 testes;
+  entrada em [crons](docs/referencia/crons.md)
+- [x] W1 — **F1**: [1118](supabase/migrations/20261030190100_1118_whatsapp_pedidos.sql) enfileira pago, pagamento
+  falhado, lembrete do agendado, pronto (levantamento), a caminho (estafeta), entregue e cancelado (só se pago);
+  [`events.ts`](apps/web/lib/whatsapp/events.ts) → templates `hs_*` (catálogo no [plano §3.1](docs/planos/whatsapp.md))
+- [x] W1 — [Ensaio SQL](supabase/tests/whatsapp.sql) na base local: 34/34 (idempotência, claim, retry, estado só para
+  a frente, opt-out, loja do número, balcão e loja desligada não enviam). Suite a 30/10: **1432 testes, 152 ficheiros**
+- [x] W1 — Transporte **Meta Cloud API** ([`meta.ts`](packages/whatsapp/src/meta.ts)): envio de templates e mensagens
+  interactivas, `X-Hub-Signature-256`, `hub.challenge`, várias mensagens por entrega, media; limites da Meta em
+  [`limits.ts`](packages/whatsapp/src/limits.ts) — pacote com 61 testes
+- [~] **B-121** — Ligar ([plano §7](docs/planos/whatsapp.md)): app Meta, token, método de pagamento, webhook, templates, cron, número de Maputo
+- [x] W1 — Migrations 1117, 1118, 1124 e 1125 no LIVE a 05/11, fora do horário (`anon` recusado, verificado)
+- [x] Painel do dono ([1126](supabase/migrations/20261105190000_1126_whatsapp_no_painel.sql), Lojas → WhatsApp): ligar e desligar
+  sem deploy, números, uso do mês por tipo (base da cobrança, B-123), últimas enviadas e recebidas
+- [ ] Aplicar a 1126 no LIVE
+- [x] W2 — **F4** alertas e resumo do dia também por WhatsApp, para os telemóveis escolhidos no painel; best-effort, o email fica
+- [x] Revisão ao preço novo da Meta (1/10/2026, [plano §8](docs/planos/whatsapp.md)): bolhas juntas numa mensagem, cardápio nas
+  boas-vindas, 13 mensagens num pedido típico. Corrigidos: resumo longo perdia o total, dois templates seriam recusados,
+  quem esconde o número ficava sem resposta (BSUID, **B-124**)
+- [x] W3 — **F2** pedido dentro da conversa (ADR 0012): [1124](supabase/migrations/20261105180000_1124_whatsapp_conversas.sql)
+  conversas portáteis (estado com versão, respostas na fila idempotentes por mensagem recebida, retoma pelo cron);
+  [1125](supabase/migrations/20261105180100_1125_whatsapp_pedido_na_conversa.sql) `whatsapp_create_order` (mesmo
+  `create_order`, idempotente pelo resumo confirmado, origem `whatsapp` no funil) e comprovativo pela conversa;
+  motor em [`pedido/engine.ts`](apps/web/lib/whatsapp/pedido/engine.ts), IA para texto livre em
+  [`pedido/ai.ts`](apps/web/lib/whatsapp/pedido/ai.ts) — 48 testes na app; [ensaio SQL](supabase/tests/whatsapp_conversa.sql)
+  11/11 na base local. Suite da app a 05/11: **964 testes**
+- [ ] W3 — Ligar a conversa em Maputo (`whatsapp_chat_enabled`) depois de um pedido real de ensaio
+- [ ] W4 — **F3** conversas no POS (com o plano de atendimento §19)
+- [ ] W5 — **F5** marketing com consentimento · Matola ligada
+
+**PROMPT:** *"Executa a W1 do WhatsApp conforme `docs/planos/whatsapp.md` e a ADR 0011: bloco portátil em
+`packages/whatsapp` com mock, migration base sem colunas de restaurante, cron e webhook, e o F1 só na loja de
+Maputo. Testes de idempotência, isolamento por loja e best-effort primeiro. Não aplicar a migration no LIVE."*
+

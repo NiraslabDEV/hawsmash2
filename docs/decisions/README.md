@@ -14,5 +14,7 @@ Decisões aceites não se reescrevem para acomodar divergências de implementaç
 | [0008](0008-staging-passa-a-live.md) | A base onde a loja já vende passa a ser o LIVE | Aceite; transição em curso |
 | [0009](0009-email-por-https-resend.md) | Resend por HTTPS quando o alojamento bloqueia SMTP; SMTP fica de reserva | Aceite; activo quando houver `RESEND_API_KEY` |
 | [0010](0010-email-pela-hostinger-via-supabase.md) | Caixa Hostinger através de um relé no Supabase; Resend passa a reserva | Aceite; activo quando houver `EMAIL_RELAY_SECRET` |
+| [0011](0011-whatsapp-business-por-adaptador.md) | WhatsApp Business por adaptador e fila, um número por loja, a começar por Maputo | Aceite; em construção |
+| [0012](0012-pedido-pelo-whatsapp-na-conversa.md) | Pedido feito dentro da conversa do WhatsApp, pago por comprovativo, pela Cloud API da Meta; IA só para texto livre | Aceite; código pronto, por ligar (B-121) |
 
 [Candidatas a novas decisões](../AUDITORIA-DOCUMENTACAO.md#114-decisões-fortes-candidatas-a-adr) permanecem propostas. Nenhum ADR novo foi inventado.

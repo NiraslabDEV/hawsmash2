@@ -73,7 +73,7 @@ const nextConfig = {
   env: {
     NEXT_PUBLIC_APP_BUILD: buildVersion(),
   },
-  transpilePackages: ["@delivery/core", "@delivery/payments", "@delivery/receipt"],
+  transpilePackages: ["@delivery/core", "@delivery/payments", "@delivery/receipt", "@delivery/whatsapp"],
   images: {
     // Fotos de produto vêm do Storage do Supabase do cliente (whitelabel);
     // o demo usa também assets locais (/assets/*) e, no protótipo, Unsplash.

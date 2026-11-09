@@ -4,10 +4,11 @@
 
 | Handler | Protecção observada | Comportamento / dependência |
 |---|---|---|
-| alerts | Recusa ausência de CRON_SECRET (503) | Cooldown 30 min; list_system_alerts_all; SMTP/WhatsApp deep link |
+| alerts | Recusa ausência de CRON_SECRET (503) | Cooldown 30 min; list_system_alerts_all; SMTP/WhatsApp deep link; também por template aos telemóveis de `whatsapp_alert_phones` (1126), best-effort |
 | conversions | Recusa ausência de CRON_SECRET (503) | Claim/processamento da outbox; credenciais de cada rede |
-| digest | Recusa ausência de CRON_SECRET (503) | get_daily_digest, resumo diário/email |
+| digest | Recusa ausência de CRON_SECRET (503) | get_daily_digest, resumo diário/email; também por template aos telemóveis de `whatsapp_alert_phones` (1126), best-effort |
 | emails | Recusa ausência de CRON_SECRET (503) | `email_claim` (FOR UPDATE SKIP LOCKED, até cinco por chamada), cinco ligações em paralelo; fila do módulo de [emails](../modulos/emails.md), 1104. A etapa seguinte só é agendada depois de a anterior ficar aceite e persistida |
+| whatsapp | Recusa ausência de CRON_SECRET (503); sem transporte configurado → 503 sem reclamar a fila | Primeiro retoma mensagens recebidas que ficaram a meio (`whatsapp_inbound_pending`: 20 s–30 min, máx. 3 tentativas, 1124); depois `whatsapp_claim` (até 20, SKIP LOCKED), envio pelo número da loja com idempotency-key = id da linha, em fila dentro da mesma conversa; preso em `sending` > 10 min volta à fila; retry com espera do fornecedor, máx. 5; aviso expirado cancela; respostas da conversa expiram em 15 min. ADR 0011/0012, 1117/1124. **Por agendar** (B-121) |
 | monthly | Recusa ausência de CRON_SECRET (503) | get_monthly_digest, fotografia Google, deduplicação/force; B-114 |
 | reconcile | Recusa ausência de CRON_SECRET (503) | Até 300 pedidos por passagem, páginas de 50, 3 consultas em paralelo, orçamento 50 s/consulta 20 s; nextCursor até completed; B-106 |
 

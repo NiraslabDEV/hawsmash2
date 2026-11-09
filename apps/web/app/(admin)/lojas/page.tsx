@@ -8,6 +8,7 @@ import { createClient } from '@/utils/supabase/client';
 
 import { GoogleSection } from './google-section';
 import { PaymentSection } from './payment-section';
+import { WhatsAppSection } from './whatsapp-section';
 
 type StoreConfig = {
   id: string;
@@ -518,6 +519,8 @@ export default function LojasPage() {
           </div>
 
           <PaymentSection storeId={config.store.id} storeName={config.store.short_name} />
+
+          <WhatsAppSection key={`whatsapp-${config.store.id}`} storeId={config.store.id} storeName={config.store.short_name} />
 
           <GoogleSection
             key={config.store.id}

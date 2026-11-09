@@ -9,6 +9,7 @@ import {
   type AlertRecipientStore,
   type SystemAlert,
 } from '@/lib/alerts/digest';
+import { alertJobs, alertPhones, enqueueOwnerMessages } from '@/lib/alerts/whatsapp';
 import { getBrand } from '@/lib/brand/server';
 import { cronUnauthorized } from '@/lib/cron/auth';
 
@@ -102,6 +103,12 @@ export async function GET(request: Request) {
     }
   }
 
+  // Também por WhatsApp, para os telemóveis escolhidos no painel (F4). Best-effort: o email já foi.
+  const whatsapp = await enqueueOwnerMessages(
+    supabase,
+    alertJobs(pending, await alertPhones(supabase, Array.from(new Set(pending.map((alert) => alert.store_id)))), Date.now()),
+  );
+
   // O registo acontece mesmo quando o email não sai: é o que evita repetir o
   // aviso em ciclo e deixa rasto de que o sistema detectou o problema.
   await supabase.from('event_log').insert(
@@ -114,9 +121,10 @@ export async function GET(request: Request) {
         message: alert.message,
         delivery,
         recipients: recipients.length,
+        whatsapp,
       },
     })),
   );
 
-  return NextResponse.json({ ok: true, alerts: alerts.length, sent: pending.length, delivery });
+  return NextResponse.json({ ok: true, alerts: alerts.length, sent: pending.length, delivery, whatsapp });
 }

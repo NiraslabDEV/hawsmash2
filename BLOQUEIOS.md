@@ -948,6 +948,52 @@ validadas. Os requisitos GBP abaixo continuam fora da parcela Places instalada.
   nova em `delivery_zones` ou um acerto diário — uma migration pequena. Se os estafetas cobrarem à porta, falta o
   "dinheiro a devolver" na conta-corrente (hoje os pedidos saem pagos).
 
+
+### B-121 · [WhatsApp] Ligar a Cloud API da Meta ao número de Maputo (ADR 0011, 0012)
+
+- Estado: **aberto**. Categoria: **fornecedor/cliente**. Desbloqueia: Gabriel (app Meta) + Ridwan (Facebook Business, B-122).
+- Pergunta exacta: quem cria a app Meta e a WABA do HAWSMASH, e quando pode o +258 87 030 1006 ser registado na WABA?
+- Decidido a 05/11 (ADR 0012): **Cloud API da Meta directa**, não a Tyxter — a Tyxter só aluga números brasileiros,
+  factura em BRL com NFS-e e não liga o endpoint de dados dos Flows. A Tyxter fica no código como alternativa.
+- Como avancei: W1 (avisos) e W3 (pedido na conversa, comprovativo, IA) feitos contra o adaptador e testados com o
+  mock; transporte Meta testado contra os formatos da Graph API; migrations 1117/1118/1124/1125 ensaiadas na base local.
+- Para ligar: [plano](docs/planos/whatsapp.md) §7 (app Meta → token de sistema → **método de pagamento na conta** →
+  migrations → webhook → templates → cron → número, no painel). O número de teste da Meta serve para ensaiar tudo antes
+  do da loja. Sem método de pagamento a Meta deixa de entregar as respostas (regra desde 1/10/2026).
+- Estado a 05/11: migrations 1117/1118/1124/1125 no LIVE (`anon` recusado nas tabelas e RPCs, verificado); falta a 1126.
+- Onde está: [plano](docs/planos/whatsapp.md) §2 e §7 · [ADR 0012](docs/decisions/0012-pedido-pelo-whatsapp-na-conversa.md).
+- Se a resposta for outra: um fornecedor diferente é outro ficheiro em `packages/whatsapp`; fila, rotas e conversa não mudam.
+
+### B-122 · [WhatsApp] Número da Matola e o número de Maputo sair da app (ADR 0011)
+
+- Estado: **aberto**. Categoria: **cliente**. Desbloqueia: Ridwan.
+- Pergunta exacta: qual é o número WhatsApp da Matola, o +258 87 030 1006 (Maputo · Glória) pode deixar de ser
+  usado na app WhatsApp do telemóvel, e quem tem acesso ao Facebook Business do HAWSMASH para criar a conta WhatsApp Business?
+- Como avancei: Maputo configurado com o 87 030 1006; Matola com `whatsapp_enabled = false` e sem número — os
+  pedidos da Matola continuam só com email, nunca saem pelo número de Maputo.
+- Onde está: `stores.whatsapp_sender_id` (migration base do WhatsApp, W1).
+- Se a resposta for outra: número é dado (minutos). Se o 87 030 1006 tiver de continuar na app, é preciso outro
+  número para a API ou o modo de coexistência da Meta (B-121).
+
+### B-123 · [WhatsApp] Quem paga as mensagens (ADR 0011)
+
+- Estado: **resolvido a 05/11/2026** — passa ao arquivo na próxima arrumação.
+- Resposta (Gabriel): o custo do WhatsApp (mensagens da Meta) e da IA é **repassado ao HAWSMASH, pelo uso** — fora
+  dos 20.000 MT/mês. Falta a adenda à `NL-2026-HS-EXP`, com o preço confirmado no rate card da Meta.
+- Atenção: desde 1/10/2026 também as respostas da conversa pagam acima de 1.000 por número e por mês. Contas no
+  [plano §8](docs/planos/whatsapp.md): cerca de US$ 0,07 por pedido acima das grátis, com preço de terceiros por confirmar.
+- Onde está: [ADR 0012](docs/decisions/0012-pedido-pelo-whatsapp-na-conversa.md) · o painel (Lojas → WhatsApp) conta o
+  mês por tipo e por loja: é a base da factura.
+
+### B-124 · [WhatsApp] O que só se valida contra a Meta real (ADR 0012)
+
+- Estado: **aberto**. Categoria: **fornecedor**. Desbloqueia: o ensaio com o número de teste (B-121).
+- O que está testado só contra os formatos documentados, nunca contra a API real: envio de templates com parâmetros com
+  nome, listas e botões, `cta_url`, download de media, webhooks; e o caminho de quem esconde o número (`request_contact_info`).
+- O que é decisão por tomar: o modelo da IA. Por defeito `claude-opus-5-5`; `claude-haiku-5-5` sai cerca de 50 vezes mais
+  barato por mensagem e pode chegar para isto. Medir com conversas reais antes de escolher (`WHATSAPP_AI_MODEL`).
+- Se a resposta for outra: um formato diferente corrige-se em `packages/whatsapp/src/meta.ts`; nada mais muda.
+
 ---
 
 ## ARQUIVO — resolvidos
