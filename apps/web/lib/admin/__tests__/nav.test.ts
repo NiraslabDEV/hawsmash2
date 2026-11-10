@@ -52,6 +52,13 @@ describe('painel — onde cada perfil pode entrar', () => {
     expect(canAccessAdminPath('kitchen', '/estafetas')).toBe(false);
   });
 
+  it('o WhatsApp tem a sua aba, só do dono (custos e conversas dos clientes)', () => {
+    expect(navItemForPath('/whatsapp')?.label).toBe('WhatsApp');
+    expect(canAccessAdminPath('owner', '/whatsapp')).toBe(true);
+    expect(canAccessAdminPath('manager', '/whatsapp')).toBe(false);
+    expect(canAccessAdminPath('cashier', '/whatsapp')).toBe(false);
+  });
+
   it('a cozinha não entra no painel', () => {
     expect(canAccessAdminPath('kitchen', '/pedidos')).toBe(false);
   });

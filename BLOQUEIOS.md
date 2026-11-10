@@ -982,7 +982,7 @@ validadas. Os requisitos GBP abaixo continuam fora da parcela Places instalada.
   dos 20.000 MT/mês. Falta a adenda à `NL-2026-HS-EXP`, com o preço confirmado no rate card da Meta.
 - Atenção: desde 1/10/2026 também as respostas da conversa pagam acima de 1.000 por número e por mês. Contas no
   [plano §8](docs/planos/whatsapp.md): cerca de US$ 0,07 por pedido acima das grátis, com preço de terceiros por confirmar.
-- Onde está: [ADR 0012](docs/decisions/0012-pedido-pelo-whatsapp-na-conversa.md) · o painel (Lojas → WhatsApp) conta o
+- Onde está: [ADR 0012](docs/decisions/0012-pedido-pelo-whatsapp-na-conversa.md) · o painel (WhatsApp → Dados) conta o
   mês por tipo e por loja: é a base da factura.
 
 ### B-124 · [WhatsApp] O que só se valida contra a Meta real (ADR 0012)

@@ -1,0 +1,125 @@
+# App iOS (ios/, Capacitor) compilada num Mac do GitHub: ninguém precisa de ter um Mac.
+#
+# - push em ios/**: só compila para o simulador, sem assinar. Prova que o
+#   projecto Xcode está são, mesmo antes de haver conta Apple.
+# - "Run workflow" com enviar=true: arquiva, assina (assinatura gerida pela
+#   Apple através da chave da API) e envia para o App Store Connect → TestFlight.
+#
+# Segredos (Settings → Secrets and variables → Actions), ver docs/operacao/ios.md:
+#   APPLE_TEAM_ID   ASC_KEY_ID   ASC_ISSUER_ID   ASC_KEY_P8 (conteúdo do .p8)
+#
+# Atenção ao custo: num repositório privado, cada minuto de macOS conta 10×
+# na quota do GitHub. Por isso só corre quando ios/ muda ou à mão.
+name: iOS
+
+on:
+  push:
+    branches: [dev, main]
+    paths: ['ios/**', '.github/workflows/ios.yml']
+  workflow_dispatch:
+    inputs:
+      enviar:
+        description: 'Assinar e enviar para o TestFlight'
+        type: boolean
+        default: false
+      versao:
+        description: 'Versão visível na loja (ex.: 1.0.1). Vazio = a do projecto'
+        type: string
+        default: ''
+
+concurrency:
+  group: ios-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  ios:
+    name: ${{ inputs.enviar && 'Enviar para o TestFlight' || 'Compilar (simulador)' }}
+    runs-on: macos-latest
+    timeout-minutes: 40
+    defaults:
+      run:
+        working-directory: ios
+
+    steps:
+      - name: Obter o código
+        uses: actions/checkout@v6
+
+      - name: Xcode mais recente
+        # A App Store só aceita apps compiladas com o SDK actual.
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      - name: Configurar Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: ios/package-lock.json
+
+      - name: Dependências e sincronização do Capacitor
+        run: |
+          npm ci --no-audit --no-fund
+          npx cap sync ios
+
+      - name: Compilar para o simulador (sem assinar)
+        if: ${{ !inputs.enviar }}
+        run: |
+          xcodebuild -project ios/App/App.xcodeproj -scheme App \
+            -configuration Debug -sdk iphonesimulator \
+            -destination 'generic/platform=iOS Simulator' \
+            CODE_SIGNING_ALLOWED=NO build | tail -n 40
+          exit "${PIPESTATUS[0]}"
+
+      - name: Chave da API do App Store Connect
+        if: ${{ inputs.enviar }}
+        env:
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          for v in ASC_KEY_P8 ASC_KEY_ID ASC_ISSUER_ID APPLE_TEAM_ID; do
+            [ -n "${!v}" ] || { echo "::error::Falta o segredo $v (docs/operacao/ios.md)"; exit 1; }
+          done
+          printf '%s' "$ASC_KEY_P8" > "$RUNNER_TEMP/asc.p8"
+
+      - name: Arquivar e enviar
+        if: ${{ inputs.enviar }}
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          VERSAO: ${{ inputs.versao }}
+          # Número de build sempre a crescer, sem ninguém o ter de lembrar.
+          BUILD: ${{ github.run_number }}
+        run: |
+          set -o pipefail
+          AUTH=(-allowProvisioningUpdates
+                -authenticationKeyPath "$RUNNER_TEMP/asc.p8"
+                -authenticationKeyID "$ASC_KEY_ID"
+                -authenticationKeyIssuerID "$ASC_ISSUER_ID")
+          EXTRA=()
+          [ -n "$VERSAO" ] && EXTRA+=("MARKETING_VERSION=$VERSAO")
+
+          xcodebuild -project ios/App/App.xcodeproj -scheme App \
+            -configuration Release -destination 'generic/platform=iOS' \
+            -archivePath "$RUNNER_TEMP/App.xcarchive" \
+            DEVELOPMENT_TEAM="$APPLE_TEAM_ID" CODE_SIGN_STYLE=Automatic \
+            CURRENT_PROJECT_VERSION="$BUILD" "${EXTRA[@]}" \
+            "${AUTH[@]}" archive | tail -n 40
+
+          sed "s/__TEAM_ID__/$APPLE_TEAM_ID/" ExportOptions.plist > "$RUNNER_TEMP/ExportOptions.plist"
+          xcodebuild -exportArchive -archivePath "$RUNNER_TEMP/App.xcarchive" \
+            -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist" \
+            -exportPath "$RUNNER_TEMP/export" "${AUTH[@]}" | tail -n 40
+
+          echo "### Enviado para o App Store Connect: build $BUILD" >> "$GITHUB_STEP_SUMMARY"
+          echo "Aparece no TestFlight depois de a Apple o processar (5–30 min)." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Apagar a chave
+        if: ${{ always() && inputs.enviar }}
+        run: rm -f "$RUNNER_TEMP/asc.p8"

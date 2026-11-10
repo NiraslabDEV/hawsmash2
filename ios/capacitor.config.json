@@ -1,0 +1,23 @@
+{
+  "appId": "com.hawsmash.app",
+  "appName": "HAWSMASH",
+  "webDir": "www",
+  "backgroundColor": "#0a0807",
+  "server": {
+    "url": "https://hawsmash.com",
+    "errorPath": "offline.html",
+    "allowNavigation": [
+      "hawsmash.com",
+      "*.hawsmash.com",
+      "paysuite.tech",
+      "*.paysuite.tech"
+    ]
+  },
+  "ios": {
+    "appendUserAgent": "RestaurantOS-iOS/1",
+    "contentInset": "automatic",
+    "backgroundColor": "#0a0807",
+    "scrollEnabled": true,
+    "allowsLinkPreview": false
+  }
+}

@@ -44,6 +44,9 @@ export const ADMIN_NAV: AdminNavItem[] = [
   { href: '/feedback', label: 'Avaliações', icon: 'feedback', roles: ['owner', 'manager'] },
   { href: '/lista-espera', label: 'Clientes', icon: 'clientes', roles: ['owner', 'manager'] },
   { href: '/marketing', label: 'Marketing', icon: 'marketing', roles: ['owner', 'manager'] },
+  // Conversas, custos e ligação do número: só o dono, como a RLS da 1124/1126. Quando houver
+  // "assumir a conversa", o Balcão entra só nas Conversas.
+  { href: '/whatsapp', label: 'WhatsApp', icon: 'whatsapp', roles: ['owner'] },
   // Promoção mexe no preço: só o dono (§6). A RLS de promotions/referral_codes diz o mesmo.
   { href: '/promocoes', label: 'Promoções', icon: 'promocoes', roles: ['owner'] },
   { href: '/emails', label: 'Emails', icon: 'emails', roles: ['owner'] },

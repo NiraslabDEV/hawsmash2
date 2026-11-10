@@ -25,7 +25,7 @@ ensaiado ainda contra a Meta real (B-124).
 | Pedido na conversa + comprovativo (restaurante) | `supabase/migrations/20261105180100_1125_whatsapp_pedido_na_conversa.sql` | ✅ ensaio 11/11 |
 | Despacho/webhook | `apps/web/lib/whatsapp/dispatch.ts`, `config.ts`, `events.ts`, `templates.ts` | ✅ |
 | Motor da conversa, IA, orquestrador | `apps/web/lib/whatsapp/pedido/{engine,ai,run,state,catalogue}.ts` | ✅ |
-| Painel do dono + uso do mês (T8) | `apps/web/app/(admin)/lojas/whatsapp-section.tsx`, `apps/web/lib/whatsapp/painel.ts`, migration 1126 | ✅ falta aplicar a 1126 |
+| Painel do dono + uso do mês (T8) | `apps/web/app/(admin)/whatsapp/` (aba própria desde 10/11), `apps/web/lib/whatsapp/painel.ts`, migration 1126 | ✅ falta aplicar a 1126 |
 | Alertas e resumo por WhatsApp (T9) | `apps/web/lib/alerts/whatsapp.ts` | ✅ |
 | Rotas | `apps/web/app/api/webhooks/whatsapp/route.ts` (GET hub.challenge + POST), `apps/web/app/api/cron/whatsapp/route.ts` | ✅ |
 | Submeter templates | `scripts/whatsapp-templates.ts` (`--dry-run`, `--status`) | ✅ dry-run verificado |
@@ -158,7 +158,7 @@ Aceitação: `curl "https://hawsmash.com/api/webhooks/whatsapp?hub.mode=subscrib
 
 ### T6 — Ensaio de ponta a ponta com o número de teste
 
-1. No painel (Lojas → WhatsApp, sessão de dono), ligar uma **loja de ensaio**, não a de Maputo: se não houver loja de
+1. No painel (WhatsApp → Ligação, sessão de dono), ligar uma **loja de ensaio**, não a de Maputo: se não houver loja de
    ensaio no LIVE, regista em BLOQUEIOS e pergunta ao Gabriel qual usar — não ligues Maputo ao número de teste.
    Id do número = `phone_number_id` do teste; interruptores Avisos e Conversa; número de atendimento.
 2. Instala o cron: `scripts/sql/install-whatsapp-cron.sql` (só depois de `GET /api/cron/whatsapp` dar 200).
@@ -178,7 +178,7 @@ Regista o resultado no ROADMAP (`[x] ⏳` → `[x]`) e no plano.
 
 ### T7 — Ligar Maputo (com H5 e o ensaio verde)
 
-No painel (Lojas → WhatsApp), em dias/horas diferentes se o Gabriel quiser:
+No painel (WhatsApp → Dados), em dias/horas diferentes se o Gabriel quiser:
 1. **Avisos:** id do número = `phone_number_id` de Maputo, telefone `+258870301006`, telemóveis dos alertas, interruptor Avisos.
 2. **Conversa:** número de atendimento `+258860760009` (o da marca, que fica na app — confirma com o Gabriel), interruptor Conversa.
 Matola fica desligada até haver número (B-122). Desligar = o mesmo interruptor.

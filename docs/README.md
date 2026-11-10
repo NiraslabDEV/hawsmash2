@@ -4,7 +4,7 @@ O [CLAUDE](../CLAUDE.md) conserva decisões e invariantes. Os módulos descrevem
 
 ## Dono e operação
 
-- [Manual do dono](operacao/manual-dono.md), [runbook](operacao/runbook.md), [hardware](operacao/hardware.md).
+- [Manual do dono](operacao/manual-dono.md), [runbook](operacao/runbook.md), [hardware](operacao/hardware.md), [app iOS](operacao/ios.md).
 - [Lojas](modulos/lojas.md), [equipa/PIN](modulos/equipa.md), [caixa](modulos/caixa.md), [relatórios/exportação](modulos/relatorios.md).
 - [Aparência](modulos/aparencia.md), [marketing](operacao/marketing.md), [promoções](modulos/promocoes.md), [TVs/KDS](modulos/tvs-kds.md). Promoções e cupões são do dono.
 - [Instalação](operacao/instalacao.md), [plano LIVE](planos/live.md), [volume](planos/volume.md). Metas não são ensaios concluídos.

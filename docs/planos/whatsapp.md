@@ -157,7 +157,7 @@ O que vai para o Gym OS e para o motor é **copiado sem edição**; o que é do 
 | `whatsapp_outbox` (`subject_type` + `subject_id`, **`idempotency_key` unique**, `expires_at`), `whatsapp_inbound`, `whatsapp_optouts`, `stores.whatsapp_enabled/_sender_id/_phone`, `whatsapp_enqueue/_claim/_finish/_apply_status/_record_inbound`, RLS | [`1117_whatsapp_base.sql`](../../supabase/migrations/20261030190000_1117_whatsapp_base.sql) | ✅ sem colunas de restaurante |
 | Despacho e webhook (o projecto injecta `render`), transporte pelo ambiente | [`lib/whatsapp/dispatch.ts`](../../apps/web/lib/whatsapp/dispatch.ts), [`config.ts`](../../apps/web/lib/whatsapp/config.ts) | ✅ |
 | `GET /api/cron/whatsapp` (CRON_SECRET) e `POST /api/webhooks/whatsapp` | `apps/web/app/api/…/whatsapp/route.ts` | ✅ |
-| Painel do dono: interruptores, números, uso do mês, últimas enviadas e recebidas ([1126](../../supabase/migrations/20261105190000_1126_whatsapp_no_painel.sql), `get/save_store_whatsapp`) | [`lojas/whatsapp-section.tsx`](../../apps/web/app/(admin)/lojas/whatsapp-section.tsx), [`lib/whatsapp/painel.ts`](../../apps/web/lib/whatsapp/painel.ts) | quase |
+| Painel do dono: interruptores, números, uso do mês, últimas enviadas e recebidas ([1126](../../supabase/migrations/20261105190000_1126_whatsapp_no_painel.sql), `get/save_store_whatsapp`) | [`(admin)/whatsapp/`](../../apps/web/app/(admin)/whatsapp/page.tsx) (aba própria: Conversas, Dados, Ligação), [`lib/whatsapp/painel.ts`](../../apps/web/lib/whatsapp/painel.ts) | quase |
 | **Gatilhos** do pedido e do estafeta → fila | [`1118_whatsapp_pedidos.sql`](../../supabase/migrations/20261030190100_1118_whatsapp_pedidos.sql) | ❌ do HAWSMASH |
 | **Mapa evento → template** | [`lib/whatsapp/events.ts`](../../apps/web/lib/whatsapp/events.ts) | ❌ do HAWSMASH |
 
@@ -221,7 +221,7 @@ Prompt completo para o agente: [whatsapp-ligar-prompt.md](whatsapp-ligar-prompt.
    `--status` até ficarem `APPROVED`. O catálogo vive em [`templates.ts`](../../apps/web/lib/whatsapp/templates.ts).
 6. **Cron:** [`scripts/sql/install-whatsapp-cron.sql`](../../scripts/sql/install-whatsapp-cron.sql) — só depois de o
    `GET /api/cron/whatsapp` responder 200 com o transporte configurado.
-7. **Ligar a loja — no painel, em Lojas → WhatsApp, só o dono** (nunca `update` à mão no LIVE, CLAUDE §2): id do
+7. **Ligar a loja — no painel, em WhatsApp → Ligação, só o dono** (nunca `update` à mão no LIVE, CLAUDE §2): id do
    número (o `phone_number_id` da Meta), telefone, telemóveis dos alertas, interruptor **Avisos**. Depois de um pedido
    real de ensaio, o número de atendimento humano e o interruptor **Conversa de pedido**. Desligar é o mesmo interruptor,
    sem deploy. O número de Maputo (+258 87 030 1006) é registado na WABA primeiro e sai da app do telemóvel (B-122).

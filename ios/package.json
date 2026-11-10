@@ -1,0 +1,17 @@
+{
+  "name": "ios-app",
+  "private": true,
+  "description": "App iOS da instalação (Capacitor): um invólucro nativo que abre o site. Fora do workspace pnpm de propósito, como android/. Compila-se num Mac ou no GitHub Actions (.github/workflows/ios.yml). Ver docs/operacao/ios.md.",
+  "scripts": {
+    "sync": "cap sync ios",
+    "capturas": "node capturas.mjs"
+  },
+  "dependencies": {
+    "@capacitor/core": "8.6.0",
+    "@capacitor/ios": "8.6.0"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "8.6.0",
+    "puppeteer-core": "^25.16.0"
+  }
+}
