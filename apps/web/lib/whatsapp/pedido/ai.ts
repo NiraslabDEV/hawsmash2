@@ -1,9 +1,9 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { betaZodOutputFormat } from "@anthropic-ai/sdk/helpers/beta/zod";
 import { z } from "zod";
-import type { Catalogue } from "@/lib/agents/service";
+import { priceItems, type Catalogue } from "@/lib/agents/service";
 import { activeAddons, activeGroups, activeOptions, activeVariants, fmt, usableCategories } from "./catalogue";
-import type { AiIntent, AiItem, TurnContext } from "./engine";
+import { cleanNote, type AiCartChange, type AiIntent, type AiItem, type TurnContext } from "./engine";
 import type { ConversationState } from "./state";
 
 /**
@@ -56,6 +56,9 @@ O teu trabalho é perceber o que a pessoa quer e devolver uma intenção. O sist
 - Usa só os ids entre [ ] do cardápio. Nunca inventes produtos, ingredientes, alergénios, promoções, prazos ou horários.
 - Se a pessoa pedir produtos: action "add_items" com os itens. Preenche versão, grupos e adicionais só quando a pessoa os disse claramente; se faltar uma escolha obrigatória, deixa-a vazia — o sistema pergunta com botões.
 - "qty" é o número de unidades pedidas (1 se não disser).
+- "note" é a instrução de preparação que a pessoa deu para esse produto, pelas palavras dela e curta («sem cebola», «molho à parte»); null se não deu. Nunca ponhas lá preços, descontos, moradas nem promessas. Se a instrução corresponder a uma opção ou adicional do cardápio, usa o id em vez da nota.
+- Alterar o que já está no carrinho (tirar um produto, mudar a quantidade, juntar ou tirar uma observação): action "update_cart" com "changes". "line" é o número da linha em «Carrinho actual»; "qty" 0 retira o produto e null não mexe na quantidade; "note" "" apaga a observação e null não mexe nela. Para trocar o tamanho ou as escolhas de um produto, retira a linha e diz à pessoa para o escolher de novo.
+- «Mais um», «outro igual», «o mesmo»: usa a conversa anterior e o carrinho para saber de que produto se trata; se não der para saber, pergunta com action "none".
 - Se pedir para ver o cardápio ou não souber o que quer: "show_menu"; uma categoria concreta: "show_category" com categoryId.
 - Ver o carrinho: "show_cart". Quer fechar/pagar/finalizar: "checkout". Quer falar com uma pessoa, reclamar ou algo que não é pedido: "human". Pergunta pelo estado do pedido: "order_status".
 - Agradecimento ou pergunta sobre este restaurante a que o cardápio responda: "none" com uma resposta curta, sem inventar.
@@ -64,17 +67,24 @@ O teu trabalho é perceber o que a pessoa quer e devolver uma intenção. O sist
 
 const intentSchema = z.object({
   reply: z.string(),
-  action: z.enum(["add_items", "show_menu", "show_category", "show_cart", "checkout", "human", "order_status", "none"]),
+  action: z.enum(["add_items", "update_cart", "show_menu", "show_category", "show_cart", "checkout", "human", "order_status", "none"]),
   items: z.array(z.object({
     product: z.string(),
     qty: z.number().int(),
     version: z.string().nullable(),
     addons: z.array(z.string()),
     groups: z.array(z.object({ group: z.string(), options: z.array(z.string()) })),
+    note: z.string().nullable(),
   })),
+  changes: z.array(z.object({ line: z.number().int(), qty: z.number().int().nullable(), note: z.string().nullable() })),
   categoryId: z.string().nullable(),
 });
-export type RawIntent = z.infer<typeof intentSchema>;
+type FullIntent = z.infer<typeof intentSchema>;
+/** O que chega do modelo. Os campos novos são tolerados em falta (respostas gravadas, testes antigos). */
+export type RawIntent = Omit<FullIntent, "items" | "changes"> & {
+  items: Array<Omit<FullIntent["items"][number], "note"> & { note?: string | null }>;
+  changes?: FullIntent["changes"];
+};
 
 /** Converte os ids curtos de volta. Ids desconhecidos caem fora — o código valida o resto. */
 export function toIntent(raw: RawIntent, aliases: Aliases): AiIntent {
@@ -97,22 +107,45 @@ export function toIntent(raw: RawIntent, aliases: Aliases): AiIntent {
       ...(variantId ? { variantId } : {}),
       ...(addonIds.length ? { addonIds } : {}),
       ...(modifiers.length ? { modifiers } : {}),
+      ...(cleanNote(item.note) ? { notes: cleanNote(item.note) } : {}),
     });
+  }
+  const changes: AiCartChange[] = [];
+  for (const change of (raw.changes ?? []).slice(0, 10)) {
+    if (!Number.isInteger(change.line) || change.line < 1 || change.line > 20) continue;
+    const qty = typeof change.qty === "number" && Number.isFinite(change.qty) ? Math.min(Math.max(Math.trunc(change.qty), 0), 20) : undefined;
+    // "" apaga a observação; null não mexe nela.
+    const notes = change.note === null || change.note === undefined ? undefined : cleanNote(change.note) ?? null;
+    if (qty === undefined && notes === undefined) continue;
+    changes.push({ line: change.line, ...(qty !== undefined ? { qty } : {}), ...(notes !== undefined ? { notes } : {}) });
   }
   const categoryId = real(raw.categoryId, "C");
   return {
     reply: raw.reply.replace(/\s+\n/g, "\n").trim().slice(0, 700),
     action: raw.action,
     ...(items.length ? { items } : {}),
+    ...(changes.length ? { changes } : {}),
     ...(categoryId ? { categoryId } : {}),
   };
 }
 
 function describeCart(state: ConversationState, menu: Catalogue): string {
   if (!state.cart.length) return "vazio";
-  const names = new Map(menu.categories.flatMap((c) => c.items).map((i) => [i.id, i.name]));
-  return state.cart.map((l) => `${l.qty}× ${names.get(l.menuItemId) ?? "produto"}`).join(", ");
+  const note = (i: number) => (state.cart[i]?.notes ? ` [observação: ${state.cart[i].notes}]` : "");
+  try {
+    // Numerado como a pessoa o vê: é por este número que a IA aponta a linha a alterar.
+    return "\n" + priceItems(menu, state.cart).lines.map((l, i) => {
+      const extras = [l.variantName, ...l.addonNames, ...l.modifierNames].filter(Boolean).join(", ");
+      return `${i + 1}. ${l.qty}× ${l.name}${extras ? ` (${extras})` : ""}${note(i)}`;
+    }).join("\n");
+  } catch {
+    const names = new Map(menu.categories.flatMap((c) => c.items).map((i) => [i.id, i.name]));
+    return "\n" + state.cart.map((l, i) => `${i + 1}. ${l.qty}× ${names.get(l.menuItemId) ?? "produto"}${note(i)}`).join("\n");
+  }
 }
+
+/** Modelos sem reserva do lado do servidor: mandar `fallbacks` não ajuda e a forma em lista dá 400. */
+const noServerFallback = (model: string) => /^claude-haiku/.test(model);
 
 export interface AiConfig {
   apiKey: string;
@@ -140,18 +173,21 @@ export function createAiInterpreter(config: AiConfig) {
       const response = await client.beta.messages.parse({
         model,
         max_tokens: 4000,
-        betas: ["server-side-fallback-2026-07-01"],
-        // Recusa de segurança → o servidor tenta o modelo de reserva na mesma chamada.
-        fallbacks: "default",
+        // Recusa de segurança → o servidor tenta o modelo de reserva na mesma chamada (onde o modelo o permite).
+        ...(noServerFallback(model) ? {} : { betas: ["server-side-fallback-2026-07-01"], fallbacks: "default" as const }),
         output_config: { effort: "low", format: betaZodOutputFormat(intentSchema) },
         system: [
           { type: "text", text: RULES },
           { type: "text", text: `Loja: ${store.name}\n\nCARDÁPIO\n${entry.built.text}`, cache_control: { type: "ephemeral" } },
         ],
-        messages: [{
-          role: "user",
+        messages: [
+          // As trocas anteriores em texto livre, para «mais um desses» ter a que se referir.
+          ...(request.state.history ?? []).map((turn) => ({ role: turn.role, content: turn.text })),
+          {
+          role: "user" as const,
           content: `Carrinho actual: ${describeCart(request.state, menu)}\nPasso da conversa: ${request.state.step}\n\nMensagem do cliente:\n"""${request.text.slice(0, 1000)}"""`,
-        }],
+          },
+        ],
       });
       if (response.stop_reason === "refusal" || response.stop_reason === "max_tokens" || !response.parsed_output) return null;
       return toIntent(response.parsed_output as RawIntent, entry.built.aliases);

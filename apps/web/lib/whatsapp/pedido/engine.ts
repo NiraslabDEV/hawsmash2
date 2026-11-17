@@ -1,11 +1,11 @@
 import { compactSession, LIMITS, normalizeWord, type InboundMedia, type ListRow, type ReplyButton, type SessionContent } from "@delivery/whatsapp";
 import { encodeAgentHandoff } from "@/lib/agents/handoff";
-import { AgentToolError, priceItems, quoteLine, type Catalogue, type CatalogueItem, type PublicStore } from "@/lib/agents/service";
+import { AgentToolError, priceItems, quoteLine, usableItem, type Catalogue, type CatalogueItem, type PublicStore } from "@/lib/agents/service";
 import {
   activeAddons, activeGroups, activeOptions, activeVariants, channels, findItem, fmt, manualMethods,
   nextOpeningText, priceLabel, usableCategories, type ManualMethod,
 } from "./catalogue";
-import { expireState, type CartLine, type ConversationState, type Draft } from "./state";
+import { expireState, NOTE_MAX, type CartLine, type ConversationState, type Draft } from "./state";
 
 /**
  * A conversa de pedido do WhatsApp (ADR 0012). Função pura sobre o estado: os efeitos (criar o pedido,
@@ -44,12 +44,21 @@ export type CreateOrderResult =
 export type ProofResult = "ok" | "already" | "invalid_type" | "error";
 export interface PendingOrder { orderId: string; orderNumber: string; totalCents: number; method: "mpesa" | "emola" | string }
 
-export type AiItem = Pick<CartLine, "menuItemId" | "qty" | "variantId" | "addonIds" | "modifiers">;
+export type AiItem = Pick<CartLine, "menuItemId" | "qty" | "variantId" | "addonIds" | "modifiers" | "notes">;
+/** Alteração a uma linha do carrinho (1 = primeira). `qty: 0` retira; `notes: null` apaga a observação. */
+export interface AiCartChange { line: number; qty?: number; notes?: string | null }
 export interface AiIntent {
   reply: string;
-  action: "add_items" | "show_menu" | "show_category" | "show_cart" | "checkout" | "human" | "order_status" | "none";
+  action: "add_items" | "update_cart" | "show_menu" | "show_category" | "show_cart" | "checkout" | "human" | "order_status" | "none";
   items?: AiItem[];
+  changes?: AiCartChange[];
   categoryId?: string;
+}
+
+/** Observação para a cozinha: uma linha curta, sem quebras. Vazia = sem observação. */
+export function cleanNote(raw: string | null | undefined): string | undefined {
+  const note = (raw ?? "").replace(/\s+/g, " ").trim().slice(0, NOTE_MAX).trim();
+  return note || undefined;
 }
 
 export interface TurnDeps {
@@ -62,6 +71,7 @@ export interface TurnDeps {
 
 export const AI_CALLS_PER_HOUR = 20;
 const PAGE = 8;
+const DRAFT_KINDS = new Set(["var", "opt", "grp", "add", "addok", "pg", "qty"]);
 const MAX_QTY = 20;
 
 const GREETINGS = /^(OLA|OI|BOM DIA|BOA TARDE|BOA NOITE|BOAS|HELLO|HI|HEY|SALAM|ALO|E AI|EAI)\b/;
@@ -95,7 +105,8 @@ export async function runTurn(
       const { lines, subtotalCents } = priceItems(menu, s.cart);
       const text = lines.map((l, i) => {
         const extras = [l.variantName, ...l.addonNames, ...l.modifierNames].filter(Boolean).join(" · ");
-        return `${i + 1}. ${l.qty}× ${l.name} — ${fmt(l.lineTotalCents)}${extras ? `\n     _${extras}_` : ""}`;
+        const note = s.cart[i]?.notes;
+        return `${i + 1}. ${l.qty}× ${l.name} — ${fmt(l.lineTotalCents)}${extras ? `\n     _${extras}_` : ""}${note ? `\n     📝 ${note}` : ""}`;
       }).join("\n");
       return { text, subtotal: subtotalCents };
     } catch (error) {
@@ -106,7 +117,7 @@ export async function runTurn(
   function welcome(prefix?: string) {
     const name = firstName(input.profileName ?? s.name);
     const closed = !store.open_now ? `\n\n🕒 Agora estamos fechados. ${nextOpeningText(menu.hours, input.now) ?? ""}`.trimEnd() : "";
-    const ai = ctx.aiEnabled ? "\nTambém podes escrever o que te apetece, por exemplo: _«quero 2 hambúrgueres e um refrigerante»_." : "";
+    const ai = ctx.aiEnabled ? "\nTambém podes escrever o que te apetece, por exemplo: _«quero 2 hambúrgueres sem cebola e um refrigerante»_." : "";
     const text = `${prefix ? `${prefix}\n\n` : ""}Olá${name ? `, ${name}` : ""}! 👋 Bem-vindo à *${store.name}*.\nPodes fazer o pedido aqui mesmo, sem sair do WhatsApp.${ai}${closed}`;
     const cats = usableCategories(menu);
     if (!cats.length) {
@@ -231,6 +242,8 @@ export async function runTurn(
       say({ type: "list", text: `${head}Queres adicionar alguma coisa?`, button: "Adicionais", sections: [{ rows }] });
       return;
     }
+    // Quem escreveu «2 smash grandes» já disse quantas: fecha-se sem voltar a perguntar.
+    if (d.qty) return finishDraft(d.qty);
     s = { ...s, step: "qty" };
     say({
       type: "buttons",
@@ -248,6 +261,7 @@ export async function runTurn(
     const key = (l: CartLine) => JSON.stringify([
       l.menuItemId, l.variantId ?? null, [...(l.addonIds ?? [])].sort(),
       [...(l.modifiers ?? [])].map((m) => [m.groupId, [...m.optionIds].sort()]).sort(),
+      l.notes ?? "",
     ]);
     return key(a) === key(b);
   }
@@ -270,7 +284,7 @@ export async function runTurn(
     }
     s = { ...s, cart };
     const extras = [lineInfo.variantName, ...lineInfo.addonNames, ...lineInfo.modifierNames].filter(Boolean).join(" · ");
-    return { ok: true, summary: `${line.qty}× ${lineInfo.name}${extras ? ` (${extras})` : ""} — ${fmt(lineInfo.lineTotalCents)}` };
+    return { ok: true, summary: `${line.qty}× ${lineInfo.name}${extras ? ` (${extras})` : ""} — ${fmt(lineInfo.lineTotalCents)}${line.notes ? `\n     📝 ${line.notes}` : ""}` };
   }
 
   function afterAdd(lines: string[]) {
@@ -293,14 +307,49 @@ export async function runTurn(
       ...(d.variantId ? { variantId: d.variantId } : {}),
       ...(d.addonIds.length ? { addonIds: d.addonIds } : {}),
       ...(d.modifiers.some((m) => m.optionIds.length) ? { modifiers: d.modifiers.filter((m) => m.optionIds.length) } : {}),
+      ...(d.notes ? { notes: d.notes } : {}),
     };
     const added = addToCart(line);
     if (!added.ok) {
-      s = { ...s, step: "idle", draft: undefined };
+      s = { ...s, step: "idle", draft: undefined, queue: undefined };
       say({ type: "buttons", text: `⚠️ ${added.error}`, buttons: [{ id: "menu", title: "🍔 Ver cardápio" }, { id: "cart", title: "🛒 Ver carrinho" }] });
       return;
     }
+    const next = s.queue?.[0];
+    const nextItem = next ? findItem(menu, next.menuItemId)?.item : undefined;
+    if (next && nextItem && usableItem(nextItem)) {
+      // Falta configurar outro produto do mesmo pedido em texto: segue-se logo para ele.
+      s = { ...s, queue: s.queue!.slice(1), checkoutId: undefined };
+      say({ type: "text", text: `✅ Adicionado:\n${added.summary}` });
+      return startItem(next.menuItemId, presetFromText(nextItem, next));
+    }
+    s = { ...s, queue: undefined };
     afterAdd([added.summary]);
+  }
+
+  /**
+   * O que a pessoa já disse em texto fica escolhido; pelos botões só se pergunta o que é obrigatório e falta.
+   * Tudo é validado contra o catálogo: um id que não seja deste produto cai fora.
+   */
+  function presetFromText(item: CatalogueItem, line: AiItem): Partial<Draft> {
+    const variantId = line.variantId && activeVariants(item).some((v) => v.id === line.variantId) ? line.variantId : undefined;
+    const modifiers: Draft["modifiers"] = [];
+    const doneGroups: string[] = [];
+    for (const group of activeGroups(item)) {
+      const single = group.selection_type === "single" || group.max_select <= 1;
+      const valid = (line.modifiers?.find((m) => m.groupId === group.id)?.optionIds ?? [])
+        .filter((id) => activeOptions(group).some((o) => o.id === id))
+        .slice(0, single ? 1 : group.max_select);
+      if (valid.length) modifiers.push({ groupId: group.id, optionIds: valid });
+      if (valid.length >= group.min_select) doneGroups.push(group.id);
+    }
+    const addonIds = (line.addonIds ?? []).filter((id) => activeAddons(item).some((a) => a.id === id));
+    const notes = cleanNote(line.notes);
+    return {
+      ...(variantId ? { variantId } : {}), modifiers, doneGroups, addonIds, addonsDone: true,
+      qty: Math.min(Math.max(Math.trunc(line.qty || 1), 1), MAX_QTY),
+      ...(notes ? { notes } : {}),
+    };
   }
 
   // ── Carrinho ────────────────────────────────────────────────────────────
@@ -332,7 +381,7 @@ export async function runTurn(
   }
 
   function clearAll(note?: string) {
-    s = { ...s, step: "idle", cart: [], draft: undefined, checkoutId: undefined, fulfillment: undefined, zoneId: undefined, address: undefined, paymentMethod: undefined };
+    s = { ...s, step: "idle", cart: [], draft: undefined, queue: undefined, checkoutId: undefined, fulfillment: undefined, zoneId: undefined, address: undefined, paymentMethod: undefined };
     const pending = s.order ? `\n\nO pedido *${s.order.number}* continua registado. Para o cancelar, fala com a loja.` : "";
     say({ type: "buttons", text: `${note ?? "🧹 Carrinho esvaziado."}${pending}`, buttons: [{ id: "menu", title: "🍔 Ver cardápio" }, { id: "human", title: "💬 Falar com a loja" }] });
   }
@@ -346,7 +395,12 @@ export async function runTurn(
         return `${base}/pedido-assistido${encodeAgentHandoff({
           storeSlug: store.slug, fulfillmentType: fulfillment,
           ...(fulfillment === "delivery" ? { deliveryZoneId: s.zoneId } : {}),
-          items: s.cart,
+          // O link do site leva só as escolhas públicas; a observação escreve-se lá.
+          items: s.cart.map((line) => {
+            const publicLine = { ...line };
+            delete publicLine.notes;
+            return publicLine;
+          }),
         })}`;
       } catch { /* carrinho grande demais para o link: cai no cardápio */ }
     }
@@ -500,12 +554,12 @@ export async function runTurn(
       scheduledFor: null,
       paymentMethod: s.paymentMethod,
       notes: "Pedido pelo WhatsApp",
-      items: s.cart.map((line) => ({ ...line, notes: "" })),
+      items: s.cart.map((line) => ({ ...line, notes: line.notes ?? "" })),
     });
     if (!result.ok) return orderFailed(result.code);
     const order = { id: result.orderId, number: result.orderNumber, totalCents: result.totalCents, method: result.method, at: input.now };
     s = {
-      ...s, step: "proof", order, cart: [], draft: undefined, checkoutId: undefined,
+      ...s, step: "proof", order, cart: [], draft: undefined, queue: undefined, history: undefined, checkoutId: undefined,
       last: { zoneId: s.zoneId, address: s.address, name: s.name },
       fulfillment: undefined, zoneId: undefined, address: undefined, paymentMethod: undefined,
     };
@@ -584,37 +638,76 @@ export async function runTurn(
     try { intent = await deps.interpret({ text, state: s, ctx }); } catch { intent = null; }
     if (!intent) return false;
     const reply = intent.reply?.trim().slice(0, 700);
+    // Memória curta: o que a pessoa escreveu e o que se respondeu, para a mensagem seguinte fazer sentido.
+    s = {
+      ...s,
+      history: [
+        ...(s.history ?? []),
+        { role: "user" as const, text: text.replace(/\s+/g, " ").trim().slice(0, 400) },
+        { role: "assistant" as const, text: (reply || `(${intent.action})`).slice(0, 400) },
+      ].slice(-6),
+    };
     switch (intent.action) {
       case "add_items": {
         const added: string[] = [];
-        let pendingConfig: AiItem | null = null;
+        const soldOut: string[] = [];
+        const pending: AiItem[] = [];
         for (const item of (intent.items ?? []).slice(0, 10)) {
           const found = findItem(menu, item.menuItemId);
           if (!found) continue;
+          if (!usableItem(found.item)) { soldOut.push(found.item.name); continue; }
           const qty = Math.min(Math.max(Math.trunc(item.qty || 1), 1), MAX_QTY);
+          const notes = cleanNote(item.notes);
           const line: CartLine = {
             menuItemId: item.menuItemId, qty,
             ...(item.variantId ? { variantId: item.variantId } : {}),
             ...(item.addonIds?.length ? { addonIds: item.addonIds } : {}),
             ...(item.modifiers?.length ? { modifiers: item.modifiers } : {}),
+            ...(notes ? { notes } : {}),
           };
           const result = addToCart(line);
           if (result.ok) added.push(result.summary);
-          else if (!pendingConfig) pendingConfig = { ...item, qty };
+          else pending.push(line);
         }
         if (reply) say({ type: "text", text: reply });
-        if (pendingConfig) {
-          // Faltou uma escolha (tamanho, molho…): segue pelos botões para esse produto.
+        if (soldOut.length) say({ type: "text", text: `😕 Esgotado agora: ${soldOut.join(", ")}.` });
+        if (pending.length) {
+          // Faltou uma escolha (tamanho, molho…): segue pelos botões, um produto de cada vez.
           if (added.length) say({ type: "text", text: `✅ Adicionado:\n${added.join("\n")}` });
-          const found = findItem(menu, pendingConfig.menuItemId)!;
-          const variants = activeVariants(found.item);
-          startItem(pendingConfig.menuItemId, {
-            ...(pendingConfig.variantId && variants.some((v) => v.id === pendingConfig!.variantId) ? { variantId: pendingConfig.variantId } : {}),
-          });
+          const [first, ...rest] = pending;
+          s = { ...s, queue: rest.slice(0, 8), checkoutId: undefined };
+          startItem(first.menuItemId, presetFromText(findItem(menu, first.menuItemId)!.item, first));
           return true;
         }
         if (added.length) afterAdd(added);
-        else categoryList(0, reply ? undefined : "Não encontrei isso no cardápio. Escolhe aqui 👇");
+        else categoryList(0, reply || soldOut.length ? undefined : "Não encontrei isso no cardápio. Escolhe aqui 👇");
+        return true;
+      }
+      case "update_cart": {
+        let changed = false;
+        const next = s.cart.map((line) => ({ ...line }));
+        for (const change of (intent.changes ?? []).slice(0, 10)) {
+          const target = Number.isInteger(change.line) ? next[change.line - 1] : undefined;
+          if (!target) continue;
+          if (change.qty !== undefined && Number.isFinite(change.qty)) {
+            target.qty = Math.min(Math.max(Math.trunc(change.qty), 0), MAX_QTY);
+            changed = true;
+          }
+          if (change.notes !== undefined) {
+            const notes = cleanNote(change.notes);
+            if (notes) target.notes = notes; else delete target.notes;
+            changed = true;
+          }
+        }
+        if (!changed) { showCart(reply || undefined); return true; }
+        // `qty: 0` não passa no schema da linha: as retiradas saem antes de gravar.
+        const cart = next.filter((line) => line.qty > 0);
+        try { priceItems(menu, cart); } catch (error) {
+          showCart(`⚠️ ${error instanceof AgentToolError ? error.message : "Não consegui alterar o carrinho."}`);
+          return true;
+        }
+        s = { ...s, cart, checkoutId: undefined, draft: undefined, queue: undefined, step: s.step === "proof" ? s.step : "idle" };
+        showCart(reply || "✏️ Carrinho actualizado.");
         return true;
       }
       case "show_category":
@@ -636,6 +729,8 @@ export async function runTurn(
   // ── Botões e listas ─────────────────────────────────────────────────────
   async function handleReply(id: string) {
     const [kind, a, b] = id.split(":");
+    // Sair da configuração a meio (menu, carrinho, finalizar…) larga o que estava em fila do texto livre.
+    if (s.queue?.length && !DRAFT_KINDS.has(kind)) s = { ...s, queue: undefined };
     switch (kind) {
       case "menu": return categoryList(0);
       case "catp": return categoryList(Number(a) || 0);

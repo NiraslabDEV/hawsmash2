@@ -114,8 +114,18 @@ foto / PDF     → bucket privado → attach_payment_proof → "Comprovativo rec
 caixa aprova   → F1: "Pedido MPT-0042 pago" … "a caminho" … "entregue"
 ```
 
-- **Texto livre** ("quero 2 hambúrgueres e um refresco") vai à IA, que propõe itens; o código valida, junta ao
-  carrinho e mostra os números. Falta uma escolha obrigatória → segue pelos botões desse produto.
+- **Texto livre** ("quero 2 hambúrgueres sem cebola e um refresco") vai à IA, que propõe itens; o código valida,
+  junta ao carrinho e mostra os números. Desde 16/11:
+  - **Observação para a cozinha** ("sem cebola") fica na linha, aparece no carrinho e no resumo que a pessoa
+    confirma, e segue para a comanda. Nunca mexe no preço; 120 caracteres, uma linha.
+  - **Falta uma escolha obrigatória** (tamanho, ponto) em um ou mais produtos → pergunta-se só essa, um produto de
+    cada vez, sem voltar a pedir a quantidade e sem perder nenhum. Sair para o cardápio larga a fila.
+  - **Alterar o carrinho por texto** ("tira a coca", "afinal são 3", "esse sem molho"): a IA aponta a linha, o
+    código refaz as contas e invalida o "Confirmar" de um resumo antigo.
+  - **Memória curta**: as últimas 3 trocas em texto livre vão com o pedido à IA ("mais um desses"). Apaga-se
+    quando o pedido nasce. Produto esgotado é dito pelo nome.
+  - Modelo Haiku (`WHATSAPP_AI_MODEL`): o pedido vai sem `fallbacks`, que esse modelo não tem.
+  Testes em [`texto-livre.test.ts`](../../apps/web/lib/whatsapp/pedido/__tests__/texto-livre.test.ts). Por validar com clientes reais (B-124).
 - **Loja fechada** ou com pagamento automático: o resumo manda para o site com o carrinho montado.
 - **"Falar com a loja"** → link para o WhatsApp da loja que fica na app (`stores.whatsapp_handoff_phone`), até
   haver a gaveta de conversas no POS (F3).
