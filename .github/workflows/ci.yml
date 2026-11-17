@@ -38,7 +38,9 @@ jobs:
       - name: Instalar Supabase CLI
         uses: supabase/setup-cli@v1
         with:
-          version: latest
+          # Fixa a versão usada em local: a "latest" deixou de aceitar [inbucket] no config.toml
+          # e a CI parou no arranque da base desde 10/11/2026.
+          version: 2.105.0
 
       # Só os serviços que os testes usam (db, auth, rest, realtime, storage,
       # kong). O resto (Studio, logs, imgproxy, edge, pooler, mail) eram ~6
