@@ -16,7 +16,8 @@ permissions:
 jobs:
   quality:
     name: Lint e testes
-    runs-on: ubuntu-latest
+    # Fixo: a ubuntu-latest passou a 26.04 e o Playwright 1.60 não instala o Chromium nela.
+    runs-on: ubuntu-24.04
     timeout-minutes: 25
 
     steps:
