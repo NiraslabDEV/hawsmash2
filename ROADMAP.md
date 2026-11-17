@@ -825,3 +825,13 @@ fechado aqui, vai para o Gym OS e para o motor sem edição (plano §4 e §6).
 `packages/whatsapp` com mock, migration base sem colunas de restaurante, cron e webhook, e o F1 só na loja de
 Maputo. Testes de idempotência, isolamento por loja e best-effort primeiro. Não aplicar a migration no LIVE."*
 
+## Facturação e WhatsApp — pedido de 16/11/2026
+
+Prompt: [`docs/planos/facturacao-e-whatsapp-codex-prompt.md`](docs/planos/facturacao-e-whatsapp-codex-prompt.md) ·
+relatório: [`docs/validation/facturacao-whatsapp-2026-11-16.md`](docs/validation/facturacao-whatsapp-2026-11-16.md).
+
+- [x] Núcleo fiscal (1138) e WhatsApp em texto livre (observações, fila de escolhas, alterar carrinho, memória curta).
+- [x] A1: RPCs reais e concorrência ensaiadas em local.
+- [x] A2: migration 1139, motivo da anulação na Nota de Crédito.
+- [ ] A3–A10: NUIT, painel, documentos, impressão, exportação, cron, regimes e activação.
+- [ ] B1–B4: avaliação IA, lacunas do motor, observabilidade e documentação WhatsApp.

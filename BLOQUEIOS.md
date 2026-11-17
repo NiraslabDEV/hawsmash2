@@ -389,6 +389,12 @@ Falta: passar os terminais para `hawsmash.com/pos`.
 
 ### B-019 · [F0] Enquadramento fiscal: facturação certificada pela AT
 - Estado: aberto
+- **Actualização 17/11/2026:** o núcleo do caminho A está no código ([ADR 0013](docs/decisions/0013-facturacao-fiscal-no-motor.md),
+  migrations 1138 e 1139, `packages/fiscal`, [módulo](docs/modulos/facturacao.md)). Ensaiado numa base local com as RPCs reais
+  (balcão, offline, site, mesa, anulações) e 20 pagamentos em simultâneo. **Migrations não aplicadas no LIVE, desligado por
+  defeito, sem ecrãs.** A pergunta abaixo continua aberta: activar no HAWSMASH é aditamento ao contrato e depende do contabilista.
+- **Actualização 19/10/2026:** opções, mapa para este código e riscos em [`FATURACAO-CERTIFICADA.md`](FATURACAO-CERTIFICADA.md).
+  Para implementar, usar a skill `/faturacao-certificada-mocambique` (já validada no Gym OS).
 - Desbloqueia: cliente + contabilista de Maputo
 - Pergunta exacta: o HAWSMASH precisa de emitir **factura fiscal certificada** (regime da AT, com numeração
   sequencial inalterável, autenticação e comunicação periódica à AT) para as vendas de balcão/delivery, ou o
@@ -1440,3 +1446,7 @@ Verificação adicional desta entrega: 973 testes unitários, 60 testes de base 
 |---|---|---|
 | Enviar emails | Gabriel — B-114 / SMTP | o editor funciona, mas a caixa não está autenticada |
 | Operação LIVE | Gabriel — B-022 | mudanças continuam em staging, sem alterar o 1.0 |
+
+### B-125 · [Facturação] Lint do pacote fiscal
+- Estado: **resolvido** (17/11/2026). O BOM literal da função `csv` passou a escape `\uFEFF` (mesmos bytes no CSV);
+  `pnpm lint` e os testes do pacote verdes. Corrigido também na skill `faturacao-certificada-mocambique`.

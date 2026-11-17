@@ -180,6 +180,18 @@ importers:
         specifier: ^2.0.0
         version: 2.1.9(@types/node@20.19.43)(terser@5.50.0)
 
+  packages/fiscal:
+    devDependencies:
+      eslint:
+        specifier: ^8.57.0
+        version: 8.57.1
+      typescript:
+        specifier: ^5.0.0
+        version: 5.9.3
+      vitest:
+        specifier: ^2.0.0
+        version: 2.1.9(@types/node@20.19.43)(terser@5.50.0)
+
   packages/payments:
     dependencies:
       zod:

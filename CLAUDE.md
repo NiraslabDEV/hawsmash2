@@ -165,6 +165,11 @@ Fecho do dia obrigatório (1128): o dia de trabalho só muda com ele, e sem ele 
 pagar não fecha o turno nem o dia. O POS guia a caixa, mas o servidor nunca recusa a venda (Regra 1).
 [Caixa e falhas conhecidas](docs/modulos/caixa.md).
 
+**Facturação fiscal (1138, ADR 0013) — desligada por defeito e fora do contrato (§0, B-019).** Com `fiscal_settings.active`,
+o gatilho em `payments` emite a Factura-Recibo quando a venda fica paga e a Nota de Crédito quando é anulada; documentos
+imutáveis na BD, série por loja. Falhar a factura nunca pára a venda (regra 1). Nunca dizer nem imprimir "certificado"
+sem número da AT. [Facturação](docs/modulos/facturacao.md).
+
 ---
 
 ## 10. ESTOQUE (por loja)

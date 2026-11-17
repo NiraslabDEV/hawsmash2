@@ -16,5 +16,6 @@ Decisões aceites não se reescrevem para acomodar divergências de implementaç
 | [0010](0010-email-pela-hostinger-via-supabase.md) | Caixa Hostinger através de um relé no Supabase; Resend passa a reserva | Aceite; activo quando houver `EMAIL_RELAY_SECRET` |
 | [0011](0011-whatsapp-business-por-adaptador.md) | WhatsApp Business por adaptador e fila, um número por loja, a começar por Maputo | Aceite; em construção |
 | [0012](0012-pedido-pelo-whatsapp-na-conversa.md) | Pedido feito dentro da conversa do WhatsApp, pago por comprovativo, pela Cloud API da Meta; IA só para texto livre | Aceite; código pronto, por ligar (B-121) |
+| [0013](0013-facturacao-fiscal-no-motor.md) | Facturação fiscal (AT) dentro do motor: FR ao confirmar o pagamento, NC ao anular, documentos imutáveis, série por loja; desligada por defeito | Aceite para o motor; núcleo ensaiado em local, por aplicar; activar num cliente é B-019 |
 
 [Candidatas a novas decisões](../AUDITORIA-DOCUMENTACAO.md#114-decisões-fortes-candidatas-a-adr) permanecem propostas. Nenhum ADR novo foi inventado.
