@@ -545,8 +545,8 @@ export function DetalhePedido({
         </button>
       </header>
 
-      <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 overflow-y-auto p-3 lg:grid-cols-2 lg:overflow-hidden lg:p-4">
-        <section className="flex min-h-0 flex-col gap-3 lg:overflow-y-auto">
+      <div className="grid min-h-0 flex-1 grid-cols-1 content-start gap-4 overflow-y-auto p-3 lg:grid-cols-2 lg:content-stretch lg:overflow-hidden lg:p-4">
+        <section className="flex flex-col gap-3 lg:min-h-0 lg:overflow-y-auto">
           {/* Morada e hora: o que o cliente liga a pedir para mudar. O botão
               só aparece quando o servidor vai aceitar (1072). */}
           <div className="pos-card !p-4">
@@ -668,9 +668,9 @@ export function DetalhePedido({
           </div>
         </section>
 
-        <section className="!flex !min-h-0 !flex-col pos-card !p-4">
+        <section className="!flex !flex-col pos-card !p-4 lg:!min-h-0">
           <p className="shrink-0 pos-eyebrow">COMPROVATIVO</p>
-          <div className="mt-3 flex min-h-0 flex-1 items-center justify-center overflow-hidden rounded-xl bg-black/40">
+          <div className="mt-3 flex min-h-40 items-center justify-center overflow-hidden rounded-xl bg-black/40 lg:min-h-0 lg:flex-1">
             {!order.payment_proof_path ? (
               <p className="px-6 text-center text-lg font-bold text-ink-mute">
                 O cliente não anexou comprovativo.
@@ -695,7 +695,7 @@ export function DetalhePedido({
               <img
                 src={proofUrl}
                 alt={`Comprovativo do pedido ${order.order_number}`}
-                className="max-h-full max-w-full object-contain"
+                className="w-full object-contain lg:max-h-full lg:w-auto lg:max-w-full"
               />
             )}
           </div>
