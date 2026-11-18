@@ -189,5 +189,7 @@ describe('quadro de pedidos do balcão', () => {
     expect(fulfillmentLabel(order({ channel: 'counter', fulfillment_type: 'delivery' }))).toBe('ENTREGA');
     expect(fulfillmentLabel(order({ channel: 'delivery', fulfillment_type: 'delivery' }))).toBe('ENTREGA');
     expect(fulfillmentLabel(order({ channel: 'pickup', fulfillment_type: 'pickup' }))).toBe('LEVANTAMENTO');
+    // Antes saía "DINE_IN", o nome da coluna da base de dados.
+    expect(fulfillmentLabel(order({ channel: 'dine_in', fulfillment_type: 'dine_in' }))).toBe('MESA');
   });
 });

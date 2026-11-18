@@ -101,6 +101,11 @@ export function OrdersBoard({
   const [moving, setMoving] = useState<Set<string>>(new Set());
   /** O pedido aberto em detalhe — itens, pagamento e comprovativo. */
   const [aberto, setAberto] = useState<BoardOrder | null>(null);
+  /**
+   * No telemóvel as quatro colunas não cabem lado a lado: vê-se uma de cada
+   * vez, escolhida nos separadores de cima. Null = a primeira com pedidos.
+   */
+  const [colunaMovel, setColunaMovel] = useState<BoardColumn['id'] | null>(null);
 
   const load = useCallback(async () => {
     const { data, error: loadError } = await supabase
@@ -210,6 +215,8 @@ export function OrdersBoard({
   }
 
   const board = buildBoard(orders);
+  const colunaVista =
+    colunaMovel ?? board.find((coluna) => coluna.orders.length > 0)?.id ?? board[0]?.id ?? null;
   const agora = Date.now();
   // O detalhe mostra a versão mais recente do pedido: depois de alterar a
   // morada, o recarregamento traz a linha nova e o ecrã acompanha.
@@ -217,19 +224,19 @@ export function OrdersBoard({
 
   return (
     <div className="pos-screen fixed inset-0 z-40 flex flex-col">
-      <header className="flex shrink-0 items-center justify-between gap-4 border-b border-white/[0.07] bg-bg1 px-6 py-4">
+      <header className="flex shrink-0 items-center justify-between gap-4 border-b border-white/[0.07] bg-bg1 px-4 py-3 pt-[max(0.75rem,env(safe-area-inset-top))] lg:px-6 lg:py-4">
         <div>
           <p className="pos-eyebrow">PEDIDOS</p>
-          <h2 className="pos-title !text-3xl">
+          <h2 className="pos-title !text-2xl lg:!text-3xl">
             {orders.length} {orders.length === 1 ? 'em curso' : 'em curso'}
           </h2>
         </div>
         <button
           type="button"
           onClick={onClose}
-          className="pos-btn pos-btn--quiet shrink-0 !text-lg"
+          className="pos-btn pos-btn--quiet shrink-0 !text-base lg:!text-lg"
         >
-          ← Voltar a vender
+          ← Voltar
         </button>
       </header>
 
@@ -239,16 +246,41 @@ export function OrdersBoard({
         </p>
       )}
 
-      <div className="grid min-h-0 flex-1 grid-cols-4 gap-3 overflow-hidden p-3">
+      {/* Telemóvel: uma coluna de cada vez. */}
+      <div className="grid shrink-0 grid-cols-4 gap-1.5 border-b border-white/[0.07] bg-bg1 p-2 lg:hidden" role="tablist">
+        {board.map((coluna) => {
+          const activa = coluna.id === colunaVista;
+          return (
+            <button
+              key={coluna.id}
+              type="button"
+              role="tab"
+              aria-selected={activa}
+              onClick={() => setColunaMovel(coluna.id)}
+              className={`pos-press flex min-h-14 flex-col items-center justify-center rounded-xl border px-1 text-[10px] font-bold tracking-[0.08em] ${
+                activa ? TONE[coluna.tone].head : 'border-transparent bg-white/[0.04] text-ink-mute'
+              }`}
+            >
+              <span className="pos-num text-xl leading-none">{coluna.orders.length}</span>
+              <span className="mt-1 truncate">{coluna.title}</span>
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="grid min-h-0 flex-1 grid-cols-1 gap-3 overflow-hidden p-3 lg:grid-cols-4">
         {board.map((coluna) => (
-          <section key={coluna.id} className="flex min-h-0 flex-col">
+          <section
+            key={coluna.id}
+            className={`min-h-0 flex-col ${coluna.id === colunaVista ? 'flex' : 'hidden lg:flex'}`}
+          >
             <h3
-              className={`shrink-0 rounded-t-2xl border px-4 py-3 text-center text-sm font-bold tracking-[0.2em] ${TONE[coluna.tone].head}`}
+              className={`shrink-0 rounded-t-2xl border px-4 py-3 text-center text-sm font-bold tracking-[0.2em] max-lg:hidden ${TONE[coluna.tone].head}`}
             >
               {coluna.title} · {coluna.orders.length}
             </h3>
 
-            <div className="min-h-0 flex-1 space-y-3 overflow-y-auto rounded-b-2xl bg-white/[0.03] p-3">
+            <div className="min-h-0 flex-1 space-y-3 overflow-y-auto rounded-2xl bg-white/[0.03] p-3 lg:rounded-t-none">
               {coluna.orders.length === 0 && (
                 <p className="py-8 text-center text-sm font-bold text-ink-mute">vazio</p>
               )}
@@ -496,9 +528,9 @@ export function DetalhePedido({
       aria-label={`Pedido ${order.daily_number ?? order.order_number}`}
       className="pos-screen fixed inset-0 z-50 flex flex-col"
     >
-      <header className="flex shrink-0 items-center justify-between gap-4 border-b border-white/[0.07] bg-bg1 px-6 py-4">
+      <header className="flex shrink-0 items-center justify-between gap-4 border-b border-white/[0.07] bg-bg1 px-4 py-3 pt-[max(0.75rem,env(safe-area-inset-top))] lg:px-6 lg:py-4">
         <div className="min-w-0">
-          <p className="text-5xl font-extrabold leading-none">{order.daily_number ?? '—'}</p>
+          <p className="text-4xl font-extrabold leading-none lg:text-5xl">{order.daily_number ?? '—'}</p>
           <p className="mt-1 truncate text-sm font-bold text-ink-dim">
             {order.order_number} · {fulfillmentLabel(order)}
             {order.customer_name ? ` · ${order.customer_name}` : ''}
@@ -513,8 +545,8 @@ export function DetalhePedido({
         </button>
       </header>
 
-      <div className="grid min-h-0 flex-1 grid-cols-2 gap-4 overflow-hidden p-4">
-        <section className="flex min-h-0 flex-col gap-3 overflow-y-auto">
+      <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 overflow-y-auto p-3 lg:grid-cols-2 lg:overflow-hidden lg:p-4">
+        <section className="flex min-h-0 flex-col gap-3 lg:overflow-y-auto">
           {/* Morada e hora: o que o cliente liga a pedir para mudar. O botão
               só aparece quando o servidor vai aceitar (1072). */}
           <div className="pos-card !p-4">

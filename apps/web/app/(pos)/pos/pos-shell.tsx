@@ -55,6 +55,7 @@ import { SenhasTab } from './senhas-tab';
 import { MesasTab } from './mesas-tab';
 import { CaixaTab } from './caixa-tab';
 import { PosIcon, type PosIconName } from './pos-icons';
+import { MaisSheet, MobileBar } from './mobile-bar';
 import { AvailabilityPanel } from './availability-panel';
 import { useNewOrderAlert } from './use-new-order-alert';
 import { useScreenWakeLock } from './use-screen-wake-lock';
@@ -194,6 +195,8 @@ type AvailableStore = {
 type AllocationMap = Partial<Record<CounterPaymentMethod, number>>;
 
 const DEVICE_STORAGE_KEY = 'hs_pos_device_id';
+/** Vazio (telemóvel, sem bridge ao lado) ou um token inteiro do bridge. */
+const bridgeTokenOk = (token: string) => token.trim().length === 0 || token.trim().length >= 32;
 // Meios de pagamento, notas rápidas, upsell, tipo de pedido por defeito e
 // tempo de confirmação vêm das definições do POS da loja
 // (`lib/pos/settings.ts`, aba POS do painel) — não deste ficheiro.
@@ -383,6 +386,18 @@ export function PosShell() {
   /** Sobe quando uma conta fecha ou se lança na mesa: a aba relê já. */
   const [mesasRefresh, setMesasRefresh] = useState(0);
   const [boardOpen, setBoardOpen] = useState(false);
+  /**
+   * No telemóvel o carrinho não cabe ao lado dos produtos: abre por cima, em
+   * ecrã inteiro, a partir da barra de baixo. No PC fica sempre à direita.
+   */
+  const [cartSheet, setCartSheet] = useState(false);
+  /** A folha "Mais" do telemóvel: o que no PC está na barra de cima. */
+  const [maisOpen, setMaisOpen] = useState(false);
+  // Venda feita: a confirmação aparece já por cima e o carrinho, agora
+  // vazio, não precisa de ficar aberto atrás dela.
+  useEffect(() => {
+    if (confirmation) setCartSheet(false);
+  }, [confirmation]);
   const [availabilityOpen, setAvailabilityOpen] = useState(false);
   /**
    * Definições do POS desta loja (aba POS do painel). Arranca no valor de
@@ -846,12 +861,18 @@ export function PosShell() {
   useScreenWakeLock(Boolean(context) && !(pinConfigured && locked));
 
   async function bindDevice() {
-    if (!selectedStoreId || deviceLabel.trim().length < 3 || bridgeToken.trim().length < 32) return;
-    try {
-      saveLocalBridgeConfig(window.localStorage, { baseUrl: bridgeUrl, token: bridgeToken });
-    } catch {
-      setError('Confirma o endereço e o token local do bridge.');
-      return;
+    if (!selectedStoreId || deviceLabel.trim().length < 3 || !bridgeTokenOk(bridgeToken)) return;
+    // O bridge local só existe no PC que tem a impressora ao lado: talões das
+    // vendas offline e visor do cliente. Um telemóvel não tem nenhum — vende,
+    // imprime pela fila do servidor e fica sem esses dois, que já são
+    // best-effort (CLAUDE §1). Sem token, vincula-se na mesma.
+    if (bridgeToken.trim()) {
+      try {
+        saveLocalBridgeConfig(window.localStorage, { baseUrl: bridgeUrl, token: bridgeToken });
+      } catch {
+        setError('Confirma o endereço e o token local do bridge.');
+        return;
+      }
     }
     setBinding(true);
     setError(null);
@@ -2078,7 +2099,7 @@ export function PosShell() {
               className="pos-well mt-2 !min-h-16 w-full !px-4 !font-mono !text-sm outline-none focus:shadow-[inset_0_0_0_1.5px_var(--gold)]"
             />
             <label className="mt-4 block text-sm font-semibold text-ink-dim" htmlFor="bridge-token">
-              Token local do bridge
+              Token local do bridge <span className="font-normal text-ink-mute">(só no PC da impressora; no telemóvel deixa vazio)</span>
             </label>
             <input
               id="bridge-token"
@@ -2095,7 +2116,7 @@ export function PosShell() {
                 binding
                 || !selectedStoreId
                 || deviceLabel.trim().length < 3
-                || bridgeToken.trim().length < 32
+                || !bridgeTokenOk(bridgeToken)
               }
               onClick={() => void bindDevice()}
               className="pos-btn pos-btn--primary mt-6 w-full"
@@ -2132,7 +2153,7 @@ export function PosShell() {
             <span className="truncate font-display text-[1.4rem] leading-none tracking-[0.04em] text-gold">
               {brand.name}
             </span>
-            <span className="rounded-md bg-white/[0.07] px-1.5 py-0.5 text-[0.625rem] font-bold tracking-[0.16em] text-ink-dim">
+            <span className="rounded-md bg-white/[0.07] px-1.5 py-0.5 text-[0.625rem] font-bold tracking-[0.16em] text-ink-dim max-lg:hidden">
               POS
             </span>
           </p>
@@ -2150,9 +2171,11 @@ export function PosShell() {
               prepararSom();
               tocarAlarme();
             }}
-            className="pos-btn pos-alarm !min-h-12 shrink-0 !rounded-[14px] !px-4 !text-[0.9375rem]"
+            aria-label="Som dos pedidos desligado — tocar para ligar"
+            className="pos-btn pos-alarm !min-h-12 shrink-0 !rounded-[14px] !px-4 !text-[0.9375rem] max-lg:!w-12 max-lg:!px-0"
           >
-            🔇 Som dos pedidos desligado — tocar para ligar
+            <span className="lg:hidden">🔇</span>
+            <span className="max-lg:hidden">🔇 Som dos pedidos desligado — tocar para ligar</span>
           </button>
         )}
         {/* O caixa gere as entregas sem sair do terminal. E daqui que se ve
@@ -2166,7 +2189,7 @@ export function PosShell() {
           className={`pos-btn relative !min-h-12 shrink-0 !rounded-[14px] !px-4 !text-[0.9375rem] ${alerta.piscar ? 'pos-alarm' : ''}`}
         >
           <PosIcon name="inbox" />
-          Pedidos
+          <span className="max-sm:hidden">Pedidos</span>
           {alerta.piscar && (
             <span className="pos-qty pos-num absolute -right-2.5 -top-2.5 !h-8 !min-w-8 !text-sm">
               {alerta.aAtender}
@@ -2177,19 +2200,19 @@ export function PosShell() {
         <button
           type="button"
           onClick={() => setAvailabilityOpen(true)}
-          className="pos-btn !min-h-12 shrink-0 !rounded-[14px] !px-4 !text-[0.9375rem]"
+          className="pos-btn !min-h-12 shrink-0 !rounded-[14px] !px-4 !text-[0.9375rem] max-lg:!hidden"
         >
           <PosIcon name="ban" />
           Esgotados
         </button>
         {lastSale && (
           <>
-            <span aria-hidden className="mx-1 h-8 w-px shrink-0 bg-white/10" />
+            <span aria-hidden className="mx-1 h-8 w-px shrink-0 bg-white/10 max-lg:!hidden" />
             <button
               type="button"
               disabled={reprintPending}
               onClick={() => void reprintLastReceipt()}
-              className="pos-btn pos-btn--accent-outline !min-h-12 shrink-0 !rounded-[14px] !px-3.5 !text-sm"
+              className="pos-btn pos-btn--accent-outline !min-h-12 shrink-0 !rounded-[14px] !px-3.5 !text-sm max-lg:!hidden"
             >
               <PosIcon name="printer" size={18} />
               {reprintPending ? 'A reimprimir…' : `Reimprimir talão #${lastSale.dailyNumber}`}
@@ -2197,14 +2220,14 @@ export function PosShell() {
             <button
               type="button"
               onClick={() => setVoidOpen(true)}
-              className="pos-btn pos-btn--danger !min-h-12 shrink-0 !rounded-[14px] !px-3.5 !text-sm"
+              className="pos-btn pos-btn--danger !min-h-12 shrink-0 !rounded-[14px] !px-3.5 !text-sm max-lg:!hidden"
             >
               <PosIcon name="undo" size={18} />
               Anular #{lastSale.dailyNumber}
             </button>
           </>
         )}
-        <span aria-hidden className="mx-1 h-8 w-px shrink-0 bg-white/10" />
+        <span aria-hidden className="mx-1 h-8 w-px shrink-0 bg-white/10 max-lg:!hidden" />
         {/* Troca de turno: quem sai conta a gaveta e fecha o seu caixa, quem
             entra põe o PIN e abre o seu (CLAUDE §9). O Bloquear fica para uma
             ausência curta, sem mexer no caixa. */}
@@ -2215,7 +2238,7 @@ export function PosShell() {
             setTrocaTurno('fechar');
             setPosView('caixa');
           }}
-          className="pos-btn !min-h-12 shrink-0 !rounded-[14px] !px-3.5 !text-sm"
+          className="pos-btn !min-h-12 shrink-0 !rounded-[14px] !px-3.5 !text-sm max-lg:!hidden"
         >
           <PosIcon name="user" size={18} />
           TROCAR DE TURNO
@@ -2223,7 +2246,7 @@ export function PosShell() {
         <button
           type="button"
           onClick={() => void lockDevice()}
-          className="pos-btn pos-btn--quiet !min-h-12 shrink-0 !rounded-[14px] !px-3.5 !text-sm"
+          className="pos-btn pos-btn--quiet !min-h-12 shrink-0 !rounded-[14px] !px-3.5 !text-sm max-lg:!hidden"
         >
           <PosIcon name="lock" size={18} />
           Bloquear · trocar
@@ -2235,10 +2258,23 @@ export function PosShell() {
         >
           {reprintFeedback ?? networkStatus.label}
         </div>
+        {/* No telemóvel o resto da barra vive aqui dentro. */}
+        <button
+          type="button"
+          onClick={() => setMaisOpen(true)}
+          aria-label="Mais"
+          className="pos-btn pos-btn--quiet !min-h-12 !w-12 shrink-0 !rounded-[14px] !p-0 lg:!hidden"
+        >
+          <PosIcon name="menu" size={22} />
+        </button>
       </header>
 
       <div className="grid lg:h-[calc(100vh-3.75rem)] lg:grid-cols-[9.5rem_minmax(0,1fr)_24rem]">
-        <nav className="flex gap-1.5 overflow-x-auto border-b border-white/[0.07] bg-bg1 p-2 lg:flex-col lg:overflow-y-auto lg:border-b-0 lg:border-r lg:p-2.5">
+        <nav
+          className={`flex gap-1.5 overflow-x-auto border-b border-white/[0.07] bg-bg1 p-2 [scrollbar-width:none] lg:flex-col lg:overflow-y-auto lg:border-b-0 lg:border-r lg:p-2.5 ${
+            posView === 'menu' ? '' : 'max-lg:!hidden'
+          }`}
+        >
           {categories.map((category) => (
             <button
               key={category.id}
@@ -2248,7 +2284,7 @@ export function PosShell() {
                 setPosView('menu');
                 setActiveCategory(category.id);
               }}
-              className="pos-rail-item min-w-28 shrink-0 lg:min-w-0"
+              className="pos-rail-item shrink-0 max-lg:!min-h-11 max-lg:!px-4 lg:min-w-0"
             >
               {category.name}
             </button>
@@ -2257,11 +2293,12 @@ export function PosShell() {
               que está a sair pela loja online — sem sair do POS nem
               depender de acesso ao painel admin, que o perfil não tem. */}
           <span aria-hidden className="mx-2 my-1.5 hidden h-px shrink-0 bg-white/[0.07] lg:block" />
+          {/* No telemóvel estes cinco estão na barra de baixo. */}
           <button
             type="button"
             aria-current={posView === 'delivery' ? 'true' : undefined}
             onClick={() => setPosView('delivery')}
-            className="pos-rail-item min-w-28 shrink-0 !gap-2 lg:min-w-0"
+            className="pos-rail-item min-w-28 shrink-0 !gap-2 max-lg:!hidden lg:min-w-0"
           >
             <PosIcon name="truck" size={18} className="shrink-0 opacity-80" />
             Delivery
@@ -2271,7 +2308,7 @@ export function PosShell() {
             type="button"
             aria-current={posView === 'estafetas' ? 'true' : undefined}
             onClick={() => setPosView('estafetas')}
-            className="pos-rail-item min-w-28 shrink-0 !gap-2 lg:min-w-0"
+            className="pos-rail-item min-w-28 shrink-0 !gap-2 max-lg:!hidden lg:min-w-0"
           >
             <PosIcon name="user" size={18} className="shrink-0 opacity-80" />
             Estafetas
@@ -2281,7 +2318,7 @@ export function PosShell() {
             type="button"
             aria-current={posView === 'senhas' ? 'true' : undefined}
             onClick={() => setPosView('senhas')}
-            className="pos-rail-item min-w-28 shrink-0 !gap-2 lg:min-w-0"
+            className="pos-rail-item min-w-28 shrink-0 !gap-2 max-lg:!hidden lg:min-w-0"
           >
             <PosIcon name="ticket" size={18} className="shrink-0 opacity-80" />
             Senhas
@@ -2291,7 +2328,7 @@ export function PosShell() {
             type="button"
             aria-current={posView === 'mesas' ? 'true' : undefined}
             onClick={() => setPosView('mesas')}
-            className="pos-rail-item min-w-28 shrink-0 !gap-2 lg:min-w-0"
+            className="pos-rail-item min-w-28 shrink-0 !gap-2 max-lg:!hidden lg:min-w-0"
           >
             <PosIcon name="table" size={18} className="shrink-0 opacity-80" />
             Mesas
@@ -2301,14 +2338,14 @@ export function PosShell() {
             type="button"
             aria-current={posView === 'caixa' ? 'true' : undefined}
             onClick={() => setPosView('caixa')}
-            className="pos-rail-item min-w-28 shrink-0 !gap-2 lg:min-w-0"
+            className="pos-rail-item min-w-28 shrink-0 !gap-2 max-lg:!hidden lg:min-w-0"
           >
             <PosIcon name="cash" size={18} className="shrink-0 opacity-80" />
             Caixa
           </button>
         </nav>
 
-        <section className="overflow-y-auto p-2.5 lg:p-3">
+        <section className="overflow-y-auto p-2.5 max-lg:pb-40 lg:p-3">
           {posView === 'caixa' ? (
             <CaixaTab
               storeId={context.storeId}
@@ -2426,7 +2463,7 @@ export function PosShell() {
                         {availability.badge}
                       </span>
                     )}
-                    {qty && (
+                    {qty > 0 && (
                       <span className="pos-qty absolute right-2 top-2">
                         {qty}
                       </span>
@@ -2449,7 +2486,21 @@ export function PosShell() {
 
         {/* Se num ecrã baixo nem assim couber, o painel inteiro rola — nunca
             corta o botão PAGAR nem um campo por preencher. */}
-        <aside className="flex min-h-[36rem] flex-col border-t border-white/[0.07] bg-bg1 lg:min-h-0 lg:overflow-y-auto lg:border-l lg:border-t-0">
+        <aside
+          className={`flex flex-col border-white/[0.07] bg-bg1 lg:min-h-0 lg:overflow-y-auto lg:border-l ${
+            cartSheet ? 'max-lg:fixed max-lg:inset-0 max-lg:z-30 max-lg:overflow-y-auto' : 'max-lg:!hidden'
+          }`}
+        >
+          <div className="sticky top-0 z-10 flex items-center gap-2 border-b border-white/[0.07] bg-bg1 p-2.5 lg:hidden">
+            <button
+              type="button"
+              onClick={() => setCartSheet(false)}
+              className="pos-btn pos-btn--quiet !min-h-12 !rounded-[14px] !px-3.5 !text-sm"
+            >
+              <PosIcon name="back" size={18} />
+              Continuar a vender
+            </button>
+          </div>
           <div className="shrink-0 space-y-2 border-b border-white/[0.07] p-2.5">
             <div className="flex items-center justify-between px-1">
               <h2 className="text-base font-bold tracking-tight">Carrinho</h2>
@@ -2748,7 +2799,7 @@ export function PosShell() {
 
           {/* O total vive no próprio botão: é o número que se diz ao cliente
               no momento em que se carrega nele, e poupa uma linha ao carrinho. */}
-          <div className="shrink-0 border-t border-white/[0.07] p-2.5">
+          <div className="shrink-0 border-t border-white/[0.07] bg-bg1 p-2.5 max-lg:sticky max-lg:bottom-0 max-lg:mt-auto max-lg:pb-[max(0.625rem,env(safe-area-inset-bottom))]">
             {deliveryFeeCents > 0 && (
               <p className="mb-1.5 flex items-baseline justify-between px-1 text-xs font-medium text-ink-mute">
                 <span>Inclui entrega</span>
@@ -2778,6 +2829,57 @@ export function PosShell() {
           </div>
         </aside>
       </div>
+
+      {/* O telemóvel (o POS quando o PC não está): o carrinho e as secções
+          ficam no fundo do ecrã, onde o polegar chega. */}
+      {!cartSheet && (
+        <MobileBar
+          posView={posView}
+          count={count}
+          totalCents={totalCents}
+          mesaNumber={mesaAlvo?.number ?? null}
+          onCart={() => setCartSheet(true)}
+          onView={(view) => {
+            setPosView(view);
+            window.scrollTo({ top: 0 });
+          }}
+          onMais={() => setMaisOpen(true)}
+        />
+      )}
+      {maisOpen && (
+        <MaisSheet
+          onClose={() => setMaisOpen(false)}
+          online={online}
+          lastSaleNumber={lastSale?.dailyNumber ?? null}
+          reprintPending={reprintPending}
+          onView={(view) => {
+            setMaisOpen(false);
+            setPosView(view);
+            window.scrollTo({ top: 0 });
+          }}
+          onEsgotados={() => {
+            setMaisOpen(false);
+            setAvailabilityOpen(true);
+          }}
+          onReprint={() => {
+            setMaisOpen(false);
+            void reprintLastReceipt();
+          }}
+          onVoid={() => {
+            setMaisOpen(false);
+            setVoidOpen(true);
+          }}
+          onTrocaTurno={() => {
+            setMaisOpen(false);
+            setTrocaTurno('fechar');
+            setPosView('caixa');
+          }}
+          onLock={() => {
+            setMaisOpen(false);
+            void lockDevice();
+          }}
+        />
+      )}
 
       {/* Selector de variante.
           O Classic Smash não tem um preço: HAW são 300 e WAGYU são 400. Até
@@ -3183,10 +3285,10 @@ export function PosShell() {
 
       {paying && (
         <div className="pos-screen fixed inset-0 z-40 flex flex-col">
-          <header className="flex shrink-0 items-center justify-between gap-4 border-b border-white/[0.07] bg-bg1 px-6 py-4">
-            <div>
+          <header className="flex shrink-0 items-center justify-between gap-4 border-b border-white/[0.07] bg-bg1 px-4 py-3 lg:px-6 lg:py-4">
+            <div className="min-w-0">
               <p className="pos-eyebrow">TOTAL A PAGAR</p>
-              <p className="pos-num mt-1 text-5xl font-extrabold leading-none text-gold">{mt(cobrarCents)}</p>
+              <p className="pos-num mt-1 whitespace-nowrap text-4xl font-extrabold leading-none text-gold lg:text-5xl">{mt(cobrarCents)}</p>
             </div>
             <button
               type="button"

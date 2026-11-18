@@ -191,6 +191,7 @@ export function isLate(order: BoardOrder, now = Date.now()): boolean {
 const FULFILLMENT_LABEL: Record<string, string> = {
   delivery: 'ENTREGA',
   pickup: 'LEVANTAMENTO',
+  dine_in: 'MESA',
 };
 
 export function fulfillmentLabel(order: BoardOrder): string {
