@@ -39,6 +39,7 @@ O [README raiz](../README.md) explica arranque. Complementos: [formato de cardá
 | [Promoções](modulos/promocoes.md) | 2x1, entrega grátis e cupões por loja |
 | [Emails](modulos/emails.md) | Editor por blocos, transaccionais, funis, SMTP e fila |
 | [Relatórios](modulos/relatorios.md) | Vendas, CSV, digest e Google |
+| [Escritório](modulos/escritorio.md) | Resumo do mês com IVA, facturas, compras, obrigações, arquivo, pessoal e acesso do contabilista (ADR 0014) |
 | [Facturação fiscal](modulos/facturacao.md) | Factura-Recibo, Nota de Crédito, série por loja, ficheiro do mês; núcleo ensaiado, desligado e por aplicar (ADR 0013) |
 | [Agentes](modulos/agentes.md) | MCP/WebMCP e revisão humana |
 | [Mesas](modulos/mesas.md) | QR/balcão e conta conjunta |

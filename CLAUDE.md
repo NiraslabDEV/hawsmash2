@@ -169,6 +169,9 @@ pagar não fecha o turno nem o dia. O POS guia a caixa, mas o servidor nunca rec
 o gatilho em `payments` emite a Factura-Recibo quando a venda fica paga e a Nota de Crédito quando é anulada; documentos
 imutáveis na BD, série por loja. Falhar a factura nunca pára a venda (regra 1). Nunca dizer nem imprimir "certificado"
 sem número da AT. [Facturação](docs/modulos/facturacao.md).
+**Escritório (1140, 1141, ADR 0014):** a papelada no painel — resumo do mês com IVA, facturas, compras, obrigações, arquivo,
+pessoal (só dono) e acesso do contabilista por token opaco. NUIT pedido antes de pagar pela chave da venda; talão fiscal
+com `kind = 'fiscal'` (bridge nova). [Escritório](docs/modulos/escritorio.md).
 
 ---
 

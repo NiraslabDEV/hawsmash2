@@ -1,7 +1,7 @@
 # Facturação fiscal (AT)
 
-> **Estado a 16/11/2026: núcleo escrito e ensaiado numa base local; não aplicado no LIVE, desligado por defeito,
-> sem ecrãs.** Decisão em [ADR 0013](../decisions/0013-facturacao-fiscal-no-motor.md); enquadramento legal e
+> **Estado a 19/11/2026: completo no código e verificado no browser contra a base local (módulo
+> [Escritório](escritorio.md), 1140/1141); 1138–1141 por aplicar no LIVE; desligado por defeito.** Decisão em [ADR 0013](../decisions/0013-facturacao-fiscal-no-motor.md); enquadramento legal e
 > comercial em [FATURACAO-CERTIFICADA.md](../../FATURACAO-CERTIFICADA.md); activar num cliente é B-019.
 > **Isto não é parecer fiscal** e o programa **não está certificado** pela AT.
 
@@ -44,22 +44,22 @@ Nunca numa base partilhada: os documentos de ensaio ficariam para sempre. Nunca 
 | # | Falta | Nota |
 |---|---|---|
 | 1 | Decisão comercial e contabilista (B-019) | Regime de IVA da restauração, FR vs FT+RC, prazo das vendas offline, quem submete o ficheiro |
-| 2 | Aplicar a 1138 | CLI ligado ao LIVE: revisão, dry-run, fora de horas, skill `aplicar-migration-supabase`. Inofensiva enquanto desligada |
-| 3 | Ensaio com as RPCs reais | O ensaio SQL insere pedidos e pagamentos à mão; falta `create_counter_sale`, `confirm_payment`, `close_table_bill` e `void_sale` de ponta a ponta, e duas vendas em simultâneo |
-| 4 | Talão "Factura-Recibo" de 80 mm | `packages/receipt` + bridge nova nas lojas; uma bridge antiga não pode imprimir uma factura incompleta |
-| 5 | Ecrã das definições (dono) e lista de documentos | Usa `get/save_fiscal_settings`, `get_order_fiscal_documents` |
-| 6 | NUIT no POS e no checkout | Grava `orders.customer_nuit` antes de pagar; depois só por `fiscal_reissue` |
-| 7 | Rota do ficheiro do mês (CSV/XLSX/XML) | `fiscal_export_month` + `packages/fiscal`; colunas provisórias até a AT enviar o modelo |
-| 8 | Cron de `fiscal_emit_pending` e alerta de pendentes | Junto de `/api/cron/alerts` |
-| 9 | Motivo da anulação na NC | `void_sale` e `void_delivered_order` passam `app.fiscal_reason` |
-| 10 | Pedido à AT | Email a efacturação@at.gov.mz (rascunho na skill `faturacao-certificada-mocambique`) |
+| 2 | Aplicar 1138–1141 | CLI ligado ao LIVE: revisão, dry-run, fora de horas, skill `aplicar-migration-supabase`. Inofensivas enquanto desligadas |
+| 3 | ~~Ensaio com as RPCs reais~~ | Feito a 16/11 (`fiscal_rpcs.sql`, concorrência 20/20) e a 19/11 (`fiscal_1140.sql`) |
+| 4 | ~~Talão de 80 mm~~ — **falta a bridge nova nas lojas** | Formato em `packages/receipt/src/fiscal.ts` (1140); a bridge antiga falha o trabalho em vez de imprimir |
+| 5 | ~~Ecrã das definições e lista~~ | Escritório → Facturação e Facturas |
+| 6 | ~~NUIT no POS e no checkout~~ | Pedido antes de pagar pela chave da venda (1140); morada incluída |
+| 7 | ~~Rota do ficheiro do mês~~ | CSV e XML (sem XLSX); só sai com a cadeia íntegra |
+| 8 | ~~Cron dos pendentes e avisos~~ — **falta instalar** | `/api/cron/escritorio` + `install-escritorio-cron.sql` |
+| 9 | ~~Motivo da anulação na NC~~ | 1139 |
+| 10 | Pedido à AT | Requerimento do contabilista; memória descritiva e modelos de 18/11 |
 
 ## Limites conhecidos
 
 - O gatilho corre dentro da transacção da venda e tranca a série da loja até ao commit: duas vendas da mesma
   loja no mesmo instante emitem uma atrás da outra.
 - Um pedido com vários pagamentos parciais fora de uma conta de mesa só é facturado quando o total fica coberto.
-- A contagem de "pendentes" em `get_fiscal_settings` inclui contas de mesa pagas a meio.
+- ~~A contagem de "pendentes" inclui contas de mesa pagas a meio~~ — corrigido na 1140.
 
 
 ## Ensaio das RPCs reais — 16/11/2026 (A1/A2)
@@ -80,6 +80,5 @@ A migration 1138 e os ficheiros das sessões anteriores foram preservados.
   `perform set_config('app.fiscal_reason', left(v_reason, 200), true);` antes de actualizar `payments`.
   O teste do motivo falhou antes e passou depois. A 1138 não foi alterada.
 
-**Ainda não fechado:** lint global vermelho num ficheiro preexistente de outra sessão
-(`packages/fiscal/src/fiscal.ts:283`, BOM literal, `no-irregular-whitespace`). B-125 regista o gate.
-Não houve commit nem aplicação. A3–A10 e B1–B4 não foram implementados nesta corrida.
+**Fechado a 17/11:** o lint (B-125) foi corrigido e A1/A2 publicados. A3–A10 foram feitos a 19/11 no módulo
+[Escritório](escritorio.md).

@@ -126,6 +126,13 @@ deste módulo. Se um mudar de propósito, actualiza-se o retrato **e** imprime-s
 3. Testes em `packages/receipt/src/__tests__/layout.test.ts` — o que sai e o que **não** sai.
 4. Imprimir em papel antes de o oferecer às lojas. O painel mostra-o sozinho (lê `TICKET_TEMPLATES`).
 
+### 11.4-a Talão fiscal (1140, ADR 0014)
+
+Factura-Recibo e Nota de Crédito saem pela fila com `kind = 'fiscal'` e o formato `packages/receipt/src/fiscal.ts`
+(48 colunas, elementos do art. 27.º do CIVA). O payload leva `format_version`: uma bridge que não o conhece falha o
+trabalho em vez de imprimir no formato herdado. **Antes de ligar a facturação numa loja, a bridge dessa loja tem de
+ser actualizada** para esta versão. Cada 2.ª via é um trabalho novo (`reprint_seq` seguinte) e fica no `event_log`.
+
 ### 11.5 Levar o mini-PC para esta versão
 
 1. No repositório: `BRAND_LOGO_FILE=/nao/existe.b64 npx vitest run services/print-bridge` verde

@@ -833,5 +833,5 @@ relatório: [`docs/validation/facturacao-whatsapp-2026-11-16.md`](docs/validatio
 - [x] Núcleo fiscal (1138) e WhatsApp em texto livre (observações, fila de escolhas, alterar carrinho, memória curta).
 - [x] A1: RPCs reais e concorrência ensaiadas em local.
 - [x] A2: migration 1139, motivo da anulação na Nota de Crédito.
-- [ ] A3–A10: NUIT, painel, documentos, impressão, exportação, cron, regimes e activação.
+- [x] A3–A10: módulo Escritório (1140, 1141, ADR 0014) — NUIT, painel, documentos, talão, exportação, cron, compras, obrigações, arquivo, pessoal, contabilista. Por aplicar no LIVE.
 - [ ] B1–B4: avaliação IA, lacunas do motor, observabilidade e documentação WhatsApp.
