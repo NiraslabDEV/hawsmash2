@@ -97,11 +97,6 @@ function dateTime(iso: string): string {
   return `${get('day')}/${get('month')}/${get('year')} ${get('hour')}:${get('minute')}:${get('second')}`;
 }
 
-function shortDate(isoDate: string): string {
-  const [y, m, d] = isoDate.slice(0, 10).split('-');
-  return `${d}/${m}/${y}`;
-}
-
 /** Colunas da linha de artigo: "2 x 387,93" · taxa · valor do IVA · valor sem IVA = 48. */
 function itemColumns(left: string, rate: string, vat: string, base: string): string {
   return `${left.slice(0, 18).padEnd(18)} ${rate.padStart(5)} ${vat.padStart(11)} ${base.padStart(11)}`;
