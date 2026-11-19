@@ -18,7 +18,7 @@ export function migrations() {
 if (process.argv[1]?.replaceAll('\\', '/').endsWith('/fiscal-local.mjs')) {
   const tests = process.argv.slice(2);
   for (const test of tests.length ? tests : ['fiscal', 'fiscal_rpcs']) {
-    if (!/^[a-z_]+$/.test(test)) throw new Error('Nome de ensaio inválido');
+    if (!/^[a-z0-9_]+$/.test(test)) throw new Error('Nome de ensaio inválido');
     console.log(sql(`begin;\n${migrations()}\n${readFileSync(`supabase/tests/${test}.sql`, 'utf8')}\nrollback;`));
   }
 }
