@@ -16,6 +16,7 @@ export * from './tickets';
 export * from './cash-day';
 export * from './cash-sold';
 export * from './senha';
+export * from './fiscal';
 export * from './encode';
 export * from './preview';
 export * from './sample';

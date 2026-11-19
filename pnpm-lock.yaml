@@ -48,6 +48,9 @@ importers:
       '@delivery/core':
         specifier: workspace:^
         version: link:../../packages/core
+      '@delivery/fiscal':
+        specifier: workspace:^
+        version: link:../../packages/fiscal
       '@delivery/payments':
         specifier: workspace:^
         version: link:../../packages/payments

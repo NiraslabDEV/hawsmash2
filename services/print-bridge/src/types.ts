@@ -8,7 +8,7 @@ export interface PrintJob {
   request_id: string | null;
   claimed_at: string | null;
   station: 'kitchen' | 'counter' | 'bar';
-  kind: 'order' | 'receipt' | 'drawer' | 'cash_close' | 'test';
+  kind: 'order' | 'receipt' | 'drawer' | 'cash_close' | 'test' | 'fiscal';
   reprint_seq: number;
   payload: PrintPayload;
   status: 'queued' | 'printing' | 'printed' | 'failed';

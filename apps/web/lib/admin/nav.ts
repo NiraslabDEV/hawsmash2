@@ -41,6 +41,8 @@ export const ADMIN_NAV: AdminNavItem[] = [
   { href: '/caixa', label: 'Caixa', icon: 'caixa', roles: ['owner', 'manager', 'cashier'] },
   { href: '/estoque', label: 'Estoque', icon: 'estoque', roles: ['owner', 'manager'] },
   { href: '/analise', label: 'Análise', icon: 'analise', roles: ['owner', 'manager'] },
+  // Papelada (ADR 0014): o gerente vê as suas lojas; pessoal, contabilista e definições fiscais são do dono (a BD diz o mesmo).
+  { href: '/escritorio', label: 'Escritório', icon: 'escritorio', roles: ['owner', 'manager'] },
   { href: '/feedback', label: 'Avaliações', icon: 'feedback', roles: ['owner', 'manager'] },
   { href: '/lista-espera', label: 'Clientes', icon: 'clientes', roles: ['owner', 'manager'] },
   { href: '/marketing', label: 'Marketing', icon: 'marketing', roles: ['owner', 'manager'] },

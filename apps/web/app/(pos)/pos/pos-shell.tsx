@@ -48,6 +48,7 @@ import {
   type PosPromotions,
 } from '@/lib/pos/promotions';
 import { parseMTInput } from '@/lib/cash/input';
+import { checkFiscalBuyer, formatNuit, officeError } from '@/lib/escritorio/regras';
 import { DiscountPanel } from './discount-panel';
 import { OrdersBoard } from './orders-board';
 import { EstafetasTab } from './estafetas-tab';
@@ -256,6 +257,9 @@ const KEYBOARD_LABELS = {
   coupon: 'Código do cupão',
   discountValue: 'Valor do desconto',
   discountReason: 'Motivo do desconto',
+  fiscalNuit: 'NUIT do cliente (factura)',
+  fiscalName: 'Nome ou empresa na factura',
+  fiscalAddress: 'Morada na factura',
 } as const;
 
 /**
@@ -377,6 +381,10 @@ export function PosShell() {
   useEffect(() => () => window.clearTimeout(confirmationTimer.current), []);
   const [lastSale, setLastSale] = useState<{ orderId: string; dailyNumber: number } | null>(null);
   const [paying, setPaying] = useState(false);
+  // Facturação (1140): o interruptor da empresa e o NUIT pedido para a venda em curso.
+  const [fiscalActive, setFiscalActive] = useState(false);
+  const [fiscalBuyer, setFiscalBuyer] = useState({ nuit: '', name: '', address: '' });
+  const [fiscalWarning, setFiscalWarning] = useState<string | null>(null);
   /** A mesa para onde vai o carrinho (1081). Null = venda normal, paga já. */
   const [mesaAlvo, setMesaAlvo] = useState<TableRef | null>(null);
   /** A conta de mesa no ecrã de pagamento. Null = cobra-se o carrinho. */
@@ -652,6 +660,8 @@ export function PosShell() {
     }
     // O que o dono muda na aba POS chega ao balcão no mesmo ritmo do cardápio,
     // sem reiniciar o terminal. Falhar aqui mantém o que já estava.
+    // Sem a 1140 ou sem rede, o cartão do NUIT simplesmente não aparece.
+    void supabase.rpc('fiscal_status').then(({ data }) => setFiscalActive(Boolean((data as { active?: boolean } | null)?.active)));
     const lidas = await fetchPosSettings(supabase, context.storeId);
     if (lidas) {
       setPosSettings(lidas);
@@ -771,6 +781,14 @@ export function PosShell() {
       running = true;
       try {
         const result = await syncOfflineSales(async (sale) => {
+          if (sale.fiscalBuyer) {
+            const { error: stageError } = await supabase.rpc('stage_fiscal_buyer', {
+              p_store_id: context.storeId, p_key: sale.clientSaleId, p_nuit: sale.fiscalBuyer.nuit,
+              p_name: sale.fiscalBuyer.name, p_address: sale.fiscalBuyer.address ?? null,
+            });
+            // Rede em baixo: tenta outra vez mais tarde. Outro erro (já facturada, BD sem a 1140): a venda sobe na mesma.
+            if (stageError && /fetch|network|connection|offline/i.test(stageError.message)) throw new Error(stageError.message);
+          }
           const { data, error: syncError } = await supabase.rpc('sync_counter_sale', {
             p_payload: {
               clientSaleId: sale.clientSaleId,
@@ -1247,6 +1265,33 @@ export function PosShell() {
     setCouponError(null);
     setManualValue('');
     setManualReason('');
+    // O NUIT é da venda que acabou: a seguinte começa como consumidor final.
+    setFiscalBuyer({ nuit: '', name: '', address: '' });
+  }
+
+  /**
+   * Factura com NUIT (1140): pede-a à BD antes de cobrar, pela chave da venda. Devolve false só quando os dados
+   * estão errados (o caixa corrige). Sem rede ou com a BD sem a 1140, a venda segue (regra 1) e o aviso diz
+   * para reemitir com NUIT no Escritório.
+   */
+  async function stageFiscalBuyer(key: string): Promise<{ ok: boolean; buyer?: { nuit: string; name: string; address?: string } }> {
+    if (!context || !fiscalBuyer.nuit.trim()) return { ok: true };
+    const check = checkFiscalBuyer(fiscalBuyer);
+    if (!check.ok) {
+      setError(check.error);
+      return { ok: false };
+    }
+    const buyer = { nuit: check.buyer.nuit, name: check.buyer.name, ...(check.buyer.address ? { address: check.buyer.address } : {}) };
+    if (!navigator.onLine) return { ok: true, buyer };
+    const { error: stageError } = await supabase.rpc('stage_fiscal_buyer', {
+      p_store_id: context.storeId, p_key: key, p_nuit: buyer.nuit, p_name: buyer.name, p_address: buyer.address ?? null,
+    });
+    if (stageError && /fiscal_invalid_nuit|fiscal_buyer_name_required/.test(stageError.message)) {
+      setError(officeError(stageError.message));
+      return { ok: false };
+    }
+    if (stageError) setFiscalWarning('Não consegui juntar o NUIT a esta venda. Reemite a factura com NUIT no Escritório.');
+    return { ok: true, buyer };
   }
 
   const discountFields = discountPayload({ coupon, customerPhone, manual });
@@ -1724,6 +1769,11 @@ export function PosShell() {
     };
     setSubmitting(true);
     setError(null);
+    setFiscalWarning(null);
+    if (!(await stageFiscalBuyer(conta.closeId)).ok) {
+      setSubmitting(false);
+      return;
+    }
     const { data, error: closeError } = await supabase.rpc('close_table_bill', {
       p_payload: {
         clientCloseId: conta.closeId,
@@ -1780,6 +1830,12 @@ export function PosShell() {
 
     setSubmitting(true);
     setError(null);
+    setFiscalWarning(null);
+    const staged = await stageFiscalBuyer(saleId);
+    if (!staged.ok) {
+      setSubmitting(false);
+      return;
+    }
     const createdAt = new Date().toISOString();
     let queuedSale: OfflineSale;
     try {
@@ -1813,6 +1869,7 @@ export function PosShell() {
         ...(Object.keys(discountFields).length > 0
           ? { discount: discountFields as OfflineSaleDraft['discount'] }
           : {}),
+        ...(staged.buyer ? { fiscalBuyer: staged.buyer } : {}),
       });
     } catch {
       setSubmitting(false);
@@ -3405,6 +3462,30 @@ export function PosShell() {
                   />
                 )}
 
+                {/* Factura com NUIT (1140): só com a facturação ligada. Vazio = consumidor final. */}
+                {fiscalActive && (
+                  <div className="pos-card !p-4">
+                    <div className="flex items-baseline justify-between gap-3">
+                      <p className="pos-eyebrow">FACTURA COM NUIT</p>
+                      {fiscalBuyer.nuit && (
+                        <button type="button" className="text-sm text-ink-mute underline" onClick={() => setFiscalBuyer({ nuit: '', name: '', address: '' })}>
+                          Limpar
+                        </button>
+                      )}
+                    </div>
+                    <div className="mt-3 grid gap-2">
+                      <CartField label="NUIT" value={formatNuit(fiscalBuyer.nuit)} placeholder="Consumidor final" onClick={() => setKeyboardField('fiscalNuit')} />
+                      {fiscalBuyer.nuit && (
+                        <>
+                          <CartField label="Nome ou empresa" value={fiscalBuyer.name} placeholder="Obrigatório com NUIT" warn onClick={() => setKeyboardField('fiscalName')} />
+                          <CartField label="Morada" value={fiscalBuyer.address} placeholder="Opcional" onClick={() => setKeyboardField('fiscalAddress')} />
+                        </>
+                      )}
+                    </div>
+                    {fiscalWarning && <p className="mt-2 text-sm text-amber-200">{fiscalWarning}</p>}
+                  </div>
+                )}
+
                 {/* Misto só faz sentido com dois meios ligados e com a loja a
                     deixar dividir a conta (aba POS). */}
                 {mixedAvailable && (
@@ -3640,7 +3721,7 @@ export function PosShell() {
       {keyboardField && (
         <TouchKeyboard
           label={KEYBOARD_LABELS[keyboardField]}
-          mode={keyboardField === 'phone' || keyboardField === 'discountValue' ? 'tel' : 'text'}
+          mode={keyboardField === 'phone' || keyboardField === 'discountValue' || keyboardField === 'fiscalNuit' ? 'tel' : 'text'}
           value={
             keyboardField === 'name'
               ? customerName
@@ -3656,7 +3737,13 @@ export function PosShell() {
                         ? manualReason
                         : keyboardField === 'tabNote'
                           ? tabNote
-                          : orderNote
+                          : keyboardField === 'fiscalNuit'
+                            ? fiscalBuyer.nuit
+                            : keyboardField === 'fiscalName'
+                              ? fiscalBuyer.name
+                              : keyboardField === 'fiscalAddress'
+                                ? fiscalBuyer.address
+                                : orderNote
           }
           suggestions={keyboardField === 'orderNote' ? quickNotes : []}
           maxLength={keyboardField === 'tabNote' ? 120 : undefined}
@@ -3669,6 +3756,9 @@ export function PosShell() {
             else if (keyboardField === 'discountValue') setManualValue(valor.replace(/[^\d.,]/g, ''));
             else if (keyboardField === 'discountReason') setManualReason(valor);
             else if (keyboardField === 'tabNote') setTabNote(valor);
+            else if (keyboardField === 'fiscalNuit') setFiscalBuyer((b) => ({ ...b, nuit: valor.replace(/\D/g, '').slice(0, 9) }));
+            else if (keyboardField === 'fiscalName') setFiscalBuyer((b) => ({ ...b, name: valor }));
+            else if (keyboardField === 'fiscalAddress') setFiscalBuyer((b) => ({ ...b, address: valor }));
             else setOrderNote(valor);
             setKeyboardField(null);
           }}

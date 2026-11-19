@@ -52,6 +52,16 @@ describe('painel — onde cada perfil pode entrar', () => {
     expect(canAccessAdminPath('kitchen', '/estafetas')).toBe(false);
   });
 
+  it('o Escritório é do dono e do gerente; o Balcão e a cozinha não entram (nem no documento em A4)', () => {
+    expect(navItemForPath('/escritorio')?.label).toBe('Escritório');
+    expect(canAccessAdminPath('owner', '/escritorio')).toBe(true);
+    expect(canAccessAdminPath('manager', '/escritorio')).toBe(true);
+    expect(canAccessAdminPath('manager', '/escritorio/documento/abc')).toBe(true);
+    expect(canAccessAdminPath('cashier', '/escritorio')).toBe(false);
+    expect(canAccessAdminPath('cashier', '/escritorio/documento/abc')).toBe(false);
+    expect(canAccessAdminPath('kitchen', '/escritorio')).toBe(false);
+  });
+
   it('o WhatsApp tem a sua aba, só do dono (custos e conversas dos clientes)', () => {
     expect(navItemForPath('/whatsapp')?.label).toBe('WhatsApp');
     expect(canAccessAdminPath('owner', '/whatsapp')).toBe(true);

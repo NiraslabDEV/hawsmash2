@@ -10,6 +10,7 @@
  * formatos (comanda curta, talão curto, fecho de caixa, mesa) não mudam.
  */
 
+import { buildFiscalDocument, isFiscalDocument } from './fiscal';
 import {
   ALIGN_CENTER,
   ALIGN_LEFT,
@@ -722,5 +723,10 @@ export function buildPrintDocument(
   if (kind === 'order' && isKitchenTicket(payload)) return buildKitchenTicket(payload, layout);
   if (kind === 'receipt' && isCustomerReceipt(payload)) return buildCustomerReceipt(payload);
   if (kind === 'cash_close' && isCashClosePayload(payload)) return buildCashCloseReceipt(payload);
+  // Documento fiscal (1140): só no seu formato. Nunca cai no formato herdado.
+  if (kind === 'fiscal' || isFiscalDocument(payload)) {
+    if (!isFiscalDocument(payload)) throw new Error('fiscal_payload_invalid');
+    return buildFiscalDocument(payload);
+  }
   return buildReceipt(payload, layout);
 }

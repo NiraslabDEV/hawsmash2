@@ -12,6 +12,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^1.6.0",
     "@delivery/core": "workspace:^",
+    "@delivery/fiscal": "workspace:^",
     "@delivery/payments": "workspace:^",
     "@delivery/receipt": "workspace:^",
     "@delivery/whatsapp": "workspace:^",

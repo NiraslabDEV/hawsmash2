@@ -25,6 +25,7 @@ function Icon({ name }: { name: string }) {
     cardapio: <path d="M3 4h18M3 12h18M3 20h18" />,
     caixa: <path d="M3 7h18v12H3zM3 7l2-3h14l2 3M8 13h.01M16 13a2 2 0 1 1-4 0 2 2 0 0 1 4 0Z" />,
     analise: <path d="M4 20V10M10 20V4M16 20v-7M22 20H2" />,
+    escritorio: <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2M3 7h18v12a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V7Zm0 5h18M10 12v2h4v-2" />,
     feedback: <path d="m12 2 3 7 7 .5-5.5 4.5 2 7-6.5-4-6.5 4 2-7L2 9.5 9 9z" />,
     clientes: <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM22 21v-2a4 4 0 0 0-3-3.87" />,
     marketing: <path d="m3 11 18-5v12L3 14v-3zM11.6 16.8a3 3 0 1 1-5.8-1.6" />,

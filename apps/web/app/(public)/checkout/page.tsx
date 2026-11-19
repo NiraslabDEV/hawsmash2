@@ -30,6 +30,7 @@ import { applyPromotions, formatMT, getPaymentMode, type Cents } from '@delivery
 import '../_storefront/landing.css';
 import '../_storefront/funnel.css';
 import { createClient } from '@/utils/supabase/client';
+import { checkFiscalBuyer } from '@/lib/escritorio/regras';
 import { useStoreSlug } from '@/utils/useStore';
 import { buildScheduleSlots, type StoreHour } from '@/lib/store-hours';
 import { trackBeginCheckout, trackAddPaymentInfo, type TrackItem } from '@/lib/analytics/track';
@@ -283,6 +284,10 @@ export default function CheckoutPage() {
   const [cart, setCart]                 = useState<any[]>([]);
   const [cartHydrated, setCartHydrated] = useState(false);
   const [customerName, setCustomerName] = useState('');
+  // Factura com NUIT (1140): só aparece com a facturação ligada; vazio = consumidor final.
+  const [fiscalActive, setFiscalActive] = useState(false);
+  const [wantInvoice, setWantInvoice] = useState(false);
+  const [fiscalBuyer, setFiscalBuyer] = useState({ nuit: '', name: '', address: '' });
   const [customerPhone, setCustomerPhone] = useState('');
   const [customerEmail, setCustomerEmail] = useState('');
   const [fulfillmentType, setFulfillmentType] = useState<'pickup' | 'delivery'>('pickup');
@@ -528,6 +533,10 @@ export default function CheckoutPage() {
 
   function validate(): boolean {
     if (cart.length === 0)            { alert('Carrinho vazio'); return false; }
+    if (wantInvoice) {
+      const check = checkFiscalBuyer(fiscalBuyer);
+      if (!check.ok) { alert(check.error); return false; }
+    }
     if (!customerName.trim() || !customerPhone.trim() || !customerEmail.trim()) {
       alert('Preenche o nome, o telefone e o email.');
       return false;
@@ -537,6 +546,27 @@ export default function CheckoutPage() {
       if (!deliveryZoneId || !address) { alert('Por favor, selecione zona e morada'); return false; }
     }
     return true;
+  }
+
+  useEffect(() => {
+    void supabase.rpc('fiscal_status').then(({ data }) => setFiscalActive(Boolean((data as { active?: boolean } | null)?.active)));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  /**
+   * Pede a factura com NUIT para o pedido acabado de criar, antes de a pessoa pagar. Best-effort: se falhar, o pedido
+   * segue como consumidor final e a loja reemite com NUIT a pedido (a venda nunca pára, regra 1).
+   */
+  async function stageInvoice(orderId: string) {
+    if (!wantInvoice) return;
+    const check = checkFiscalBuyer(fiscalBuyer);
+    if (!check.ok) return;
+    try {
+      await supabase.rpc('stage_checkout_fiscal_buyer', {
+        p_store_slug: storeSlug, p_checkout_id: orderId, p_nuit: check.buyer.nuit, p_name: check.buyer.name,
+        p_address: check.buyer.address || null,
+      });
+    } catch { /* fica consumidor final */ }
   }
 
   async function resumePendingCheckout(): Promise<boolean> {
@@ -632,6 +662,7 @@ export default function CheckoutPage() {
       // A partir daqui o pedido existe. Guardar a referência antes de a pessoa
       // sair para o M-Pesa é o que a traz de volta a ESTE pedido.
       if (typeof created?.orderId === 'string') {
+        await stageInvoice(created.orderId);
         setManualOrderId(created.orderId);
         rememberPendingProof(localStorage, {
           orderId: created.orderId, storeSlug, method: manualMethod,
@@ -681,6 +712,7 @@ export default function CheckoutPage() {
       // Não apagar o carrinho aqui — só depois de o pagamento ser confirmado
       // em /payment/return. Se o utilizador voltar atrás, o carrinho mantém-se.
       if (newOrderId) {
+        await stageInvoice(newOrderId);
         localStorage.setItem('pending_order_id', newOrderId);
         rememberPendingCheckout(localStorage, newOrderId, storeSlug, cart, clientCheckoutId);
       }
@@ -1154,6 +1186,31 @@ export default function CheckoutPage() {
                 <input type="email" name="email" required autoComplete="email" inputMode="email" value={customerEmail} onChange={(e) => setCustomerEmail(e.target.value)} className="hf-fld" style={{ paddingLeft: 46 }} placeholder="email@exemplo.com" />
               </div>
             </label>
+
+            {fiscalActive && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 10, minHeight: 44, cursor: 'pointer' }}>
+                  <input type="checkbox" checked={wantInvoice} onChange={(e) => setWantInvoice(e.target.checked)} style={{ width: 20, height: 20 }} />
+                  <span style={{ fontSize: 15 }}>Quero factura com NUIT</span>
+                </label>
+                {wantInvoice && (
+                  <>
+                    <label style={{ display: 'block' }}>
+                      <span className="hf-lbl">NUIT *</span>
+                      <input type="text" inputMode="numeric" autoComplete="off" value={fiscalBuyer.nuit} onChange={(e) => setFiscalBuyer({ ...fiscalBuyer, nuit: e.target.value })} className="hf-fld num" placeholder="9 dígitos" />
+                    </label>
+                    <label style={{ display: 'block' }}>
+                      <span className="hf-lbl">Nome ou empresa na factura *</span>
+                      <input type="text" autoComplete="organization" value={fiscalBuyer.name} onChange={(e) => setFiscalBuyer({ ...fiscalBuyer, name: e.target.value })} className="hf-fld" />
+                    </label>
+                    <label style={{ display: 'block' }}>
+                      <span className="hf-lbl">Morada na factura</span>
+                      <input type="text" autoComplete="street-address" value={fiscalBuyer.address} onChange={(e) => setFiscalBuyer({ ...fiscalBuyer, address: e.target.value })} className="hf-fld" />
+                    </label>
+                  </>
+                )}
+              </div>
+            )}
 
             {profile ? (
               <button type="button" onClick={notMe} style={{ display: 'flex', alignItems: 'center', gap: 11, minHeight: 44, color: 'var(--hs-ink-mute)' }}>

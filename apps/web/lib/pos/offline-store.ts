@@ -143,6 +143,8 @@ export type OfflineSaleDraft = {
     customerPhone?: string;
     manualDiscount?: { type: 'pct' | 'cents'; value: number; reason: string };
   };
+  /** Factura com NUIT (1140): pedida à BD antes de sincronizar, pela chave da venda. */
+  fiscalBuyer?: { nuit: string; name: string; address?: string };
 };
 
 export type OfflineSale = OfflineSaleDraft & {
@@ -188,6 +190,11 @@ const offlineSaleDraftSchema: z.ZodType<OfflineSaleDraft> = z.object({
       reason: z.string().min(3).max(200),
     }).optional(),
   }).optional(),
+  fiscalBuyer: z.object({
+    nuit: z.string().regex(/^\d{9}$/),
+    name: z.string().min(1).max(120),
+    address: z.string().max(200).optional(),
+  }).optional().catch(undefined),
 });
 
 export type CachedMenu = {
