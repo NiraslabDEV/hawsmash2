@@ -44,13 +44,13 @@ Nunca numa base partilhada: os documentos de ensaio ficariam para sempre. Nunca 
 | # | Falta | Nota |
 |---|---|---|
 | 1 | Decisão comercial e contabilista (B-019) | Regime de IVA da restauração, FR vs FT+RC, prazo das vendas offline, quem submete o ficheiro |
-| 2 | Aplicar 1138–1141 | CLI ligado ao LIVE: revisão, dry-run, fora de horas, skill `aplicar-migration-supabase`. Inofensivas enquanto desligadas |
+| 2 | ~~Aplicar 1138–1141~~ | Aplicadas no LIVE a 19/11 às 08:50, loja fechada; facturação desligada |
 | 3 | ~~Ensaio com as RPCs reais~~ | Feito a 16/11 (`fiscal_rpcs.sql`, concorrência 20/20) e a 19/11 (`fiscal_1140.sql`) |
 | 4 | ~~Talão de 80 mm~~ — **falta a bridge nova nas lojas** | Formato em `packages/receipt/src/fiscal.ts` (1140); a bridge antiga falha o trabalho em vez de imprimir |
 | 5 | ~~Ecrã das definições e lista~~ | Escritório → Facturação e Facturas |
 | 6 | ~~NUIT no POS e no checkout~~ | Pedido antes de pagar pela chave da venda (1140); morada incluída |
 | 7 | ~~Rota do ficheiro do mês~~ | CSV e XML (sem XLSX); só sai com a cadeia íntegra |
-| 8 | ~~Cron dos pendentes e avisos~~ — **falta instalar** | `/api/cron/escritorio` + `install-escritorio-cron.sql` |
+| 8 | ~~Cron dos pendentes e avisos~~ — instalado a 19/11 (`app-escritorio`) | `/api/cron/escritorio` + `install-escritorio-cron.sql` |
 | 9 | ~~Motivo da anulação na NC~~ | 1139 |
 | 10 | Pedido à AT | Requerimento do contabilista; memória descritiva e modelos de 18/11 |
 

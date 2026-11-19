@@ -391,8 +391,8 @@ Falta: passar os terminais para `hawsmash.com/pos`.
 - Estado: aberto
 - **Actualização 19/11/2026:** o módulo [Escritório](docs/modulos/escritorio.md) completa o caminho A (1140, 1141, ADR 0014):
   NUIT no POS e no site, talão fiscal, ecrãs, ficheiro do mês, cron, compras com IVA, obrigações, arquivo, pessoal e acesso do
-  contabilista. Verificado no browser contra a base local. **1138–1141 por aplicar no LIVE; bridge nova por instalar nas lojas;
-  desligado.** O contabilista prepara o requerimento à AT (memória descritiva e modelos entregues a 18/11).
+  contabilista. **Em produção desde 19/11** (1138–1141 aplicadas às 08:50, deploy `c451fe6`, cron `app-escritorio`).
+  **Falta a bridge nova nas lojas** (`.exe` pronto) **e a decisão de ligar**; a facturação continua desligada. O contabilista prepara o requerimento à AT (memória descritiva e modelos entregues a 18/11).
 - **Actualização 17/11/2026:** o núcleo do caminho A está no código ([ADR 0013](docs/decisions/0013-facturacao-fiscal-no-motor.md),
   migrations 1138 e 1139, `packages/fiscal`, [módulo](docs/modulos/facturacao.md)). Ensaiado numa base local com as RPCs reais
   (balcão, offline, site, mesa, anulações) e 20 pagamentos em simultâneo. **Migrations não aplicadas no LIVE, desligado por

@@ -1,7 +1,8 @@
 # Escritório
 
-> **Estado a 19/11/2026:** escrito, testado e verificado no browser contra a base local. **Migrations 1138–1141 por
-> aplicar no LIVE**; a facturação continua desligada por defeito. Decisões em [ADR 0013](../decisions/0013-facturacao-fiscal-no-motor.md)
+> **Estado a 19/11/2026:** em produção. Migrations 1138–1141 aplicadas no LIVE às 08:50 (loja fechada), deploy
+> `c451fe6`, cron `app-escritorio` instalado (a cada 15 min, primeira corrida com sucesso). **A facturação continua
+> desligada** e a **bridge nova ainda não está nas lojas** (`.exe` gerado, SHA-256 `98e05026…0a82d5f`). Decisões em [ADR 0013](../decisions/0013-facturacao-fiscal-no-motor.md)
 > e [ADR 0014](../decisions/0014-modulo-escritorio.md). Facturação em detalhe: [facturacao.md](facturacao.md).
 > **Isto não é parecer fiscal** e o programa **não está certificado** pela AT.
 
@@ -66,10 +67,10 @@ o do checkout (precisa de carrinho); estão cobertos por tipos e pelos ensaios S
 ## Para ligar num cliente — por esta ordem
 
 1. Decisão comercial e contabilista (B-019).
-2. Aplicar 1138, 1139, 1140 e 1141 fora do horário, com a skill `aplicar-migration-supabase`. Inofensivas desligadas.
-3. Deploy (dev → main). O separador Escritório aparece ao dono e ao gerente.
+2. ~~Aplicar 1138–1141~~ — feito a 19/11 no LIVE do HAWSMASH.
+3. ~~Deploy~~ — feito a 19/11 (`c451fe6`).
 4. **Actualizar a bridge das lojas** (o talão fiscal vem na versão nova de `@delivery/receipt`). Ver [impressao.md](impressao.md).
-5. Instalar o cron (`install-escritorio-cron.sql`) depois de `GET /api/cron/escritorio` responder 200.
+5. ~~Instalar o cron~~ — feito a 19/11 (`supabase db query --linked -f scripts/sql/install-escritorio-cron.sql`).
 6. Escritório → Facturação: dados fiscais, depois ligar. Fazer uma venda de ensaio e conferir talão, A4 e ficheiro.
 7. Escritório → Obrigações: juntar os modelos e preencher os dias com o contabilista.
 8. Escritório → Contabilista: criar a ligação e enviá-la ao contabilista.
