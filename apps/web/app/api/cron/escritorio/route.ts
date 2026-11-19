@@ -34,11 +34,14 @@ export async function GET(request: Request) {
   }
   const alerts = (data ?? []) as OfficeAlert[];
   const today = maputoToday();
-  const { data: sentRows } = await svc
+  const { data: sentRows, error: sentError } = await svc
     .from('event_log')
     .select('payload')
     .eq('type', 'office.alert_sent')
-    .gte('created_at', `${today}T00:00:00+02:00`);
+    // Meia-noite de Maputo em UTC: um "+02:00" no URL viraria espaço e a consulta falhava (avisos repetidos).
+    .gte('created_at', new Date(`${today}T00:00:00+02:00`).toISOString());
+  // Sem saber o que já foi avisado hoje, não se manda nada: antes um aviso atrasado do que repetido a cada 15 min.
+  if (sentError) return NextResponse.json({ ok: false, emitted, error: sentError.message }, { status: 500 });
   const sentKeys = new Set((sentRows ?? []).map((row) => (row.payload as { key?: string } | null)?.key ?? ''));
   const fresh = newAlerts(alerts, sentKeys);
   if (fresh.length === 0) return NextResponse.json({ ok: true, emitted, alerts: alerts.length, sent: 0 });
