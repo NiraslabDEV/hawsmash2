@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useState } from 'react';
 
 import { InsightIcon } from '@/components/admin/insights-ui';
+
+type Icon = Parameters<typeof InsightIcon>[0]['name'];
 import { maputoToday } from '@/lib/escritorio/regras';
 import { createClient } from '@/utils/supabase/client';
 
@@ -18,13 +20,13 @@ import type { Role, Store } from './ui';
 
 type Tab = 'resumo' | 'documentos' | 'compras' | 'obrigacoes' | 'arquivo' | 'pessoal' | 'contabilista' | 'facturacao';
 
-const TABS: Array<{ id: Tab; label: string; icon: string; ownerOnly?: boolean; subtitle: string }> = [
+const TABS: Array<{ id: Tab; label: string; icon: Icon; ownerOnly?: boolean; subtitle: string }> = [
   { id: 'resumo', label: 'Resumo do mês', icon: 'chart', subtitle: 'Vendas, IVA e o que entregar ao contabilista, mês a mês.' },
-  { id: 'documentos', label: 'Facturas', icon: 'ticket', subtitle: 'Todas as Facturas-Recibo e Notas de Crédito: pesquisar, imprimir, 2.ª via e NUIT depois.' },
-  { id: 'compras', label: 'Compras', icon: 'download', subtitle: 'As facturas dos fornecedores, com fotografia, para o IVA a deduzir.' },
+  { id: 'documentos', label: 'Facturas', icon: 'orders', subtitle: 'Todas as Facturas-Recibo e Notas de Crédito: pesquisar, imprimir, 2.ª via e NUIT depois.' },
+  { id: 'compras', label: 'Compras', icon: 'ticket', subtitle: 'As facturas dos fornecedores, com fotografia, para o IVA a deduzir.' },
   { id: 'obrigacoes', label: 'Obrigações', icon: 'clock', subtitle: 'Prazos do mês e do ano, com aviso antes. Marca como feito e o aviso pára.' },
-  { id: 'arquivo', label: 'Arquivo', icon: 'orders', subtitle: 'Alvará, licenças, contratos e seguros, com aviso antes de caducarem.' },
-  { id: 'pessoal', label: 'Pessoal', icon: 'name', ownerOnly: true, subtitle: 'A ficha de cada trabalhador para o contabilista: NUIT, INSS e salário base.' },
+  { id: 'arquivo', label: 'Arquivo', icon: 'download', subtitle: 'Alvará, licenças, contratos e seguros, com aviso antes de caducarem.' },
+  { id: 'pessoal', label: 'Pessoal', icon: 'orders', ownerOnly: true, subtitle: 'A ficha de cada trabalhador para o contabilista: NUIT, INSS e salário base.' },
   { id: 'contabilista', label: 'Contabilista', icon: 'globe', ownerOnly: true, subtitle: 'Uma ligação só de leitura para o contabilista descarregar o mês sem pedir nada.' },
   { id: 'facturacao', label: 'Facturação', icon: 'arrow', ownerOnly: true, subtitle: 'Os dados fiscais da empresa e o interruptor da facturação.' },
 ];
@@ -70,7 +72,7 @@ export default function EscritorioPage() {
       <nav className="insight-tabs" aria-label="Vistas do Escritório">
         {visible.map((t) => (
           <button key={t.id} aria-pressed={tab === t.id} onClick={() => setTab(t.id)}>
-            <InsightIcon name={t.icon as never} />
+            <InsightIcon name={t.icon} />
             {t.label}
           </button>
         ))}
